@@ -1,0 +1,35 @@
+# Normalise line endings so the repo works on Windows, Linux and macOS.
+* text=auto eol=lf
+
+# Windows scripts must keep CRLF
+*.bat  text eol=crlf
+*.cmd  text eol=crlf
+
+# Shell scripts must keep LF or they break in bash
+*.sh   text eol=lf
+
+# Binary assets
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.ico  binary
+*.jar  binary
+*.zip  binary
+*.apk  binary
+*.aab  binary
+*.keystore binary
+*.jks  binary
+
+# Keep the built game and libraries diff-friendly
+*.html text
+*.js   text
+*.css  text
+*.json text
+*.md   text
+
+# Do not count generated files in language stats
+index.html linguist-generated
+banana-shooter.html linguist-generated
+lib/three.min.js linguist-vendored
+lib/peerjs.min.js linguist-vendored

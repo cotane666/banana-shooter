@@ -1,0 +1,846 @@
+/* ============================================================
+   06 — PLAYER: physics, inventory, recoil, first-person view model
+   ============================================================ */
+
+/* ============================================================
+   FIRST-PERSON WEAPON MODELS
+   Every weapon has its own silhouette — receiver proportions, magazine
+   shape/angle, stock, sights, muzzle device and material mix. Weapons are
+   built along -Z (the barrel points away from the player).
+   ============================================================ */
+
+/* weapon materials: mid-tones, because ACES tone mapping darkens them */
+function gunMat(color) {
+  return new THREE.MeshLambertMaterial({ color: color === undefined ? 0x4d545c : color, emissive: 0x0a0b0d });
+}
+
+/* material palette */
+const PAL = {
+  black: 0x2b2f34,
+  steel: 0x8b939d,
+  gun: 0x4a5057,
+  gunLight: 0x5b626b,
+  poly: 0x353a40,
+  wood: 0x9c6a36,
+  tan: 0xa8926a,
+  oliv: 0x5d6247,
+  mag: 0x3a4046,
+  glass: 0x0e1114,
+  accent: 0x646c76
+};
+
+function gunMesh(w, h, d, color, x, y, z) {
+  return new THREE.Mesh(new THREE.BoxGeometry(w, h, d), gunMat(color));
+}
+/* box at a position (bottom-anchored is not used; these are centre-anchored) */
+function B(w, h, d, color, x, y, z, rotZ, rotX, rotY) {
+  const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), gunMat(color));
+  m.position.set(x, y, z);
+  if (rotZ) m.rotation.z = rotZ;
+  if (rotX) m.rotation.x = rotX;
+  if (rotY) m.rotation.y = rotY;
+  return m;
+}
+/* cylinder along the Z axis (barrels, tubes, scopes) */
+function CYL(r, len, color, x, y, z, seg) {
+  const g = new THREE.CylinderGeometry(r, r, len, seg || 10);
+  g.rotateX(Math.PI / 2);
+  const m = new THREE.Mesh(g, gunMat(color));
+  m.position.set(x, y, z);
+  return m;
+}
+/* angled magazine: a box tilted forward around the X axis */
+function MAG(w, h, d, color, x, y, z, tiltZ) {
+  const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), gunMat(color));
+  m.position.set(x, y, z);
+  m.rotation.z = tiltZ || 0;
+  return m;
+}
+
+function buildWeaponModel(id) {
+  const g = new THREE.Group();
+  const add = (...ms) => { for (const m of ms) g.add(m); return ms[0]; };
+
+  switch (id) {
+
+    /* ---------------- GLOCK-18: compact polymer pistol ---------------- */
+    case 'glock': {
+      add(B(.052, .052, .17, PAL.poly, 0, 0, -.075));                 // slide
+      add(B(.046, .030, .155, PAL.gun, 0, -.038, -.07));              // frame
+      add(CYL(.011, .06, PAL.steel, 0, .004, -.19, 8));               // barrel
+      add(B(.040, .020, .022, PAL.black, 0, -.004, -.165));           // muzzle block
+      add(B(.044, .105, .052, PAL.poly, 0, -.085, .005, .16));        // grip
+      add(B(.048, .026, .050, PAL.mag, 0, -.11, .004, .16));          // mag floorplate
+      add(B(.020, .012, .012, PAL.steel, 0, .032, -.145));            // front sight
+      add(B(.030, .014, .014, PAL.steel, 0, .032, -.005));            // rear sight
+      add(B(.026, .022, .028, PAL.black, 0, -.048, -.036));           // trigger guard
+      break;
+    }
+
+    /* ---------------- USP-S: silenced pistol ---------------- */
+    case 'usp': {
+      add(B(.050, .054, .185, PAL.black, 0, 0, -.08));
+      add(B(.044, .030, .16, PAL.gun, 0, -.040, -.075));
+      add(CYL(.017, .20, PAL.poly, 0, .004, -.255, 10));              // long suppressor
+      add(CYL(.019, .012, PAL.steel, 0, .004, -.158, 10));            // thread collar
+      add(B(.042, .105, .050, PAL.black, 0, -.088, .008, .15));
+      add(B(.020, .012, .012, PAL.steel, 0, .034, -.155));
+      add(B(.028, .013, .014, PAL.steel, 0, .034, -.012));
+      add(B(.024, .020, .026, PAL.black, 0, -.050, -.038));
+      break;
+    }
+
+    /* ---------------- P250: compact duty pistol ---------------- */
+    case 'p250': {
+      add(B(.054, .050, .165, PAL.gunLight, 0, 0, -.072));
+      add(B(.046, .032, .15, PAL.poly, 0, -.038, -.068));
+      add(CYL(.012, .05, PAL.steel, 0, .002, -.178, 8));
+      add(B(.046, .10, .052, PAL.poly, 0, -.082, .006, .14));
+      add(B(.050, .024, .052, PAL.mag, 0, -.106, .005, .14));         // wide floorplate
+      add(B(.020, .011, .012, PAL.steel, 0, .030, -.135));
+      add(B(.028, .013, .013, PAL.steel, 0, .030, -.008));
+      add(B(.024, .020, .026, PAL.black, 0, -.046, -.036));
+      break;
+    }
+
+    /* ---------------- Desert Eagle: huge silver hand cannon ---------------- */
+    case 'deagle': {
+      add(B(.062, .070, .215, PAL.steel, 0, 0, -.095));               // massive slide
+      add(B(.056, .038, .18, PAL.gun, 0, -.052, -.085));
+      add(B(.048, .036, .20, PAL.steel, 0, .020, -.115));             // full-length top rib
+      add(CYL(.014, .05, PAL.black, 0, .004, -.225, 8));
+      add(B(.052, .115, .058, PAL.poly, 0, -.098, .010, .17));        // grip
+      add(B(.020, .016, .014, PAL.black, 0, .044, -.20));             // front sight
+      add(B(.032, .016, .016, PAL.black, 0, .044, -.005));            // rear sight
+      add(B(.028, .022, .030, PAL.black, 0, -.058, -.046));
+      break;
+    }
+
+    /* ---------------- R8 Revolver: swinging cylinder ---------------- */
+    case 'revolver': {
+      add(B(.048, .054, .19, PAL.gun, 0, 0, -.085));
+      add(B(.042, .028, .16, PAL.black, 0, -.036, -.08));
+      const cyl = CYL(.036, .085, PAL.steel, 0, 0, -.105, 12);        // the cylinder
+      add(cyl);
+      add(CYL(.014, .13, PAL.steel, 0, .002, -.215, 8));              // barrel
+      add(B(.046, .115, .055, PAL.wood, 0, -.095, .012, .19));        // wooden grip
+      add(B(.020, .014, .014, PAL.black, 0, .040, -.19));
+      add(B(.030, .014, .015, PAL.black, 0, .038, -.015));
+      add(B(.022, .032, .022, PAL.steel, 0, -.045, -.03));            // hammer area
+      break;
+    }
+
+    /* ---------------- MP5-SD: integrally suppressed SMG ---------------- */
+    case 'mp5': {
+      add(B(.052, .075, .30, PAL.black, 0, 0, -.14));                 // receiver
+      add(CYL(.021, .28, PAL.gun, 0, .006, -.43, 12));                // fat suppressor
+      add(CYL(.024, .015, PAL.steel, 0, .006, -.295, 12));
+      add(B(.048, .060, .20, PAL.poly, 0, -.008, -.30));              // slim handguard
+      add(B(.040, .150, .055, PAL.black, 0, -.115, -.06));            // curved mag
+      add(B(.044, .028, .058, PAL.mag, 0, -.185, -.06));              // mag floor
+      add(B(.042, .115, .058, PAL.poly, 0, -.085, .015, .18));        // pistol grip
+      add(B(.050, .060, .13, PAL.black, 0, -.004, .085));             // stock body
+      add(B(.040, .050, .10, PAL.poly, 0, -.004, .20));               // sliding stock
+      add(B(.030, .034, .09, PAL.black, 0, .052, -.13));              // optic hood
+      add(CYL(.013, .05, PAL.steel, 0, .052, -.20, 8));               // optic tube
+      add(B(.024, .020, .026, PAL.black, 0, -.058, -.10));
+      break;
+    }
+
+    /* ---------------- P90: bullpup with a top magazine ---------------- */
+    case 'p90': {
+      add(B(.075, .105, .34, PAL.oliv, 0, 0, -.14));                  // chunky shell
+      add(B(.058, .072, .10, PAL.poly, 0, -.005, .05));               // rear
+      add(CYL(.014, .11, PAL.steel, 0, .004, -.345, 8));              // stubby barrel
+      add(B(.070, .040, .13, PAL.poly, 0, .070, -.13));               // TOP magazine
+      add(B(.066, .020, .12, PAL.mag, 0, .095, -.13));
+      add(B(.030, .110, .050, PAL.poly, 0, -.075, .01, .10));         // grip
+      add(B(.052, .058, .06, PAL.black, 0, -.008, -.045));            // trigger housing
+      add(B(.026, .030, .11, PAL.black, 0, .048, -.02));              // built-in optic
+      add(B(.020, .014, .016, PAL.steel, 0, .035, -.045));
+      break;
+    }
+
+    /* ---------------- UMP-45: angular polymer SMG ---------------- */
+    case 'ump': {
+      add(B(.058, .072, .30, PAL.poly, 0, 0, -.135));
+      add(B(.046, .062, .22, PAL.black, 0, -.006, -.30));             // squared handguard
+      add(CYL(.016, .11, PAL.steel, 0, .004, -.41, 8));
+      add(B(.044, .135, .055, PAL.mag, 0, -.105, -.075));             // thick .45 mag
+      add(B(.048, .024, .060, PAL.black, 0, -.175, -.075));
+      add(B(.044, .115, .058, PAL.poly, 0, -.085, .015, .22));
+      add(B(.048, .058, .14, PAL.poly, 0, -.006, .09));               // folding stock
+      add(B(.040, .058, .06, PAL.black, 0, -.006, .17));
+      add(B(.025, .028, .11, PAL.black, 0, .050, -.10));              // rail
+      add(B(.024, .020, .026, PAL.black, 0, -.058, -.105));
+      break;
+    }
+
+    /* ---------------- Nova: pump-action shotgun ---------------- */
+    case 'nova': {
+      add(B(.050, .075, .17, PAL.gun, 0, 0, -.08));                   // receiver
+      add(CYL(.017, .42, PAL.steel, 0, .030, -.375, 10));             // barrel
+      add(CYL(.016, .32, PAL.black, 0, .000, -.32, 10));              // mag tube
+      add(B(.058, .046, .13, PAL.wood, 0, .002, -.28));               // pump forend
+      add(B(.048, .115, .055, PAL.wood, 0, -.085, .015, .20));
+      add(B(.052, .085, .20, PAL.wood, 0, -.012, .11));               // stock
+      add(B(.044, .075, .05, PAL.gun, 0, -.012, .215));               // recoil pad
+      add(B(.020, .014, .014, PAL.steel, 0, .062, -.55));
+      add(B(.024, .020, .026, PAL.black, 0, -.055, -.06));
+      break;
+    }
+
+    /* ---------------- XM1014: semi-auto shotgun ---------------- */
+    case 'xm': {
+      add(B(.058, .085, .28, PAL.black, 0, 0, -.135));                // bulky receiver
+      add(CYL(.019, .40, PAL.steel, 0, .028, -.38, 10));
+      add(CYL(.018, .34, PAL.gun, 0, -.002, -.35, 10));               // gas tube
+      add(B(.056, .048, .16, PAL.poly, 0, .000, -.30));               // broad forend
+      add(B(.050, .115, .058, PAL.black, 0, -.088, .015, .20));
+      add(B(.052, .075, .18, PAL.poly, 0, -.008, .10));               // stock
+      add(B(.058, .028, .055, PAL.mag, 0, .075, -.20));               // shell holder
+      add(B(.024, .020, .026, PAL.black, 0, -.058, -.055));
+      break;
+    }
+
+    /* ---------------- Galil AR: utilitarian assault rifle ---------------- */
+    case 'galil': {
+      add(B(.060, .080, .40, PAL.poly, 0, 0, -.19));                  // slab receiver
+      add(B(.046, .060, .26, PAL.black, 0, -.006, -.43));             // handguard
+      add(B(.020, .020, .10, PAL.steel, 0, .032, -.52));              // gas block
+      add(CYL(.015, .16, PAL.steel, 0, .008, -.62, 8));               // barrel
+      add(B(.030, .026, .045, PAL.black, 0, .008, -.70));             // birdcage flash hider
+      add(B(.046, .175, .070, PAL.mag, 0, -.125, -.16, -.06));        // long curved mag
+      add(B(.046, .130, .058, PAL.poly, 0, -.092, .015, .22));
+      add(B(.048, .070, .16, PAL.poly, 0, .004, .10));                // folding stock
+      add(B(.044, .062, .05, PAL.black, 0, .004, .19));
+      add(B(.022, .030, .12, PAL.black, 0, .058, -.10));              // rail
+      add(B(.030, .030, .012, PAL.glass, 0, .062, -.05));             // rear peep
+      add(B(.024, .020, .026, PAL.black, 0, -.060, -.13));
+      break;
+    }
+
+    /* ---------------- FAMAS: bullpup, carry handle ---------------- */
+    case 'famas': {
+      add(B(.058, .095, .50, PAL.poly, 0, 0, -.19));                  // long single shell
+      add(B(.030, .030, .30, PAL.black, 0, .088, -.20));              // tall carry handle
+      add(B(.026, .028, .30, PAL.poly, 0, .060, -.20));
+      add(B(.020, .026, .06, PAL.steel, 0, .088, -.03));              // rear sight notch
+      add(B(.018, .030, .04, PAL.steel, 0, .088, -.37));              // front post
+      add(CYL(.013, .13, PAL.steel, 0, .010, -.47, 8));               // barrel
+      add(B(.046, .150, .070, PAL.mag, 0, -.120, .02));               // rear mag (bullpup)
+      add(B(.044, .115, .056, PAL.poly, 0, -.085, -.08, .18));
+      add(B(.052, .045, .24, PAL.black, 0, -.020, -.42));             // handguard/bipod rail
+      add(B(.020, .050, .10, PAL.poly, 0, -.062, -.44));              // folded bipod
+      add(B(.024, .020, .026, PAL.black, 0, -.055, -.20));
+      break;
+    }
+
+    /* ---------------- AK-47: wood furniture, curved mag ---------------- */
+    case 'ak47': {
+      add(B(.056, .078, .34, PAL.gun, 0, 0, -.16));                   // stamped receiver
+      add(B(.024, .026, .30, PAL.black, 0, .052, -.17));              // dust-cover rail
+      add(B(.052, .062, .22, PAL.wood, 0, -.004, -.35));              // wooden handguard
+      add(B(.020, .020, .09, PAL.steel, 0, .030, -.44));              // gas block
+      add(CYL(.014, .20, PAL.steel, 0, .008, -.56, 8));
+      add(B(.026, .024, .05, PAL.black, 0, .008, -.67));              // slant brake
+      // the signature curved magazine (three stacked segments)
+      add(B(.044, .080, .070, PAL.mag, 0, -.085, -.13, -.05));
+      add(B(.044, .080, .072, PAL.mag, 0, -.155, -.155, -.16));
+      add(B(.044, .070, .074, PAL.mag, 0, -.215, -.195, -.30));
+      add(B(.046, .120, .056, PAL.wood, 0, -.082, .025, .20));        // wooden grip
+      add(B(.050, .100, .17, PAL.wood, 0, -.005, .14));               // wooden stock
+      add(B(.036, .070, .05, PAL.gun, 0, -.048, .215, -.10));         // stock comb
+      add(B(.022, .026, .10, PAL.black, 0, .060, -.06));
+      add(B(.024, .020, .028, PAL.black, 0, -.056, -.09));
+      break;
+    }
+
+    /* ---------------- M4A4: carbine, flat-top, carry handle stock ---------------- */
+    case 'm4a4': {
+      add(B(.054, .072, .38, PAL.black, 0, 0, -.18));
+      add(B(.030, .020, .30, PAL.steel, 0, .048, -.19));              // flat-top rail
+      add(B(.032, .034, .035, PAL.black, 0, .042, -.02));             // rear sight block
+      add(B(.050, .058, .26, PAL.poly, 0, -.004, -.42));              // round handguard
+      add(CYL(.014, .17, PAL.steel, 0, .006, -.60, 8));
+      add(B(.028, .028, .05, PAL.black, 0, .006, -.70));              // A2 flash hider
+      add(B(.030, .030, .10, PAL.gun, 0, .040, -.34));                // carry handle / optic
+      add(B(.046, .140, .068, PAL.mag, 0, -.100, -.16, .02));         // straight STANAG mag
+      add(B(.044, .115, .056, PAL.poly, 0, -.082, .015, .20));
+      add(B(.048, .078, .16, PAL.poly, 0, -.004, .10));               // buffer tube
+      add(B(.052, .080, .07, PAL.black, 0, -.004, .19));              // collapsible stock
+      add(B(.024, .020, .026, PAL.black, 0, -.056, -.12));
+      break;
+    }
+
+    /* ---------------- SG 553: heavy rifle with a scope ---------------- */
+    case 'sg553': {
+      add(B(.062, .085, .40, PAL.oliv, 0, 0, -.19));
+      add(B(.060, .062, .24, PAL.black, 0, -.004, -.43));
+      add(CYL(.016, .15, PAL.steel, 0, .006, -.60, 8));
+      add(B(.030, .028, .05, PAL.black, 0, .006, -.69));
+      add(CYL(.026, .19, PAL.black, 0, .080, -.20, 12));              // big scope tube
+      add(CYL(.030, .035, PAL.gun, 0, .080, -.10, 12));               // eyepiece
+      add(CYL(.031, .030, PAL.gun, 0, .080, -.30, 12));               // objective
+      add(B(.026, .070, .022, PAL.black, 0, .050, -.16));             // scope mount
+      add(B(.046, .150, .068, PAL.mag, 0, -.105, -.16, .04));         // translucent mag
+      add(B(.046, .115, .058, PAL.poly, 0, -.082, .015, .20));
+      add(B(.050, .080, .17, PAL.poly, 0, -.004, .10));
+      add(B(.054, .085, .075, PAL.black, 0, -.006, .20));
+      add(B(.024, .020, .026, PAL.black, 0, -.056, -.13));
+      break;
+    }
+
+    /* ---------------- AWP: bolt-action sniper ---------------- */
+    case 'awp': {
+      add(B(.056, .082, .48, PAL.oliv, 0, 0, -.23));                  // long receiver
+      add(B(.044, .060, .30, PAL.oliv, 0, -.004, -.52));              // handguard
+      add(CYL(.016, .34, PAL.steel, 0, .008, -.80, 8));               // long barrel
+      add(CYL(.021, .09, PAL.black, 0, .008, -.99, 8));               // muzzle brake
+      add(CYL(.032, .30, PAL.black, 0, .090, -.28, 12));              // LONG scope
+      add(CYL(.037, .05, PAL.gun, 0, .090, -.10, 12));                // eyepiece
+      add(CYL(.039, .045, PAL.gun, 0, .090, -.45, 12));               // objective
+      add(B(.028, .080, .024, PAL.black, 0, .052, -.22));             // scope mount
+      add(B(.028, .080, .024, PAL.black, 0, .052, -.35));
+      add(B(.022, .040, .13, PAL.steel, 0, -.004, -.22));             // bolt body
+      add(CYL(.011, .06, PAL.steel, .034, .004, -.20, 8));            // bolt handle
+      add(B(.048, .150, .080, PAL.mag, 0, -.105, -.24));              // low magazine
+      add(B(.048, .120, .060, PAL.oliv, 0, -.085, .020, .20));
+      add(B(.052, .115, .22, PAL.oliv, 0, -.005, .14));               // thumbhole stock
+      add(B(.046, .088, .06, PAL.black, 0, -.012, .26));              // butt pad
+      add(B(.030, .046, .10, PAL.steel, 0, -.040, .08));              // cheek riser
+      break;
+    }
+
+    /* ---------------- SSG 08 (Scout): light bolt-action ---------------- */
+    case 'scout': {
+      add(B(.048, .070, .42, PAL.black, 0, 0, -.20));
+      add(B(.042, .054, .24, PAL.poly, 0, -.004, -.46));
+      add(CYL(.013, .26, PAL.steel, 0, .006, -.68, 8));
+      add(CYL(.024, .22, PAL.black, 0, .080, -.26, 12));              // smaller scope
+      add(CYL(.029, .04, PAL.gun, 0, .080, -.12, 12));
+      add(CYL(.030, .038, PAL.gun, 0, .080, -.39, 12));
+      add(B(.026, .068, .022, PAL.black, 0, .046, -.20));
+      add(B(.024, .020, .09, PAL.steel, 0, -.002, -.20));             // bolt
+      add(CYL(.010, .05, PAL.steel, .030, .004, -.19, 8));
+      add(B(.042, .120, .070, PAL.mag, 0, -.090, -.22));
+      add(B(.044, .110, .055, PAL.poly, 0, -.078, .015, .20));
+      add(B(.048, .088, .19, PAL.poly, 0, -.006, .12));
+      add(B(.046, .080, .05, PAL.black, 0, -.010, .22));
+      break;
+    }
+
+    /* ---------------- Negev: heavy machine gun ---------------- */
+    case 'negev': {
+      add(B(.075, .100, .46, PAL.gun, 0, 0, -.22));                   // huge receiver
+      add(B(.070, .080, .26, PAL.black, 0, -.004, -.47));
+      add(CYL(.019, .22, PAL.steel, 0, .008, -.70, 8));
+      add(B(.034, .034, .06, PAL.black, 0, .008, -.82));
+      add(B(.170, .185, .190, PAL.oliv, 0, -.150, -.20));             // big ammo box
+      add(B(.150, .020, .170, PAL.gun, 0, -.055, -.20));              // box lid
+      add(B(.030, .120, .10, PAL.black, 0, -.075, -.05));             // belt feed
+      add(B(.056, .120, .060, PAL.poly, 0, -.088, .035, .20));
+      add(B(.052, .090, .17, PAL.gun, 0, -.004, .12));                // stock
+      add(B(.048, .080, .05, PAL.black, 0, -.010, .21));
+      add(B(.028, .034, .30, PAL.black, 0, .062, -.15));              // top rail
+      add(B(.034, .040, .05, PAL.steel, 0, .066, -.02));              // rear sight
+      add(CYL(.022, .05, PAL.steel, 0, .066, -.32, 10));              // front sight
+      add(B(.024, .026, .10, PAL.black, 0, -.070, -.60));             // foregrip
+      break;
+    }
+
+    /* ---------------- БАНАН: the banana launcher ---------------- */
+    case 'banana': {
+      const YELLOW = 0xf2c93b, YELLOW2 = 0xd9a92a, BROWN = 0x7a5a24, GREEN = 0x6f8f3a;
+      // curved banana body: many overlapping segments form a smooth arc
+      const SEG = 14;
+      for (let i = 0; i < SEG; i++) {
+        const t = i / (SEG - 1);
+        const w = .082 - t * .026;                     // tapers toward the tip
+        const seg = new THREE.Mesh(new THREE.BoxGeometry(w, w, .075), gunMat(i === SEG - 1 ? BROWN : (i % 2 ? YELLOW : YELLOW2)));
+        // arc: rises at the back, dips in the middle, tip flicks up
+        const curve = -Math.sin(t * Math.PI) * .17 + t * .06;
+        seg.position.set(0, curve + .06, -.10 - i * .062);
+        seg.rotation.x = -(-Math.cos(t * Math.PI) * .30 + .30) * 1.0 + t * .55;
+        seg.rotation.z = Math.sin(t * 3.1) * .04;
+        add(seg);
+      }
+      // stem at the back (grip end)
+      add(B(.046, .046, .09, GREEN, 0, .085, .045, 0, -0.30));
+      add(B(.032, .032, .045, BROWN, 0, .112, .078));
+      // second banana taped alongside for the "magazine"
+      for (let i = 0; i < 8; i++) {
+        const t = i / 7;
+        const seg = new THREE.Mesh(new THREE.BoxGeometry(.05, .05, .07), gunMat(i % 2 ? YELLOW2 : YELLOW));
+        const cv = -Math.sin(t * Math.PI) * .12 + t * .03;
+        seg.position.set(.095, cv - .075, -.13 - i * .058);
+        seg.rotation.x = -(-Math.cos(t * Math.PI) * .28 + .28) + t * .40;
+        add(seg);
+      }
+      // duct-tape bands holding the pair together
+      add(B(.15, .020, .032, PAL.black, .048, -.105, -.21));
+      add(B(.15, .020, .032, PAL.black, .045, -.095, -.40));
+      // grip wrap
+      add(B(.056, .125, .068, PAL.black, 0, -.095, .012, .18));
+      add(B(.060, .018, .072, BROWN, 0, -.05, .012));
+      add(B(.060, .018, .072, BROWN, 0, -.145, .022));
+      // sight: a little banana peel stuck on top
+      add(B(.028, .048, .028, GREEN, 0, .10, -.16, .30));
+      add(B(.024, .028, .024, YELLOW, 0, .135, -.205, .50));
+      // stock: a small third banana
+      for (let i = 0; i < 5; i++) {
+        const seg = new THREE.Mesh(new THREE.BoxGeometry(.055, .055, .08), gunMat(YELLOW));
+        seg.position.set(0, .015 + i * .020, .12 + i * .055);
+        seg.rotation.x = i * .12;
+        add(seg);
+      }
+      break;
+    }
+
+    /* ---------------- Knife ---------------- */
+    default:
+    case 'knife': {
+      add(B(.012, .048, .26, PAL.steel, 0, .014, -.16));              // blade
+      add(B(.014, .030, .06, PAL.steel, 0, -.010, -.03));             // choil
+      add(B(.010, .058, .02, PAL.black, 0, .002, -.028));             // guard
+      add(B(.030, .040, .13, PAL.poly, 0, -.004, .07));               // handle
+      add(B(.032, .012, .02, PAL.black, 0, .006, .135));              // pommel
+      add(B(.006, .014, .006, PAL.steel, 0, .006, .14));
+      break;
+    }
+  }
+
+  /* every model gets a muzzle marker at the barrel tip so flashes and
+     tracers line up per weapon */
+  const muzzleZ = MUZZLE_Z[id] !== undefined ? MUZZLE_Z[id] : -0.6;
+  g.userData.muzzleZ = muzzleZ;
+  return g;
+}
+
+/* barrel-tip Z per weapon (used for the muzzle flash / tracer origin) */
+const MUZZLE_Z = {
+  knife: -0.28,
+  glock: -0.22, usp: -0.36, p250: -0.20, deagle: -0.25, revolver: -0.28,
+  mp5: -0.58, p90: -0.42, ump: -0.47,
+  nova: -0.60, xm: -0.58,
+  galil: -0.74, famas: -0.54, ak47: -0.70, m4a4: -0.73, sg553: -0.72,
+  awp: -1.04, scout: -0.82,
+  negev: -0.86,
+  banana: -0.92
+};
+
+/* A small curved banana used as the flying projectile */
+let _bananaProjGeo = null, _bananaProjMats = null;
+function buildBananaProjectile() {
+  if (!_bananaProjMats) {
+    _bananaProjMats = [
+      new THREE.MeshLambertMaterial({ color: 0xf2c93b, emissive: 0x2a2008 }),
+      new THREE.MeshLambertMaterial({ color: 0xd9a92a, emissive: 0x241a05 }),
+      new THREE.MeshLambertMaterial({ color: 0x6f8f3a, emissive: 0x14200a })
+    ];
+  }
+  const g = new THREE.Group();
+  const SEG = 7;
+  for (let i = 0; i < SEG; i++) {
+    const t = i / (SEG - 1);
+    const w = .085 - t * .028;
+    const m = new THREE.Mesh(new THREE.BoxGeometry(w, w, .09), _bananaProjMats[i === SEG - 1 ? 2 : (i % 2)]);
+    m.position.set(0, -Math.pow(t, 2) * .22, (i - (SEG - 1) / 2) * .085);
+    m.rotation.x = -t * .85;
+    g.add(m);
+  }
+  const tip = new THREE.Mesh(new THREE.BoxGeometry(.035, .035, .05), _bananaProjMats[2]);
+  tip.position.set(0, .03, -(SEG - 1) / 2 * .085 - .05);
+  g.add(tip);
+  return g;
+}
+
+/* ============================================================
+   PLAYER
+   ============================================================ */
+class Player {
+  constructor(opts) {
+    opts = opts || {};
+    this.id = opts.id || 'p1';
+    this.name = opts.name || 'Игрок';
+    this.team = opts.team || 'ct';
+    this.isLocal = !!opts.isLocal;
+
+    // ---- transform ----
+    this.pos = { x: 0, y: 0, z: 0 };
+    this.vel = { x: 0, y: 0, z: 0 };
+    this.yaw = 0; this.pitch = 0;
+    this.onGround = false;
+    this.crouching = false;
+    this.height = CFG.playerHeight;
+    this.radius = CFG.playerRadius;
+
+    // CollisionWorld.moveCylinder works on {x,y,z,radius,height}. Expose the
+    // player's position through those names so physics can move us directly.
+    Object.defineProperties(this, {
+      x: { get() { return this.pos.x; }, set(v) { this.pos.x = v; } },
+      y: { get() { return this.pos.y; }, set(v) { this.pos.y = v; } },
+      z: { get() { return this.pos.z; }, set(v) { this.pos.z = v; } }
+    });
+    // ---- state ----
+    this.health = CFG.maxHP;
+    this.armor = 0;
+    this.helmet = false;
+    this.alive = true;
+    this.money = 800;
+    this.kills = 0;
+    this.deaths = 0;
+    this.score = 0;
+    this.zombieKills = 0;
+    this.bulletsFired = 0;
+    this.bulletsHit = 0;
+    this.headshots = 0;
+    this.damageDealt = 0;
+
+    // ---- inventory ----
+    this.inv = { 1: null, 2: null, 3: { id: 'knife', mag: Infinity, reserve: 0 } };
+    this.slot = 3;
+    this.lastPrimary = 2;
+
+    // ---- weapon runtime ----
+    this.fireCd = 0;
+    this.reloadT = 0;
+    this.reloadTotal = 0;
+    this.recoil = 0;          // accumulated recoil (radians)
+    this.recoilYaw = 0;
+    this.viewPunchP = 0; this.viewPunchY = 0;
+    this.spread = 0;
+    this.zoom = 0;            // 0..1 scope blend
+    this.isAiming = false;
+    this.deployT = 0;
+    this.triggerDown = false;
+    this.shotsSinceRelease = 0;
+    this.lastStep = 0;
+    this.bobPhase = 0;
+    this.landImpact = 0;
+
+    // ---- input (local only) ----
+    this.in = { f: 0, r: 0, jump: false, run: false, crouch: false, wantJump: false };
+
+    // ---- view model ----
+    this.vmGroup = null;
+    this.muzzle = null;
+    this.flashLight = null;
+    this.flashT = 0;
+    this.skin = opts.skin || 0;
+  }
+
+  /* ---------- inventory helpers ---------- */
+  get weapon() {
+    const s = this.inv[this.slot];
+    if (!s) {
+      // fall back to whatever we have
+      if (this.inv[2]) { this.slot = 2; } else if (this.inv[1]) { this.slot = 1; } else { this.slot = 3; }
+      return this.inv[this.slot];
+    }
+    return s;
+  }
+  get def() { const w = this.weapon; return w ? WEAPONS[w.id] : WEAPONS.knife; }
+
+  give(id) {
+    const def = WEAPONS[id];
+    if (!def) return false;
+    const slot = def.slot;
+    if (slot === 3) { this.inv[3] = { id: 'knife', mag: Infinity, reserve: 0 }; return true; }
+    const had = this.inv[slot];
+    this.inv[slot] = { id, mag: def.mag, reserve: def.reserve };
+    if (had && had.id === id) { this.inv[slot].mag = had.mag; this.inv[slot].reserve = had.reserve; }
+    if (slot === 2) this.lastPrimary = 2;
+    return true;
+  }
+  has(id) { return [1, 2, 3].some(s => this.inv[s] && this.inv[s].id === id); }
+  takeWeapon(slot) {
+    if (!this.inv[slot]) return false;
+    if (this.slot === slot) return true;
+    this.slot = slot;
+    this.reloadT = 0;          // switching cancels a reload
+    this.deployT = 0.5;        // and costs deploy time, so swaps are not free
+    this.zoom = 0;
+    if (this.vmGroup) this.buildViewModel();
+    return true;
+  }
+  nextSlot() {
+    const order = this.inv[2] ? [2, 1, 3] : [1, 3];
+    const i = order.indexOf(this.slot);
+    return order[(i + 1) % order.length];
+  }
+  dropWeapon() {
+    const slot = this.slot;
+    if (slot === 3 || !this.inv[slot]) return null;
+    const w = this.inv[slot];
+    this.inv[slot] = null;
+    this.slot = this.inv[2] ? 2 : (this.inv[1] ? 1 : 3);
+    this.deployT = .3;
+    this.buildViewModel();
+    return w.id;
+  }
+
+  resetSpawn(x, y, z, yaw) {
+    this.pos.x = x; this.pos.y = y; this.pos.z = z;
+    this.vel.x = this.vel.y = this.vel.z = 0;
+    this.yaw = yaw === undefined ? 0 : yaw;
+    this.pitch = 0;
+    this.health = CFG.maxHP;
+    this.alive = true;
+    this.recoil = this.recoilYaw = this.viewPunchP = this.viewPunchY = 0;
+    this.reloadT = 0; this.fireCd = 0; this.zoom = 0; this.deployT = .3;
+    this.crouching = false; this.height = CFG.playerHeight;
+    this.triggerDown = false;
+    for (const s of [1, 2, 3]) {
+      const w = this.inv[s];
+      if (w && w.id !== 'knife') { w.mag = WEAPONS[w.id].mag; w.reserve = WEAPONS[w.id].reserve; }
+    }
+  }
+
+  /* total ammo for HUD */
+  ammoInfo() {
+    const w = this.weapon; if (!w) return { mag: 0, reserve: 0 };
+    return { mag: w.mag === Infinity ? 1 : w.mag, reserve: w.reserve === Infinity ? 1 : w.reserve };
+  }
+
+  /* ---------- view model construction ---------- */
+  buildViewModel() {
+    const parent = this.vmGroup ? this.vmGroup.parent : null;
+    if (this.vmGroup) { parent && parent.remove(this.vmGroup); disposeGroup(this.vmGroup); }
+    const w = this.weapon;
+    const id = !w ? 'knife' : w.id;
+    const vm = buildWeaponModel(id);
+    vm.traverse(o => { if (o.isMesh) { o.castShadow = false; o.receiveShadow = false; o.renderOrder = 5; } });
+    const group = new THREE.Group();
+    group.add(vm);
+    // muzzle point at this weapon's barrel tip, so flashes and tracers line up
+    const mz = new THREE.Object3D();
+    mz.position.set(0, .015, vm.userData.muzzleZ !== undefined ? vm.userData.muzzleZ : -0.6);
+    vm.add(mz);
+    // muzzle flash sprite
+    const flash = new THREE.Mesh(new THREE.PlaneGeometry(.34, .34), new THREE.MeshBasicMaterial({
+      color: 0xffdd88, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false
+    }));
+    flash.position.copy(mz.position); flash.position.z -= .10;
+    vm.add(flash);
+    this.flashMesh = flash;
+    const light = new THREE.PointLight(0xffcc66, 0, 9, 2);
+    light.position.copy(mz.position); light.position.z += .1;
+    vm.add(light);
+    this.flashLight = light;
+    this.muzzle = mz;
+    this.vmGroup = group;
+    this.vmInner = vm;
+    this.vmKind = id;
+    if (parent) parent.add(group);
+    return group;
+  }
+
+  /* ---------- movement + physics ---------- */
+  update(dt, world, input) {
+    const w = this.weapon, def = this.def;
+
+    // crouch (smooth height)
+    const wantCrouch = !!input.crouch;
+    const targetH = wantCrouch ? CFG.crouchHeight : CFG.playerHeight;
+    if (Math.abs(this.height - targetH) > .001) {
+      // don't uncrouch into geometry
+      if (targetH > this.height && world.overlaps(this.pos.x, this.pos.y + this.height, this.pos.z, this.radius, targetH - this.height + .05)) {
+        // blocked — stay crouched
+      } else {
+        this.height = U.lerp(this.height, targetH, 1 - Math.pow(.0006, dt));
+      }
+    }
+    this.crouching = this.height < CFG.playerHeight * .82;
+
+    // ---- wish direction ----
+    const cy = Math.cos(this.yaw), sy = Math.sin(this.yaw);
+    let wishX = 0, wishZ = 0;
+    if (input.f) { wishX += -sy * input.f; wishZ += -cy * input.f; }
+    if (input.r) { wishX += cy * input.r; wishZ += -sy * input.r; }
+    const wl = Math.hypot(wishX, wishZ);
+    if (wl > 0) { wishX /= wl; wishZ /= wl; }
+
+    let maxSpeed = input.run && !this.crouching ? CFG.runSpeed : CFG.walkSpeed;
+    if (this.crouching) maxSpeed = CFG.crouchSpeed;
+    if (this.isAiming && def.zoom) maxSpeed *= .35;
+    maxSpeed *= (1 - U.clamp(this.reloadT > 0 ? .16 : 0, 0, 1));
+
+    // ---- horizontal acceleration ----
+    const accel = this.onGround ? CFG.accel : CFG.airAccel;
+    const curSpeedAlongWish = this.vel.x * wishX + this.vel.z * wishZ;
+    const addSpeed = maxSpeed - curSpeedAlongWish;
+    if (addSpeed > 0 && wl > 0) {
+      const a = Math.min(accel * maxSpeed * dt, addSpeed);
+      this.vel.x += wishX * a; this.vel.z += wishZ * a;
+    }
+    // friction
+    if (this.onGround) {
+      const sp = Math.hypot(this.vel.x, this.vel.z);
+      if (sp > 0.01) {
+        const drop = Math.max(sp, 2) * CFG.friction * dt;
+        const nf = Math.max(sp - drop, 0) / sp;
+        this.vel.x *= nf; this.vel.z *= nf;
+      } else { this.vel.x = 0; this.vel.z = 0; }
+    }
+
+    // ---- jump ----
+    if (input.wantJump && this.onGround) {
+      this.vel.y = CFG.jumpSpeed;
+      this.onGround = false;
+    }
+
+    // ---- gravity ----
+    this.vel.y -= CFG.gravity * dt;
+    if (this.vel.y < -55) this.vel.y = -55;
+
+    // ---- move with collision ----
+    const disp = { x: this.vel.x * dt, y: this.vel.y * dt, z: this.vel.z * dt };
+    const res = world.moveCylinder(this, disp, { stepUp: CFG.stepUp, snap: CFG.stepUp });
+    if (res.hitX) this.vel.x = 0;
+    if (res.hitZ) this.vel.z = 0;
+    if (res.ceiling) this.vel.y = Math.min(this.vel.y, 0);
+
+    // ---- ground: land on, or step up to, the surface under our feet ----
+    // A ground snap must only pull us DOWN by a small amount (stairs and
+    // ledges). Snapping from any height would teleport a jumping player back
+    // to the floor the moment their vertical velocity crosses zero, so the
+    // snap window is limited to roughly this frame's fall distance.
+    const gy = res.groundY;
+    const snapDown = Math.max(CFG.snapDown, -disp.y + 0.05);
+    if (res.hitY && this.vel.y <= 0) {
+      // we struck something while descending → this is a landing
+      if (!this.onGround && this.vel.y < -6) this.landImpact = Math.min(1, -this.vel.y / 18);
+      this.vel.y = 0;
+      this.onGround = true;
+    } else if (gy !== null && gy !== undefined && this.vel.y <= 0.001) {
+      const gap = gy - this.pos.y;                  // >0 means stepping up
+      if (gap >= -snapDown && gap <= CFG.stepUp + 0.001) {
+        if (gap > 0.001 && !this.onGround && this.vel.y < -8) {
+          // falling too fast to climb — keep airborne, gravity finishes the job
+          this.onGround = false;
+        } else {
+          if (!this.onGround && this.vel.y < -6) this.landImpact = Math.min(1, -this.vel.y / 18);
+          this.pos.y = gy;
+          this.vel.y = 0;
+          this.onGround = true;
+        }
+      } else {
+        // surface is far below (or above) — we are genuinely airborne
+        this.onGround = false;
+      }
+    } else {
+      this.onGround = false;
+    }
+    // keep inside the world
+    this.pos.x = U.clamp(this.pos.x, -MAP.size / 2 + 2, MAP.size / 2 - 2);
+    this.pos.z = U.clamp(this.pos.z, -MAP.size / 2 + 2, MAP.size / 2 - 2);
+    if (this.pos.y < -8) {
+      this.pos.y = this.world ? this.world.groundAt(this.pos.x, this.pos.z, 4) : 0;
+      this.vel.x = this.vel.y = this.vel.z = 0;
+    }
+
+    // ---- footsteps ----
+    const hspeed = Math.hypot(this.vel.x, this.vel.z);
+    if (this.onGround && hspeed > 1.4) {
+      const interval = (this.crouching ? .62 : input.run ? .30 : .44) * (CFG.runSpeed / Math.max(hspeed, 1));
+      this.bobPhase += dt / interval;
+      if (this.bobPhase >= 1) {
+        this.bobPhase -= 1;
+        if (this.isLocal) Audio3D_SFX.step(this.pos.x, this.pos.y, this.pos.z);
+      }
+    } else {
+      this.bobPhase = U.lerp(this.bobPhase % 1, 0, dt * 6);
+    }
+
+    return res;
+  }
+
+  /* ---------- per-frame weapon logic ---------- */
+  tickWeapon(dt, game) {
+    const w = this.weapon; if (!w) return;
+    const def = this.def;
+
+    if (this.fireCd > 0) this.fireCd -= dt;
+    if (this.deployT > 0) this.deployT -= dt;
+
+    // reload
+    if (this.reloadT > 0) {
+      this.reloadT -= dt;
+      const prog = 1 - this.reloadT / Math.max(this.reloadTotal, .001);
+      if (Math.floor(prog * 6) !== this._reloadTick) {
+        this._reloadTick = Math.floor(prog * 6);
+        if (this.isLocal) Audio3D_SFX.reloadStep(this._reloadTick);
+      }
+      if (this.reloadT <= 0) {
+        const need = def.mag - w.mag;
+        const take = Math.min(need, w.reserve);
+        w.mag += take; w.reserve -= take;
+        this.reloadT = 0;
+      }
+    }
+
+    // recoil recovery
+    const rec = Math.pow(0.0009, dt);
+    this.recoil = U.lerp(this.recoil, 0, 1 - rec);
+    this.recoilYaw = U.lerp(this.recoilYaw, 0, 1 - rec);
+    this.viewPunchP = U.lerp(this.viewPunchP, 0, 1 - Math.pow(0.00005, dt));
+    this.viewPunchY = U.lerp(this.viewPunchY, 0, 1 - Math.pow(0.00005, dt));
+
+    // spread decay
+    const moveSpread = this.onGround ? Math.min(Math.hypot(this.vel.x, this.vel.z) / CFG.runSpeed, 1) : 1;
+    this.spread = U.lerp(this.spread, 0, 1 - Math.pow(0.02, dt));
+    this.moveSpreadNow = moveSpread;
+
+    // zoom / scope
+    const canZoom = !!def.zoom && this.reloadT <= 0 && this.deployT <= 0;
+    this.isAiming = this._wantAim && canZoom;
+    this.zoom = U.lerp(this.zoom, this.isAiming ? 1 : 0, 1 - Math.pow(0.0000015, dt));
+
+    if (this.flashT > 0) {
+      this.flashT -= dt;
+      const k = U.clamp(this.flashT / .05, 0, 1);
+      if (this.flashMesh) this.flashMesh.material.opacity = k * .95;
+      if (this.flashLight) this.flashLight.intensity = k * 14;
+      if (this.flashMesh) this.flashMesh.rotation.z += dt * 40;
+    }
+  }
+
+  reload(game) {
+    const w = this.weapon; if (!w) return false;
+    const def = this.def;
+    if (def.mag === Infinity) return false;
+    if (this.reloadT > 0 || this.deployT > 0) return false;
+    if (w.mag >= def.mag || w.reserve <= 0) return false;
+    this.reloadTotal = def.mag <= 12 ? 2.2 : def.mag <= 30 ? 2.5 : 3.6;
+    this.reloadT = this.reloadTotal;
+    this._reloadTick = 0;
+    this.zoom = 0;
+    return true;
+  }
+
+  canFire() {
+    const w = this.weapon; if (!w) return false;
+    if (!this.alive) return false;
+    if (this.fireCd > 0 || this.reloadT > 0 || this.deployT > 0) return false;
+    if (w.mag <= 0) return false;
+    return true;
+  }
+
+  /* current inaccuracy in radians */
+  aimSpread() {
+    const def = this.def;
+    let s = def.spread;
+    s += (def.moveSpread || 0) * (this.moveSpreadNow || 0) * (this.onGround ? 1 : 1.7);
+    s += this.spread;
+    if (this.crouching) s *= .62;
+    if (this.isAiming) s *= .18;
+    return s;
+  }
+}
+
+function disposeGroup(g) {
+  g.traverse(o => {
+    if (o.geometry) o.geometry.dispose();
+  });
+}

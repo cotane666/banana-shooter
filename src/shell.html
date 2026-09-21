@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#ff9d21">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Banana Shooter">
+<meta name="description" content="3D-шутер от первого лица: волны зомби, онлайн-дуэль и банан за $10 000, который стреляет бананами.">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="64x64" href="icons/favicon-64.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<title>Banana Shooter — зомби и онлайн-дуэль</title>
+<style><!--CSS--></style>
+</head>
+<body>
+
+<!-- ============ LOADING ============ -->
+<div id="loading">
+  <div class="load-box">
+    <div class="logo">BANANA<span> SHOOTER</span></div>
+    <div class="load-bar"><i></i></div>
+    <div class="load-txt" id="loadTxt">Инициализация движка…</div>
+  </div>
+</div>
+
+<!-- ============ MAIN MENU ============ -->
+<div id="menu" class="screen hidden">
+  <div class="menu-bg"></div>
+  <div class="menu-inner">
+    <div class="logo big">BANANA<span> SHOOTER</span></div>
+    <div class="tagline">БАНАНОВЫЙ ШУТЕР &nbsp;•&nbsp; ЗОМБИ И ДУЭЛЬ</div>
+
+    <div class="menu-btns">
+      <button class="mbtn primary" id="btnOffline"><b>ОФФЛАЙН</b><i>Волны зомби — зарабатывай счёт</i></button>
+      <button class="mbtn" id="btnOnline"><b>ОНЛАЙН</b><i>Дуэль против другого игрока</i></button>
+      <button class="mbtn hidden" id="btnInstall"><b>УСТАНОВИТЬ НА ТЕЛЕФОН</b><i>Играть как приложение, оффлайн</i></button>
+      <button class="mbtn" id="btnControls"><b>УПРАВЛЕНИЕ</b><i>Клавиши и настройки</i></button>
+    </div>
+
+    <div class="menu-stats" id="menuStats"></div>
+    <div class="menu-foot" id="menuControlsHint">WASD — движение &nbsp;·&nbsp; ЛКМ — огонь &nbsp;·&nbsp; B — магазин &nbsp;·&nbsp; Tab — счёт</div>
+  </div>
+</div>
+
+<!-- ============ CONTROLS / SETTINGS ============ -->
+<div id="controls" class="screen hidden">
+  <div class="panel wide">
+    <h2>УПРАВЛЕНИЕ</h2>
+    <div class="keys">
+      <div class="krow"><kbd>W A S D</kbd><span>Движение</span></div>
+      <div class="krow"><kbd>Мышь</kbd><span>Обзор / прицел</span></div>
+      <div class="krow"><kbd>ЛКМ</kbd><span>Огонь (авто — удерживать)</span></div>
+      <div class="krow"><kbd>ПКМ</kbd><span>Прицел оптики (AWP)</span></div>
+      <div class="krow"><kbd>Shift</kbd><span>Бег</span></div>
+      <div class="krow"><kbd>Ctrl</kbd><span>Присесть</span></div>
+      <div class="krow"><kbd>Space</kbd><span>Прыжок</span></div>
+      <div class="krow"><kbd>R</kbd><span>Перезарядка</span></div>
+      <div class="krow"><kbd>1 2 3</kbd><span>Пистолет / Основное / Нож</span></div>
+      <div class="krow"><kbd>G</kbd><span>Сбросить оружие</span></div>
+      <div class="krow"><kbd>B</kbd><span>Магазин (в фазе закупки)</span></div>
+      <div class="krow"><kbd>Tab</kbd><span>Счёт / статистика</span></div>
+      <div class="krow"><kbd>Esc</kbd><span>Пауза и настройки</span></div>
+    </div>
+    <h2 class="mt">НАСТРОЙКИ</h2>
+    <label class="slider">Чувствительность мыши <output id="oSens">2.20</output>
+      <input type="range" id="sSens" min="0.3" max="8" step="0.05" value="2.2"></label>
+    <label class="slider">Чувствительность (сенсор) <output id="oTsens">1.50</output>
+      <input type="range" id="sTsens" min="0.4" max="4" step="0.05" value="1.5"></label>
+    <label class="slider">Угол обзора (FOV) <output id="oFov">80</output>
+      <input type="range" id="sFov" min="60" max="110" step="1" value="80"></label>
+    <label class="slider">Громкость <output id="oVol">60</output>
+      <input type="range" id="sVol" min="0" max="100" step="1" value="60"></label>
+    <label class="slider">Качество теней <output id="oQual">Среднее</output>
+      <input type="range" id="sQual" min="0" max="2" step="1" value="1"></label>
+    <div class="btnrow">
+      <button class="mbtn small" id="btnReset">Сбросить прогресс</button>
+      <button class="mbtn small primary" id="btnControlsBack">НАЗАД</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ ONLINE LOBBY ============ -->
+<div id="lobby" class="screen hidden">
+  <div class="panel">
+    <h2>СЕТЕВАЯ ИГРА</h2>
+    <div id="lobbyMain">
+      <label class="fld">Ваш ник
+        <input id="inName" maxlength="14" placeholder="Игрок" autocomplete="off">
+      </label>
+      <div class="btnrow">
+        <button class="mbtn primary" id="btnHost"><b>СОЗДАТЬ ИГРУ</b><i>Вы хост · получите код</i></button>
+        <button class="mbtn" id="btnJoin"><b>ПОДКЛЮЧИТЬСЯ</b><i>Введите код друга</i></button>
+      </div>
+      <div id="joinRow" class="hidden">
+        <label class="fld">Код комнаты
+          <input id="inCode" maxlength="5" placeholder="AB12C" autocomplete="off" style="text-transform:uppercase">
+        </label>
+        <button class="mbtn primary" id="btnJoinGo">ВОЙТИ В БОЙ</button>
+      </div>
+      <div id="hostRow" class="hidden">
+        <div class="code-box">КОД КОМНАТЫ
+          <div class="code" id="roomCode">·····</div>
+          <button class="mbtn tiny" id="btnCopy">Копировать</button>
+        </div>
+        <div class="waiting" id="waiting"><span class="spin"></span> Ожидание второго игрока…</div>
+        <div class="hintbox">
+          Отправьте код другу. Игра идёт напрямую между браузерами (P2P / WebRTC) —
+          сервер нужен только для знакомства. Играйте в одном браузере (Chrome/Edge) на разных компьютерах.
+        </div>
+      </div>
+    </div>
+    <div id="lobbyStatus" class="status"></div>
+    <div class="btnrow"><button class="mbtn small" id="btnLobbyBack">НАЗАД</button></div>
+  </div>
+</div>
+
+<!-- ============ HUD ============ -->
+<div id="hud" class="hidden">
+  <div id="crosshair"><span class="ch t"></span><span class="ch b"></span><span class="ch l"></span><span class="ch r"></span><span class="ch dot"></span></div>
+  <div id="hitmark"><span></span><span></span><span></span><span></span></div>
+  <div id="scope" class="hidden"></div>
+
+  <div class="hud-tl">
+    <div class="bar hp"><i id="hpFill"></i><em id="hpVal">100</em></div>
+    <div class="bar ap"><i id="apFill"></i><em id="apVal">0</em></div>
+  </div>
+
+  <div class="hud-bl">
+    <div class="ammo"><b id="ammoMag">30</b><span id="ammoRes">/ 90</span></div>
+    <div class="wname" id="weaponName">AK-47</div>
+  </div>
+
+  <div class="hud-tr">
+    <div class="money" id="money">$800</div>
+    <div class="timer" id="roundTimer">0:30</div>
+    <div class="objective" id="objective">Волна 1</div>
+    <div class="netinfo hidden" id="netInfo">PING 0</div>
+  </div>
+
+  <div class="hud-br">
+    <div class="kills"><b id="killCount">0</b><span>убийств</span></div>
+    <div class="score" id="scoreVal">0</div>
+  </div>
+
+  <canvas id="minimap" width="180" height="180"></canvas>
+  <div id="feed"></div>
+  <div id="centerMsg"></div>
+  <div id="dmgDirs"></div>
+  <div id="dmgFlash"></div>
+  <div id="lowhp"></div>
+</div>
+
+<!-- ============ BUY MENU ============ -->
+<div id="buy" class="screen hidden">
+  <div class="buy-wrap">
+    <div class="buy-head">
+      <h2>МАГАЗИН</h2>
+      <div class="buy-money">Доступно: <b id="buyMoney">$800</b></div>
+      <div class="buy-time">Закупка: <b id="buyTimer">30</b>с &nbsp;·&nbsp; <span class="esc-hint">B / Enter — закрыть</span></div>
+    </div>
+    <div class="buy-cats" id="buyCats"></div>
+    <div class="buy-grid" id="buyGrid"></div>
+    <div class="buy-foot">
+      <span id="buyHint">Выберите оружие. 1–9 — быстрая покупка · B — закрыть</span>
+      <span id="buyOwned"></span>
+    </div>
+  </div>
+</div>
+
+<!-- ============ SCOREBOARD ============ -->
+<div id="scoreboard" class="screen hidden">
+  <div class="panel wide sb-panel">
+    <h2 id="sbTitle">СЧЁТ</h2>
+    <table class="sb" id="sbTable"></table>
+  </div>
+</div>
+
+<!-- ============ PAUSE ============ -->
+<div id="pause" class="screen hidden">
+  <div class="panel">
+    <h2>ПАУЗА</h2>
+    <label class="slider">Чувствительность <output id="oSens2">2.20</output>
+      <input type="range" id="sSens2" min="0.3" max="8" step="0.05" value="2.2"></label>
+    <label class="slider">Громкость <output id="oVol2">60</output>
+      <input type="range" id="sVol2" min="0" max="100" step="1" value="60"></label>
+    <div class="btnrow">
+      <button class="mbtn primary" id="btnResume">ПРОДОЛЖИТЬ</button>
+      <button class="mbtn" id="btnLeave">ВЫЙТИ В МЕНЮ</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ CONNECT OVERLAY ============ -->
+<div id="connect" class="screen hidden">
+  <div class="panel">
+    <h2 id="connTitle">ПОДКЛЮЧЕНИЕ</h2>
+    <div class="status big" id="connStatus">…</div>
+    <div class="btnrow"><button class="mbtn small" id="btnConnCancel">ОТМЕНА</button></div>
+  </div>
+</div>
+
+<!-- ============ TOAST ============ -->
+<div id="toast"></div>
+<div id="fps"></div>
+<div id="clickToPlay" class="hidden"><div class="ctp">НАЖМИТЕ, ЧТОБЫ ИГРАТЬ<br><small>Захват курсора · Esc — пауза</small></div></div>
+
+<script><!--LIB_THREE--></script>
+<script><!--LIB_PEER--></script>
+<script><!--GAME--></script>
+</body>
+</html>

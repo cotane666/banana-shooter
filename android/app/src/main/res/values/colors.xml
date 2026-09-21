@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- the game paints its own dark background; the splash matches it -->
+    <color name="splash_bg">#FF0B0D0F</color>
+    <color name="banana">#FFFF9D21</color>
+    <color name="ic_bg">#FF141A1F</color>
+</resources>

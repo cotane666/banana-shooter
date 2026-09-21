@@ -1,0 +1,59 @@
+name: Build game
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Assemble the single-file game
+        shell: pwsh
+        run: ./build.ps1
+
+      - name: Copy the web entry point and verify the PWA
+        shell: pwsh
+        run: |
+          Copy-Item banana-shooter.html index.html -Force
+          if (-not (Select-String -Path index.html -Pattern 'manifest.webmanifest' -Quiet)) { throw "manifest link missing" }
+          if (-not (Select-String -Path index.html -Pattern 'registerServiceWorker' -Quiet)) { throw "service worker missing" }
+          Write-Host "index.html OK ($((Get-Item index.html).Length) bytes)"
+
+      - name: Prepare the site
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path _site | Out-Null
+          Copy-Item index.html _site/ -Force
+          Copy-Item manifest.webmanifest _site/ -Force
+          Copy-Item sw.js _site/ -Force
+          Copy-Item icons _site/icons -Recurse -Force
+          Copy-Item README.md _site/ -Force
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

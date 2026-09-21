@@ -1,0 +1,34 @@
+# --- служебное для тестов (не коммитим) ---
+_test.html
+_shot.html
+_*.png
+_srv.exe
+_srv.cs
+_icongen.html
+_andicons.html
+_shot-inject.js
+_dbg-inject.js
+_test-inject.js
+
+# --- устаревшее имя сборки ---
+counterstrike.html
+
+# --- Android / сборка ---
+android/app/src/main/assets/
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/.idea/
+android/captures/
+*.apk
+*.aab
+*.keystore
+*.jks
+
+# --- редакторы / ОС ---
+.vscode/
+.idea/
+Thumbs.db
+desktop.ini
+.DS_Store

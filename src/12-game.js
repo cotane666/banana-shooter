@@ -740,6 +740,9 @@ const Game = {
     Bus.on('touchAutoFire', on => {
       const tag = document.getElementById('autoFireTag');
       if (tag) tag.classList.toggle('hidden', !on);
+      // keep the on-screen АВТО button lit while armed
+      const btn = document.getElementById('tAuto');
+      if (btn) btn.classList.toggle('armed', !!on);
       UI.toast(on ? 'Автоогонь: ВКЛ' : 'Автоогонь: ВЫКЛ', on ? '#ff9d21' : undefined);
       Audio3D_SFX.uiClick();
     });
@@ -1006,6 +1009,8 @@ const Game = {
       this.player.resetSpawn(room.entry.x, room.floorY + .05, room.entry.z, room.entry.yaw);
       this.player.pitch = 0;
       this.camera.position.set(room.entry.x, room.floorY + CFG.eyeHeight, room.entry.z);
+      // the room's lights are global in three.js, so enable them only inside
+      setAimRoomLights(true);
       this.spawnTargetWave(true);
       UI.toast('Аим-тренировка: ВКЛ', '#57d16a');
       UI.center('АИМ-ТРЕНИРОВКА', 'T — выход', 2.0);
@@ -1015,6 +1020,7 @@ const Game = {
       this.player.resetSpawn(r.x, r.y, r.z, r.yaw);
       this.camera.position.set(r.x, r.y + CFG.eyeHeight, r.z);
       this._rangeReturn = null;
+      setAimRoomLights(false);
       UI.toast('Аим-тренировка: ВЫКЛ');
       UI.center('ПОЛИГОН', '', 1.4);
     }
@@ -1178,6 +1184,8 @@ const Game = {
       TouchUI.aimPressed = false; TouchUI.autoFire = false; TouchUI._lastTapT = 0;
       const aimBtn = document.getElementById('tAim');
       if (aimBtn) aimBtn.classList.remove('down');
+      const autoBtn = document.getElementById('tAuto');
+      if (autoBtn) autoBtn.classList.remove('down');
       const tag = document.getElementById('autoFireTag');
       if (tag) tag.classList.add('hidden');
     }

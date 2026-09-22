@@ -317,7 +317,8 @@ html.touch #rangePanel #rpToggle{font-size:9.5px;padding:8px 6px;letter-spacing:
   text-align:center;text-shadow:0 0 30px rgba(255,157,33,.4)}
 #clickToPlay small{font-size:12px;letter-spacing:2px;color:var(--dim);font-weight:400}
 
-/* damage direction markers */.dmgdir{position:absolute;left:50%;top:50%;width:0;height:0;transform-origin:center}
+/* damage direction markers */
+.dmgdir{position:absolute;left:50%;top:50%;width:0;height:0;transform-origin:center}
 .dmgdir i{position:absolute;left:-40px;top:-118px;width:80px;height:15px;
   background:linear-gradient(0deg,rgba(255,60,40,.9),rgba(255,60,40,0));
   clip-path:polygon(50% 0,100% 100%,0 100%);animation:dfade 1.1s ease-out forwards;display:block}
@@ -357,10 +358,14 @@ html.touch #rangePanel #rpToggle{font-size:9.5px;padding:8px 6px;letter-spacing:
 .tbtn.down{transform:scale(.92);background:rgba(255,157,33,.55)}
 .tbtn.small{width:58px;height:58px;font-size:10.5px}
 .tbtn.accent{background:rgba(255,157,33,.35);border-color:rgba(255,180,90,.75)}
+/* the АВТО button stays lit while automatic fire is armed */
+.tbtn.armed{background:rgba(255,157,33,.8);border-color:rgba(255,205,130,.95);
+  box-shadow:0 0 15px rgba(255,157,33,.65);color:#12161a}
 
-/* Aim sits where the fire button used to be; firing is done by tapping the
-   screen, so a dedicated ОГОНЬ button would only get in the way. */
+/* Fire controls live on the RIGHT edge, under the right thumb: ПРИЦЕЛ and the
+   dedicated АВТО toggle (automatic fire), so no gesture is needed. */
 #tAim{right:16px;bottom:110px}
+#tAuto{right:16px;bottom:176px}
 #tJump{right:18px;bottom:26px}
 #tCrouch{right:88px;bottom:30px}
 /* Reload, weapon-swap and pause live in a row at the top centre: far from both
@@ -440,6 +445,7 @@ html.touch .fld input{padding:10px;font-size:15px}
   html.touch #feed{top:150px}
   .tbtn.small{width:52px;height:52px;font-size:9.5px}
   #tAim{right:16px;bottom:96px}
+  #tAuto{right:16px;bottom:154px}
   #tJump{right:18px;bottom:20px}
   #tCrouch{right:80px;bottom:24px}
   #tReload{left:calc(50% - 84px);top:calc(6px + env(safe-area-inset-top,0px))}
@@ -466,6 +472,7 @@ html.touch .fld input{padding:10px;font-size:15px}
   html.touch #tHint{bottom:28%}
   .tbtn.small{width:56px;height:56px}
   #tAim{right:14px;bottom:110px}
+  #tAuto{right:14px;bottom:176px}
   #tJump{right:14px;bottom:28px}
   #tCrouch{right:82px;bottom:32px}
   #tReload{left:calc(50% - 92px);top:calc(10px + env(safe-area-inset-top,0px))}
@@ -1792,9 +1799,9 @@ function buildAimRoom(scene, world) {
   scene.add(roof);
 
   /* The room is roofed, so the arena sun is shadowed out of it. Give it its own
-     lighting. A directional light is the reliable choice here: this build of
-     three.js (r160) uses physical units, where point lights fall off with
-     distance and render very dim indoors. */
+     lighting — but three.js lights are GLOBAL, so these must be switched off
+     while the player is in the arena, otherwise the whole map gets brighter.
+     `MAP.aimRoom.lights` holds them for the game to toggle. */
   const roomHemi = new THREE.HemisphereLight(0xdfe9f5, 0x8a8070, 2.4);
   roomHemi.position.set(cx, H * .6, cz);
   scene.add(roomHemi);
@@ -1814,6 +1821,8 @@ function buildAimRoom(scene, world) {
   // warm ambient so nothing reads as pure black
   const roomAmb = new THREE.AmbientLight(0xffffff, 0.55);
   scene.add(roomAmb);
+
+  const roomLights = [roomHemi, roomSun, roomSun2, roomAmb];
 
   // floor lane markings: a firing line and distance ticks
   const line = (z, w, col) => {
@@ -1846,9 +1855,20 @@ function buildAimRoom(scene, world) {
   MAP.aimRoom = {
     minX: minX, maxX: maxX, minZ: minZ, maxZ: maxZ,
     entry: { x: cx, z: maxZ - 3, yaw: 0 },            // yaw 0 faces -Z, into the room
-    floorY: 0
+    floorY: 0,
+    lights: roomLights
   };
+  // the room starts dark: its lights are enabled only while the player is inside
+  setAimRoomLights(false);
   return MAP.aimRoom;
+}
+
+/* Aim-room lights are global in three.js, so they are switched on only while the
+   player is inside the room. Otherwise they brighten the whole arena. */
+function setAimRoomLights(on) {
+  const room = MAP.aimRoom;
+  if (!room || !room.lights) return;
+  for (const l of room.lights) l.visible = !!on;
 }
 
 /* ---------------- stepped ramp ----------------
@@ -4336,13 +4356,14 @@ const TouchUI = {
     wrap.innerHTML =
       '<div id="tStick"><div id="tStickBase"></div><div id="tStickKnob"></div></div>' +
       '<button id="tAim" class="tbtn small">ПРИЦЕЛ</button>' +
+      '<button id="tAuto" class="tbtn small">АВТО</button>' +
       '<button id="tJump" class="tbtn small">ПРЫЖОК</button>' +
       '<button id="tCrouch" class="tbtn small">ПРИСЕСТЬ</button>' +
       '<button id="tReload" class="tbtn small">ПЕРЕЗАРЯДКА</button>' +
       '<button id="tSwap" class="tbtn small">СМЕНА</button>' +
       '<button id="tBuy" class="tbtn small accent">МАГАЗИН</button>' +
       '<button id="tMenu" class="tbtn small">ПАУЗА</button>' +
-      '<div id="tHint">Слева — ходьба · Справа — обзор · Тап — огонь · Двойной тап — автоогонь</div>';
+      '<div id="tHint">Слева — ходьба · Справа — обзор · Тап — огонь · АВТО — очередь</div>';
     document.body.appendChild(wrap);
     this.root = wrap;
     this._els = {
@@ -4350,6 +4371,7 @@ const TouchUI = {
       base: document.getElementById('tStickBase'),
       knob: document.getElementById('tStickKnob'),
       aim: document.getElementById('tAim'),
+      auto: document.getElementById('tAuto'),
       jump: document.getElementById('tJump'),
       crouch: document.getElementById('tCrouch'),
       reload: document.getElementById('tReload'),
@@ -4373,6 +4395,14 @@ const TouchUI = {
     };
     holdBtn(E.crouch, () => { this.crouchHeld = true; }, () => { this.crouchHeld = false; });
     holdBtn(E.jump, () => { this.jumpQueued = true; }, () => { });
+    // Dedicated automatic-fire button (a toggle). It replaced the old
+    // double-tap gesture, which conflicted with normal aiming taps.
+    E.auto.addEventListener('touchstart', e => {
+      swallow(e);
+      this.autoFire = !this.autoFire;
+      E.auto.classList.toggle('down', this.autoFire);
+      Bus.emit('touchAutoFire', this.autoFire);
+    }, { passive: false });
     // scope is a TOGGLE, not a hold: with one thumb on the button you could not
     // also look around or tap to fire, so the only way to shoot while scoped was
     // to lower the scope first. As a toggle the thumb is free to aim and shoot.
@@ -4461,22 +4491,8 @@ const TouchUI = {
         this.lookTouchId = -1;
         // a drag means "look around", not "shoot"
         if (!(U.now() - this._tapStart < 220 && this._tapMoved < 14)) continue;
-        const now = U.now();
-        if (this.autoFire) {
-          // tapping again cancels the locked automatic fire
-          this.autoFire = false;
-          this._lastTapT = 0;
-          Bus.emit('touchAutoFire', false);
-        } else if (now - this._lastTapT < 320) {
-          // double tap = lock automatic fire on, like holding LMB on a PC
-          this._lastTapT = 0;
-          this.autoFire = true;
-          Bus.emit('touchAutoFire', true);
-        } else {
-          // single tap = one shot
-          this._lastTapT = now;
-          this.tapFire = true;
-        }
+        // single tap = one shot (automatic fire has its own on-screen button)
+        this.tapFire = true;
       }
     }
   },
@@ -4507,6 +4523,7 @@ const TouchUI = {
     // an overlay is up so they cannot be pressed through it
     const blocked = UI.overlayOpen() && !Game.buyOpen;
     this._els.aim.style.opacity = blocked ? '.35' : '1';
+    this._els.auto.style.opacity = blocked ? '.35' : '1';
     this._els.jump.style.opacity = blocked ? '.35' : '1';
     this._els.crouch.style.opacity = blocked ? '.35' : '1';
     this._els.reload.style.opacity = blocked ? '.35' : '1';
@@ -5034,13 +5051,24 @@ const UI = {
       const b = document.createElement('button');
       b.textContent = c.label;
       b.dataset.cat = c.id;
-      b.addEventListener('click', () => { this.buyCat = c.id; UI.renderBuy(); Audio3D_SFX.uiClick(); });
+      b.addEventListener('click', () => {
+      this.buyCat = c.id;
+      // renderBuy needs the live player; calling it with no argument used to
+      // throw on `player.money`, so the grid silently stayed empty until the
+      // menu was reopened. Fall back to the current player.
+      const p = (typeof Game !== 'undefined' && Game.player) ? Game.player : null;
+      if (p) this.renderBuy(p, Game.buyTimer);
+      Audio3D_SFX.uiClick();
+    });
       wrap.appendChild(b);
     });
   },
   renderBuy(player, secondsLeft) {
     const wrap = this.el.buyGrid;
     if (!wrap) return;
+    // defensive: some callers (category buttons) may not pass a player
+    if (!player && typeof Game !== 'undefined' && Game.player) player = Game.player;
+    if (!player) return;
     const free = typeof Game !== 'undefined' && Game.mode === CS.MODE.RANGE;
     this.el.buyMoney.textContent = free ? 'БЕСПЛАТНО' : U.money(player.money);
     this.el.buyTimer.textContent = free ? '∞' : Math.max(0, Math.ceil(secondsLeft));
@@ -6348,6 +6376,9 @@ const Game = {
     Bus.on('touchAutoFire', on => {
       const tag = document.getElementById('autoFireTag');
       if (tag) tag.classList.toggle('hidden', !on);
+      // keep the on-screen АВТО button lit while armed
+      const btn = document.getElementById('tAuto');
+      if (btn) btn.classList.toggle('armed', !!on);
       UI.toast(on ? 'Автоогонь: ВКЛ' : 'Автоогонь: ВЫКЛ', on ? '#ff9d21' : undefined);
       Audio3D_SFX.uiClick();
     });
@@ -6614,6 +6645,8 @@ const Game = {
       this.player.resetSpawn(room.entry.x, room.floorY + .05, room.entry.z, room.entry.yaw);
       this.player.pitch = 0;
       this.camera.position.set(room.entry.x, room.floorY + CFG.eyeHeight, room.entry.z);
+      // the room's lights are global in three.js, so enable them only inside
+      setAimRoomLights(true);
       this.spawnTargetWave(true);
       UI.toast('Аим-тренировка: ВКЛ', '#57d16a');
       UI.center('АИМ-ТРЕНИРОВКА', 'T — выход', 2.0);
@@ -6623,6 +6656,7 @@ const Game = {
       this.player.resetSpawn(r.x, r.y, r.z, r.yaw);
       this.camera.position.set(r.x, r.y + CFG.eyeHeight, r.z);
       this._rangeReturn = null;
+      setAimRoomLights(false);
       UI.toast('Аим-тренировка: ВЫКЛ');
       UI.center('ПОЛИГОН', '', 1.4);
     }
@@ -6786,6 +6820,8 @@ const Game = {
       TouchUI.aimPressed = false; TouchUI.autoFire = false; TouchUI._lastTapT = 0;
       const aimBtn = document.getElementById('tAim');
       if (aimBtn) aimBtn.classList.remove('down');
+      const autoBtn = document.getElementById('tAuto');
+      if (autoBtn) autoBtn.classList.remove('down');
       const tag = document.getElementById('autoFireTag');
       if (tag) tag.classList.add('hidden');
     }

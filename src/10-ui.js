@@ -162,13 +162,24 @@ const UI = {
       const b = document.createElement('button');
       b.textContent = c.label;
       b.dataset.cat = c.id;
-      b.addEventListener('click', () => { this.buyCat = c.id; UI.renderBuy(); Audio3D_SFX.uiClick(); });
+      b.addEventListener('click', () => {
+      this.buyCat = c.id;
+      // renderBuy needs the live player; calling it with no argument used to
+      // throw on `player.money`, so the grid silently stayed empty until the
+      // menu was reopened. Fall back to the current player.
+      const p = (typeof Game !== 'undefined' && Game.player) ? Game.player : null;
+      if (p) this.renderBuy(p, Game.buyTimer);
+      Audio3D_SFX.uiClick();
+    });
       wrap.appendChild(b);
     });
   },
   renderBuy(player, secondsLeft) {
     const wrap = this.el.buyGrid;
     if (!wrap) return;
+    // defensive: some callers (category buttons) may not pass a player
+    if (!player && typeof Game !== 'undefined' && Game.player) player = Game.player;
+    if (!player) return;
     const free = typeof Game !== 'undefined' && Game.mode === CS.MODE.RANGE;
     this.el.buyMoney.textContent = free ? 'БЕСПЛАТНО' : U.money(player.money);
     this.el.buyTimer.textContent = free ? '∞' : Math.max(0, Math.ceil(secondsLeft));

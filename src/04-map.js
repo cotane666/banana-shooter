@@ -347,9 +347,9 @@ function buildAimRoom(scene, world) {
   scene.add(roof);
 
   /* The room is roofed, so the arena sun is shadowed out of it. Give it its own
-     lighting. A directional light is the reliable choice here: this build of
-     three.js (r160) uses physical units, where point lights fall off with
-     distance and render very dim indoors. */
+     lighting — but three.js lights are GLOBAL, so these must be switched off
+     while the player is in the arena, otherwise the whole map gets brighter.
+     `MAP.aimRoom.lights` holds them for the game to toggle. */
   const roomHemi = new THREE.HemisphereLight(0xdfe9f5, 0x8a8070, 2.4);
   roomHemi.position.set(cx, H * .6, cz);
   scene.add(roomHemi);
@@ -369,6 +369,8 @@ function buildAimRoom(scene, world) {
   // warm ambient so nothing reads as pure black
   const roomAmb = new THREE.AmbientLight(0xffffff, 0.55);
   scene.add(roomAmb);
+
+  const roomLights = [roomHemi, roomSun, roomSun2, roomAmb];
 
   // floor lane markings: a firing line and distance ticks
   const line = (z, w, col) => {
@@ -401,9 +403,20 @@ function buildAimRoom(scene, world) {
   MAP.aimRoom = {
     minX: minX, maxX: maxX, minZ: minZ, maxZ: maxZ,
     entry: { x: cx, z: maxZ - 3, yaw: 0 },            // yaw 0 faces -Z, into the room
-    floorY: 0
+    floorY: 0,
+    lights: roomLights
   };
+  // the room starts dark: its lights are enabled only while the player is inside
+  setAimRoomLights(false);
   return MAP.aimRoom;
+}
+
+/* Aim-room lights are global in three.js, so they are switched on only while the
+   player is inside the room. Otherwise they brighten the whole arena. */
+function setAimRoomLights(on) {
+  const room = MAP.aimRoom;
+  if (!room || !room.lights) return;
+  for (const l of room.lights) l.visible = !!on;
 }
 
 /* ---------------- stepped ramp ----------------

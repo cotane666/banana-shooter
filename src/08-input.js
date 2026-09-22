@@ -236,13 +236,14 @@ const TouchUI = {
     wrap.innerHTML =
       '<div id="tStick"><div id="tStickBase"></div><div id="tStickKnob"></div></div>' +
       '<button id="tAim" class="tbtn small">ПРИЦЕЛ</button>' +
+      '<button id="tAuto" class="tbtn small">АВТО</button>' +
       '<button id="tJump" class="tbtn small">ПРЫЖОК</button>' +
       '<button id="tCrouch" class="tbtn small">ПРИСЕСТЬ</button>' +
       '<button id="tReload" class="tbtn small">ПЕРЕЗАРЯДКА</button>' +
       '<button id="tSwap" class="tbtn small">СМЕНА</button>' +
       '<button id="tBuy" class="tbtn small accent">МАГАЗИН</button>' +
       '<button id="tMenu" class="tbtn small">ПАУЗА</button>' +
-      '<div id="tHint">Слева — ходьба · Справа — обзор · Тап — огонь · Двойной тап — автоогонь</div>';
+      '<div id="tHint">Слева — ходьба · Справа — обзор · Тап — огонь · АВТО — очередь</div>';
     document.body.appendChild(wrap);
     this.root = wrap;
     this._els = {
@@ -250,6 +251,7 @@ const TouchUI = {
       base: document.getElementById('tStickBase'),
       knob: document.getElementById('tStickKnob'),
       aim: document.getElementById('tAim'),
+      auto: document.getElementById('tAuto'),
       jump: document.getElementById('tJump'),
       crouch: document.getElementById('tCrouch'),
       reload: document.getElementById('tReload'),
@@ -273,6 +275,14 @@ const TouchUI = {
     };
     holdBtn(E.crouch, () => { this.crouchHeld = true; }, () => { this.crouchHeld = false; });
     holdBtn(E.jump, () => { this.jumpQueued = true; }, () => { });
+    // Dedicated automatic-fire button (a toggle). It replaced the old
+    // double-tap gesture, which conflicted with normal aiming taps.
+    E.auto.addEventListener('touchstart', e => {
+      swallow(e);
+      this.autoFire = !this.autoFire;
+      E.auto.classList.toggle('down', this.autoFire);
+      Bus.emit('touchAutoFire', this.autoFire);
+    }, { passive: false });
     // scope is a TOGGLE, not a hold: with one thumb on the button you could not
     // also look around or tap to fire, so the only way to shoot while scoped was
     // to lower the scope first. As a toggle the thumb is free to aim and shoot.
@@ -361,22 +371,8 @@ const TouchUI = {
         this.lookTouchId = -1;
         // a drag means "look around", not "shoot"
         if (!(U.now() - this._tapStart < 220 && this._tapMoved < 14)) continue;
-        const now = U.now();
-        if (this.autoFire) {
-          // tapping again cancels the locked automatic fire
-          this.autoFire = false;
-          this._lastTapT = 0;
-          Bus.emit('touchAutoFire', false);
-        } else if (now - this._lastTapT < 320) {
-          // double tap = lock automatic fire on, like holding LMB on a PC
-          this._lastTapT = 0;
-          this.autoFire = true;
-          Bus.emit('touchAutoFire', true);
-        } else {
-          // single tap = one shot
-          this._lastTapT = now;
-          this.tapFire = true;
-        }
+        // single tap = one shot (automatic fire has its own on-screen button)
+        this.tapFire = true;
       }
     }
   },
@@ -407,6 +403,7 @@ const TouchUI = {
     // an overlay is up so they cannot be pressed through it
     const blocked = UI.overlayOpen() && !Game.buyOpen;
     this._els.aim.style.opacity = blocked ? '.35' : '1';
+    this._els.auto.style.opacity = blocked ? '.35' : '1';
     this._els.jump.style.opacity = blocked ? '.35' : '1';
     this._els.crouch.style.opacity = blocked ? '.35' : '1';
     this._els.reload.style.opacity = blocked ? '.35' : '1';

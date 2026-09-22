@@ -257,6 +257,12 @@ html.touch #buy .buy-close{order:1}
 .sb .d{color:var(--red)}
 .sb .s{color:var(--or);font-weight:800;text-align:right}
 
+/* ---------- auto-fire indicator (touch) ---------- */
+#autoFireTag{position:absolute;left:50%;top:14%;transform:translateX(-50%);z-index:24;
+  font-size:12px;font-weight:800;letter-spacing:3px;color:#12161a;background:var(--or);
+  padding:4px 14px;border-radius:12px;pointer-events:none;box-shadow:0 0 14px rgba(255,157,33,.5)}
+html.touch #autoFireTag{font-size:11px;padding:3px 11px}
+
 /* ---------- click to play ---------- */
 #clickToPlay{position:fixed;inset:0;z-index:35;background:rgba(4,6,8,.86);display:flex;
   align-items:center;justify-content:center;cursor:pointer;backdrop-filter:blur(3px)}
@@ -264,8 +270,7 @@ html.touch #buy .buy-close{order:1}
   text-align:center;text-shadow:0 0 30px rgba(255,157,33,.4)}
 #clickToPlay small{font-size:12px;letter-spacing:2px;color:var(--dim);font-weight:400}
 
-/* damage direction markers */
-.dmgdir{position:absolute;left:50%;top:50%;width:0;height:0;transform-origin:center}
+/* damage direction markers */.dmgdir{position:absolute;left:50%;top:50%;width:0;height:0;transform-origin:center}
 .dmgdir i{position:absolute;left:-40px;top:-118px;width:80px;height:15px;
   background:linear-gradient(0deg,rgba(255,60,40,.9),rgba(255,60,40,0));
   clip-path:polygon(50% 0,100% 100%,0 100%);animation:dfade 1.1s ease-out forwards;display:block}

@@ -101,6 +101,17 @@ const WEAPONS = {
   negev: { name: 'NEGEV', cat: 'lmg', slot: 2, price: 1700, dmg: 35, rpm: 800, mag: 150, reserve: 0,
            auto: true, spread: .055, moveSpread: .030, recoil: 1.2, falloff: .72, range: 90, headMul: 2.2, sound: 'rifle' },
 
+  /* ---------------- heavy: spin-up minigun ---------------- */
+  minigun: { name: 'МИНИГАН', cat: 'heavy', slot: 2, price: 10000, dmg: 30, rpm: 1150, mag: 200, reserve: 200,
+             auto: true, spread: .048, moveSpread: .034, recoil: .80, falloff: .62, range: 95, headMul: 1.9,
+             sound: 'rifle', spinUp: .5 },
+
+  /* ---------------- heavy: rocket launcher with splash damage ---------------- */
+  rpg: { name: 'РПГ-7', cat: 'heavy', slot: 2, price: 10000, dmg: 130, rpm: 38, mag: 1, reserve: 6,
+         auto: false, spread: .006, moveSpread: .070, recoil: 6.2, falloff: .99, range: 220, headMul: 1.2,
+         sound: 'awp', projectile: 'rocket', projSpeed: 48, projGravity: 3,
+         splash: 6.0, splashDmg: 120 },
+
   /* ---------------- the legendary banana launcher ---------------- */
   banana: { name: 'БАНАН', cat: 'banana', slot: 2, price: 10000, dmg: 55, rpm: 130, mag: 12, reserve: 60,
             auto: false, spread: .010, moveSpread: .020, recoil: 2.6, falloff: .85, range: 120, headMul: 1.6,
@@ -119,6 +130,7 @@ const BUY_CATS = [
   { id: 'sniper',  label: 'СНАЙПЕРКИ' },
   { id: 'shotgun', label: 'ДРОБОВИКИ' },
   { id: 'lmg',     label: 'ПУЛЕМЁТЫ' },
+  { id: 'heavy',   label: 'ТЯЖЁЛОЕ' },
   { id: 'banana',  label: 'БАНАНЫ' },
   { id: 'gear',    label: 'СНАРЯЖЕНИЕ' }
 ];

@@ -349,6 +349,51 @@ function buildWeaponModel(id) {
       break;
     }
 
+    /* ---------------- M134 Minigun: rotating multi-barrel ---------------- */
+    case 'minigun': {
+      add(B(.090, .110, .34, PAL.gun, 0, 0, -.16));                   // motor housing
+      add(B(.100, .120, .14, PAL.black, 0, 0, .01));                  // gearbox
+      // six barrels arranged around the axis
+      for (let i = 0; i < 6; i++) {
+        const a = (i / 6) * Math.PI * 2;
+        add(CYL(.014, .62, PAL.steel, Math.cos(a) * .052, Math.sin(a) * .052, -.62, 6));
+      }
+      add(CYL(.060, .07, PAL.black, 0, 0, -.30, 12));                 // barrel clamp front
+      add(CYL(.058, .06, PAL.black, 0, 0, -.52, 12));                 // barrel clamp rear
+      add(CYL(.056, .05, PAL.gun, 0, 0, -.94, 12));                   // muzzle ring
+      add(B(.150, .170, .170, PAL.oliv, 0, -.165, -.02));             // ammo drum
+      add(CYL(.085, .10, PAL.oliv, 0, -.165, .085, 14));              // drum body
+      add(B(.034, .120, .11, PAL.black, 0, -.070, -.14));             // feed chute
+      add(B(.026, .034, .28, PAL.black, 0, .078, -.14));              // top rail
+      add(B(.034, .044, .05, PAL.steel, 0, .082, -.02));              // rear sight
+      add(CYL(.020, .045, PAL.steel, 0, .082, -.36, 8));              // front sight
+      add(B(.040, .105, .26, PAL.poly, 0, -.020, .16));               // rear grip
+      add(B(.026, .070, .09, PAL.black, 0, -.075, -.48));             // foregrip
+      break;
+    }
+
+    /* ---------------- RPG-7: rocket launcher ---------------- */
+    case 'rpg': {
+      add(CYL(.052, 1.02, PAL.oliv, 0, .020, -.40, 14));              // long launch tube
+      add(CYL(.060, .10, PAL.black, 0, .020, .08, 14));               // rear flare
+      add(CYL(.086, .14, PAL.oliv, 0, .020, -.92, 14));               // muzzle bell
+      add(B(.055, .062, .20, PAL.black, 0, .020, -.14));              // heat shield band
+      add(B(.048, .054, .18, PAL.wood, 0, .020, .16));                // wooden rear grip
+      add(B(.048, .054, .14, PAL.wood, 0, .020, -.44));               // wooden foregrip
+      add(CYL(.030, .24, PAL.steel, 0, .098, -.46, 10));              // optic tube
+      add(CYL(.036, .05, PAL.gun, 0, .098, -.34, 10));                // eyepiece
+      add(CYL(.038, .05, PAL.gun, 0, .098, -.58, 10));                // objective
+      add(B(.024, .062, .022, PAL.black, 0, .058, -.44));             // scope mount
+      // loaded rocket: a cone poking out of the muzzle
+      add(CYL(.040, .16, PAL.gun, 0, .020, -1.04, 12));               // rocket body
+      const cone = new THREE.Mesh(new THREE.ConeGeometry(.062, .16, 12), gunMat(0x8a3b2a));
+      cone.position.set(0, .020, -1.19); cone.rotation.x = -Math.PI / 2;
+      add(cone);                                                      // warhead
+      add(B(.028, .040, .12, PAL.black, 0, -.030, -.06));             // trigger group
+      add(B(.030, .050, .07, PAL.black, 0, -.060, -.02));             // pistol grip
+      break;
+    }
+
     /* ---------------- БАНАН: the banana launcher ---------------- */
     case 'banana': {
       const YELLOW = 0xf2c93b, YELLOW2 = 0xd9a92a, BROWN = 0x7a5a24, GREEN = 0x6f8f3a;
@@ -426,8 +471,35 @@ const MUZZLE_Z = {
   galil: -0.74, famas: -0.54, ak47: -0.70, m4a4: -0.73, sg553: -0.72,
   awp: -1.04, scout: -0.82,
   negev: -0.86,
+  minigun: -0.98, rpg: -1.20,
   banana: -0.92
 };
+
+/* An RPG rocket: a tube body with a pointed warhead and fins */
+let _rocketGeoCache = null;
+function buildRocketProjectile() {
+  const g = new THREE.Group();
+  const body = new THREE.Mesh(new THREE.CylinderGeometry(.038, .038, .34, 10), gunMat(0x5d6247));
+  body.rotation.x = Math.PI / 2;
+  g.add(body);
+  const nose = new THREE.Mesh(new THREE.ConeGeometry(.055, .18, 10), gunMat(0x8a3b2a));
+  nose.rotation.x = -Math.PI / 2;
+  nose.position.z = -.26;
+  g.add(nose);
+  const tail = new THREE.Mesh(new THREE.CylinderGeometry(.050, .038, .09, 10), gunMat(0x2b2f34));
+  tail.rotation.x = Math.PI / 2;
+  tail.position.z = .20;
+  g.add(tail);
+  // four stabiliser fins
+  for (let i = 0; i < 4; i++) {
+    const a = (i / 4) * Math.PI * 2;
+    const fin = new THREE.Mesh(new THREE.BoxGeometry(.010, .075, .10), gunMat(0x2b2f34));
+    fin.position.set(Math.cos(a) * .045, Math.sin(a) * .045, .16);
+    fin.rotation.z = a;
+    g.add(fin);
+  }
+  return g;
+}
 
 /* A small curved banana used as the flying projectile */
 let _bananaProjGeo = null, _bananaProjMats = null;
@@ -512,6 +584,8 @@ class Player {
     this.spread = 0;
     this.zoom = 0;            // 0..1 scope blend
     this.isAiming = false;
+    this.spinT = 0;           // minigun spin-up (0..1)
+    this._spinSnd = false;
     this.deployT = 0;
     this.triggerDown = false;
     this.shotsSinceRelease = 0;
@@ -797,6 +871,21 @@ class Player {
     this.isAiming = this._wantAim && canZoom;
     this.zoom = U.lerp(this.zoom, this.isAiming ? 1 : 0, 1 - Math.pow(0.0000015, dt));
 
+    // minigun spin-up: the barrels must wind up before it can fire, and they
+    // wind back down when the trigger is released
+    if (def.spinUp) {
+      const want = this.triggerDown && this.reloadT <= 0 && this.deployT <= 0 && this.weapon.mag > 0;
+      const rate = want ? 1 / def.spinUp : 1 / (def.spinUp * 1.4);
+      this.spinT = U.clamp(this.spinT + (want ? rate : -rate) * dt, 0, 1);
+      if (!this.isLocal && this.spinT > .05 && !this._spinSnd) {
+        Audio3D_SFX.minigunSpin(this.pos.x, this.pos.y + 1.2, this.pos.z);
+        this._spinSnd = true;
+      }
+      if (this.spinT <= .05) this._spinSnd = false;
+    } else {
+      this.spinT = 0;
+    }
+
     if (this.flashT > 0) {
       this.flashT -= dt;
       const k = U.clamp(this.flashT / .05, 0, 1);
@@ -822,6 +911,7 @@ class Player {
   canFire() {
     const w = this.weapon; if (!w) return false;
     if (!this.alive) return false;
+    if (this.def.spinUp && this.spinT < 1) return false;   // minigun must wind up
     if (this.fireCd > 0 || this.reloadT > 0 || this.deployT > 0) return false;
     if (w.mag <= 0) return false;
     return true;

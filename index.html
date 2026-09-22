@@ -272,6 +272,12 @@ html.touch #buy .buy-close{order:1}
 .sb .d{color:var(--red)}
 .sb .s{color:var(--or);font-weight:800;text-align:right}
 
+/* ---------- auto-fire indicator (touch) ---------- */
+#autoFireTag{position:absolute;left:50%;top:14%;transform:translateX(-50%);z-index:24;
+  font-size:12px;font-weight:800;letter-spacing:3px;color:#12161a;background:var(--or);
+  padding:4px 14px;border-radius:12px;pointer-events:none;box-shadow:0 0 14px rgba(255,157,33,.5)}
+html.touch #autoFireTag{font-size:11px;padding:3px 11px}
+
 /* ---------- click to play ---------- */
 #clickToPlay{position:fixed;inset:0;z-index:35;background:rgba(4,6,8,.86);display:flex;
   align-items:center;justify-content:center;cursor:pointer;backdrop-filter:blur(3px)}
@@ -279,8 +285,7 @@ html.touch #buy .buy-close{order:1}
   text-align:center;text-shadow:0 0 30px rgba(255,157,33,.4)}
 #clickToPlay small{font-size:12px;letter-spacing:2px;color:var(--dim);font-weight:400}
 
-/* damage direction markers */
-.dmgdir{position:absolute;left:50%;top:50%;width:0;height:0;transform-origin:center}
+/* damage direction markers */.dmgdir{position:absolute;left:50%;top:50%;width:0;height:0;transform-origin:center}
 .dmgdir i{position:absolute;left:-40px;top:-118px;width:80px;height:15px;
   background:linear-gradient(0deg,rgba(255,60,40,.9),rgba(255,60,40,0));
   clip-path:polygon(50% 0,100% 100%,0 100%);animation:dfade 1.1s ease-out forwards;display:block}
@@ -571,6 +576,7 @@ html.touch .fld input{padding:10px;font-size:15px}
   <canvas id="minimap" width="180" height="180"></canvas>
   <div id="feed"></div>
   <div id="centerMsg"></div>
+  <div id="autoFireTag" class="hidden">АВТО</div>
   <div id="dmgDirs"></div>
   <div id="dmgFlash"></div>
   <div id="lowhp"></div>
@@ -754,6 +760,17 @@ const WEAPONS = {
   negev: { name: 'NEGEV', cat: 'lmg', slot: 2, price: 1700, dmg: 35, rpm: 800, mag: 150, reserve: 0,
            auto: true, spread: .055, moveSpread: .030, recoil: 1.2, falloff: .72, range: 90, headMul: 2.2, sound: 'rifle' },
 
+  /* ---------------- heavy: spin-up minigun ---------------- */
+  minigun: { name: 'МИНИГАН', cat: 'heavy', slot: 2, price: 10000, dmg: 30, rpm: 1150, mag: 200, reserve: 200,
+             auto: true, spread: .048, moveSpread: .034, recoil: .80, falloff: .62, range: 95, headMul: 1.9,
+             sound: 'rifle', spinUp: .5 },
+
+  /* ---------------- heavy: rocket launcher with splash damage ---------------- */
+  rpg: { name: 'РПГ-7', cat: 'heavy', slot: 2, price: 10000, dmg: 130, rpm: 38, mag: 1, reserve: 6,
+         auto: false, spread: .006, moveSpread: .070, recoil: 6.2, falloff: .99, range: 220, headMul: 1.2,
+         sound: 'awp', projectile: 'rocket', projSpeed: 48, projGravity: 3,
+         splash: 6.0, splashDmg: 120 },
+
   /* ---------------- the legendary banana launcher ---------------- */
   banana: { name: 'БАНАН', cat: 'banana', slot: 2, price: 10000, dmg: 55, rpm: 130, mag: 12, reserve: 60,
             auto: false, spread: .010, moveSpread: .020, recoil: 2.6, falloff: .85, range: 120, headMul: 1.6,
@@ -772,6 +789,7 @@ const BUY_CATS = [
   { id: 'sniper',  label: 'СНАЙПЕРКИ' },
   { id: 'shotgun', label: 'ДРОБОВИКИ' },
   { id: 'lmg',     label: 'ПУЛЕМЁТЫ' },
+  { id: 'heavy',   label: 'ТЯЖЁЛОЕ' },
   { id: 'banana',  label: 'БАНАНЫ' },
   { id: 'gear',    label: 'СНАРЯЖЕНИЕ' }
 ];
@@ -2146,9 +2164,94 @@ const Audio3D_SFX = {
     osc.start(t); osc.stop(t + P.td + .02);
   },
 
-  /* the banana launcher: a cartoon "boing" plus a rubbery squeak */
-  bananaShot(x, y, z) {
+  /* rocket launch: a whoosh plus a deep thump */
+  rocketShot(x, y, z) {
     if (!this.ctx || this.muted) return;
+    const sp = this._spatial(x, y, z, 3, 180);
+    if (sp.gain <= .002) return;
+    const t = this.ctx.currentTime;
+    const out = this.ctx.createGain(); out.gain.value = sp.gain;
+    const pan = this.ctx.createStereoPanner ? this.ctx.createStereoPanner() : null;
+    if (pan) { pan.pan.value = sp.pan; out.connect(pan); pan.connect(this.master); } else out.connect(this.master);
+    // whoosh: band-swept noise
+    const src = this.ctx.createBufferSource();
+    src.buffer = this.noiseBuf;
+    const bp = this.ctx.createBiquadFilter();
+    bp.type = 'bandpass'; bp.Q.value = 1.2;
+    bp.frequency.setValueAtTime(1800, t);
+    bp.frequency.exponentialRampToValueAtTime(320, t + .5);
+    const g = this.ctx.createGain();
+    g.gain.setValueAtTime(.42, t);
+    g.gain.exponentialRampToValueAtTime(.001, t + .55);
+    src.connect(bp); bp.connect(g); g.connect(out);
+    src.start(t); src.stop(t + .58);
+    // launch thump
+    const o = this.ctx.createOscillator();
+    o.type = 'sine';
+    o.frequency.setValueAtTime(120, t);
+    o.frequency.exponentialRampToValueAtTime(48, t + .30);
+    const og = this.ctx.createGain();
+    og.gain.setValueAtTime(.55, t);
+    og.gain.exponentialRampToValueAtTime(.001, t + .32);
+    o.connect(og); og.connect(out);
+    o.start(t); o.stop(t + .34);
+  },
+
+  /* minigun spin-up: a rising mechanical whirr */
+  minigunSpin(x, y, z) {
+    if (!this.ctx || this.muted) return;
+    const sp = this._spatial(x, y, z, 3, 120);
+    if (sp.gain <= .002) return;
+    const t = this.ctx.currentTime;
+    const out = this.ctx.createGain(); out.gain.value = sp.gain * .5;
+    const pan = this.ctx.createStereoPanner ? this.ctx.createStereoPanner() : null;
+    if (pan) { pan.pan.value = sp.pan; out.connect(pan); pan.connect(this.master); } else out.connect(this.master);
+    const o = this.ctx.createOscillator();
+    o.type = 'sawtooth';
+    o.frequency.setValueAtTime(70, t);
+    o.frequency.exponentialRampToValueAtTime(340, t + .5);
+    const lp = this.ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 1200;
+    const g = this.ctx.createGain();
+    g.gain.setValueAtTime(.16, t);
+    g.gain.linearRampToValueAtTime(.22, t + .4);
+    g.gain.exponentialRampToValueAtTime(.001, t + .6);
+    o.connect(lp); lp.connect(g); g.connect(out);
+    o.start(t); o.stop(t + .62);
+  },
+
+  /* rocket impact: a big low boom with debris noise */
+  explosionAt(x, y, z) {
+    if (!this.ctx || this.muted) return;
+    const sp = this._spatial(x, y, z, 6, 220);
+    if (sp.gain <= .002) return;
+    const t = this.ctx.currentTime;
+    const out = this.ctx.createGain(); out.gain.value = sp.gain;
+    const pan = this.ctx.createStereoPanner ? this.ctx.createStereoPanner() : null;
+    if (pan) { pan.pan.value = sp.pan; out.connect(pan); pan.connect(this.master); } else out.connect(this.master);
+    // deep boom
+    const o = this.ctx.createOscillator();
+    o.type = 'sine';
+    o.frequency.setValueAtTime(90, t);
+    o.frequency.exponentialRampToValueAtTime(28, t + .65);
+    const og = this.ctx.createGain();
+    og.gain.setValueAtTime(.75, t);
+    og.gain.exponentialRampToValueAtTime(.001, t + .7);
+    o.connect(og); og.connect(out);
+    o.start(t); o.stop(t + .72);
+    // blast noise
+    const src = this.ctx.createBufferSource();
+    src.buffer = this.noiseBuf;
+    src.playbackRate.value = .35;
+    const lp = this.ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 700;
+    const g = this.ctx.createGain();
+    g.gain.setValueAtTime(.55, t);
+    g.gain.exponentialRampToValueAtTime(.001, t + .55);
+    src.connect(lp); lp.connect(g); g.connect(out);
+    src.start(t); src.stop(t + .58);
+  },
+
+  /* the banana launcher: a cartoon "boing" plus a rubbery squeak */
+  bananaShot(x, y, z) {    if (!this.ctx || this.muted) return;
     const sp = this._spatial(x, y, z, 3, 150);
     if (sp.gain <= .002) return;
     const t = this.ctx.currentTime;
@@ -2655,6 +2758,51 @@ function buildWeaponModel(id) {
       break;
     }
 
+    /* ---------------- M134 Minigun: rotating multi-barrel ---------------- */
+    case 'minigun': {
+      add(B(.090, .110, .34, PAL.gun, 0, 0, -.16));                   // motor housing
+      add(B(.100, .120, .14, PAL.black, 0, 0, .01));                  // gearbox
+      // six barrels arranged around the axis
+      for (let i = 0; i < 6; i++) {
+        const a = (i / 6) * Math.PI * 2;
+        add(CYL(.014, .62, PAL.steel, Math.cos(a) * .052, Math.sin(a) * .052, -.62, 6));
+      }
+      add(CYL(.060, .07, PAL.black, 0, 0, -.30, 12));                 // barrel clamp front
+      add(CYL(.058, .06, PAL.black, 0, 0, -.52, 12));                 // barrel clamp rear
+      add(CYL(.056, .05, PAL.gun, 0, 0, -.94, 12));                   // muzzle ring
+      add(B(.150, .170, .170, PAL.oliv, 0, -.165, -.02));             // ammo drum
+      add(CYL(.085, .10, PAL.oliv, 0, -.165, .085, 14));              // drum body
+      add(B(.034, .120, .11, PAL.black, 0, -.070, -.14));             // feed chute
+      add(B(.026, .034, .28, PAL.black, 0, .078, -.14));              // top rail
+      add(B(.034, .044, .05, PAL.steel, 0, .082, -.02));              // rear sight
+      add(CYL(.020, .045, PAL.steel, 0, .082, -.36, 8));              // front sight
+      add(B(.040, .105, .26, PAL.poly, 0, -.020, .16));               // rear grip
+      add(B(.026, .070, .09, PAL.black, 0, -.075, -.48));             // foregrip
+      break;
+    }
+
+    /* ---------------- RPG-7: rocket launcher ---------------- */
+    case 'rpg': {
+      add(CYL(.052, 1.02, PAL.oliv, 0, .020, -.40, 14));              // long launch tube
+      add(CYL(.060, .10, PAL.black, 0, .020, .08, 14));               // rear flare
+      add(CYL(.086, .14, PAL.oliv, 0, .020, -.92, 14));               // muzzle bell
+      add(B(.055, .062, .20, PAL.black, 0, .020, -.14));              // heat shield band
+      add(B(.048, .054, .18, PAL.wood, 0, .020, .16));                // wooden rear grip
+      add(B(.048, .054, .14, PAL.wood, 0, .020, -.44));               // wooden foregrip
+      add(CYL(.030, .24, PAL.steel, 0, .098, -.46, 10));              // optic tube
+      add(CYL(.036, .05, PAL.gun, 0, .098, -.34, 10));                // eyepiece
+      add(CYL(.038, .05, PAL.gun, 0, .098, -.58, 10));                // objective
+      add(B(.024, .062, .022, PAL.black, 0, .058, -.44));             // scope mount
+      // loaded rocket: a cone poking out of the muzzle
+      add(CYL(.040, .16, PAL.gun, 0, .020, -1.04, 12));               // rocket body
+      const cone = new THREE.Mesh(new THREE.ConeGeometry(.062, .16, 12), gunMat(0x8a3b2a));
+      cone.position.set(0, .020, -1.19); cone.rotation.x = -Math.PI / 2;
+      add(cone);                                                      // warhead
+      add(B(.028, .040, .12, PAL.black, 0, -.030, -.06));             // trigger group
+      add(B(.030, .050, .07, PAL.black, 0, -.060, -.02));             // pistol grip
+      break;
+    }
+
     /* ---------------- БАНАН: the banana launcher ---------------- */
     case 'banana': {
       const YELLOW = 0xf2c93b, YELLOW2 = 0xd9a92a, BROWN = 0x7a5a24, GREEN = 0x6f8f3a;
@@ -2732,8 +2880,35 @@ const MUZZLE_Z = {
   galil: -0.74, famas: -0.54, ak47: -0.70, m4a4: -0.73, sg553: -0.72,
   awp: -1.04, scout: -0.82,
   negev: -0.86,
+  minigun: -0.98, rpg: -1.20,
   banana: -0.92
 };
+
+/* An RPG rocket: a tube body with a pointed warhead and fins */
+let _rocketGeoCache = null;
+function buildRocketProjectile() {
+  const g = new THREE.Group();
+  const body = new THREE.Mesh(new THREE.CylinderGeometry(.038, .038, .34, 10), gunMat(0x5d6247));
+  body.rotation.x = Math.PI / 2;
+  g.add(body);
+  const nose = new THREE.Mesh(new THREE.ConeGeometry(.055, .18, 10), gunMat(0x8a3b2a));
+  nose.rotation.x = -Math.PI / 2;
+  nose.position.z = -.26;
+  g.add(nose);
+  const tail = new THREE.Mesh(new THREE.CylinderGeometry(.050, .038, .09, 10), gunMat(0x2b2f34));
+  tail.rotation.x = Math.PI / 2;
+  tail.position.z = .20;
+  g.add(tail);
+  // four stabiliser fins
+  for (let i = 0; i < 4; i++) {
+    const a = (i / 4) * Math.PI * 2;
+    const fin = new THREE.Mesh(new THREE.BoxGeometry(.010, .075, .10), gunMat(0x2b2f34));
+    fin.position.set(Math.cos(a) * .045, Math.sin(a) * .045, .16);
+    fin.rotation.z = a;
+    g.add(fin);
+  }
+  return g;
+}
 
 /* A small curved banana used as the flying projectile */
 let _bananaProjGeo = null, _bananaProjMats = null;
@@ -2818,6 +2993,8 @@ class Player {
     this.spread = 0;
     this.zoom = 0;            // 0..1 scope blend
     this.isAiming = false;
+    this.spinT = 0;           // minigun spin-up (0..1)
+    this._spinSnd = false;
     this.deployT = 0;
     this.triggerDown = false;
     this.shotsSinceRelease = 0;
@@ -3103,6 +3280,21 @@ class Player {
     this.isAiming = this._wantAim && canZoom;
     this.zoom = U.lerp(this.zoom, this.isAiming ? 1 : 0, 1 - Math.pow(0.0000015, dt));
 
+    // minigun spin-up: the barrels must wind up before it can fire, and they
+    // wind back down when the trigger is released
+    if (def.spinUp) {
+      const want = this.triggerDown && this.reloadT <= 0 && this.deployT <= 0 && this.weapon.mag > 0;
+      const rate = want ? 1 / def.spinUp : 1 / (def.spinUp * 1.4);
+      this.spinT = U.clamp(this.spinT + (want ? rate : -rate) * dt, 0, 1);
+      if (!this.isLocal && this.spinT > .05 && !this._spinSnd) {
+        Audio3D_SFX.minigunSpin(this.pos.x, this.pos.y + 1.2, this.pos.z);
+        this._spinSnd = true;
+      }
+      if (this.spinT <= .05) this._spinSnd = false;
+    } else {
+      this.spinT = 0;
+    }
+
     if (this.flashT > 0) {
       this.flashT -= dt;
       const k = U.clamp(this.flashT / .05, 0, 1);
@@ -3128,6 +3320,7 @@ class Player {
   canFire() {
     const w = this.weapon; if (!w) return false;
     if (!this.alive) return false;
+    if (this.def.spinUp && this.spinT < 1) return false;   // minigun must wind up
     if (this.fireCd > 0 || this.reloadT > 0 || this.deployT > 0) return false;
     if (w.mag <= 0) return false;
     return true;
@@ -3963,6 +4156,7 @@ const TouchUI = {
   look: { dx: 0, dy: 0 },
   firePressed: false,
   aimPressed: false,
+  autoFire: false,        // double-tap locked: keep firing like a held LMB
   jumpQueued: false,
   reloadQueued: false,
   switchQueued: 0,
@@ -3972,6 +4166,7 @@ const TouchUI = {
   _els: {},
   _tapStart: 0,
   _tapMoved: 0,
+  _lastTapT: 0,
 
   init() {
     if (!IS_TOUCH) return;
@@ -3996,7 +4191,7 @@ const TouchUI = {
       '<button id="tSwap" class="tbtn small">СМЕНА</button>' +
       '<button id="tBuy" class="tbtn small accent">МАГАЗИН</button>' +
       '<button id="tMenu" class="tbtn small">ПАУЗА</button>' +
-      '<div id="tHint">Слева — ходьба · Справа — обзор · Тап по экрану — огонь</div>';
+      '<div id="tHint">Слева — ходьба · Справа — обзор · Тап — огонь · Двойной тап — автоогонь</div>';
     document.body.appendChild(wrap);
     this.root = wrap;
     this._els = {
@@ -4025,9 +4220,17 @@ const TouchUI = {
       el.addEventListener('touchend', e => { swallow(e); el.classList.remove('down'); off(); }, { passive: false });
       el.addEventListener('touchcancel', e => { swallow(e); el.classList.remove('down'); off(); }, { passive: false });
     };
-    holdBtn(E.aim, () => { this.aimPressed = true; }, () => { this.aimPressed = false; });
     holdBtn(E.crouch, () => { this.crouchHeld = true; }, () => { this.crouchHeld = false; });
     holdBtn(E.jump, () => { this.jumpQueued = true; }, () => { });
+    // scope is a TOGGLE, not a hold: with one thumb on the button you could not
+    // also look around or tap to fire, so the only way to shoot while scoped was
+    // to lower the scope first. As a toggle the thumb is free to aim and shoot.
+    E.aim.addEventListener('touchstart', e => {
+      swallow(e);
+      this.aimPressed = !this.aimPressed;
+      E.aim.classList.toggle('down', this.aimPressed);
+      Bus.emit('touchAim', this.aimPressed);
+    }, { passive: false });
     E.reload.addEventListener('touchstart', e => { swallow(e); this.reloadQueued = true; E.reload.classList.add('down'); setTimeout(() => E.reload.classList.remove('down'), 130); }, { passive: false });
     E.swap.addEventListener('touchstart', e => { swallow(e); this.switchQueued = 1; E.swap.classList.add('down'); setTimeout(() => E.swap.classList.remove('down'), 130); }, { passive: false });
     E.buy.addEventListener('touchstart', e => { swallow(e); Bus.emit('touchBuy'); E.buy.classList.add('down'); setTimeout(() => E.buy.classList.remove('down'), 130); }, { passive: false });
@@ -4105,8 +4308,24 @@ const TouchUI = {
         this._els.knob.style.display = 'none';
       } else if (t.identifier === this.lookTouchId) {
         this.lookTouchId = -1;
-        // a quick tap with barely any movement = fire once
-        if (U.now() - this._tapStart < 220 && this._tapMoved < 14) this.tapFire = true;
+        // a drag means "look around", not "shoot"
+        if (!(U.now() - this._tapStart < 220 && this._tapMoved < 14)) continue;
+        const now = U.now();
+        if (this.autoFire) {
+          // tapping again cancels the locked automatic fire
+          this.autoFire = false;
+          this._lastTapT = 0;
+          Bus.emit('touchAutoFire', false);
+        } else if (now - this._lastTapT < 320) {
+          // double tap = lock automatic fire on, like holding LMB on a PC
+          this._lastTapT = 0;
+          this.autoFire = true;
+          Bus.emit('touchAutoFire', true);
+        } else {
+          // single tap = one shot
+          this._lastTapT = now;
+          this.tapFire = true;
+        }
       }
     }
   },
@@ -5687,8 +5906,13 @@ const Game = {
       if (UI.overlayOpen()) return;
       if (this.mode !== CS.MODE.MENU) { this.togglePause(true); Audio3D_SFX.uiClick(); }
     });
-    Bus.on('zombieAttack', (z, dmg) => this.playerHurt(dmg, z));
-    Bus.on('zombieDied', (z, hs) => this.onZombieDied(z, hs));
+    Bus.on('touchAutoFire', on => {
+      const tag = document.getElementById('autoFireTag');
+      if (tag) tag.classList.toggle('hidden', !on);
+      UI.toast(on ? 'Автоогонь: ВКЛ' : 'Автоогонь: ВЫКЛ', on ? '#ff9d21' : undefined);
+      Audio3D_SFX.uiClick();
+    });
+    Bus.on('zombieAttack', (z, dmg) => this.playerHurt(dmg, z));    Bus.on('zombieDied', (z, hs) => this.onZombieDied(z, hs));
     Bus.on('zombieHit', (z, part, dmg, dir) => this.onZombieHit(z, part, dmg, dir));
     Bus.on('zombieGrowl', z => Audio3D_SFX.growl(z.pos.x, z.pos.y + 1.4, z.pos.z, z.type));
 
@@ -5875,6 +6099,14 @@ const Game = {
     this.running = true;
     this.paused = false;
     this.buyOpen = false;
+    // clear any touch toggles left over from a previous match
+    if (typeof TouchUI !== 'undefined') {
+      TouchUI.aimPressed = false; TouchUI.autoFire = false; TouchUI._lastTapT = 0;
+      const aimBtn = document.getElementById('tAim');
+      if (aimBtn) aimBtn.classList.remove('down');
+      const tag = document.getElementById('autoFireTag');
+      if (tag) tag.classList.add('hidden');
+    }
     Input.enabled = true;          // arm keyboard, mouse buttons and wheel
     UI.show('hud');
     if (IS_TOUCH) {
@@ -6329,7 +6561,11 @@ const Game = {
       p.viewPunchP += def.recoil * .0028;
       p.viewPunchY += U.rand(-1, 1) * def.recoil * .0012;
       p.flashT = .06;
-      Audio3D_SFX.bananaShot(muzzleWorld.x, muzzleWorld.y, muzzleWorld.z);
+      if (def.projectile === 'rocket') {
+        Audio3D_SFX.rocketShot(muzzleWorld.x, muzzleWorld.y, muzzleWorld.z);
+      } else {
+        Audio3D_SFX.bananaShot(muzzleWorld.x, muzzleWorld.y, muzzleWorld.z);
+      }
       if (this.effects) this.effects.muzzleSmoke(muzzleWorld.x, muzzleWorld.y, muzzleWorld.z, baseDir);
       if (this.mode === CS.MODE.ONLINE) {
         Net.send({ t: 'shot', wid: w.id, ox: origin.x, oy: origin.y, oz: origin.z, dx: baseDir.x, dy: baseDir.y, dz: baseDir.z, sp: spread });
@@ -6369,21 +6605,25 @@ const Game = {
     const p = this.player;
     const spread = p.aimSpread();
     const d = this.spreadDirection(dir, spread, false);
-    const mesh = buildBananaProjectile();
+    const isRocket = def.projectile === 'rocket';
+    const mesh = isRocket ? buildRocketProjectile() : buildBananaProjectile();
     mesh.position.set(origin.x, origin.y, origin.z);
-    mesh.rotation.x = Math.PI / 2;          // lie along the flight path
+    if (!isRocket) mesh.rotation.x = Math.PI / 2;   // bananas lie along the flight path
     this.scene.add(mesh);
     const speed = def.projSpeed || 30;
     this.projectiles.push({
       mesh: mesh,
+      kind: def.projectile,
       alive: true,
-      life: 6,
+      life: isRocket ? 8 : 6,
       prev: { x: origin.x, y: origin.y, z: origin.z },
       pos: { x: origin.x, y: origin.y, z: origin.z },
       vel: { x: d.x * speed, y: d.y * speed, z: d.z * speed },
       grav: def.projGravity || 12,
       dmg: def.dmg,
       headMul: def.headMul || 1.6,
+      splash: def.splash || 0,          // blast radius (m); 0 = no splash
+      splashDmg: def.splashDmg || 0,
       ownerIsLocal: true
     });
     if (this.projectiles.length > 40) {
@@ -6444,21 +6684,73 @@ const Game = {
       }
 
       if (impactPoint) {
-        this.effects.bananaSplat(impactPoint.x, impactPoint.y, impactPoint.z);
-        Audio3D_SFX.bananaSplat(impactPoint.x, impactPoint.y, impactPoint.z);
-        UI.hitmark(false);
+        if (pr.splash > 0) {
+          // rockets detonate: blast damage to everything nearby
+          this.explode(impactPoint, pr);
+        } else {
+          this.effects.bananaSplat(impactPoint.x, impactPoint.y, impactPoint.z);
+          Audio3D_SFX.bananaSplat(impactPoint.x, impactPoint.y, impactPoint.z);
+          UI.hitmark(false);
+        }
         this.removeProjectile(i);
         continue;
       }
 
       pr.pos.x = nx; pr.pos.y = ny; pr.pos.z = nz;
       pr.mesh.position.set(pr.pos.x, pr.pos.y, pr.pos.z);
-      // point the banana along its velocity
-      const vl = Math.hypot(pr.vel.x, pr.vel.y, pr.vel.z) || 1;
-      pr.mesh.lookAt(pr.pos.x + pr.vel.x / vl, pr.pos.y + pr.vel.y / vl, pr.pos.z + pr.vel.z / vl);
-      pr.mesh.rotateZ(Math.PI / 2);
-      pr.mesh.rotateY(Math.sin(performance.now() * .02) * .4);   // silly spin
-      if (pr.life <= 0 || pr.pos.y < -3) this.removeProjectile(i);
+      if (pr.kind === 'rocket') {
+        // rockets point straight along their flight path
+        const vl = Math.hypot(pr.vel.x, pr.vel.y, pr.vel.z) || 1;
+        pr.mesh.lookAt(pr.pos.x + pr.vel.x / vl, pr.pos.y + pr.vel.y / vl, pr.pos.z + pr.vel.z / vl);
+      } else {
+        // point the banana along its velocity
+        const vl = Math.hypot(pr.vel.x, pr.vel.y, pr.vel.z) || 1;
+        pr.mesh.lookAt(pr.pos.x + pr.vel.x / vl, pr.pos.y + pr.vel.y / vl, pr.pos.z + pr.vel.z / vl);
+        pr.mesh.rotateZ(Math.PI / 2);
+        pr.mesh.rotateY(Math.sin(performance.now() * .02) * .4);   // silly spin
+      }
+      if (pr.life <= 0 || pr.pos.y < -3) {
+        // a rocket that runs out of life or hits the void still detonates
+        if (pr.splash > 0) this.explode({ x: pr.pos.x, y: pr.pos.y, z: pr.pos.z }, pr);
+        this.removeProjectile(i);
+      }
+    }
+  },
+
+  /* radial blast damage for rockets: falls off linearly to the edge */
+  explode(center, pr) {
+    const R = pr.splash, dmg = pr.splashDmg || pr.dmg;
+    this.effects.explosion(center.x, center.y, center.z, R);
+    Audio3D_SFX.explosionAt(center.x, center.y, center.z);
+    UI.hitmark(false);
+    // zombies
+    if (this.horde) {
+      for (const z of this.horde.list) {
+        if (!z.alive || z.dying) continue;
+        const d = Math.hypot(z.pos.x - center.x, (z.pos.y + 1) - center.y, z.pos.z - center.z);
+        if (d > R) continue;
+        const k = 1 - d / R;
+        const dealt = dmg * k;
+        const killed = z.takeDamage(dealt, 'body', { x: 0, y: 0, z: 0 });
+        this.player.damageDealt += dealt;
+        if (killed) { /* scored in onZombieDied */ }
+      }
+    }
+    // the opponent
+    if (this.mode === CS.MODE.ONLINE && this.remote && this.remote.alive) {
+      const rp = this.remote;
+      const d = Math.hypot(rp.pos.x - center.x, (rp.pos.y + 1) - center.y, rp.pos.z - center.z);
+      if (d <= R) {
+        const k = 1 - d / R;
+        this.sendPvpHit(dmg * k, 'body', false);
+      }
+    }
+    // splash back on the shooter, so point-blank rockets hurt
+    const p = this.player;
+    const ds = Math.hypot(p.pos.x - center.x, (p.pos.y + 1) - center.y, p.pos.z - center.z);
+    if (ds <= R * .8) {
+      const k = 1 - ds / (R * .8);
+      this.applyDamageToSelf(dmg * k * .45, center);
     }
   },
 
@@ -7026,9 +7318,13 @@ const Game = {
     if (IS_TOUCH) {
       if (Input.consumeReload()) p.reload();
       if (Input.consumeWeaponSwitch()) this.switchSlot(p.nextSlot());
-      // tapping the look half fires one shot (there is no fire button on phones)
+      // Touch firing: a single tap fires one shot; a double tap (or the fire
+      // button held) locks automatic fire on, exactly like holding LMB on a PC.
       if (TouchUI.tapFire) { TouchUI.tapFire = false; p.triggerDown = true; this._tapFireRelease = 2; }
       if (this._tapFireRelease > 0 && --this._tapFireRelease === 0) p.triggerDown = false;
+      if (TouchUI.autoFire) p.triggerDown = true;
+      else if (!TouchUI.firePressed && this._tapFireRelease <= 0) p.triggerDown = false;
+      if (TouchUI.firePressed) p.triggerDown = true;
     }
 
     p._wantAim = Input.aimDown() && canLook;

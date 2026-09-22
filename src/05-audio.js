@@ -89,9 +89,94 @@ const Audio3D_SFX = {
     osc.start(t); osc.stop(t + P.td + .02);
   },
 
-  /* the banana launcher: a cartoon "boing" plus a rubbery squeak */
-  bananaShot(x, y, z) {
+  /* rocket launch: a whoosh plus a deep thump */
+  rocketShot(x, y, z) {
     if (!this.ctx || this.muted) return;
+    const sp = this._spatial(x, y, z, 3, 180);
+    if (sp.gain <= .002) return;
+    const t = this.ctx.currentTime;
+    const out = this.ctx.createGain(); out.gain.value = sp.gain;
+    const pan = this.ctx.createStereoPanner ? this.ctx.createStereoPanner() : null;
+    if (pan) { pan.pan.value = sp.pan; out.connect(pan); pan.connect(this.master); } else out.connect(this.master);
+    // whoosh: band-swept noise
+    const src = this.ctx.createBufferSource();
+    src.buffer = this.noiseBuf;
+    const bp = this.ctx.createBiquadFilter();
+    bp.type = 'bandpass'; bp.Q.value = 1.2;
+    bp.frequency.setValueAtTime(1800, t);
+    bp.frequency.exponentialRampToValueAtTime(320, t + .5);
+    const g = this.ctx.createGain();
+    g.gain.setValueAtTime(.42, t);
+    g.gain.exponentialRampToValueAtTime(.001, t + .55);
+    src.connect(bp); bp.connect(g); g.connect(out);
+    src.start(t); src.stop(t + .58);
+    // launch thump
+    const o = this.ctx.createOscillator();
+    o.type = 'sine';
+    o.frequency.setValueAtTime(120, t);
+    o.frequency.exponentialRampToValueAtTime(48, t + .30);
+    const og = this.ctx.createGain();
+    og.gain.setValueAtTime(.55, t);
+    og.gain.exponentialRampToValueAtTime(.001, t + .32);
+    o.connect(og); og.connect(out);
+    o.start(t); o.stop(t + .34);
+  },
+
+  /* minigun spin-up: a rising mechanical whirr */
+  minigunSpin(x, y, z) {
+    if (!this.ctx || this.muted) return;
+    const sp = this._spatial(x, y, z, 3, 120);
+    if (sp.gain <= .002) return;
+    const t = this.ctx.currentTime;
+    const out = this.ctx.createGain(); out.gain.value = sp.gain * .5;
+    const pan = this.ctx.createStereoPanner ? this.ctx.createStereoPanner() : null;
+    if (pan) { pan.pan.value = sp.pan; out.connect(pan); pan.connect(this.master); } else out.connect(this.master);
+    const o = this.ctx.createOscillator();
+    o.type = 'sawtooth';
+    o.frequency.setValueAtTime(70, t);
+    o.frequency.exponentialRampToValueAtTime(340, t + .5);
+    const lp = this.ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 1200;
+    const g = this.ctx.createGain();
+    g.gain.setValueAtTime(.16, t);
+    g.gain.linearRampToValueAtTime(.22, t + .4);
+    g.gain.exponentialRampToValueAtTime(.001, t + .6);
+    o.connect(lp); lp.connect(g); g.connect(out);
+    o.start(t); o.stop(t + .62);
+  },
+
+  /* rocket impact: a big low boom with debris noise */
+  explosionAt(x, y, z) {
+    if (!this.ctx || this.muted) return;
+    const sp = this._spatial(x, y, z, 6, 220);
+    if (sp.gain <= .002) return;
+    const t = this.ctx.currentTime;
+    const out = this.ctx.createGain(); out.gain.value = sp.gain;
+    const pan = this.ctx.createStereoPanner ? this.ctx.createStereoPanner() : null;
+    if (pan) { pan.pan.value = sp.pan; out.connect(pan); pan.connect(this.master); } else out.connect(this.master);
+    // deep boom
+    const o = this.ctx.createOscillator();
+    o.type = 'sine';
+    o.frequency.setValueAtTime(90, t);
+    o.frequency.exponentialRampToValueAtTime(28, t + .65);
+    const og = this.ctx.createGain();
+    og.gain.setValueAtTime(.75, t);
+    og.gain.exponentialRampToValueAtTime(.001, t + .7);
+    o.connect(og); og.connect(out);
+    o.start(t); o.stop(t + .72);
+    // blast noise
+    const src = this.ctx.createBufferSource();
+    src.buffer = this.noiseBuf;
+    src.playbackRate.value = .35;
+    const lp = this.ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 700;
+    const g = this.ctx.createGain();
+    g.gain.setValueAtTime(.55, t);
+    g.gain.exponentialRampToValueAtTime(.001, t + .55);
+    src.connect(lp); lp.connect(g); g.connect(out);
+    src.start(t); src.stop(t + .58);
+  },
+
+  /* the banana launcher: a cartoon "boing" plus a rubbery squeak */
+  bananaShot(x, y, z) {    if (!this.ctx || this.muted) return;
     const sp = this._spatial(x, y, z, 3, 150);
     if (sp.gain <= .002) return;
     const t = this.ctx.currentTime;

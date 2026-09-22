@@ -466,8 +466,13 @@ const Game = {
       if (UI.overlayOpen()) return;
       if (this.mode !== CS.MODE.MENU) { this.togglePause(true); Audio3D_SFX.uiClick(); }
     });
-    Bus.on('zombieAttack', (z, dmg) => this.playerHurt(dmg, z));
-    Bus.on('zombieDied', (z, hs) => this.onZombieDied(z, hs));
+    Bus.on('touchAutoFire', on => {
+      const tag = document.getElementById('autoFireTag');
+      if (tag) tag.classList.toggle('hidden', !on);
+      UI.toast(on ? 'Автоогонь: ВКЛ' : 'Автоогонь: ВЫКЛ', on ? '#ff9d21' : undefined);
+      Audio3D_SFX.uiClick();
+    });
+    Bus.on('zombieAttack', (z, dmg) => this.playerHurt(dmg, z));    Bus.on('zombieDied', (z, hs) => this.onZombieDied(z, hs));
     Bus.on('zombieHit', (z, part, dmg, dir) => this.onZombieHit(z, part, dmg, dir));
     Bus.on('zombieGrowl', z => Audio3D_SFX.growl(z.pos.x, z.pos.y + 1.4, z.pos.z, z.type));
 
@@ -654,6 +659,14 @@ const Game = {
     this.running = true;
     this.paused = false;
     this.buyOpen = false;
+    // clear any touch toggles left over from a previous match
+    if (typeof TouchUI !== 'undefined') {
+      TouchUI.aimPressed = false; TouchUI.autoFire = false; TouchUI._lastTapT = 0;
+      const aimBtn = document.getElementById('tAim');
+      if (aimBtn) aimBtn.classList.remove('down');
+      const tag = document.getElementById('autoFireTag');
+      if (tag) tag.classList.add('hidden');
+    }
     Input.enabled = true;          // arm keyboard, mouse buttons and wheel
     UI.show('hud');
     if (IS_TOUCH) {
@@ -1108,7 +1121,11 @@ const Game = {
       p.viewPunchP += def.recoil * .0028;
       p.viewPunchY += U.rand(-1, 1) * def.recoil * .0012;
       p.flashT = .06;
-      Audio3D_SFX.bananaShot(muzzleWorld.x, muzzleWorld.y, muzzleWorld.z);
+      if (def.projectile === 'rocket') {
+        Audio3D_SFX.rocketShot(muzzleWorld.x, muzzleWorld.y, muzzleWorld.z);
+      } else {
+        Audio3D_SFX.bananaShot(muzzleWorld.x, muzzleWorld.y, muzzleWorld.z);
+      }
       if (this.effects) this.effects.muzzleSmoke(muzzleWorld.x, muzzleWorld.y, muzzleWorld.z, baseDir);
       if (this.mode === CS.MODE.ONLINE) {
         Net.send({ t: 'shot', wid: w.id, ox: origin.x, oy: origin.y, oz: origin.z, dx: baseDir.x, dy: baseDir.y, dz: baseDir.z, sp: spread });
@@ -1148,21 +1165,25 @@ const Game = {
     const p = this.player;
     const spread = p.aimSpread();
     const d = this.spreadDirection(dir, spread, false);
-    const mesh = buildBananaProjectile();
+    const isRocket = def.projectile === 'rocket';
+    const mesh = isRocket ? buildRocketProjectile() : buildBananaProjectile();
     mesh.position.set(origin.x, origin.y, origin.z);
-    mesh.rotation.x = Math.PI / 2;          // lie along the flight path
+    if (!isRocket) mesh.rotation.x = Math.PI / 2;   // bananas lie along the flight path
     this.scene.add(mesh);
     const speed = def.projSpeed || 30;
     this.projectiles.push({
       mesh: mesh,
+      kind: def.projectile,
       alive: true,
-      life: 6,
+      life: isRocket ? 8 : 6,
       prev: { x: origin.x, y: origin.y, z: origin.z },
       pos: { x: origin.x, y: origin.y, z: origin.z },
       vel: { x: d.x * speed, y: d.y * speed, z: d.z * speed },
       grav: def.projGravity || 12,
       dmg: def.dmg,
       headMul: def.headMul || 1.6,
+      splash: def.splash || 0,          // blast radius (m); 0 = no splash
+      splashDmg: def.splashDmg || 0,
       ownerIsLocal: true
     });
     if (this.projectiles.length > 40) {
@@ -1223,21 +1244,73 @@ const Game = {
       }
 
       if (impactPoint) {
-        this.effects.bananaSplat(impactPoint.x, impactPoint.y, impactPoint.z);
-        Audio3D_SFX.bananaSplat(impactPoint.x, impactPoint.y, impactPoint.z);
-        UI.hitmark(false);
+        if (pr.splash > 0) {
+          // rockets detonate: blast damage to everything nearby
+          this.explode(impactPoint, pr);
+        } else {
+          this.effects.bananaSplat(impactPoint.x, impactPoint.y, impactPoint.z);
+          Audio3D_SFX.bananaSplat(impactPoint.x, impactPoint.y, impactPoint.z);
+          UI.hitmark(false);
+        }
         this.removeProjectile(i);
         continue;
       }
 
       pr.pos.x = nx; pr.pos.y = ny; pr.pos.z = nz;
       pr.mesh.position.set(pr.pos.x, pr.pos.y, pr.pos.z);
-      // point the banana along its velocity
-      const vl = Math.hypot(pr.vel.x, pr.vel.y, pr.vel.z) || 1;
-      pr.mesh.lookAt(pr.pos.x + pr.vel.x / vl, pr.pos.y + pr.vel.y / vl, pr.pos.z + pr.vel.z / vl);
-      pr.mesh.rotateZ(Math.PI / 2);
-      pr.mesh.rotateY(Math.sin(performance.now() * .02) * .4);   // silly spin
-      if (pr.life <= 0 || pr.pos.y < -3) this.removeProjectile(i);
+      if (pr.kind === 'rocket') {
+        // rockets point straight along their flight path
+        const vl = Math.hypot(pr.vel.x, pr.vel.y, pr.vel.z) || 1;
+        pr.mesh.lookAt(pr.pos.x + pr.vel.x / vl, pr.pos.y + pr.vel.y / vl, pr.pos.z + pr.vel.z / vl);
+      } else {
+        // point the banana along its velocity
+        const vl = Math.hypot(pr.vel.x, pr.vel.y, pr.vel.z) || 1;
+        pr.mesh.lookAt(pr.pos.x + pr.vel.x / vl, pr.pos.y + pr.vel.y / vl, pr.pos.z + pr.vel.z / vl);
+        pr.mesh.rotateZ(Math.PI / 2);
+        pr.mesh.rotateY(Math.sin(performance.now() * .02) * .4);   // silly spin
+      }
+      if (pr.life <= 0 || pr.pos.y < -3) {
+        // a rocket that runs out of life or hits the void still detonates
+        if (pr.splash > 0) this.explode({ x: pr.pos.x, y: pr.pos.y, z: pr.pos.z }, pr);
+        this.removeProjectile(i);
+      }
+    }
+  },
+
+  /* radial blast damage for rockets: falls off linearly to the edge */
+  explode(center, pr) {
+    const R = pr.splash, dmg = pr.splashDmg || pr.dmg;
+    this.effects.explosion(center.x, center.y, center.z, R);
+    Audio3D_SFX.explosionAt(center.x, center.y, center.z);
+    UI.hitmark(false);
+    // zombies
+    if (this.horde) {
+      for (const z of this.horde.list) {
+        if (!z.alive || z.dying) continue;
+        const d = Math.hypot(z.pos.x - center.x, (z.pos.y + 1) - center.y, z.pos.z - center.z);
+        if (d > R) continue;
+        const k = 1 - d / R;
+        const dealt = dmg * k;
+        const killed = z.takeDamage(dealt, 'body', { x: 0, y: 0, z: 0 });
+        this.player.damageDealt += dealt;
+        if (killed) { /* scored in onZombieDied */ }
+      }
+    }
+    // the opponent
+    if (this.mode === CS.MODE.ONLINE && this.remote && this.remote.alive) {
+      const rp = this.remote;
+      const d = Math.hypot(rp.pos.x - center.x, (rp.pos.y + 1) - center.y, rp.pos.z - center.z);
+      if (d <= R) {
+        const k = 1 - d / R;
+        this.sendPvpHit(dmg * k, 'body', false);
+      }
+    }
+    // splash back on the shooter, so point-blank rockets hurt
+    const p = this.player;
+    const ds = Math.hypot(p.pos.x - center.x, (p.pos.y + 1) - center.y, p.pos.z - center.z);
+    if (ds <= R * .8) {
+      const k = 1 - ds / (R * .8);
+      this.applyDamageToSelf(dmg * k * .45, center);
     }
   },
 
@@ -1805,9 +1878,13 @@ const Game = {
     if (IS_TOUCH) {
       if (Input.consumeReload()) p.reload();
       if (Input.consumeWeaponSwitch()) this.switchSlot(p.nextSlot());
-      // tapping the look half fires one shot (there is no fire button on phones)
+      // Touch firing: a single tap fires one shot; a double tap (or the fire
+      // button held) locks automatic fire on, exactly like holding LMB on a PC.
       if (TouchUI.tapFire) { TouchUI.tapFire = false; p.triggerDown = true; this._tapFireRelease = 2; }
       if (this._tapFireRelease > 0 && --this._tapFireRelease === 0) p.triggerDown = false;
+      if (TouchUI.autoFire) p.triggerDown = true;
+      else if (!TouchUI.firePressed && this._tapFireRelease <= 0) p.triggerDown = false;
+      if (TouchUI.firePressed) p.triggerDown = true;
     }
 
     p._wantAim = Input.aimDown() && canLook;

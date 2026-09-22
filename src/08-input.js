@@ -207,6 +207,7 @@ const TouchUI = {
   look: { dx: 0, dy: 0 },
   firePressed: false,
   aimPressed: false,
+  autoFire: false,        // double-tap locked: keep firing like a held LMB
   jumpQueued: false,
   reloadQueued: false,
   switchQueued: 0,
@@ -216,6 +217,7 @@ const TouchUI = {
   _els: {},
   _tapStart: 0,
   _tapMoved: 0,
+  _lastTapT: 0,
 
   init() {
     if (!IS_TOUCH) return;
@@ -240,7 +242,7 @@ const TouchUI = {
       '<button id="tSwap" class="tbtn small">СМЕНА</button>' +
       '<button id="tBuy" class="tbtn small accent">МАГАЗИН</button>' +
       '<button id="tMenu" class="tbtn small">ПАУЗА</button>' +
-      '<div id="tHint">Слева — ходьба · Справа — обзор · Тап по экрану — огонь</div>';
+      '<div id="tHint">Слева — ходьба · Справа — обзор · Тап — огонь · Двойной тап — автоогонь</div>';
     document.body.appendChild(wrap);
     this.root = wrap;
     this._els = {
@@ -269,9 +271,17 @@ const TouchUI = {
       el.addEventListener('touchend', e => { swallow(e); el.classList.remove('down'); off(); }, { passive: false });
       el.addEventListener('touchcancel', e => { swallow(e); el.classList.remove('down'); off(); }, { passive: false });
     };
-    holdBtn(E.aim, () => { this.aimPressed = true; }, () => { this.aimPressed = false; });
     holdBtn(E.crouch, () => { this.crouchHeld = true; }, () => { this.crouchHeld = false; });
     holdBtn(E.jump, () => { this.jumpQueued = true; }, () => { });
+    // scope is a TOGGLE, not a hold: with one thumb on the button you could not
+    // also look around or tap to fire, so the only way to shoot while scoped was
+    // to lower the scope first. As a toggle the thumb is free to aim and shoot.
+    E.aim.addEventListener('touchstart', e => {
+      swallow(e);
+      this.aimPressed = !this.aimPressed;
+      E.aim.classList.toggle('down', this.aimPressed);
+      Bus.emit('touchAim', this.aimPressed);
+    }, { passive: false });
     E.reload.addEventListener('touchstart', e => { swallow(e); this.reloadQueued = true; E.reload.classList.add('down'); setTimeout(() => E.reload.classList.remove('down'), 130); }, { passive: false });
     E.swap.addEventListener('touchstart', e => { swallow(e); this.switchQueued = 1; E.swap.classList.add('down'); setTimeout(() => E.swap.classList.remove('down'), 130); }, { passive: false });
     E.buy.addEventListener('touchstart', e => { swallow(e); Bus.emit('touchBuy'); E.buy.classList.add('down'); setTimeout(() => E.buy.classList.remove('down'), 130); }, { passive: false });
@@ -349,8 +359,24 @@ const TouchUI = {
         this._els.knob.style.display = 'none';
       } else if (t.identifier === this.lookTouchId) {
         this.lookTouchId = -1;
-        // a quick tap with barely any movement = fire once
-        if (U.now() - this._tapStart < 220 && this._tapMoved < 14) this.tapFire = true;
+        // a drag means "look around", not "shoot"
+        if (!(U.now() - this._tapStart < 220 && this._tapMoved < 14)) continue;
+        const now = U.now();
+        if (this.autoFire) {
+          // tapping again cancels the locked automatic fire
+          this.autoFire = false;
+          this._lastTapT = 0;
+          Bus.emit('touchAutoFire', false);
+        } else if (now - this._lastTapT < 320) {
+          // double tap = lock automatic fire on, like holding LMB on a PC
+          this._lastTapT = 0;
+          this.autoFire = true;
+          Bus.emit('touchAutoFire', true);
+        } else {
+          // single tap = one shot
+          this._lastTapT = now;
+          this.tapFire = true;
+        }
       }
     }
   },

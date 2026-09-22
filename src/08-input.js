@@ -233,21 +233,19 @@ const TouchUI = {
     wrap.id = 'touchui';
     wrap.innerHTML =
       '<div id="tStick"><div id="tStickBase"></div><div id="tStickKnob"></div></div>' +
-      '<button id="tFire" class="tbtn fire">ОГОНЬ</button>' +
       '<button id="tAim" class="tbtn small">ПРИЦЕЛ</button>' +
       '<button id="tJump" class="tbtn small">ПРЫЖОК</button>' +
       '<button id="tCrouch" class="tbtn small">ПРИСЕСТЬ</button>' +
       '<button id="tReload" class="tbtn small">ПЕРЕЗАРЯДКА</button>' +
       '<button id="tSwap" class="tbtn small">СМЕНА</button>' +
       '<button id="tBuy" class="tbtn small accent">МАГАЗИН</button>' +
-      '<div id="tHint">Слева — ходьба · Справа — обзор · Огонь — кнопка или тап</div>';
+      '<div id="tHint">Слева — ходьба · Справа — обзор · Тап по экрану — огонь</div>';
     document.body.appendChild(wrap);
     this.root = wrap;
     this._els = {
       stick: document.getElementById('tStick'),
       base: document.getElementById('tStickBase'),
       knob: document.getElementById('tStickKnob'),
-      fire: document.getElementById('tFire'),
       aim: document.getElementById('tAim'),
       jump: document.getElementById('tJump'),
       crouch: document.getElementById('tCrouch'),
@@ -269,7 +267,6 @@ const TouchUI = {
       el.addEventListener('touchend', e => { swallow(e); el.classList.remove('down'); off(); }, { passive: false });
       el.addEventListener('touchcancel', e => { swallow(e); el.classList.remove('down'); off(); }, { passive: false });
     };
-    holdBtn(E.fire, () => { this.firePressed = true; }, () => { this.firePressed = false; });
     holdBtn(E.aim, () => { this.aimPressed = true; }, () => { this.aimPressed = false; });
     holdBtn(E.crouch, () => { this.crouchHeld = true; }, () => { this.crouchHeld = false; });
     holdBtn(E.jump, () => { this.jumpQueued = true; }, () => { });
@@ -377,10 +374,14 @@ const TouchUI = {
     this.root.style.display = show ? 'block' : 'none';
     const buyVisible = show && Game.roundState === 'buy';
     this._els.buy.style.display = buyVisible ? 'block' : 'none';
-    // the stick and look layer are always live; buttons dim while an overlay is up
+    // the stick and look layer are always live; the remaining buttons dim while
+    // an overlay is up so they cannot be pressed through it
     const blocked = UI.overlayOpen() && !Game.buyOpen;
-    this._els.fire.style.opacity = blocked ? '.35' : '1';
     this._els.aim.style.opacity = blocked ? '.35' : '1';
+    this._els.jump.style.opacity = blocked ? '.35' : '1';
+    this._els.crouch.style.opacity = blocked ? '.35' : '1';
+    this._els.reload.style.opacity = blocked ? '.35' : '1';
+    this._els.swap.style.opacity = blocked ? '.35' : '1';
     // the control hint is only useful at the very start of a match
     if (this._els.hint) {
       if (!this._hintAt && show) this._hintAt = U.now();
@@ -465,5 +466,5 @@ function initTouch() {
   TouchUI.init();
   // touch has no pointer lock, so the keyboard/mouse path must not gate input
   const note = document.getElementById('menuControlsHint');
-  if (note) note.textContent = 'Слева стик — ходьба · Справа — обзор · Кнопка ОГОНЬ или тап';
+  if (note) note.textContent = 'Слева стик — ходьба · Справа — обзор · Тап по экрану — огонь';
 }

@@ -307,17 +307,18 @@ html.touch .esc-hint{display:none}
   display:flex;align-items:center;justify-content:center;text-align:center;
   line-height:1.05;padding:4px;transition:transform .08s,background .08s;z-index:32}
 .tbtn.down{transform:scale(.92);background:rgba(255,157,33,.55)}
-.tbtn.fire{width:104px;height:104px;right:18px;bottom:104px;font-size:16px;
-  background:rgba(180,40,30,.5);border-color:rgba(255,120,90,.7)}
-.tbtn.fire.down{background:rgba(255,70,50,.75)}
 .tbtn.small{width:58px;height:58px;font-size:10.5px}
 .tbtn.accent{background:rgba(255,157,33,.35);border-color:rgba(255,180,90,.75)}
 
-#tAim{right:132px;bottom:112px}
+/* Aim sits where the fire button used to be; firing is done by tapping the
+   screen, so a dedicated ОГОНЬ button would only get in the way. */
+#tAim{right:16px;bottom:110px}
 #tJump{right:18px;bottom:26px}
 #tCrouch{right:88px;bottom:30px}
-#tReload{left:18px;bottom:26px}
-#tSwap{left:88px;bottom:30px}
+/* Reload and weapon-swap live at the top centre: far from both thumbs, so they
+   cannot be hit by accident while moving or looking. */
+#tReload{left:calc(50% - 62px);top:calc(10px + env(safe-area-inset-top,0px))}
+#tSwap{left:calc(50% + 4px);top:calc(10px + env(safe-area-inset-top,0px))}
 #tBuy{left:18px;bottom:104px;width:72px;height:48px;border-radius:12px;font-size:11.5px}
 
 #tHint{position:fixed;left:50%;bottom:24%;transform:translateX(-50%);text-align:center;
@@ -388,13 +389,12 @@ html.touch .fld input{padding:10px;font-size:15px}
   html.touch .hud-bl{bottom:146px}
   html.touch .hud-br{top:88px}
   html.touch #feed{top:150px}
-  .tbtn.fire{width:92px;height:92px;bottom:92px;font-size:14px}
   .tbtn.small{width:52px;height:52px;font-size:9.5px}
-  #tAim{right:116px;bottom:98px}
+  #tAim{right:16px;bottom:96px}
   #tJump{right:18px;bottom:20px}
   #tCrouch{right:80px;bottom:24px}
-  #tReload{left:18px;bottom:20px}
-  #tSwap{left:80px;bottom:24px}
+  #tReload{left:calc(50% - 56px);top:calc(6px + env(safe-area-inset-top,0px))}
+  #tSwap{left:calc(50% + 4px);top:calc(6px + env(safe-area-inset-top,0px))}
   #tBuy{left:18px;bottom:90px;width:66px;height:44px;font-size:11px}
   html.touch .logo.big{font-size:clamp(20px,5vw,30px)}
   html.touch .tagline{margin:8px 0 14px}
@@ -414,13 +414,12 @@ html.touch .fld input{padding:10px;font-size:15px}
   html.touch #feed{top:160px;width:150px}
   html.touch .menu-foot{font-size:10px}
   html.touch #tHint{bottom:28%}
-  .tbtn.fire{width:94px;height:94px;bottom:104px;right:14px;font-size:15px}
   .tbtn.small{width:56px;height:56px}
-  #tAim{right:120px;bottom:112px}
+  #tAim{right:14px;bottom:110px}
   #tJump{right:14px;bottom:28px}
   #tCrouch{right:82px;bottom:32px}
-  #tReload{left:14px;bottom:28px}
-  #tSwap{left:82px;bottom:32px}
+  #tReload{left:calc(50% - 60px);top:calc(10px + env(safe-area-inset-top,0px))}
+  #tSwap{left:calc(50% + 4px);top:calc(10px + env(safe-area-inset-top,0px))}
   #tBuy{left:14px;bottom:104px;width:66px;height:46px}
 }
 </style>
@@ -3972,21 +3971,19 @@ const TouchUI = {
     wrap.id = 'touchui';
     wrap.innerHTML =
       '<div id="tStick"><div id="tStickBase"></div><div id="tStickKnob"></div></div>' +
-      '<button id="tFire" class="tbtn fire">ОГОНЬ</button>' +
       '<button id="tAim" class="tbtn small">ПРИЦЕЛ</button>' +
       '<button id="tJump" class="tbtn small">ПРЫЖОК</button>' +
       '<button id="tCrouch" class="tbtn small">ПРИСЕСТЬ</button>' +
       '<button id="tReload" class="tbtn small">ПЕРЕЗАРЯДКА</button>' +
       '<button id="tSwap" class="tbtn small">СМЕНА</button>' +
       '<button id="tBuy" class="tbtn small accent">МАГАЗИН</button>' +
-      '<div id="tHint">Слева — ходьба · Справа — обзор · Огонь — кнопка или тап</div>';
+      '<div id="tHint">Слева — ходьба · Справа — обзор · Тап по экрану — огонь</div>';
     document.body.appendChild(wrap);
     this.root = wrap;
     this._els = {
       stick: document.getElementById('tStick'),
       base: document.getElementById('tStickBase'),
       knob: document.getElementById('tStickKnob'),
-      fire: document.getElementById('tFire'),
       aim: document.getElementById('tAim'),
       jump: document.getElementById('tJump'),
       crouch: document.getElementById('tCrouch'),
@@ -4008,7 +4005,6 @@ const TouchUI = {
       el.addEventListener('touchend', e => { swallow(e); el.classList.remove('down'); off(); }, { passive: false });
       el.addEventListener('touchcancel', e => { swallow(e); el.classList.remove('down'); off(); }, { passive: false });
     };
-    holdBtn(E.fire, () => { this.firePressed = true; }, () => { this.firePressed = false; });
     holdBtn(E.aim, () => { this.aimPressed = true; }, () => { this.aimPressed = false; });
     holdBtn(E.crouch, () => { this.crouchHeld = true; }, () => { this.crouchHeld = false; });
     holdBtn(E.jump, () => { this.jumpQueued = true; }, () => { });
@@ -4116,10 +4112,14 @@ const TouchUI = {
     this.root.style.display = show ? 'block' : 'none';
     const buyVisible = show && Game.roundState === 'buy';
     this._els.buy.style.display = buyVisible ? 'block' : 'none';
-    // the stick and look layer are always live; buttons dim while an overlay is up
+    // the stick and look layer are always live; the remaining buttons dim while
+    // an overlay is up so they cannot be pressed through it
     const blocked = UI.overlayOpen() && !Game.buyOpen;
-    this._els.fire.style.opacity = blocked ? '.35' : '1';
     this._els.aim.style.opacity = blocked ? '.35' : '1';
+    this._els.jump.style.opacity = blocked ? '.35' : '1';
+    this._els.crouch.style.opacity = blocked ? '.35' : '1';
+    this._els.reload.style.opacity = blocked ? '.35' : '1';
+    this._els.swap.style.opacity = blocked ? '.35' : '1';
     // the control hint is only useful at the very start of a match
     if (this._els.hint) {
       if (!this._hintAt && show) this._hintAt = U.now();
@@ -4204,7 +4204,7 @@ function initTouch() {
   TouchUI.init();
   // touch has no pointer lock, so the keyboard/mouse path must not gate input
   const note = document.getElementById('menuControlsHint');
-  if (note) note.textContent = 'Слева стик — ходьба · Справа — обзор · Кнопка ОГОНЬ или тап';
+  if (note) note.textContent = 'Слева стик — ходьба · Справа — обзор · Тап по экрану — огонь';
 }
 
 
@@ -6757,9 +6757,10 @@ const Game = {
       p.yaw = ((p.yaw + Math.PI) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2) - Math.PI;
     }
     p.in.f = mv.f; p.in.r = mv.r; p.in.run = mv.run; p.in.crouch = mv.crouch;
-    // jump: held Space on desktop, a one-shot queued by the touch button on mobile
+    // jump: held Space on desktop; on touch it is a one-shot, so wantJump must be
+    // cleared again or the player would re-jump every time they touch the ground
     if (IS_TOUCH) {
-      if (Input.consumeJump() && p.onGround) p.in.wantJump = true;
+      p.in.wantJump = Input.consumeJump() && p.onGround;
     } else {
       if (mv.wantJump && p.onGround) p.in.wantJump = true;
       if (!mv.wantJump) p.in.wantJump = false;
@@ -6768,10 +6769,9 @@ const Game = {
     if (IS_TOUCH) {
       if (Input.consumeReload()) p.reload();
       if (Input.consumeWeaponSwitch()) this.switchSlot(p.nextSlot());
-      // tap on the look half fires a single shot
+      // tapping the look half fires one shot (there is no fire button on phones)
       if (TouchUI.tapFire) { TouchUI.tapFire = false; p.triggerDown = true; this._tapFireRelease = 2; }
       if (this._tapFireRelease > 0 && --this._tapFireRelease === 0) p.triggerDown = false;
-      if (TouchUI.firePressed) p.triggerDown = true;
     }
 
     p._wantAim = Input.aimDown() && canLook;

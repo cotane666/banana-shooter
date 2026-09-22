@@ -1582,9 +1582,10 @@ const Game = {
       p.yaw = ((p.yaw + Math.PI) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2) - Math.PI;
     }
     p.in.f = mv.f; p.in.r = mv.r; p.in.run = mv.run; p.in.crouch = mv.crouch;
-    // jump: held Space on desktop, a one-shot queued by the touch button on mobile
+    // jump: held Space on desktop; on touch it is a one-shot, so wantJump must be
+    // cleared again or the player would re-jump every time they touch the ground
     if (IS_TOUCH) {
-      if (Input.consumeJump() && p.onGround) p.in.wantJump = true;
+      p.in.wantJump = Input.consumeJump() && p.onGround;
     } else {
       if (mv.wantJump && p.onGround) p.in.wantJump = true;
       if (!mv.wantJump) p.in.wantJump = false;
@@ -1593,10 +1594,9 @@ const Game = {
     if (IS_TOUCH) {
       if (Input.consumeReload()) p.reload();
       if (Input.consumeWeaponSwitch()) this.switchSlot(p.nextSlot());
-      // tap on the look half fires a single shot
+      // tapping the look half fires one shot (there is no fire button on phones)
       if (TouchUI.tapFire) { TouchUI.tapFire = false; p.triggerDown = true; this._tapFireRelease = 2; }
       if (this._tapFireRelease > 0 && --this._tapFireRelease === 0) p.triggerDown = false;
-      if (TouchUI.firePressed) p.triggerDown = true;
     }
 
     p._wantAim = Input.aimDown() && canLook;

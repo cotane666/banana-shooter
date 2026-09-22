@@ -37,7 +37,9 @@ const CFG = {
   limbMultiplier: 0.72,
   wallbangLoss: 0.55,
   netTickHz: 22,        // snapshot rate
-  netSendLocalHz: 34   // local player state rate
+  netSendLocalHz: 34,   // local player state rate
+  netInterpMs: 120,     // render the remote player this far behind the newest snapshot
+  netMaxExtrapMs: 160   // keep extrapolating through a packet gap for at most this long
 };
 
 /* ---------------- weapons (CS-inspired) ----------------

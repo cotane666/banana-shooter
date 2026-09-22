@@ -81,35 +81,70 @@ class RemotePlayer {
     this.buf = [];
     this.renderPos = { x: 0, y: 0, z: 0 };
     this.renderYaw = 0;
+    this.clockOffset = undefined;   // sender clock → local clock (estimated)
     this.weaponGroup = null;
     this.walkPhase = 0;
     this.lastPacket = 0;
     this.slot = 2;
     this.hitFlash = 0;
   }
-  /* Snapshots carry the sender's clock (`rt`), but performance.now() starts at
-     each page's own load time, so the two players' clocks are offset by seconds
-     or minutes. Comparing the sender's stamp with our clock froze the model
-     (t clamped to 0 forever). Stamp each snapshot with the LOCAL arrival time
-     instead, so both ends interpolate on their own consistent clock. */
+  /* Snapshot timestamps come from the SENDER's clock, but performance.now()
+     starts at each page's own load time, so the two clocks differ by seconds or
+     minutes. Two naive fixes fail:
+       - using the raw sender stamp froze the model (the render target clamped);
+       - using the local arrival time collapsed the timeline whenever packets
+         arrived in a burst (span ≈ 0), making the mesh jump.
+     So we estimate the clock offset — arrival − senderStamp, whose minimum over
+     time is the true offset because network delay is never negative — and map
+     every snapshot onto OUR timeline. The sender's even 29 ms spacing survives,
+     and the clock difference cancels out. */
   pushSnapshot(s) {
-    s.at = U.now();
+    const raw = U.now() - (s.rt || U.now());
+    if (this.clockOffset === undefined) this.clockOffset = raw;
+    else if (raw < this.clockOffset) this.clockOffset = raw;       // fast down (min filter)
+    else this.clockOffset += (raw - this.clockOffset) * 0.02;      // slow up (clock drift)
+    s.lt = (s.rt || U.now()) + this.clockOffset;                   // sender time on our clock
     this.buf.push(s);
     if (this.buf.length > 40) this.buf.shift();
-    this.lastPacket = s.at;
+    this.lastPacket = U.now();
   }
-  /* interpolate at now - delay ms, using local arrival times */
+  /* interpolate at now - delay ms on our own timeline; extrapolate briefly if
+     the render target runs past the newest snapshot (a packet gap). */
   interp(delayMs) {
     const target = U.now() - delayMs;
     const b = this.buf;
     if (b.length === 0) return;
     if (b.length === 1) { this.applySnap(b[0]); return; }
     let i = b.length - 1;
-    while (i > 0 && b[i].at > target) i--;
-    const a = b[i], c = b[i + 1] || b[i];
-    if (!c || c === a) { this.applySnap(a); return; }
-    const span = c.at - a.at;
-    const t = span > 0 ? U.clamp((target - a.at) / span, 0, 1) : 0;
+    while (i > 0 && b[i].lt > target) i--;
+    const a = b[i];
+    const c = b[i + 1];
+
+    if (!c) {
+      // past the newest snapshot → extrapolate along the measured velocity
+      const prev = b[i - 1];
+      let vx = 0, vy = 0, vz = 0;
+      if (prev) {
+        const dtms = Math.max(a.lt - prev.lt, 1);
+        vx = (a.x - prev.x) / dtms;      // m/ms
+        vy = (a.y - prev.y) / dtms;
+        vz = (a.z - prev.z) / dtms;
+      }
+      const ahead = U.clamp(target - a.lt, 0, CFG.netMaxExtrapMs);
+      this.renderPos.x = a.x + vx * ahead;
+      this.renderPos.y = a.y + vy * ahead;
+      this.renderPos.z = a.z + vz * ahead;
+      this.renderYaw = a.yw;
+      this.pitch = a.pt || 0;
+      this.alive = a.alive;
+      this.crouching = !!a.cr;
+      this.height = this.crouching ? CFG.crouchHeight : CFG.playerHeight;
+      this.moveSpeed = Math.hypot(vx, vz) * 1000;   // m/s
+      return;
+    }
+
+    const span = Math.max(c.lt - a.lt, 1);
+    const t = U.clamp((target - a.lt) / span, 0, 1);
     this.renderPos.x = U.lerp(a.x, c.x, t);
     this.renderPos.y = U.lerp(a.y, c.y, t);
     this.renderPos.z = U.lerp(a.z, c.z, t);
@@ -118,8 +153,7 @@ class RemotePlayer {
     this.alive = c.alive;
     this.crouching = !!c.cr;
     this.height = this.crouching ? CFG.crouchHeight : CFG.playerHeight;
-    const moving = Math.hypot((c.x - a.x) / Math.max(span, .001), (c.z - a.z) / Math.max(span, .001));
-    this.moveSpeed = moving;
+    this.moveSpeed = Math.hypot((c.x - a.x) / span, (c.z - a.z) / span) * 1000;  // m/s
   }
   applySnap(s) {
     this.renderPos.x = s.x; this.renderPos.y = s.y; this.renderPos.z = s.z;
@@ -128,34 +162,61 @@ class RemotePlayer {
     this.moveSpeed = 0;
   }
   /* authoritative pos follows the interpolated render pos */
-  sync() {
+  sync(dt) {
+    dt = dt || 1 / 60;
     this.pos.x = this.renderPos.x; this.pos.y = this.renderPos.y; this.pos.z = this.renderPos.z;
     this.yaw = this.renderYaw;
     this.mesh.position.set(this.pos.x, this.pos.y, this.pos.z);
     this.mesh.rotation.y = this.yaw;
     this.mesh.visible = this.alive;
-    if (!this.alive) return;
-    // walk animation
+    if (!this.alive) { this._wasFlashing = false; return; }
+
     const p = this.mesh.userData.parts;
-    const spd = U.clamp((this.moveSpeed || 0) / CFG.runSpeed, 0, 1);
-    this.walkPhase += Math.min(this.moveSpeed || 0, 12) * 0.09;
-    const amp = .55 * spd;
-    p.legL.rotation.x = Math.sin(this.walkPhase) * amp;
-    p.legR.rotation.x = -Math.sin(this.walkPhase) * amp;
-    // right arm carries the weapon
-    p.armR.rotation.x = -1.35;
-    p.armL.rotation.x = -1.15 + Math.sin(this.walkPhase) * amp * .5;
-    p.torso.rotation.x = this.pitch * .35;
-    p.head.rotation.x = this.pitch * .5;
+    const spd = U.clamp((this.moveSpeed || 0) / CFG.runSpeed, 0, 1);   // 0..1
+    const running = spd > .62;
+
+    // Advance the gait in real time (previously this used a per-millisecond
+    // figure, so the legs barely moved). Stride frequency rises with speed.
+    this.walkPhase += dt * (1.6 + spd * 9.0);
+    const ph = this.walkPhase;
+    const amp = running ? .95 : .62 * spd;
+
+    // legs: a real stride; a small idle offset keeps the pose from looking rigid
+    p.legL.rotation.x = Math.sin(ph) * amp * spd;
+    p.legR.rotation.x = -Math.sin(ph) * amp * spd;
+
+    // arms: the right hand holds the weapon, so it swings less; the left pumps
+    const armAmp = (running ? .55 : .35) * spd;
+    p.armR.rotation.x = -1.30 + Math.sin(ph) * armAmp * .45;
+    p.armL.rotation.x = -0.95 - Math.sin(ph) * armAmp;
+    p.armR.rotation.z = 0.06;
+    p.armL.rotation.z = -0.10;
+
+    // torso/head: lean into a run, always look where the player is aiming
+    p.torso.rotation.x = this.pitch * .35 + spd * .10;
+    p.head.rotation.x = this.pitch * .55;
+    p.torso.rotation.z = Math.sin(ph) * .05 * spd;      // shoulder roll
+    p.head.rotation.z = Math.sin(ph) * .03 * spd;
+
+    // vertical bob while moving; gentle breathing when standing still
+    const bobY = Math.abs(Math.sin(ph)) * .045 * spd;
+    const breathe = spd < .05 ? Math.sin(U.now() * .0018) * .012 : 0;
+    p.torso.position.y = 1.06 + bobY + breathe;
+
     // crouch
     this.mesh.scale.y = this.crouching ? .72 : 1;
-    if (this.hitFlash > 0) {
-      this.hitFlash -= 0.05;
-      this.mesh.traverse(o => { if (o.isMesh && o.material.emissive) o.material.emissive.setHex(0x662222); });
-    } else if (this._wasFlashing) {
-      this.mesh.traverse(o => { if (o.isMesh && o.material.emissive) o.material.emissive.setHex(0x000000); });
+
+    // hit flash
+    this.hitFlash = Math.max(0, this.hitFlash - dt * 4);
+    const flash = this.hitFlash > 0;
+    if (flash !== this._wasFlashing) {
+      this.mesh.traverse(o => {
+        if (o.isMesh && o.material && o.material.emissive) {
+          o.material.emissive.setHex(flash ? 0x662222 : 0x000000);
+        }
+      });
+      this._wasFlashing = flash;
     }
-    this._wasFlashing = this.hitFlash > 0;
   }
 }
 
@@ -323,6 +384,7 @@ const Game = {
     const nameIn = UI.el.inName;
     if (nameIn) nameIn.value = Store.data.name || '';
     bindClick('btnBuyClose', () => this.toggleBuy(false));
+    bindClick('btnBuySkip', () => this.voteSkipBuy());
     bindClick('btnHost', () => this.doHost());
     bindClick('btnJoin', () => {
       UI.el.joinRow.classList.remove('hidden');
@@ -434,6 +496,8 @@ const Game = {
       }
       return;
     }
+    // F1 = ready up: start the round early once both players agree
+    if (code === 'F1' && this.roundState === 'buy') { this.voteSkipBuy(); return; }
     switch (code) {
       case 'Escape':
         // Releasing the pointer lock (which Esc does natively) already pauses
@@ -538,7 +602,7 @@ const Game = {
   startOnline(role) {
     this.stopToMenu(true);
     this.mode = CS.MODE.ONLINE;
-    this.online = { role, roundWins: { me: 0, them: 0 }, opponentLeft: false, scoreMe: 0, scoreThem: 0 };
+    this.online = { role, roundWins: { me: 0, them: 0 }, opponentLeft: false, scoreMe: 0, scoreThem: 0, skipVoteMe: false, skipVoteThem: false };
     this.remotePlayers = [];
     this.player = new Player({ id: 'p1', name: (Store.data.name || 'Игрок').slice(0, 14), isLocal: true, team: role === CS.NETROLE.HOST ? 'ct' : 't' });
     this.player.money = 800;
@@ -624,11 +688,73 @@ const Game = {
     this.roundState = 'buy';
     this.buyTimer = seconds;
     this.roundT = seconds;
+    this.resetSkipVotes();
     UI.center(label || 'ЗАКУПКА', 'B — магазин', 1.8);
     if (this.mode === CS.MODE.ONLINE && Net.role === CS.NETROLE.HOST) {
       Net.send({ t: 'round', st: 'buy', time: seconds, no: this.roundNo + 1 });
     }
     this.roundNo++;
+  },
+
+  /* ---------------- ready-up: both players may skip the buy phase ----------
+     The buy phase is a fixed clock, so waiting out the full time when both
+     players have already finished shopping is dead time. Either side may press
+     ГОТОВ; the round starts as soon as BOTH have voted (or the clock runs out). */
+  resetSkipVotes() {
+    if (this.online) { this.online.skipVoteMe = false; this.online.skipVoteThem = false; }
+    this.refreshSkipUI();
+  },
+
+  refreshSkipUI() {
+    const b = UI.el.btnBuySkip;
+    if (!b) return;
+    const me = !!(this.online && this.online.skipVoteMe);
+    const them = !!(this.online && this.online.skipVoteThem);
+    if (this.mode === CS.MODE.OFFLINE) {
+      b.textContent = 'НАЧАТЬ ВОЛНУ';
+      b.classList.remove('waiting');
+      return;
+    }
+    if (me && them) { b.textContent = 'СТАРТ…'; b.classList.add('waiting'); }
+    else if (me) { b.textContent = 'ЖДЁМ СОПЕРНИКА…'; b.classList.add('waiting'); }
+    else if (them) { b.textContent = 'СОПЕРНИК ГОТОВ · ГОТОВ'; b.classList.remove('waiting'); }
+    else { b.textContent = 'ГОТОВ'; b.classList.remove('waiting'); }
+  },
+
+  voteSkipBuy() {
+    if (this.roundState !== 'buy') { Audio3D_SFX.deny(); return; }
+    // offline survival: the button simply starts the wave early
+    if (this.mode === CS.MODE.OFFLINE) {
+      if (this.buyOpen) this.toggleBuy(false);
+      this.startLive();
+      return;
+    }
+    if (this.mode !== CS.MODE.ONLINE || !this.online) return;
+    if (this.online.skipVoteMe) return;                 // already voted
+    this.online.skipVoteMe = true;
+    Net.send({ t: 'round', st: 'skip', no: this.roundNo });
+    this.refreshSkipUI();
+    if (this.buyOpen) UI.renderBuy(this.player, this.buyTimer);
+    this.maybeEndBuy();
+  },
+
+  /* host-only: start the round once both sides are ready */
+  maybeEndBuy() {
+    if (this.roundState !== 'buy') return;
+    if (this.mode !== CS.MODE.ONLINE) return;
+    if (!this.online || !this.online.skipVoteMe || !this.online.skipVoteThem) return;
+    if (Net.role !== CS.NETROLE.HOST) return;            // client waits for host's 'live'
+    if (this.buyOpen) this.toggleBuy(false);
+    this.startLive();
+  },
+
+  onSkipVoteMsg() {
+    if (!this.online) return;
+    this.online.skipVoteThem = true;
+    this.refreshSkipUI();
+    if (this.buyOpen) UI.renderBuy(this.player, this.buyTimer);
+    // as the client, both-ready is resolved by the host's 'live' broadcast
+    this.maybeEndBuy();
   },
 
   toggleBuy(on) {
@@ -1509,6 +1635,9 @@ const Game = {
       case 'newround':
         this.doNewRoundClient();
         break;
+      case 'skip':
+        this.onSkipVoteMsg();
+        break;
     }
   },
 
@@ -1517,6 +1646,7 @@ const Game = {
     this.buyTimer = sec;
     this.roundT = sec;
     this.roundNo++;
+    this.resetSkipVotes();
     UI.center('ЗАКУПКА', 'B — магазин', 1.8);
   },
 
@@ -1664,7 +1794,7 @@ const Game = {
       Net.tick(dt);
       this._netStateT -= dt;
       if (this._netStateT <= 0) { this._netStateT = 1 / CFG.netSendLocalHz; this.broadcastState(); }
-      if (this.remote) { this.remote.interp(95); this.remote.sync(); }
+      if (this.remote) { this.remote.interp(CFG.netInterpMs); this.remote.sync(dt); }
     }
 
     // ---- death handling offline ----

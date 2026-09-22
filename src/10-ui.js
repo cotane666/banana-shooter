@@ -14,7 +14,7 @@ const UI = {
       'hud', 'crosshair', 'hitmark', 'scope', 'hpFill', 'hpVal', 'apFill', 'apVal', 'ammoMag', 'ammoRes',
       'weaponName', 'money', 'roundTimer', 'objective', 'netInfo', 'killCount', 'scoreVal', 'minimap',
       'feed', 'centerMsg', 'dmgFlash', 'lowhp', 'buy', 'buyMoney', 'buyTimer', 'buyCats', 'buyGrid',
-      'buyHint', 'buyOwned', 'scoreboard', 'sbTitle', 'sbTable', 'pause', 'toast', 'fps', 'clickToPlay',
+      'buyHint', 'buyOwned', 'btnBuySkip', 'btnBuyClose', 'scoreboard', 'sbTitle', 'sbTable', 'pause', 'toast', 'fps', 'clickToPlay',
       'connect', 'connTitle', 'connStatus', 'joinRow', 'hostRow', 'roomCode', 'waiting', 'inName', 'inCode',
       'btnCopy', 'dmgDirs'];
     ids.forEach(i => this.el[i] = $(i));
@@ -212,6 +212,7 @@ const UI = {
       });
     }
     this.el.buyOwned.textContent = this.ownedList(player);
+    if (typeof Game !== 'undefined' && Game.refreshSkipUI) Game.refreshSkipUI();
   },
   ownedList(p) {
     const a = [];

@@ -5,7 +5,7 @@
 
 const CS = window.CS = {
   version: '1.0',
-  MODE: { MENU: 'menu', OFFLINE: 'offline', ONLINE: 'online' },
+  MODE: { MENU: 'menu', OFFLINE: 'offline', ONLINE: 'online', RANGE: 'range' },
   NETROLE: { NONE: 0, HOST: 1, CLIENT: 2 }
 };
 

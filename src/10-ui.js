@@ -169,8 +169,9 @@ const UI = {
   renderBuy(player, secondsLeft) {
     const wrap = this.el.buyGrid;
     if (!wrap) return;
-    this.el.buyMoney.textContent = U.money(player.money);
-    this.el.buyTimer.textContent = Math.max(0, Math.ceil(secondsLeft));
+    const free = typeof Game !== 'undefined' && Game.mode === CS.MODE.RANGE;
+    this.el.buyMoney.textContent = free ? 'БЕСПЛАТНО' : U.money(player.money);
+    this.el.buyTimer.textContent = free ? '∞' : Math.max(0, Math.ceil(secondsLeft));
     Array.from(this.el.buyCats.children).forEach(b => b.classList.toggle('on', b.dataset.cat === this.buyCat));
 
     wrap.innerHTML = '';
@@ -274,6 +275,14 @@ const UI = {
         if (!rp.alive) return;
         ctx.fillStyle = '#ff4a4a';
         ctx.beginPath(); ctx.arc(tx(rp.pos.x), tz(rp.pos.z), 4, 0, 7); ctx.fill();
+      });
+    }
+    // training dummies (test range)
+    if (game.dummies) {
+      ctx.fillStyle = '#ffb347';
+      game.dummies.forEach(d => {
+        if (!d.alive) return;
+        ctx.beginPath(); ctx.arc(tx(d.pos.x), tz(d.pos.z), 3, 0, 7); ctx.fill();
       });
     }
     // local player (triangle pointing along yaw)

@@ -57,6 +57,106 @@ function makeNameplate(text) {
   return sp;
 }
 
+/* ---------------- training dummy (test range) ---------------- */
+
+/* Floating DPS readout that hovers above a dummy. It is a canvas sprite whose
+   texture is redrawn ~6x/s (cheap) with the rolling damage-per-second value. */
+function makeDpsLabel() {
+  const c = makeCanvas(512); c.height = 128;
+  const x = c.getContext('2d');
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false }));
+  sp.scale.set(3.2, .8, 1);
+  sp.renderOrder = 10;
+  sp.userData.ctx = x; sp.userData.canvas = c; sp.userData.tex = tex;
+  sp.userData.draw = (dps, peak, total) => {
+    x.clearRect(0, 0, 512, 128);
+    x.fillStyle = 'rgba(6,9,12,.78)';
+    x.strokeStyle = dps > 0 ? 'rgba(255,157,33,.9)' : 'rgba(120,140,160,.5)';
+    x.lineWidth = 4;
+    if (x.roundRect) { x.beginPath(); x.roundRect(6, 6, 500, 116, 14); x.fill(); x.stroke(); }
+    else { x.fillRect(6, 6, 500, 116); x.strokeRect(6, 6, 500, 116); }
+    x.textAlign = 'center'; x.textBaseline = 'middle';
+    x.fillStyle = '#8b98a5';
+    x.font = 'bold 24px Arial';
+    x.fillText('УРОН В СЕКУНДУ', 256, 32);
+    x.fillStyle = dps > 0 ? '#ff9d21' : '#5d6873';
+    x.font = 'bold 56px Arial';
+    x.fillText(dps > 0 ? dps.toFixed(0) + ' / с' : '— / с', 256, 78);
+    x.font = 'bold 18px Arial';
+    x.fillStyle = '#5d6873';
+    x.fillText('макс ' + peak.toFixed(0) + '  ·  всего ' + total.toFixed(0), 256, 112);
+    tex.needsUpdate = true;
+  };
+  sp.userData.draw(0, 0, 0);
+  return sp;
+}
+
+/* A target dummy: reuses the zombie hitboxes/animation but never dies, never
+   moves and never attacks. Damage is accumulated to report damage-per-second. */
+class Dummy extends Zombie {
+  constructor(x, z, y) {
+    super('walker', x, z, y);
+    this.isDummy = true;
+    this.dummyName = 'МАНЕКЕН';
+    this.group.scale.setScalar(1);
+    // neutral colouring so it reads as a target, not an enemy
+    const skin = new THREE.MeshLambertMaterial({ color: 0xc8a06a });
+    const cloth = new THREE.MeshLambertMaterial({ color: 0x6b4a2a });
+    this.group.traverse(o => {
+      if (o.isMesh && o.material && o.material.color) {
+        o.material = (o.material.color.getHex() === ZOMBIES.walker.color) ? skin : cloth;
+      }
+    });
+    // damage tracking
+    this.dmgWindow = [];        // {t, amount} within the last second
+    this.totalDamage = 0;
+    this.peakDps = 0;
+    this.lastHitT = -99;
+    this.label = makeDpsLabel();
+    this.label.position.set(0, 2.5, 0);
+    this.group.add(this.label);
+    this._labelAcc = 0;
+  }
+
+  /* dummies absorb any amount of damage and never die */
+  takeDamage(amount, part, fromDir) {
+    if (!this.alive) return false;
+    let mul = 1;
+    if (part === 'head') mul = CFG.headshotMultiplier;
+    else if (part === 'legs') mul = CFG.limbMultiplier;
+    const dmg = amount * mul;
+    const now = U.now();
+    this.dmgWindow.push({ t: now, amount: dmg });
+    this.totalDamage += dmg;
+    this.hitFlash = .12;
+    this.lastHitT = now;
+    Bus.emit('dummyHit', this, part, dmg);
+    return false;               // never a kill
+  }
+  die() { /* dummies never die */ }
+
+  /* stays put, only plays the hit reaction and updates the DPS readout */
+  update(dt, ctx) {
+    this.hitFlash = Math.max(0, this.hitFlash - (dt || 0));
+    this.applyVisual(dt, 0);
+
+    // keep only the last second of damage
+    const now = U.now();
+    while (this.dmgWindow.length && now - this.dmgWindow[0].t > 1000) this.dmgWindow.shift();
+    const dps = this.dmgWindow.reduce((a, e) => a + e.amount, 0);
+    this.dps = dps;
+    if (dps > this.peakDps) this.peakDps = dps;
+
+    this._labelAcc += (dt || 0);
+    if (this._labelAcc > 0.16) {          // ~6 redraws/s is plenty
+      this._labelAcc = 0;
+      this.label.userData.draw(dps, this.peakDps, this.totalDamage);
+    }
+  }
+}
+
 /* ---------------- remote player (online) ---------------- */
 class RemotePlayer {
   constructor(name, team, isHostSide) {
@@ -376,6 +476,7 @@ const Game = {
      ============================================================ */
   bindUI() {
     bindClick('btnOffline', () => this.startOffline());
+    bindClick('btnRange', () => this.startRange());
     bindClick('btnOnline', () => { UI.show('lobby'); this.resetLobby(); Net.warmup(); });
     bindClick('btnControls', () => { this._prevScreen = 'menu'; UI.show('controls'); });
     bindClick('btnControlsBack', () => UI.show(this._prevScreen || 'menu'));
@@ -454,7 +555,7 @@ const Game = {
     Bus.on('touchBuy', () => {
       // One button opens and closes the shop: on a phone there is no B/Esc key.
       if (this.buyOpen) { this.toggleBuy(false); return; }
-      if (this.roundState === 'buy') { this.toggleBuy(true); Audio3D_SFX.uiClick(); }
+      if (this.roundState === 'buy' || this.mode === CS.MODE.RANGE) { this.toggleBuy(true); Audio3D_SFX.uiClick(); }
       else { UI.toast('Магазин только в фазе закупки'); Audio3D_SFX.deny(); }
     });
     Bus.on('touchPause', () => {
@@ -538,7 +639,7 @@ const Game = {
         }
         break;
       case 'KeyB':
-        if (this.roundState === 'buy') this.toggleBuy(true);
+        if (this.roundState === 'buy' || this.mode === CS.MODE.RANGE) this.toggleBuy(true);
         else { UI.toast('Магазин доступен только в фазе закупки'); Audio3D_SFX.deny(); }
         break;
       case 'KeyR': if (!this.paused) this.player.reload(); break;
@@ -617,6 +718,78 @@ const Game = {
     this.vmScene.add(this.player.vmGroup);
   },
 
+  /* ============================================================
+     TEST RANGE (полигон): free shopping, dummies, damage-per-second
+     ============================================================ */
+  startRange() {
+    this.stopToMenu(true);
+    this.mode = CS.MODE.RANGE;
+    this.offline = null;
+    this.online = null;
+    this.remotePlayers = []; this.remote = null;
+
+    this.player = new Player({ id: 'p1', name: 'Вы', isLocal: true, team: 'ct' });
+    this.player.money = 999999;          // everything is free here
+    this.player.give('glock'); this.player.give('knife');
+    this.player.slot = 1;
+    this.attachViewModel();
+
+    // no horde hunting the player; dummies are separate, static targets
+    this.horde = new Horde(this.scene, this.world, this);
+    this.dummies = [];
+    this.effects = new Effects(this.scene, Store.data.quality);
+    this.effects.clear();
+
+    this.spawnPlayerLocal(0);
+    this.spawnDummies();
+    this.beginBuyPhase(99999, 'ПОЛИГОН');   // never times out
+    this.enterGame();
+    UI.toast('Полигон: всё бесплатно · B — магазин', '#ff9d21');
+  },
+
+  spawnDummies() {
+    // placed in a fan in front of the player's spawn so they are immediately
+    // visible when the range loads
+    const s = MAP.playerSpawns[0] || { x: 0, z: 42 };
+    const face = Math.atan2(-(0 - s.x), -(0 - s.z));   // toward the arena centre
+    const fx = -Math.sin(face), fz = -Math.cos(face);  // forward
+    const rx = Math.cos(face), rz = -Math.sin(face);   // right
+    const spots = [[0, 12], [-6, 17], [6, 17], [-12, 23], [12, 23]];   // [side, forward]
+    for (const o of spots) {
+      const side = o[0], fwd = o[1];
+      const x = s.x + fx * fwd + rx * side;
+      const z = s.z + fz * fwd + rz * side;
+      const y = this.world.groundAt(x, z, 6);
+      const d = new Dummy(x, z, y === null ? 0 : y);
+      d.yaw = face + Math.PI;             // face the player
+      this.scene.add(d.group);
+      this.dummies.push(d);
+      this.horde.list.push(d);            // so every existing raycast finds them
+    }
+  },
+
+  clearDummies() {
+    if (!this.dummies) return;
+    for (const d of this.dummies) d.dispose(this.scene);
+    this.dummies = [];
+  },
+
+  /* dummies report their own DPS; the range HUD shows the total */
+  updateRange(dt) {
+    let totalDps = 0;
+    for (const d of this.dummies) {
+      if (!d) continue;
+      totalDps += d.dps || 0;
+      // keep the label facing the camera and above the head
+      const dist = Math.hypot(d.pos.x - this.player.pos.x, d.pos.z - this.player.pos.z);
+      d.label.visible = dist < 60;
+    }
+    this._rangeDps = totalDps;
+    // the range never ends: keep it out of the round-flow timers
+    this.roundState = 'live';
+    this.roundT = 0;
+  },
+
   startOnlineHost() { this.startOnline(CS.NETROLE.HOST); },
   startOnlineClient() { this.startOnline(CS.NETROLE.CLIENT); },
 
@@ -689,6 +862,7 @@ const Game = {
       Audio3D_SFX.ambientStop();
       this.mode = CS.MODE.MENU;
       this.clearProjectiles();
+      this.clearDummies();
       if (this.horde) { this.horde.clear(); this.horde = null; }
       if (this.remote) { this.scene.remove(this.remote.mesh); this.remote = null; }
       if (this.player && this.player.vmGroup && this.player.vmGroup.parent) this.player.vmGroup.parent.remove(this.player.vmGroup);
@@ -701,6 +875,7 @@ const Game = {
       Net.close(true);
     } else {
       this.clearProjectiles();
+      this.clearDummies();
       if (this.horde) { this.horde.clear(); this.horde = null; }
       if (this.remote) { this.scene.remove(this.remote.mesh); this.remote = null; }
       if (this.player && this.player.vmGroup && this.player.vmGroup.parent) this.player.vmGroup.parent.remove(this.player.vmGroup);
@@ -723,6 +898,16 @@ const Game = {
      BUY PHASE / ROUND FLOW
      ============================================================ */
   beginBuyPhase(seconds, label) {
+    // the range starts live immediately; its shop is always open and free
+    if (this.mode === CS.MODE.RANGE) {
+      this.roundState = 'live';
+      this.buyTimer = 0;
+      this.roundT = 0;
+      this.resetSkipVotes();
+      UI.center('ПОЛИГОН', 'B — магазин · всё бесплатно', 2.4);
+      this.roundNo++;
+      return;
+    }
     this.roundState = 'buy';
     this.buyTimer = seconds;
     this.roundT = seconds;
@@ -754,6 +939,12 @@ const Game = {
       b.classList.remove('waiting');
       return;
     }
+    if (this.mode === CS.MODE.RANGE) {
+      // there is no buy timer to skip on the range
+      b.textContent = 'ПОЛИГОН';
+      b.classList.add('waiting');
+      return;
+    }
     if (me && them) { b.textContent = 'СТАРТ…'; b.classList.add('waiting'); }
     else if (me) { b.textContent = 'ЖДЁМ СОПЕРНИКА…'; b.classList.add('waiting'); }
     else if (them) { b.textContent = 'СОПЕРНИК ГОТОВ · ГОТОВ'; b.classList.remove('waiting'); }
@@ -761,6 +952,7 @@ const Game = {
   },
 
   voteSkipBuy() {
+    if (this.mode === CS.MODE.RANGE) return;          // nothing to skip
     if (this.roundState !== 'buy') { Audio3D_SFX.deny(); return; }
     // offline survival: the button simply starts the wave early
     if (this.mode === CS.MODE.OFFLINE) {
@@ -797,7 +989,7 @@ const Game = {
   },
 
   toggleBuy(on) {
-    if (on && this.roundState !== 'buy') return;
+    if (on && this.roundState !== 'buy' && this.mode !== CS.MODE.RANGE) return;
     this.buyOpen = on;
     if (on) {
       UI.renderBuy(this.player, this.buyTimer);
@@ -813,10 +1005,11 @@ const Game = {
   tryBuy(id) {
     const w = WEAPONS[id];
     if (!w) return;
-    if (this.roundState !== 'buy') { Audio3D_SFX.deny(); UI.toast('Магазин закрыт'); return; }
+    if (this.roundState !== 'buy' && this.mode !== CS.MODE.RANGE) { Audio3D_SFX.deny(); UI.toast('Магазин закрыт'); return; }
     if (this.player.has(id)) { Audio3D_SFX.deny(); UI.toast('Уже куплено'); return; }
-    if (this.player.money < w.price) { Audio3D_SFX.deny(); UI.toast('Не хватает денег'); return; }
-    this.player.money -= w.price;
+    const free = this.mode === CS.MODE.RANGE;
+    if (!free && this.player.money < w.price) { Audio3D_SFX.deny(); UI.toast('Не хватает денег'); return; }
+    if (!free) this.player.money -= w.price;
     this.player.give(id);
     this.player.slot = w.slot;
     this.player.deployT = .5;
@@ -831,10 +1024,11 @@ const Game = {
   tryBuyGear(id) {
     const g = GEAR[id];
     if (!g) return;
-    if (this.roundState !== 'buy') { Audio3D_SFX.deny(); return; }
+    if (this.roundState !== 'buy' && this.mode !== CS.MODE.RANGE) { Audio3D_SFX.deny(); return; }
     if (this.player.armor >= 100 && (!g.helmet || this.player.helmet)) { Audio3D_SFX.deny(); UI.toast('Уже куплено'); return; }
-    if (this.player.money < g.price) { Audio3D_SFX.deny(); UI.toast('Не хватает денег'); return; }
-    this.player.money -= g.price;
+    const free = this.mode === CS.MODE.RANGE;
+    if (!free && this.player.money < g.price) { Audio3D_SFX.deny(); UI.toast('Не хватает денег'); return; }
+    if (!free) this.player.money -= g.price;
     this.player.armor = g.ap;
     if (g.helmet) this.player.helmet = true;
     Audio3D_SFX.buy();
@@ -845,6 +1039,8 @@ const Game = {
 
   updateBuyPhase(dt) {
     if (this.roundState === 'buy') {
+      // the range has no clock: the buy phase lasts until the player leaves
+      if (this.mode === CS.MODE.RANGE) { this.roundT = 0; return; }
       this.buyTimer -= dt;
       this.roundT = this.buyTimer;
       if (this.buyOpen) UI.renderBuy(this.player, this.buyTimer);
@@ -858,6 +1054,8 @@ const Game = {
       if (this.mode === CS.MODE.ONLINE) {
         this.roundT -= dt;
         if (this.roundT <= 0) this.endRound(null, 'ВРЕМЯ');
+      } else if (this.mode === CS.MODE.RANGE) {
+        this.updateRange(dt);
       } else if (this.offline) {
         this.offline.waveElapsed = (this.offline.waveElapsed || 0) + dt;
         this.roundT = this.offline.waveElapsed;
@@ -1218,7 +1416,10 @@ const Game = {
         if (h && (!hitZ || h.t < hitZ.t)) hitP = h;
       }
       // ---- hit the world? ----
-      const wallHits = world.raycastAll(pr.pos, dir, segLen + 0.1, ['ground']);
+      // NOTE: the ground must NOT be ignored here. Bullets deliberately skip it
+      // (they stop on walls and the ground AABB is huge), but a rocket that
+      // ignores the floor flies straight through it and never detonates.
+      const wallHits = world.raycastAll(pr.pos, dir, segLen + 0.1);
 
       let impactPoint = null, impactNormal = null;
       const bestTarget = hitP ? hitP.part : (hitZ ? hitZ.part : null);
@@ -2087,6 +2288,10 @@ const Game = {
       else objective = 'ЗАКУПКА · волна ' + (o.wave + 1);
     } else if (this.mode === CS.MODE.ONLINE) {
       objective = this.roundState === 'buy' ? 'ЗАКУПКА' : this.roundState === 'live' ? 'РАУНД ' + this.roundNo : 'КОНЕЦ РАУНДА';
+    } else if (this.mode === CS.MODE.RANGE) {
+      timer = 0;
+      const dps = this._rangeDps || 0;
+      objective = 'ПОЛИГОН · ' + (dps > 0 ? Math.round(dps) + ' урон/с' : 'стреляйте по манекенам');
     }
     if (this._uiT <= 0) {
       this._uiT = .1;
@@ -2096,7 +2301,7 @@ const Game = {
         ping: Net.connected ? Net.ping : undefined,
         role: Net.role === CS.NETROLE.HOST ? 'ХОСТ' : 'КЛИЕНТ'
       });
-      if (this.mode === CS.MODE.OFFLINE || this.mode === CS.MODE.ONLINE) UI.drawMinimap(this);
+      if (this.mode === CS.MODE.OFFLINE || this.mode === CS.MODE.ONLINE || this.mode === CS.MODE.RANGE) UI.drawMinimap(this);
     }
     if (this._restartPending && (Input.keys['Enter'] || Input.keys['NumpadEnter'])) {
       this._restartPending = false; this._offeredRestart = false; this.offlineDead = false; this.offlineDeadT = 0;
@@ -2111,6 +2316,7 @@ window.ZOMBIES = ZOMBIES; window.U = U; window.Store = Store; window.Bus = Bus;
 window.AABB = AABB; window.rayBox = rayBox; window.navPath = navPath;
 window.FlowField = FlowField; window.Horde = Horde; window.Zombie = Zombie;
 window.Player = Player; window.Effects = Effects; window.RemotePlayer = RemotePlayer;
+window.Dummy = Dummy;
 window.CollisionWorld = CollisionWorld; window.Audio3D_SFX = Audio3D_SFX;
 window.MAP = MAP; window.MAT = MAT; window.TEXTURES = TEXTURES; window.Input = Input;
 window.UI = UI; window.Net = Net; window.buildMap = buildMap; window.buildTextures = buildTextures;

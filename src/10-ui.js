@@ -276,18 +276,21 @@ const UI = {
       });
     }
     // local player (triangle pointing along yaw)
+    // The map is drawn top-down with +x → right and +z → down, so a player facing
+    // `yaw` (world forward = (-sin yaw, -cos yaw)) must be drawn rotated by -yaw.
+    // The old expression reflected the arrow across both axes, pointing it backwards.
+    const dirRot = -p.yaw;
     const px = tx(p.pos.x), pz = tz(p.pos.z);
     ctx.save();
     ctx.translate(px, pz);
-    ctx.rotate(Math.atan2(Math.cos(p.yaw), -Math.sin(p.yaw)) + Math.PI / 2);
+    ctx.rotate(dirRot);
     ctx.fillStyle = '#4aff6a';
     ctx.beginPath(); ctx.moveTo(0, -6); ctx.lineTo(4.5, 5); ctx.lineTo(0, 3); ctx.lineTo(-4.5, 5); ctx.closePath(); ctx.fill();
     ctx.restore();
     // view cone
     ctx.save();
     ctx.translate(px, pz);
-    const va = Math.atan2(Math.cos(p.yaw), -Math.sin(p.yaw)) + Math.PI / 2;
-    ctx.rotate(va);
+    ctx.rotate(dirRot);
     const grad = ctx.createLinearGradient(0, 0, 0, -46);
     grad.addColorStop(0, 'rgba(74,255,106,.22)');
     grad.addColorStop(1, 'rgba(74,255,106,0)');

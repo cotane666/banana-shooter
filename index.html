@@ -315,10 +315,11 @@ html.touch .esc-hint{display:none}
 #tAim{right:16px;bottom:110px}
 #tJump{right:18px;bottom:26px}
 #tCrouch{right:88px;bottom:30px}
-/* Reload and weapon-swap live at the top centre: far from both thumbs, so they
-   cannot be hit by accident while moving or looking. */
-#tReload{left:calc(50% - 62px);top:calc(10px + env(safe-area-inset-top,0px))}
-#tSwap{left:calc(50% + 4px);top:calc(10px + env(safe-area-inset-top,0px))}
+/* Reload, weapon-swap and pause live in a row at the top centre: far from both
+   thumbs, so they cannot be hit by accident while moving or looking. */
+#tReload{left:calc(50% - 92px);top:calc(10px + env(safe-area-inset-top,0px))}
+#tSwap{left:calc(50% - 30px);top:calc(10px + env(safe-area-inset-top,0px))}
+#tMenu{left:calc(50% + 32px);top:calc(10px + env(safe-area-inset-top,0px))}
 #tBuy{left:18px;bottom:104px;width:72px;height:48px;border-radius:12px;font-size:11.5px}
 
 #tHint{position:fixed;left:50%;bottom:24%;transform:translateX(-50%);text-align:center;
@@ -393,8 +394,9 @@ html.touch .fld input{padding:10px;font-size:15px}
   #tAim{right:16px;bottom:96px}
   #tJump{right:18px;bottom:20px}
   #tCrouch{right:80px;bottom:24px}
-  #tReload{left:calc(50% - 56px);top:calc(6px + env(safe-area-inset-top,0px))}
-  #tSwap{left:calc(50% + 4px);top:calc(6px + env(safe-area-inset-top,0px))}
+  #tReload{left:calc(50% - 84px);top:calc(6px + env(safe-area-inset-top,0px))}
+  #tSwap{left:calc(50% - 26px);top:calc(6px + env(safe-area-inset-top,0px))}
+  #tMenu{left:calc(50% + 32px);top:calc(6px + env(safe-area-inset-top,0px))}
   #tBuy{left:18px;bottom:90px;width:66px;height:44px;font-size:11px}
   html.touch .logo.big{font-size:clamp(20px,5vw,30px)}
   html.touch .tagline{margin:8px 0 14px}
@@ -418,8 +420,9 @@ html.touch .fld input{padding:10px;font-size:15px}
   #tAim{right:14px;bottom:110px}
   #tJump{right:14px;bottom:28px}
   #tCrouch{right:82px;bottom:32px}
-  #tReload{left:calc(50% - 60px);top:calc(10px + env(safe-area-inset-top,0px))}
-  #tSwap{left:calc(50% + 4px);top:calc(10px + env(safe-area-inset-top,0px))}
+  #tReload{left:calc(50% - 92px);top:calc(10px + env(safe-area-inset-top,0px))}
+  #tSwap{left:calc(50% - 28px);top:calc(10px + env(safe-area-inset-top,0px))}
+  #tMenu{left:calc(50% + 36px);top:calc(10px + env(safe-area-inset-top,0px))}
   #tBuy{left:14px;bottom:104px;width:66px;height:46px}
 }
 </style>
@@ -598,6 +601,7 @@ html.touch .fld input{padding:10px;font-size:15px}
       <input type="range" id="sVol2" min="0" max="100" step="1" value="60"></label>
     <div class="btnrow">
       <button class="mbtn primary" id="btnResume">ПРОДОЛЖИТЬ</button>
+      <button class="mbtn" id="btnPauseControls">УПРАВЛЕНИЕ И НАСТРОЙКИ</button>
       <button class="mbtn" id="btnLeave">ВЫЙТИ В МЕНЮ</button>
     </div>
   </div>
@@ -3977,6 +3981,7 @@ const TouchUI = {
       '<button id="tReload" class="tbtn small">ПЕРЕЗАРЯДКА</button>' +
       '<button id="tSwap" class="tbtn small">СМЕНА</button>' +
       '<button id="tBuy" class="tbtn small accent">МАГАЗИН</button>' +
+      '<button id="tMenu" class="tbtn small">ПАУЗА</button>' +
       '<div id="tHint">Слева — ходьба · Справа — обзор · Тап по экрану — огонь</div>';
     document.body.appendChild(wrap);
     this.root = wrap;
@@ -3990,6 +3995,7 @@ const TouchUI = {
       reload: document.getElementById('tReload'),
       swap: document.getElementById('tSwap'),
       buy: document.getElementById('tBuy'),
+      menu: document.getElementById('tMenu'),
       hint: document.getElementById('tHint')
     };
     // fire/aim must be usable while a match is not running too, so we set the
@@ -4011,6 +4017,7 @@ const TouchUI = {
     E.reload.addEventListener('touchstart', e => { swallow(e); this.reloadQueued = true; E.reload.classList.add('down'); setTimeout(() => E.reload.classList.remove('down'), 130); }, { passive: false });
     E.swap.addEventListener('touchstart', e => { swallow(e); this.switchQueued = 1; E.swap.classList.add('down'); setTimeout(() => E.swap.classList.remove('down'), 130); }, { passive: false });
     E.buy.addEventListener('touchstart', e => { swallow(e); Bus.emit('touchBuy'); E.buy.classList.add('down'); setTimeout(() => E.buy.classList.remove('down'), 130); }, { passive: false });
+    E.menu.addEventListener('touchstart', e => { swallow(e); Bus.emit('touchPause'); E.menu.classList.add('down'); setTimeout(() => E.menu.classList.remove('down'), 130); }, { passive: false });
     // double-tap the stick area toggles auto-run
     let lastStickTap = 0;
     E.stick.addEventListener('touchstart', e => {
@@ -4120,6 +4127,7 @@ const TouchUI = {
     this._els.crouch.style.opacity = blocked ? '.35' : '1';
     this._els.reload.style.opacity = blocked ? '.35' : '1';
     this._els.swap.style.opacity = blocked ? '.35' : '1';
+    this._els.menu.style.opacity = blocked ? '.35' : '1';
     // the control hint is only useful at the very start of a match
     if (this._els.hint) {
       if (!this._hintAt && show) this._hintAt = U.now();
@@ -4756,18 +4764,21 @@ const UI = {
       });
     }
     // local player (triangle pointing along yaw)
+    // The map is drawn top-down with +x → right and +z → down, so a player facing
+    // `yaw` (world forward = (-sin yaw, -cos yaw)) must be drawn rotated by -yaw.
+    // The old expression reflected the arrow across both axes, pointing it backwards.
+    const dirRot = -p.yaw;
     const px = tx(p.pos.x), pz = tz(p.pos.z);
     ctx.save();
     ctx.translate(px, pz);
-    ctx.rotate(Math.atan2(Math.cos(p.yaw), -Math.sin(p.yaw)) + Math.PI / 2);
+    ctx.rotate(dirRot);
     ctx.fillStyle = '#4aff6a';
     ctx.beginPath(); ctx.moveTo(0, -6); ctx.lineTo(4.5, 5); ctx.lineTo(0, 3); ctx.lineTo(-4.5, 5); ctx.closePath(); ctx.fill();
     ctx.restore();
     // view cone
     ctx.save();
     ctx.translate(px, pz);
-    const va = Math.atan2(Math.cos(p.yaw), -Math.sin(p.yaw)) + Math.PI / 2;
-    ctx.rotate(va);
+    ctx.rotate(dirRot);
     const grad = ctx.createLinearGradient(0, 0, 0, -46);
     grad.addColorStop(0, 'rgba(74,255,106,.22)');
     grad.addColorStop(1, 'rgba(74,255,106,0)');
@@ -5469,10 +5480,11 @@ const Game = {
   bindUI() {
     bindClick('btnOffline', () => this.startOffline());
     bindClick('btnOnline', () => { UI.show('lobby'); this.resetLobby(); Net.warmup(); });
-    bindClick('btnControls', () => UI.show('controls'));
+    bindClick('btnControls', () => { this._prevScreen = 'menu'; UI.show('controls'); });
     bindClick('btnControlsBack', () => UI.show(this._prevScreen || 'menu'));
     bindClick('btnLobbyBack', () => { Net.close(false); UI.show('menu'); });
     bindClick('btnResume', () => this.togglePause(false));
+    bindClick('btnPauseControls', () => { this._prevScreen = 'pause'; UI.show('controls'); });
     bindClick('btnLeave', () => this.stopToMenu());
     bindClick('btnReset', () => {
       if (confirm('Сбросить весь прогресс и настройки?')) {
@@ -5546,6 +5558,15 @@ const Game = {
       if (this.buyOpen) { this.toggleBuy(false); return; }
       if (this.roundState === 'buy') { this.toggleBuy(true); Audio3D_SFX.uiClick(); }
       else { UI.toast('Магазин только в фазе закупки'); Audio3D_SFX.deny(); }
+    });
+    Bus.on('touchPause', () => {
+      // In-match pause: opens the pause panel, which also exposes the settings
+      // sliders and "ВЫЙТИ В МЕНЮ". Ignore taps while another overlay owns the
+      // screen (the buy menu has its own ЗАКРЫТЬ button).
+      if (this.buyOpen) return;
+      if (this.paused) { this.togglePause(false); return; }
+      if (UI.overlayOpen()) return;
+      if (this.mode !== CS.MODE.MENU) { this.togglePause(true); Audio3D_SFX.uiClick(); }
     });
     Bus.on('zombieAttack', (z, dmg) => this.playerHurt(dmg, z));
     Bus.on('zombieDied', (z, hs) => this.onZombieDied(z, hs));

@@ -294,10 +294,11 @@ const Game = {
   bindUI() {
     bindClick('btnOffline', () => this.startOffline());
     bindClick('btnOnline', () => { UI.show('lobby'); this.resetLobby(); Net.warmup(); });
-    bindClick('btnControls', () => UI.show('controls'));
+    bindClick('btnControls', () => { this._prevScreen = 'menu'; UI.show('controls'); });
     bindClick('btnControlsBack', () => UI.show(this._prevScreen || 'menu'));
     bindClick('btnLobbyBack', () => { Net.close(false); UI.show('menu'); });
     bindClick('btnResume', () => this.togglePause(false));
+    bindClick('btnPauseControls', () => { this._prevScreen = 'pause'; UI.show('controls'); });
     bindClick('btnLeave', () => this.stopToMenu());
     bindClick('btnReset', () => {
       if (confirm('Сбросить весь прогресс и настройки?')) {
@@ -371,6 +372,15 @@ const Game = {
       if (this.buyOpen) { this.toggleBuy(false); return; }
       if (this.roundState === 'buy') { this.toggleBuy(true); Audio3D_SFX.uiClick(); }
       else { UI.toast('Магазин только в фазе закупки'); Audio3D_SFX.deny(); }
+    });
+    Bus.on('touchPause', () => {
+      // In-match pause: opens the pause panel, which also exposes the settings
+      // sliders and "ВЫЙТИ В МЕНЮ". Ignore taps while another overlay owns the
+      // screen (the buy menu has its own ЗАКРЫТЬ button).
+      if (this.buyOpen) return;
+      if (this.paused) { this.togglePause(false); return; }
+      if (UI.overlayOpen()) return;
+      if (this.mode !== CS.MODE.MENU) { this.togglePause(true); Audio3D_SFX.uiClick(); }
     });
     Bus.on('zombieAttack', (z, dmg) => this.playerHurt(dmg, z));
     Bus.on('zombieDied', (z, hs) => this.onZombieDied(z, hs));

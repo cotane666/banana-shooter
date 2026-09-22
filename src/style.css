@@ -300,10 +300,11 @@ html.touch .esc-hint{display:none}
 #tAim{right:16px;bottom:110px}
 #tJump{right:18px;bottom:26px}
 #tCrouch{right:88px;bottom:30px}
-/* Reload and weapon-swap live at the top centre: far from both thumbs, so they
-   cannot be hit by accident while moving or looking. */
-#tReload{left:calc(50% - 62px);top:calc(10px + env(safe-area-inset-top,0px))}
-#tSwap{left:calc(50% + 4px);top:calc(10px + env(safe-area-inset-top,0px))}
+/* Reload, weapon-swap and pause live in a row at the top centre: far from both
+   thumbs, so they cannot be hit by accident while moving or looking. */
+#tReload{left:calc(50% - 92px);top:calc(10px + env(safe-area-inset-top,0px))}
+#tSwap{left:calc(50% - 30px);top:calc(10px + env(safe-area-inset-top,0px))}
+#tMenu{left:calc(50% + 32px);top:calc(10px + env(safe-area-inset-top,0px))}
 #tBuy{left:18px;bottom:104px;width:72px;height:48px;border-radius:12px;font-size:11.5px}
 
 #tHint{position:fixed;left:50%;bottom:24%;transform:translateX(-50%);text-align:center;
@@ -378,8 +379,9 @@ html.touch .fld input{padding:10px;font-size:15px}
   #tAim{right:16px;bottom:96px}
   #tJump{right:18px;bottom:20px}
   #tCrouch{right:80px;bottom:24px}
-  #tReload{left:calc(50% - 56px);top:calc(6px + env(safe-area-inset-top,0px))}
-  #tSwap{left:calc(50% + 4px);top:calc(6px + env(safe-area-inset-top,0px))}
+  #tReload{left:calc(50% - 84px);top:calc(6px + env(safe-area-inset-top,0px))}
+  #tSwap{left:calc(50% - 26px);top:calc(6px + env(safe-area-inset-top,0px))}
+  #tMenu{left:calc(50% + 32px);top:calc(6px + env(safe-area-inset-top,0px))}
   #tBuy{left:18px;bottom:90px;width:66px;height:44px;font-size:11px}
   html.touch .logo.big{font-size:clamp(20px,5vw,30px)}
   html.touch .tagline{margin:8px 0 14px}
@@ -403,7 +405,8 @@ html.touch .fld input{padding:10px;font-size:15px}
   #tAim{right:14px;bottom:110px}
   #tJump{right:14px;bottom:28px}
   #tCrouch{right:82px;bottom:32px}
-  #tReload{left:calc(50% - 60px);top:calc(10px + env(safe-area-inset-top,0px))}
-  #tSwap{left:calc(50% + 4px);top:calc(10px + env(safe-area-inset-top,0px))}
+  #tReload{left:calc(50% - 92px);top:calc(10px + env(safe-area-inset-top,0px))}
+  #tSwap{left:calc(50% - 28px);top:calc(10px + env(safe-area-inset-top,0px))}
+  #tMenu{left:calc(50% + 36px);top:calc(10px + env(safe-area-inset-top,0px))}
   #tBuy{left:14px;bottom:104px;width:66px;height:46px}
 }

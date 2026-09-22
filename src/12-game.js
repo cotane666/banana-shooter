@@ -1113,12 +1113,14 @@ const Game = {
       toggle: document.getElementById('rpToggle')
     };
     if (!el.panel) return;
-    const inRange = this.mode === CS.MODE.RANGE && this.running;
+    // The range panel (damage / hits / accuracy) is a PC-only readout: on a
+    // phone it crowded the screen, so it is not shown there at all.
+    const inRange = this.mode === CS.MODE.RANGE && this.running && !IS_TOUCH;
     el.panel.classList.toggle('hidden', !inRange);
     if (!inRange) return;
     const a = this.aim;
-    // the drill is PC-only, so the toggle is hidden on touch devices
-    if (el.toggle) el.toggle.style.display = IS_TOUCH ? 'none' : '';
+    // the drill is PC-only, so the toggle always belongs to the keyboard path
+    if (el.toggle) el.toggle.style.display = '';
     if (a) {
       el.title.textContent = 'АИМ-ТРЕНИРОВКА';
       el.score.textContent = String(a.score);
@@ -1130,7 +1132,7 @@ const Game = {
       el.toggle.textContent = 'ОСТАНОВИТЬ';
       el.toggle.classList.add('on');
     } else {
-      el.title.textContent = IS_TOUCH ? 'ПОЛИГОН · МАНЕКЕНЫ' : 'ПОЛИГОН';
+      el.title.textContent = 'ПОЛИГОН';
       el.score.textContent = String(Math.round(this._rangeDps || 0));
       el.hits.textContent = (this.dummies || []).length + ' шт.';
       el.acc.textContent = '—';
@@ -2667,6 +2669,9 @@ const Game = {
       if (this.aim) {
         objective = 'АИМ · счёт ' + this.aim.score + ' · точность ' +
           (this.aim.shots > 0 ? Math.round(this.aim.hits / this.aim.shots * 100) + '%' : '—');
+      } else if (IS_TOUCH) {
+        // the range readouts are a desktop feature; phones just show the mode
+        objective = 'ПОЛИГОН';
       } else {
         const dps = this._rangeDps || 0;
         objective = 'ПОЛИГОН · ' + (dps > 0 ? Math.round(dps) + ' урон/с' : 'стреляйте по манекенам');

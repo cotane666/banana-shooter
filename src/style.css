@@ -264,10 +264,11 @@ html.touch #buy .buy-close{order:1}
 html.touch #autoFireTag{font-size:11px;padding:3px 11px}
 
 /* ---------- range scoreboard (test range) ---------- */
-/* The panel lives inside #hud (z-index 20), so it cannot stack above the
-   click-to-play overlay. That is fine: on PC the pointer is locked during play
-   and a DOM button is unclickable anyway, so the drill is toggled with the T
-   key (advertised on the button label). On touch the button works normally. */
+/* Desktop only: it reports damage-per-second on the dummies and hosts the
+   aim-training button. The panel lives inside #hud (z-index 20), so it cannot
+   stack above the click-to-play overlay — that is fine, because on PC the
+   pointer is locked during play and a DOM button is unclickable anyway, so the
+   drill is toggled with the T key (advertised on the button label). */
 #rangePanel{position:absolute;right:22px;top:150px;z-index:26;width:190px;
   background:rgba(8,11,14,.86);border:1px solid var(--line);border-left:3px solid var(--or);
   border-radius:3px;padding:10px 12px;font-size:11px;letter-spacing:1px;
@@ -285,15 +286,8 @@ html.touch #autoFireTag{font-size:11px;padding:3px 11px}
   padding:7px 8px;border-radius:3px;transition:.12s}
 #rangePanel #rpToggle:hover{background:#242c33;border-left-color:var(--or)}
 #rangePanel #rpToggle.on{background:linear-gradient(90deg,#123a1a,#1d2329);border-left-color:var(--green);color:#9be8a8}
-html.touch #rangePanel{right:8px;top:auto;bottom:190px;width:126px;padding:8px 9px;font-size:10px}
-html.touch #rangePanel .rp-row b{font-size:12px}
-html.touch #rangePanel .rp-title{font-size:9px;letter-spacing:1px}
-html.touch #rangePanel #rpToggle{font-size:9.5px;padding:8px 6px;letter-spacing:1px}
-/* very short (landscape) screens: keep the panel in the corner */
-@media (orientation:landscape) and (max-height:560px){
-  html.touch #rangePanel{top:6px;bottom:auto;right:6px;width:118px;padding:6px 8px}
-  html.touch #rangePanel .rp-title{display:none}
-}
+/* the panel is desktop-only; hide it outright on touch devices */
+html.touch #rangePanel{display:none !important}
 
 /* ---------- click to play ---------- */
 #clickToPlay{position:fixed;inset:0;z-index:35;background:rgba(4,6,8,.86);display:flex;

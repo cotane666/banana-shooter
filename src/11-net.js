@@ -7,6 +7,18 @@
 const PEER_PREFIX = 'cs3d1-';
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
+/* Signalling is only used to introduce the two browsers; the match itself runs
+   peer-to-peer over WebRTC. The public PeerJS cloud (0.peerjs.com) is blocked
+   by Cloudflare in many regions, so we keep a list of servers and fall back to
+   the next one whenever the current one is unreachable. */
+const SIGNAL_SERVERS = [
+  { host: 'peerjs-server.onrender.com', port: 443, secure: true, path: '/' },
+  { host: '0.peerjs.com', port: 443, secure: true, path: '/' },
+  { host: 'peerjs.92k.de', port: 443, secure: true, path: '/' }
+];
+/* How long to wait for one signalling server before trying the next. */
+const SIGNAL_TIMEOUT = 9000;
+
 const Net = {
   peer: null,
   conn: null,
@@ -21,6 +33,7 @@ const Net = {
   latency: 0,
   _handlers: {},
   _closedByUser: false,
+  _srv: 0,                     // index into SIGNAL_SERVERS
 
   /* ---------- helpers ---------- */
   makeCode() {
@@ -30,8 +43,13 @@ const Net = {
   },
 
   peerOptions() {
+    const srv = SIGNAL_SERVERS[this._srv] || SIGNAL_SERVERS[0];
     return {
       debug: 0,
+      host: srv.host,
+      port: srv.port,
+      secure: srv.secure,
+      path: srv.path,
       config: {
         // STUN discovers each player's public address; TURN relays the traffic
         // when both players sit behind strict NATs. The TURN entries below are
@@ -58,6 +76,17 @@ const Net = {
     };
   },
 
+  /* Render's free tier sleeps after inactivity; the first WebSocket open can
+     take ~30s. Fetching the id endpoint wakes the server while the player is
+     still reading the lobby, so pressing "Создать игру" answers quickly. */
+  warmup() {
+    const srv = SIGNAL_SERVERS[this._srv] || SIGNAL_SERVERS[0];
+    try {
+      const url = 'https://' + srv.host + (srv.path === '/' ? '/peerjs/id' : srv.path + '/id');
+      fetch(url + '?ts=' + Date.now(), { cache: 'no-store', mode: 'no-cors' }).catch(() => { });
+    } catch (e) { }
+  },
+
   on(type, fn) { (this._handlers[type] = this._handlers[type] || []).push(fn); },
   emit(type, data) {
     const l = this._handlers[type];
@@ -70,10 +99,28 @@ const Net = {
     this.name = name;
     this._closedByUser = false;
     this.code = this.makeCode();
-    this._createPeer(PEER_PREFIX + this.code, onReady, onError, 0);
+    this._srv = this.preferredServer();
+    this._createPeer(PEER_PREFIX + this.code, onReady, onError, 0, 0);
   },
 
-  _createPeer(id, onReady, onError, attempt) {
+  /* Both players should meet on the same signalling server, so remember the
+     last one that actually worked and start from it next time. */
+  preferredServer() {
+    let i = Store && Store.data ? parseInt(Store.data.signalSrv, 10) : 0;
+    if (!(i >= 0 && i < SIGNAL_SERVERS.length)) i = 0;
+    return i;
+  },
+  rememberServer(i) {
+    if (Store && Store.data) { Store.data.signalSrv = i; try { Store.save(); } catch (e) { } }
+  },
+  /* move to the next signalling server; false when the list is exhausted */
+  _nextServer() {
+    if (this._srv + 1 >= SIGNAL_SERVERS.length) return false;
+    this._srv++;
+    return true;
+  },
+
+  _createPeer(id, onReady, onError, attempt, srvTry) {
     if (this.peer) { try { this.peer.destroy(); } catch (e) { } }
     this.connecting = true;
     let peer;
@@ -87,10 +134,25 @@ const Net = {
     this.peer = peer;
     let settled = false;
 
+    // a signalling server that never answers (blocked, down) must not leave the
+    // player staring at "Ожидание" forever — try the next one automatically
+    const tryNextServer = msg => {
+      if (settled || this._closedByUser) return;
+      settled = true;
+      try { peer.destroy(); } catch (e) { }
+      if (this._nextServer()) {
+        this._createPeer(id, onReady, onError, attempt, srvTry + 1);
+      } else {
+        this.connecting = false;
+        onError && onError(msg);
+      }
+    };
+
     peer.on('open', pid => {
       settled = true;
       this.connecting = false;
       this.peerId = pid;
+      this.rememberServer(this._srv);
       onReady && onReady(pid);
     });
 
@@ -105,26 +167,31 @@ const Net = {
 
     peer.on('error', err => {
       const t = err && err.type;
+      if (settled) return;
       if (t === 'unavailable-id' && this.role === CS.NETROLE.HOST && attempt < 5) {
+        settled = true;
         this.code = this.makeCode();
-        this._createPeer(PEER_PREFIX + this.code, onReady, onError, attempt + 1);
+        this._createPeer(PEER_PREFIX + this.code, onReady, onError, attempt + 1, srvTry);
         return;
       }
       if (t === 'peer-unavailable') {
+        settled = true;
         this.connecting = false;
         onError && onError('Комната не найдена. Проверьте код.');
         return;
       }
       if (t === 'network' || t === 'server-error' || t === 'socket-error') {
-        this.connecting = false;
-        onError && onError('Сервер знакомства недоступен. Проверьте интернет.');
+        tryNextServer('Сервер знакомства недоступен. Проверьте интернет.');
         return;
       }
       if (t === 'browser-incompatible') {
+        settled = true;
         onError && onError('Браузер не поддерживает WebRTC.');
         return;
       }
-      if (!settled) { this.connecting = false; onError && onError('Ошибка сети: ' + (err.message || t || 'неизвестно')); }
+      settled = true;
+      this.connecting = false;
+      onError && onError('Ошибка сети: ' + (err.message || t || 'неизвестно'));
     });
 
     peer.on('disconnected', () => {
@@ -139,10 +206,9 @@ const Net = {
     // connection timeout guard
     setTimeout(() => {
       if (!settled && this.peer === peer && !this.connected) {
-        this.connecting = false;
-        onError && onError('Не удалось подключиться к серверу знакомства (тайм-аут).');
+        tryNextServer('Не удалось подключиться к серверу знакомства (тайм-аут).');
       }
-    }, 14000);
+    }, SIGNAL_TIMEOUT);
   },
 
   /* ---------- client ---------- */
@@ -152,27 +218,43 @@ const Net = {
     this.code = String(code || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
     this._closedByUser = false;
     if (this.code.length < 4) { onError && onError('Неверный код комнаты.'); return; }
+    this._srv = this.preferredServer();
+    this._openJoin(onError);
+  },
 
+  _openJoin(onError) {
     this.connecting = true;
     let peer;
     try { peer = new Peer(null, this.peerOptions()); }
     catch (e) { this.connecting = false; onError && onError('Сеть недоступна: ' + e.message); return; }
     this.peer = peer;
 
-    const fail = msg => { this.connecting = false; onError && onError(msg); };
+    let settled = false;
+    const fail = msg => { if (settled) return; settled = true; this.connecting = false; onError && onError(msg); };
+    const tryNextServer = msg => {
+      if (settled || this._closedByUser) return;
+      settled = true;
+      try { peer.destroy(); } catch (e) { }
+      if (this._nextServer()) this._openJoin(onError);
+      else { this.connecting = false; onError && onError(msg); }
+    };
 
     peer.on('open', () => {
+      this.rememberServer(this._srv);
       const conn = peer.connect(PEER_PREFIX + this.code, { reliable: true, serialization: 'json' });
-      const to = setTimeout(() => { fail('Не удалось подключиться к хосту (тайм-аут).'); }, 13000);
+      const to = setTimeout(() => { tryNextServer('Не удалось подключиться к хосту (тайм-аут).'); }, SIGNAL_TIMEOUT);
       conn.on('open', () => { clearTimeout(to); });
-      this._setupConn(conn, () => clearTimeout(to));
+      this._setupConn(conn, () => { clearTimeout(to); });
     });
     peer.on('error', err => {
       const t = err && err.type;
       if (t === 'peer-unavailable') fail('Комната ' + this.code + ' не найдена. Проверьте код.');
-      else if (t === 'network' || t === 'server-error' || t === 'socket-error') fail('Сервер знакомства недоступен. Проверьте интернет.');
+      else if (t === 'network' || t === 'server-error' || t === 'socket-error') tryNextServer('Сервер знакомства недоступен. Проверьте интернет.');
       else fail('Ошибка сети: ' + (err.message || t));
     });
+
+    // if the server accepts the socket but never answers, fall through too
+    setTimeout(() => { if (!settled && !this.connected) tryNextServer('Сервер знакомства не отвечает. Попробуйте позже.'); }, SIGNAL_TIMEOUT + 4000);
   },
 
   _setupConn(conn, onOpenCb) {

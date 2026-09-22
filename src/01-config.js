@@ -156,7 +156,7 @@ function makeRng(seed) {
 /* ---------------- persistent settings & progress ---------------- */
 const Store = {
   key: 'cs3d.save.v1',
-  data: { sens: 2.2, fov: 80, vol: 60, quality: 1, touchSens: 1.5, name: '', best: 0, bestWave: 0, killsTotal: 0, matches: 0, wins: 0 },
+  data: { sens: 2.2, fov: 80, vol: 60, quality: 1, touchSens: 1.5, name: '', best: 0, bestWave: 0, killsTotal: 0, matches: 0, wins: 0, signalSrv: 0 },
   load() {
     try { const r = localStorage.getItem(this.key); if (r) Object.assign(this.data, JSON.parse(r)); } catch (e) { }
     return this.data;

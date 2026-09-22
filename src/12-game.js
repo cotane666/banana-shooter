@@ -293,7 +293,7 @@ const Game = {
      ============================================================ */
   bindUI() {
     bindClick('btnOffline', () => this.startOffline());
-    bindClick('btnOnline', () => { UI.show('lobby'); this.resetLobby(); });
+    bindClick('btnOnline', () => { UI.show('lobby'); this.resetLobby(); Net.warmup(); });
     bindClick('btnControls', () => UI.show('controls'));
     bindClick('btnControlsBack', () => UI.show(this._prevScreen || 'menu'));
     bindClick('btnLobbyBack', () => { Net.close(false); UI.show('menu'); });
@@ -301,7 +301,7 @@ const Game = {
     bindClick('btnLeave', () => this.stopToMenu());
     bindClick('btnReset', () => {
       if (confirm('Сбросить весь прогресс и настройки?')) {
-        Store.data = { sens: 2.2, fov: 80, vol: 60, quality: 1, name: '', best: 0, bestWave: 0, killsTotal: 0, matches: 0, wins: 0 };
+        Store.data = { sens: 2.2, fov: 80, vol: 60, quality: 1, name: '', best: 0, bestWave: 0, killsTotal: 0, matches: 0, wins: 0, signalSrv: 0 };
         Store.save();
         UI.renderMenuStats(); UI.toast('Прогресс сброшен');
       }
@@ -315,6 +315,7 @@ const Game = {
     // --- lobby ---
     const nameIn = UI.el.inName;
     if (nameIn) nameIn.value = Store.data.name || '';
+    bindClick('btnBuyClose', () => this.toggleBuy(false));
     bindClick('btnHost', () => this.doHost());
     bindClick('btnJoin', () => {
       UI.el.joinRow.classList.remove('hidden');
@@ -365,7 +366,12 @@ const Game = {
     // game events
     Bus.on('buy', id => this.tryBuy(id));
     Bus.on('buyGear', id => this.tryBuyGear(id));
-    Bus.on('touchBuy', () => { if (this.roundState === 'buy') this.toggleBuy(true); else { UI.toast('Магазин только в фазе закупки'); Audio3D_SFX.deny(); } });
+    Bus.on('touchBuy', () => {
+      // One button opens and closes the shop: on a phone there is no B/Esc key.
+      if (this.buyOpen) { this.toggleBuy(false); return; }
+      if (this.roundState === 'buy') { this.toggleBuy(true); Audio3D_SFX.uiClick(); }
+      else { UI.toast('Магазин только в фазе закупки'); Audio3D_SFX.deny(); }
+    });
     Bus.on('zombieAttack', (z, dmg) => this.playerHurt(dmg, z));
     Bus.on('zombieDied', (z, hs) => this.onZombieDied(z, hs));
     Bus.on('zombieHit', (z, part, dmg, dir) => this.onZombieHit(z, part, dmg, dir));
@@ -615,11 +621,12 @@ const Game = {
     if (on) {
       UI.renderBuy(this.player, this.buyTimer);
       UI.show('buy');
-      Input.releaseLock();
+      if (!IS_TOUCH) Input.releaseLock();
     } else {
       UI.show('hud');
-      Input.requestLock();
+      if (!IS_TOUCH) Input.requestLock();
     }
+    if (IS_TOUCH) TouchUI.update();
   },
 
   tryBuy(id) {
@@ -1298,11 +1305,24 @@ const Game = {
   /* ============================================================
      NETWORKING (online)
      ============================================================ */
+  resetLobby() {
+    if (!UI.el.lobbyMain) return;
+    UI.el.lobbyMain.classList.remove('hidden');
+    if (UI.el.joinRow) UI.el.joinRow.classList.add('hidden');
+    if (UI.el.hostRow) UI.el.hostRow.classList.add('hidden');
+    if (UI.el.roomCode) { UI.el.roomCode.textContent = '·····'; }
+    this.setLobbyStatus('');
+    if (UI.el.inName) UI.el.inName.value = Store.data.name || '';
+  },
+
   doHost() {
     const name = (UI.el.inName.value || 'Игрок').slice(0, 14);
+    if (!name) { this.setLobbyStatus('Введите ник', true); return; }
     Store.data.name = name; Store.save();
     UI.el.hostRow.classList.remove('hidden');
     UI.el.joinRow.classList.add('hidden');
+    UI.el.roomCode.textContent = '·····';
+    this.setLobbyStatus('Создаём комнату…');
     Net.host(name,
       () => {
         // the code can change if the first id was taken; refresh the display

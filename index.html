@@ -5273,23 +5273,29 @@ class RemotePlayer {
     this.slot = 2;
     this.hitFlash = 0;
   }
+  /* Snapshots carry the sender's clock (`rt`), but performance.now() starts at
+     each page's own load time, so the two players' clocks are offset by seconds
+     or minutes. Comparing the sender's stamp with our clock froze the model
+     (t clamped to 0 forever). Stamp each snapshot with the LOCAL arrival time
+     instead, so both ends interpolate on their own consistent clock. */
   pushSnapshot(s) {
+    s.at = U.now();
     this.buf.push(s);
     if (this.buf.length > 40) this.buf.shift();
-    this.lastPacket = U.now();
+    this.lastPacket = s.at;
   }
-  /* interpolate at now - delay ms */
+  /* interpolate at now - delay ms, using local arrival times */
   interp(delayMs) {
     const target = U.now() - delayMs;
     const b = this.buf;
     if (b.length === 0) return;
     if (b.length === 1) { this.applySnap(b[0]); return; }
     let i = b.length - 1;
-    while (i > 0 && b[i].rt > target) i--;
+    while (i > 0 && b[i].at > target) i--;
     const a = b[i], c = b[i + 1] || b[i];
     if (!c || c === a) { this.applySnap(a); return; }
-    const span = c.rt - a.rt;
-    const t = span > 0 ? U.clamp((target - a.rt) / span, 0, 1) : 0;
+    const span = c.at - a.at;
+    const t = span > 0 ? U.clamp((target - a.at) / span, 0, 1) : 0;
     this.renderPos.x = U.lerp(a.x, c.x, t);
     this.renderPos.y = U.lerp(a.y, c.y, t);
     this.renderPos.z = U.lerp(a.z, c.z, t);

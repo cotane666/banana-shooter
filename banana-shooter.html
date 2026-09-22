@@ -5119,6 +5119,7 @@ const Net = {
     conn.on('open', () => {
       this.connected = true;
       this.connecting = false;
+      this.startHeartbeat();
       onOpenCb && onOpenCb();
       this.send({ t: 'hello', name: this.name, role: this.role === CS.NETROLE.HOST ? 'host' : 'client', ver: CS.version });
       this.emit('connected', { role: this.role });
@@ -5183,8 +5184,27 @@ const Net = {
     }
   },
 
+  /* Keep the data channel warm from a timer rather than the render loop: when
+     the tab is backgrounded (or the phone locks) requestAnimationFrame stops and
+     tick() is never called, so the other side saw a silent peer and eventually
+     dropped it. A 1 Hz heartbeat also gives a cheap liveness signal.
+     `keepalive` is set by Game so a backgrounded tab still sends its state —
+     otherwise the opponent's model would freeze while we are hidden. */
+  startHeartbeat() {
+    this.stopHeartbeat();
+    this._hb = setInterval(() => {
+      if (!this.connected) return;
+      try { this.send({ t: 'ping', s: 'hb', time: U.now() }); } catch (e) { }
+      try { if (this.keepalive) this.keepalive(); } catch (e) { }
+    }, 1000);
+  },
+  stopHeartbeat() {
+    if (this._hb) { clearInterval(this._hb); this._hb = null; }
+  },
+
   close(notify) {
     this._closedByUser = true;
+    this.stopHeartbeat();
     if (notify && this.connected) { try { this.send({ t: 'bye' }); } catch (e) { } }
     setTimeout(() => {
       try { if (this.conn) this.conn.close(); } catch (e) { }
@@ -5282,40 +5302,56 @@ class RemotePlayer {
     this.buf = [];
     this.renderPos = { x: 0, y: 0, z: 0 };
     this.renderYaw = 0;
-    this.clockOffset = undefined;   // sender clock → local clock (estimated)
+    this.playT = undefined;         // play-out clock on our own timeline (ms)
     this.weaponGroup = null;
     this.walkPhase = 0;
     this.lastPacket = 0;
     this.slot = 2;
     this.hitFlash = 0;
   }
-  /* Snapshot timestamps come from the SENDER's clock, but performance.now()
-     starts at each page's own load time, so the two clocks differ by seconds or
-     minutes. Two naive fixes fail:
-       - using the raw sender stamp froze the model (the render target clamped);
-       - using the local arrival time collapsed the timeline whenever packets
-         arrived in a burst (span ≈ 0), making the mesh jump.
-     So we estimate the clock offset — arrival − senderStamp, whose minimum over
-     time is the true offset because network delay is never negative — and map
-     every snapshot onto OUR timeline. The sender's even 29 ms spacing survives,
-     and the clock difference cancels out. */
+  /* Snapshots are stamped with the LOCAL ARRIVAL time. That is monotonic by
+     construction, so the interpolation search can never be confused by a moving
+     clock offset (the previous min-filter kept rewriting the mapping, so old and
+     new buffer entries ended up on different timelines and the search collapsed
+     onto a stale entry → the model froze).
+     Jitter and packet bursts are absorbed by a separate playout clock
+     (`playT`) advanced in advance(), which never runs backwards. */
   pushSnapshot(s) {
-    const raw = U.now() - (s.rt || U.now());
-    if (this.clockOffset === undefined) this.clockOffset = raw;
-    else if (raw < this.clockOffset) this.clockOffset = raw;       // fast down (min filter)
-    else this.clockOffset += (raw - this.clockOffset) * 0.02;      // slow up (clock drift)
-    s.lt = (s.rt || U.now()) + this.clockOffset;                   // sender time on our clock
+    s.lt = U.now();
     this.buf.push(s);
     if (this.buf.length > 40) this.buf.shift();
-    this.lastPacket = U.now();
+    this.lastPacket = s.lt;
   }
-  /* interpolate at now - delay ms on our own timeline; extrapolate briefly if
-     the render target runs past the newest snapshot (a packet gap). */
+
+  /* Play-out clock: advances with real time and eases toward
+     (newest snapshot − delay). It never stalls and never goes backwards, so the
+     model keeps moving during jitter, bursts and short packet loss.
+     After a long stall (backgrounded tab, phone locked) it is far behind, so it
+     catches up quickly instead of staying seconds in the past. */
+  advance(dt) {
+    const b = this.buf;
+    const now = U.now();
+    const newest = b.length ? b[b.length - 1].lt : now;
+    const target = newest - CFG.netInterpMs;
+    if (this.playT === undefined) { this.playT = target; return; }
+    const step = Math.max(dt, 0) * 1000;
+    const err = target - (this.playT + step);          // >0 → we are behind
+    if (err > 1000) {
+      // a real gap (tab was hidden): jump most of the way, then ease the rest
+      this.playT = target - 120;
+      return;
+    }
+    // correct by at most ±40% of real speed, and always move forward
+    this.playT += step + U.clamp(err * 0.30, -step * 0.40, step * 0.40);
+  }
+
+  /* Interpolate on the play-out clock; extrapolate briefly past the newest
+     snapshot so a packet gap does not freeze the model. */
   interp(delayMs) {
-    const target = U.now() - delayMs;
     const b = this.buf;
     if (b.length === 0) return;
     if (b.length === 1) { this.applySnap(b[0]); return; }
+    const target = this.playT !== undefined ? this.playT : U.now() - (delayMs || 0);
     let i = b.length - 1;
     while (i > 0 && b[i].lt > target) i--;
     const a = b[i];
@@ -5823,6 +5859,14 @@ const Game = {
     this.spawnPlayerLocal(role === CS.NETROLE.HOST ? 0 : 3);
     this.beginBuyPhase(30, role === CS.NETROLE.HOST ? 'РАУНД 1' : 'РАУНД 1');
     this.enterGame();
+    this._peerWarned = false; this._peerLost = false;
+    this._leaving = false;
+    Net.startHeartbeat();
+    // a backgrounded tab stops rAF, so keep broadcasting from the heartbeat too
+    Net.keepalive = () => {
+      if (this.mode !== CS.MODE.ONLINE || !Net.connected) return;
+      this.broadcastState();
+    };
     UI.toast('Убейте соперника. Магазин: B');
   },
 
@@ -6733,9 +6777,35 @@ const Game = {
 
   onNetDisconnected() {
     if (this.mode !== CS.MODE.ONLINE) return;
-    UI.center('СОПЕРНИК ОТКЛЮЧИЛСЯ', 'Выход в меню', 3.0);
+    if (this._leaving) return;
+    this._leaving = true;
     UI.toast('Соперник отключился', '#e33a2e');
-    setTimeout(() => { if (this.mode === CS.MODE.ONLINE) this.stopToMenu(); }, 3200);
+    UI.center('СОПЕРНИК ОТКЛЮЧИЛСЯ', 'Выход в меню через 5 секунд', 5.0);
+    setTimeout(() => { if (this.mode === CS.MODE.ONLINE && this._leaving) this.stopToMenu(); }, 5200);
+  },
+
+  /* Watchdog: the data channel can stay "open" while the peer stops sending
+     (backgrounded tab, locked phone, dead NAT mapping). Without this the match
+     silently froze and the player was only ejected much later, when PeerJS
+     finally reported the socket as closed. Thresholds are measured directly
+     against the last packet we received. */
+  checkPeerAlive(dt) {
+    if (this.mode !== CS.MODE.ONLINE) return;
+    if (!this.remote || !Net.connected) return;
+    if (!this.remote.lastPacket) return;             // nothing received yet
+    const silent = U.now() - this.remote.lastPacket;
+    if (silent < 4000) { this._peerWarned = false; return; }
+    if (!this._peerWarned) {
+      this._peerWarned = true;
+      UI.toast('Соперник не отвечает…', '#f5d33c');
+      UI.center('ЖДЁМ СОПЕРНИКА', 'Проверьте соединение', 2.0);
+      // nudge the transport: this often revives a stalled channel
+      try { if (Net.conn && Net.conn.open) Net.send({ t: 'ping', s: 'hb', time: U.now() }); } catch (e) { }
+    }
+    if (silent > 12000 && !this._peerLost) {
+      this._peerLost = true;
+      this.onNetDisconnected();
+    }
   },
 
   broadcastState() {
@@ -6759,6 +6829,7 @@ const Game = {
 
   onRemoteState(s) {
     if (!this.remote) return;
+    this._peerWarned = false; this._peerLost = false;
     this.remote.pushSnapshot(s);
     if (s.k !== undefined) { this.remote.kills = s.k; this.remote.deaths = s.d; this.remote.score = s.sc; }
     if (s.hp !== undefined) this.remote.health = s.hp;
@@ -6995,7 +7066,8 @@ const Game = {
       Net.tick(dt);
       this._netStateT -= dt;
       if (this._netStateT <= 0) { this._netStateT = 1 / CFG.netSendLocalHz; this.broadcastState(); }
-      if (this.remote) { this.remote.interp(CFG.netInterpMs); this.remote.sync(dt); }
+      if (this.remote) { this.remote.advance(dt); this.remote.interp(CFG.netInterpMs); this.remote.sync(dt); }
+      this.checkPeerAlive(dt);
     }
 
     // ---- death handling offline ----

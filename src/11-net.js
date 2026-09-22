@@ -262,6 +262,7 @@ const Net = {
     conn.on('open', () => {
       this.connected = true;
       this.connecting = false;
+      this.startHeartbeat();
       onOpenCb && onOpenCb();
       this.send({ t: 'hello', name: this.name, role: this.role === CS.NETROLE.HOST ? 'host' : 'client', ver: CS.version });
       this.emit('connected', { role: this.role });
@@ -326,8 +327,27 @@ const Net = {
     }
   },
 
+  /* Keep the data channel warm from a timer rather than the render loop: when
+     the tab is backgrounded (or the phone locks) requestAnimationFrame stops and
+     tick() is never called, so the other side saw a silent peer and eventually
+     dropped it. A 1 Hz heartbeat also gives a cheap liveness signal.
+     `keepalive` is set by Game so a backgrounded tab still sends its state —
+     otherwise the opponent's model would freeze while we are hidden. */
+  startHeartbeat() {
+    this.stopHeartbeat();
+    this._hb = setInterval(() => {
+      if (!this.connected) return;
+      try { this.send({ t: 'ping', s: 'hb', time: U.now() }); } catch (e) { }
+      try { if (this.keepalive) this.keepalive(); } catch (e) { }
+    }, 1000);
+  },
+  stopHeartbeat() {
+    if (this._hb) { clearInterval(this._hb); this._hb = null; }
+  },
+
   close(notify) {
     this._closedByUser = true;
+    this.stopHeartbeat();
     if (notify && this.connected) { try { this.send({ t: 'bye' }); } catch (e) { } }
     setTimeout(() => {
       try { if (this.conn) this.conn.close(); } catch (e) { }

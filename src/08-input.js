@@ -397,7 +397,9 @@ const TouchUI = {
     if (!this.active) return;
     const show = Game && Game.running && Game.mode !== CS.MODE.MENU;
     this.root.style.display = show ? 'block' : 'none';
-    const buyVisible = show && Game.roundState === 'buy';
+    // the shop button must also be reachable on the range, where there is no
+    // buy phase (the range runs live with the shop always available)
+    const buyVisible = show && (Game.roundState === 'buy' || Game.mode === CS.MODE.RANGE);
     this._els.buy.style.display = buyVisible ? 'block' : 'none';
     // the stick and look layer are always live; the remaining buttons dim while
     // an overlay is up so they cannot be pressed through it

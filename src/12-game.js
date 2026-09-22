@@ -824,8 +824,9 @@ const Game = {
       case 'KeyN': this.invertY(); break;
       // On PC the pointer is locked during play, so DOM buttons cannot be
       // clicked at all — the range features get keyboard shortcuts.
+      // (The aim drill is PC-only; see toggleAimTrain.)
       case 'KeyT':
-        if (this.mode === CS.MODE.RANGE) this.toggleAimTrain(!this.aim);
+        if (this.mode === CS.MODE.RANGE && !IS_TOUCH) this.toggleAimTrain(!this.aim);
         break;
     }
   },
@@ -981,8 +982,11 @@ const Game = {
   /* ---------------- aim training ----------------
      Runs inside its own sealed room (MAP.aimRoom) so the targets never
      interfere with the dummies in the arena. Entering teleports the player in;
-     leaving teleports them back to the range. */
+     leaving teleports them back to the range.
+     Not available on phones: the drill needs quick, precise aiming that a touch
+     screen makes frustrating, so the button is hidden there and this is a no-op. */
   toggleAimTrain(on) {
+    if (typeof IS_TOUCH !== 'undefined' && IS_TOUCH) return;
     if (on && this.mode !== CS.MODE.RANGE) return;
     if (!on && this.aim) {
       // remember the best score across sessions
@@ -1113,6 +1117,8 @@ const Game = {
     el.panel.classList.toggle('hidden', !inRange);
     if (!inRange) return;
     const a = this.aim;
+    // the drill is PC-only, so the toggle is hidden on touch devices
+    if (el.toggle) el.toggle.style.display = IS_TOUCH ? 'none' : '';
     if (a) {
       el.title.textContent = 'АИМ-ТРЕНИРОВКА';
       el.score.textContent = String(a.score);
@@ -1124,7 +1130,7 @@ const Game = {
       el.toggle.textContent = 'ОСТАНОВИТЬ';
       el.toggle.classList.add('on');
     } else {
-      el.title.textContent = 'ПОЛИГОН · МАНЕКЕНЫ';
+      el.title.textContent = IS_TOUCH ? 'ПОЛИГОН · МАНЕКЕНЫ' : 'ПОЛИГОН';
       el.score.textContent = String(Math.round(this._rangeDps || 0));
       el.hits.textContent = (this.dummies || []).length + ' шт.';
       el.acc.textContent = '—';
@@ -1132,7 +1138,7 @@ const Game = {
       el.best.textContent = String(Store.data.aimBest || 0);
       // On PC the pointer is locked during play, so a DOM button cannot be
       // clicked — advertise the keyboard shortcut on the button itself.
-      el.toggle.textContent = IS_TOUCH ? 'АИМ-ТРЕНИРОВКА' : 'АИМ-ТРЕНИРОВКА (T)';
+      el.toggle.textContent = 'АИМ-ТРЕНИРОВКА (T)';
       el.toggle.classList.remove('on');
     }
   },

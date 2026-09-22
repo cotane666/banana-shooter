@@ -264,10 +264,14 @@ html.touch #buy .buy-close{order:1}
 html.touch #autoFireTag{font-size:11px;padding:3px 11px}
 
 /* ---------- range scoreboard (test range) ---------- */
-#rangePanel{position:absolute;right:22px;top:150px;z-index:24;width:190px;
-  background:rgba(8,11,14,.72);border:1px solid var(--line);border-left:3px solid var(--or);
+/* The panel lives inside #hud (z-index 20), so it cannot stack above the
+   click-to-play overlay. That is fine: on PC the pointer is locked during play
+   and a DOM button is unclickable anyway, so the drill is toggled with the T
+   key (advertised on the button label). On touch the button works normally. */
+#rangePanel{position:absolute;right:22px;top:150px;z-index:26;width:190px;
+  background:rgba(8,11,14,.86);border:1px solid var(--line);border-left:3px solid var(--or);
   border-radius:3px;padding:10px 12px;font-size:11px;letter-spacing:1px;
-  pointer-events:none;backdrop-filter:blur(3px)}
+  pointer-events:auto;backdrop-filter:blur(3px)}
 #rangePanel.hidden{display:none}
 #rangePanel .rp-title{font-size:10px;color:var(--or);font-weight:800;letter-spacing:2px;
   margin-bottom:7px;border-bottom:1px solid var(--line);padding-bottom:6px}

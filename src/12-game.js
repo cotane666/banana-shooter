@@ -117,7 +117,7 @@ function buildTargetMesh() {
   const g = new THREE.Group();
   const face = new THREE.Mesh(
     new THREE.CircleGeometry(.5, 26),
-    new THREE.MeshLambertMaterial({ map: _targetTex, side: THREE.DoubleSide, emissive: 0x0d0d0d })
+    new THREE.MeshLambertMaterial({ map: _targetTex, side: THREE.DoubleSide, emissive: 0x666666, emissiveMap: _targetTex })
   );
   g.add(face);
   const rim = new THREE.Mesh(
@@ -143,6 +143,7 @@ class Target {
   constructor(x, y, z, radius) {
     this.id = 'target';
     this.isTarget = true;              // the horde must never reap practices
+    this.isTargetOnRange = true;       // bullets score these instead of damaging
     this.pos = { x, y, z };
     this.yaw = 0;
     this.alive = true;
@@ -150,7 +151,7 @@ class Target {
     this.deadT = 0;
     this.radius = radius || .5;
     this.anchor = { x, y, z };
-    this.range = 3.2;                    // how far it may drift from its anchor
+    this.range = 2.6;                    // how far it may drift from its anchor
     this.speed = 2.2 + Math.random() * 2.4;
     this.vel = { x: 0, y: 0, z: 0 };
     this.wanderT = 0;
@@ -215,6 +216,17 @@ class Target {
     this.pos.y += this.vel.y * dt;
     this.pos.z += this.vel.z * dt;
 
+    // stay inside the training room
+    const room = (typeof MAP !== 'undefined' && MAP.aimRoom) ? MAP.aimRoom : null;
+    if (room) {
+      const pad = this.radius + 0.3;
+      if (this.pos.x < room.minX + pad) { this.pos.x = room.minX + pad; this.vel.x = Math.abs(this.vel.x); }
+      if (this.pos.x > room.maxX - pad) { this.pos.x = room.maxX - pad; this.vel.x = -Math.abs(this.vel.x); }
+      if (this.pos.z < room.minZ + pad) { this.pos.z = room.minZ + pad; this.vel.z = Math.abs(this.vel.z); }
+      if (this.pos.z > room.maxZ - pad) { this.pos.z = room.maxZ - pad; this.vel.z = -Math.abs(this.vel.z); }
+      this.pos.y = U.clamp(this.pos.y, room.floorY + 0.8, room.floorY + 3.4);
+    }
+
     // hover above the ground
     const gy = ctx && ctx.world ? ctx.world.groundAt(this.pos.x, this.pos.z, 8) : 0;
     const minY = (gy === null ? 0 : gy) + 1.0;
@@ -250,6 +262,10 @@ class Dummy extends Zombie {
     this.isDummy = true;
     this.isTarget = true;              // the horde must never reap these
     this.dummyName = 'МАНЕКЕН';
+    // NOTE: `isTarget` only tells the horde not to reap them. Bullets must still
+    // treat dummies as damage sponges, so they get their own flag (`isDummy`) and
+    // the shooting code checks that first — otherwise every hit was scored as a
+    // practice target and the damage readout stopped updating.
     this.group.scale.setScalar(1);
     // neutral colouring so it reads as a target, not an enemy
     const skin = new THREE.MeshLambertMaterial({ color: 0xc8a06a });
@@ -803,6 +819,11 @@ const Game = {
       case 'KeyQ': if (!this.paused) this.switchSlot(this.player.nextSlot()); break;
       case 'KeyG': if (!this.paused && this.player.dropWeapon()) { Audio3D_SFX.pickup(); UI.toast('Оружие сброшено'); } break;
       case 'KeyN': this.invertY(); break;
+      // On PC the pointer is locked during play, so DOM buttons cannot be
+      // clicked at all — the range features get keyboard shortcuts.
+      case 'KeyT':
+        if (this.mode === CS.MODE.RANGE) this.toggleAimTrain(!this.aim);
+        break;
     }
   },
 
@@ -954,8 +975,12 @@ const Game = {
     this.roundT = 0;
   },
 
-  /* ---------------- aim training ---------------- */
+  /* ---------------- aim training ----------------
+     Runs inside its own sealed room (MAP.aimRoom) so the targets never
+     interfere with the dummies in the arena. Entering teleports the player in;
+     leaving teleports them back to the range. */
   toggleAimTrain(on) {
+    if (on && this.mode !== CS.MODE.RANGE) return;
     if (!on && this.aim) {
       // remember the best score across sessions
       if (this.aim.score > (Store.data.aimBest || 0)) {
@@ -966,41 +991,50 @@ const Game = {
     }
     this.aim = on ? {
       score: 0, hits: 0, shots: 0, streak: 0, bestStreak: 0,
-      sinceSpawn: 0, alive: 0, spawnT: 0
+      spawnT: 0, alive: 0
     } : null;
     // clear any leftover targets
     if (this.targets) for (const t of this.targets) t.dispose(this.scene);
     this.targets = [];
-    if (on) {
-      this._shotsAtStart = this.player.bulletsFired;
-      // hide the dummies so the two modes do not overlap visually
-      for (const d of this.dummies) d.group.visible = false;
+
+    const room = MAP.aimRoom;
+    if (on && room) {
+      // move into the room and face the targets
+      this._rangeReturn = {
+        x: this.player.pos.x, y: this.player.pos.y, z: this.player.pos.z, yaw: this.player.yaw
+      };
+      this.player.resetSpawn(room.entry.x, room.floorY + .05, room.entry.z, room.entry.yaw);
+      this.player.pitch = 0;
+      this.camera.position.set(room.entry.x, room.floorY + CFG.eyeHeight, room.entry.z);
       this.spawnTargetWave(true);
       UI.toast('Аим-тренировка: ВКЛ', '#57d16a');
-    } else {
-      for (const d of this.dummies) d.group.visible = true;
+      UI.center('АИМ-ТРЕНИРОВКА', 'T — выход', 2.0);
+    } else if (this._rangeReturn) {
+      // back to where we were in the arena
+      const r = this._rangeReturn;
+      this.player.resetSpawn(r.x, r.y, r.z, r.yaw);
+      this.camera.position.set(r.x, r.y + CFG.eyeHeight, r.z);
+      this._rangeReturn = null;
       UI.toast('Аим-тренировка: ВЫКЛ');
+      UI.center('ПОЛИГОН', '', 1.4);
     }
     this.updateRangePanel();
   },
 
-  /* targets spawn at a spread of distances and drift chaotically */
+  /* targets spawn across the room at a spread of distances */
   spawnTargetWave(initial) {
     if (!this.aim) return;
-    const p = this.player;
-    const face = p.yaw;
-    const fx = -Math.sin(face), fz = -Math.cos(face);
-    const rx = Math.cos(face), rz = -Math.sin(face);
+    const room = MAP.aimRoom;
+    if (!room) return;
     const n = initial ? 6 : 1;
     for (let i = 0; i < n; i++) {
-      // distances from 10 m to 42 m, sizes shrink with distance
-      const fwd = U.rand(10, 42);
-      const side = U.rand(-14, 14);
-      const x = p.pos.x + fx * fwd + rx * side;
-      const z = p.pos.z + fz * fwd + rz * side;
-      const gy = this.world.groundAt(x, z, 10);
-      const y = (gy === null ? 0 : gy) + U.rand(1.1, 2.6);
-      const radius = U.clamp(0.62 - fwd * 0.006, 0.22, 0.62);
+      // 9..34 m from the firing line, spread across the room width
+      const dist = U.rand(9, 34);
+      const x = U.clamp(room.entry.x + U.rand(-12, 12), room.minX + 1.5, room.maxX - 1.5);
+      const z = room.entry.z - dist;
+      if (z < room.minZ + 1.6) continue;
+      const radius = U.clamp(0.62 - dist * 0.010, 0.20, 0.62);
+      const y = room.floorY + U.rand(1.15, 2.7);
       const t = new Target(x, y, z, radius);
       this.scene.add(t.group);
       this.targets.push(t);
@@ -1090,7 +1124,9 @@ const Game = {
       el.acc.textContent = '—';
       el.streak.textContent = '—';
       el.best.textContent = String(Store.data.aimBest || 0);
-      el.toggle.textContent = 'АИМ-ТРЕНИРОВКА';
+      // On PC the pointer is locked during play, so a DOM button cannot be
+      // clicked — advertise the keyboard shortcut on the button itself.
+      el.toggle.textContent = IS_TOUCH ? 'АИМ-ТРЕНИРОВКА' : 'АИМ-ТРЕНИРОВКА (T)';
       el.toggle.classList.remove('on');
     }
   },
@@ -1915,8 +1951,10 @@ const Game = {
     }
 
     if (zHit && zHit.t <= stopT) {
-      // practice targets: no damage model, just scoring + a pop
-      if (zHit.zombie.isTarget) {
+      // practice targets (the aim drill) score and pop; dummies take damage
+      if (zHit.zombie.isDummy) {
+        // fall through to the normal damage path below
+      } else if (zHit.zombie.isTargetOnRange) {
         p.bulletsHit++;
         this.effects.impact(zHit.point, dir, 'concrete');
         this.effects.tracer(muzzleWorld, zHit.point, 1, true);

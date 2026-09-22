@@ -304,9 +304,106 @@ function buildMap(scene, world, quality) {
     zombies: MAP.zombieSpawns.length
   };
 
+  /* ---------- aim-training room (outside the arena) ---------- */
+  buildAimRoom(scene, world);
+
   /* ---------- navigation grid ---------- */
   MAP.nav = buildNav(world, MAP);
   return MAP;
+}
+
+/* ============================================================
+   AIM-TRAINING ROOM
+   A sealed room outside the arena, used by the test range. It is built once with
+   the map so it costs nothing at runtime. `MAP.aimRoom` describes its bounds and
+   the entry point the player is placed at.
+   ============================================================ */
+function buildAimRoom(scene, world) {
+  const cx = 0, cz = -84;                 // room centre
+  const halfW = 15, halfD = 22;           // interior half-extents
+  const H = 8, T = 1.6;                   // wall height / thickness
+  const minX = cx - halfW, maxX = cx + halfW;
+  const minZ = cz - halfD, maxZ = cz + halfD;
+  const S = MAP.size;
+
+  // floor (top at y = 0, same as the arena)
+  solid(scene, world, cx, -2, cz, halfW * 2 + T * 2, 2, halfD * 2 + T * 2,
+    MAT.floor, { tag: 'ground', noShadow: true });
+
+  // side walls
+  solid(scene, world, minX - T / 2, 0, cz, T, H, halfD * 2 + T * 2, MAT.concrete, { tag: 'wall' });
+  solid(scene, world, maxX + T / 2, 0, cz, T, H, halfD * 2 + T * 2, MAT.concrete, { tag: 'wall' });
+  // far / near walls
+  solid(scene, world, cx, 0, minZ - T / 2, halfW * 2 + T * 2, H, T, MAT.concrete, { tag: 'wall' });
+  solid(scene, world, cx, 0, maxZ + T / 2, halfW * 2 + T * 2, H, T, MAT.concrete, { tag: 'wall' });
+
+  // ceiling (decorative only) so it reads as an indoor room
+  const roof = new THREE.Mesh(
+    new THREE.BoxGeometry(halfW * 2 + T * 2, .5, halfD * 2 + T * 2),
+    MAT.dark
+  );
+  roof.position.set(cx, H + .25, cz);
+  roof.castShadow = false; roof.receiveShadow = true;
+  scene.add(roof);
+
+  /* The room is roofed, so the arena sun is shadowed out of it. Give it its own
+     lighting. A directional light is the reliable choice here: this build of
+     three.js (r160) uses physical units, where point lights fall off with
+     distance and render very dim indoors. */
+  const roomHemi = new THREE.HemisphereLight(0xdfe9f5, 0x8a8070, 2.4);
+  roomHemi.position.set(cx, H * .6, cz);
+  scene.add(roomHemi);
+
+  const roomSun = new THREE.DirectionalLight(0xfff6e6, 2.6);
+  roomSun.position.set(cx + 12, H + 10, cz + 14);
+  roomSun.target.position.set(cx, 0, cz);
+  scene.add(roomSun.target);
+  scene.add(roomSun);
+
+  const roomSun2 = new THREE.DirectionalLight(0xdfe9f5, 1.1);
+  roomSun2.position.set(cx - 14, H + 8, cz - 16);
+  roomSun2.target.position.set(cx, 0, cz);
+  scene.add(roomSun2.target);
+  scene.add(roomSun2);
+
+  // warm ambient so nothing reads as pure black
+  const roomAmb = new THREE.AmbientLight(0xffffff, 0.55);
+  scene.add(roomAmb);
+
+  // floor lane markings: a firing line and distance ticks
+  const line = (z, w, col) => {
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(w, .18),
+      new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: .5, fog: false }));
+    m.rotation.x = -Math.PI / 2;
+    m.position.set(cx, .02, z);
+    m.renderOrder = 1;
+    scene.add(m);
+  };
+  line(maxZ - 3, halfW * 2 - 1, 0xff9d21);            // firing line
+  for (let d = 10; d <= 35; d += 5) line(maxZ - 3 - d, halfW * 1.4, 0x4aa3ff);
+
+  // distance numbers painted on the floor
+  for (let d = 10; d <= 35; d += 5) {
+    const c = makeCanvas(64); c.height = 64;
+    const g2 = c.getContext('2d');
+    g2.fillStyle = 'rgba(74,163,255,.85)';
+    g2.font = 'bold 44px Arial'; g2.textAlign = 'center'; g2.textBaseline = 'middle';
+    g2.fillText(String(d), 32, 34);
+    const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace;
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(1.7, 1.7),
+      new THREE.MeshBasicMaterial({ map: tex, transparent: true, fog: false }));
+    m.rotation.x = -Math.PI / 2;
+    m.position.set(cx - 6, .03, maxZ - 3 - d);
+    m.renderOrder = 2;
+    scene.add(m);
+  }
+
+  MAP.aimRoom = {
+    minX: minX, maxX: maxX, minZ: minZ, maxZ: maxZ,
+    entry: { x: cx, z: maxZ - 3, yaw: 0 },            // yaw 0 faces -Z, into the room
+    floorY: 0
+  };
+  return MAP.aimRoom;
 }
 
 /* ---------------- stepped ramp ----------------

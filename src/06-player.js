@@ -806,9 +806,15 @@ class Player {
     } else {
       this.onGround = false;
     }
-    // keep inside the world
-    this.pos.x = U.clamp(this.pos.x, -MAP.size / 2 + 2, MAP.size / 2 - 2);
-    this.pos.z = U.clamp(this.pos.z, -MAP.size / 2 + 2, MAP.size / 2 - 2);
+    // keep inside the world — but never clamp the player out of the aim room,
+    // which sits outside the arena bounds
+    const room = (typeof MAP !== 'undefined') ? MAP.aimRoom : null;
+    const inRoom = room && this.pos.z < room.maxZ + 6 && this.pos.z > room.minZ - 6 &&
+      this.pos.x > room.minX - 6 && this.pos.x < room.maxX + 6;
+    if (!inRoom) {
+      this.pos.x = U.clamp(this.pos.x, -MAP.size / 2 + 2, MAP.size / 2 - 2);
+      this.pos.z = U.clamp(this.pos.z, -MAP.size / 2 + 2, MAP.size / 2 - 2);
+    }
     if (this.pos.y < -8) {
       this.pos.y = this.world ? this.world.groundAt(this.pos.x, this.pos.z, 4) : 0;
       this.vel.x = this.vel.y = this.vel.z = 0;

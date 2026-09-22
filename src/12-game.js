@@ -639,6 +639,7 @@ const Game = {
     this.beginBuyPhase(30, role === CS.NETROLE.HOST ? 'РАУНД 1' : 'РАУНД 1');
     this.enterGame();
     this._peerWarned = false; this._peerLost = false;
+    this._silentT = 0; this._lastSeenPacket = 0;
     this._leaving = false;
     Net.startHeartbeat();
     // a backgrounded tab stops rAF, so keep broadcasting from the heartbeat too
@@ -714,10 +715,11 @@ const Game = {
     this.roundT = seconds;
     this.resetSkipVotes();
     UI.center(label || 'ЗАКУПКА', 'B — магазин', 1.8);
-    if (this.mode === CS.MODE.ONLINE && Net.role === CS.NETROLE.HOST) {
-      Net.send({ t: 'round', st: 'buy', time: seconds, no: this.roundNo + 1 });
-    }
     this.roundNo++;
+    if (this.mode === CS.MODE.ONLINE && Net.role === CS.NETROLE.HOST) {
+      // send the number we actually settled on, so both sides agree exactly
+      Net.send({ t: 'round', st: 'buy', time: seconds, no: this.roundNo });
+    }
   },
 
   /* ---------------- ready-up: both players may skip the buy phase ----------
@@ -1564,24 +1566,34 @@ const Game = {
   },
 
   /* Watchdog: the data channel can stay "open" while the peer stops sending
-     (backgrounded tab, locked phone, dead NAT mapping). Without this the match
-     silently froze and the player was only ejected much later, when PeerJS
-     finally reported the socket as closed. Thresholds are measured directly
-     against the last packet we received. */
+     (backgrounded tab, locked phone, dead NAT mapping).
+     Silence is measured in GAME time (accumulated dt), never in wall-clock time:
+     when the page is hidden or the phone locks, rAF stops and dt stops too, so
+     our own stall is not mistaken for a dead opponent. (Measuring with
+     performance.now() made a returning tab see a multi-second "gap" and eject
+     the match instantly.) */
   checkPeerAlive(dt) {
     if (this.mode !== CS.MODE.ONLINE) return;
     if (!this.remote || !Net.connected) return;
-    if (!this.remote.lastPacket) return;             // nothing received yet
-    const silent = U.now() - this.remote.lastPacket;
-    if (silent < 4000) { this._peerWarned = false; return; }
-    if (!this._peerWarned) {
+    if (!this.remote.lastPacket) return;
+
+    // a fresh packet clears the timer
+    if (this.remote.lastPacket !== this._lastSeenPacket) {
+      this._lastSeenPacket = this.remote.lastPacket;
+      this._silentT = 0;
+      this._peerWarned = false;
+      return;
+    }
+
+    this._silentT = (this._silentT || 0) + dt;
+    if (this._silentT > 4 && !this._peerWarned) {
       this._peerWarned = true;
       UI.toast('Соперник не отвечает…', '#f5d33c');
       UI.center('ЖДЁМ СОПЕРНИКА', 'Проверьте соединение', 2.0);
       // nudge the transport: this often revives a stalled channel
       try { if (Net.conn && Net.conn.open) Net.send({ t: 'ping', s: 'hb', time: U.now() }); } catch (e) { }
     }
-    if (silent > 12000 && !this._peerLost) {
+    if (this._silentT > 12 && !this._peerLost) {
       this._peerLost = true;
       this.onNetDisconnected();
     }
@@ -1608,7 +1620,7 @@ const Game = {
 
   onRemoteState(s) {
     if (!this.remote) return;
-    this._peerWarned = false; this._peerLost = false;
+    this._silentT = 0; this._peerWarned = false; this._peerLost = false;
     this.remote.pushSnapshot(s);
     if (s.k !== undefined) { this.remote.kills = s.k; this.remote.deaths = s.d; this.remote.score = s.sc; }
     if (s.hp !== undefined) this.remote.health = s.hp;
@@ -1669,11 +1681,15 @@ const Game = {
   },
 
   onRoundMsg(r) {
-    if (this.mode !== CS.MODE.ONLINE || Net.role !== CS.NETROLE.CLIENT) return;
+    if (this.mode !== CS.MODE.ONLINE) return;
+    // The ready-up vote is symmetrical: either side may send it, so it must be
+    // handled before the client-only guard below (otherwise the host silently
+    // ignored the client's vote and the buy phase never skipped).
+    if (r.st === 'skip') { this.onSkipVoteMsg(); return; }
+    if (Net.role !== CS.NETROLE.CLIENT) return;
     switch (r.st) {
       case 'buy':
-        this.roundNo = Math.max(this.roundNo, r.no || this.roundNo);
-        this.beginBuyPhaseClient(r.time || 30);
+        this.beginBuyPhaseClient(r.time || 30, r.no);
         break;
       case 'live':
         this.roundState = 'live';
@@ -1686,17 +1702,15 @@ const Game = {
       case 'newround':
         this.doNewRoundClient();
         break;
-      case 'skip':
-        this.onSkipVoteMsg();
-        break;
     }
   },
 
-  beginBuyPhaseClient(sec) {
+  beginBuyPhaseClient(sec, roundNo) {
     this.roundState = 'buy';
     this.buyTimer = sec;
     this.roundT = sec;
-    this.roundNo++;
+    // the host's number is authoritative; only advance if it is missing
+    this.roundNo = (roundNo !== undefined && roundNo > 0) ? roundNo : this.roundNo + 1;
     this.resetSkipVotes();
     UI.center('ЗАКУПКА', 'B — магазин', 1.8);
   },

@@ -285,6 +285,14 @@ const UI = {
         ctx.beginPath(); ctx.arc(tx(d.pos.x), tz(d.pos.z), 3, 0, 7); ctx.fill();
       });
     }
+    // aim-training targets
+    if (game.targets) {
+      game.targets.forEach(t => {
+        if (!t.alive) return;
+        ctx.fillStyle = '#ff5b3d';
+        ctx.beginPath(); ctx.arc(tx(t.pos.x), tz(t.pos.z), 2.5, 0, 7); ctx.fill();
+      });
+    }
     // local player (triangle pointing along yaw)
     // The map is drawn top-down with +x → right and +z → down, so a player facing
     // `yaw` (world forward = (-sin yaw, -cos yaw)) must be drawn rotated by -yaw.

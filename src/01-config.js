@@ -113,9 +113,12 @@ const WEAPONS = {
          splash: 6.0, splashDmg: 120 },
 
   /* ---------------- the legendary banana launcher ---------------- */
-  banana: { name: 'БАНАН', cat: 'banana', slot: 2, price: 10000, dmg: 55, rpm: 130, mag: 12, reserve: 60,
-            auto: false, spread: .010, moveSpread: .020, recoil: 2.6, falloff: .85, range: 120, headMul: 1.6,
-            sound: 'banana', projectile: 'banana', projSpeed: 34, projGravity: 13 }
+  /* Rapid-fire version: the banana is now a full-auto blaster. Damage per fruit
+     is unchanged (55) — only the delivery is much faster. Recoil per shot was
+     lowered to match the higher rate, otherwise the view would climb to the sky. */
+  banana: { name: 'БАНАН', cat: 'banana', slot: 2, price: 10000, dmg: 55, rpm: 900, mag: 45, reserve: 180,
+            auto: true, spread: .018, moveSpread: .026, recoil: .85, falloff: .85, range: 120, headMul: 1.6,
+            sound: 'banana', projectile: 'banana', projSpeed: 52, projGravity: 13 }
 };
 
 const GEAR = {
@@ -170,7 +173,7 @@ function makeRng(seed) {
 /* ---------------- persistent settings & progress ---------------- */
 const Store = {
   key: 'cs3d.save.v1',
-  data: { sens: 2.2, fov: 80, vol: 60, quality: 1, touchSens: 1.5, name: '', best: 0, bestWave: 0, killsTotal: 0, matches: 0, wins: 0, signalSrv: 0 },
+  data: { sens: 2.2, fov: 80, vol: 60, quality: 1, touchSens: 1.5, name: '', best: 0, bestWave: 0, killsTotal: 0, matches: 0, wins: 0, signalSrv: 0, aimBest: 0 },
   load() {
     try { const r = localStorage.getItem(this.key); if (r) Object.assign(this.data, JSON.parse(r)); } catch (e) { }
     return this.data;

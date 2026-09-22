@@ -263,6 +263,34 @@ html.touch #buy .buy-close{order:1}
   padding:4px 14px;border-radius:12px;pointer-events:none;box-shadow:0 0 14px rgba(255,157,33,.5)}
 html.touch #autoFireTag{font-size:11px;padding:3px 11px}
 
+/* ---------- range scoreboard (test range) ---------- */
+#rangePanel{position:absolute;right:22px;top:150px;z-index:24;width:190px;
+  background:rgba(8,11,14,.72);border:1px solid var(--line);border-left:3px solid var(--or);
+  border-radius:3px;padding:10px 12px;font-size:11px;letter-spacing:1px;
+  pointer-events:none;backdrop-filter:blur(3px)}
+#rangePanel.hidden{display:none}
+#rangePanel .rp-title{font-size:10px;color:var(--or);font-weight:800;letter-spacing:2px;
+  margin-bottom:7px;border-bottom:1px solid var(--line);padding-bottom:6px}
+#rangePanel .rp-row{display:flex;justify-content:space-between;align-items:baseline;
+  color:var(--dim);margin-bottom:3px}
+#rangePanel .rp-row b{color:#fff;font-size:14px;font-weight:800}
+#rangePanel #rpScore{color:var(--or)}
+#rangePanel #rpToggle{pointer-events:auto;margin-top:8px;width:100%;cursor:pointer;
+  background:#1d2329;border:1px solid var(--line);border-left:3px solid var(--green);
+  color:var(--txt);font-family:inherit;font-size:10.5px;letter-spacing:1.4px;
+  padding:7px 8px;border-radius:3px;transition:.12s}
+#rangePanel #rpToggle:hover{background:#242c33;border-left-color:var(--or)}
+#rangePanel #rpToggle.on{background:linear-gradient(90deg,#123a1a,#1d2329);border-left-color:var(--green);color:#9be8a8}
+html.touch #rangePanel{right:8px;top:auto;bottom:190px;width:126px;padding:8px 9px;font-size:10px}
+html.touch #rangePanel .rp-row b{font-size:12px}
+html.touch #rangePanel .rp-title{font-size:9px;letter-spacing:1px}
+html.touch #rangePanel #rpToggle{font-size:9.5px;padding:8px 6px;letter-spacing:1px}
+/* very short (landscape) screens: keep the panel in the corner */
+@media (orientation:landscape) and (max-height:560px){
+  html.touch #rangePanel{top:6px;bottom:auto;right:6px;width:118px;padding:6px 8px}
+  html.touch #rangePanel .rp-title{display:none}
+}
+
 /* ---------- click to play ---------- */
 #clickToPlay{position:fixed;inset:0;z-index:35;background:rgba(4,6,8,.86);display:flex;
   align-items:center;justify-content:center;cursor:pointer;backdrop-filter:blur(3px)}

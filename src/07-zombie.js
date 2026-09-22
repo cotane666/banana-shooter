@@ -552,6 +552,8 @@ class Horde {
     // reap
     for (let i = this.list.length - 1; i >= 0; i--) {
       const z = this.list[i];
+      // practice targets respawn instead of being removed; the range owns them
+      if (z.isTarget) continue;
       if (z.dying && z.deadT > 4.2) { z.dispose(this.scene); this.list.splice(i, 1); }
     }
   }

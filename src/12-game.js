@@ -93,12 +93,162 @@ function makeDpsLabel() {
   return sp;
 }
 
+/* ---------------- aim-training target ---------------- */
+
+/* Round target board texture: concentric scoring rings. */
+function makeTargetTexture() {
+  const c = makeCanvas(128);
+  const x = c.getContext('2d');
+  const rings = ['#e8ecef', '#e33a2e', '#e8ecef', '#e33a2e', '#f5d33c'];
+  for (let i = 0; i < rings.length; i++) {
+    x.fillStyle = rings[i];
+    x.beginPath(); x.arc(64, 64, 62 - i * 12, 0, Math.PI * 2); x.fill();
+  }
+  x.fillStyle = '#12161a';
+  x.beginPath(); x.arc(64, 64, 4, 0, Math.PI * 2); x.fill();
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+
+let _targetTex = null;
+function buildTargetMesh() {
+  if (!_targetTex) _targetTex = makeTargetTexture();
+  const g = new THREE.Group();
+  const face = new THREE.Mesh(
+    new THREE.CircleGeometry(.5, 26),
+    new THREE.MeshLambertMaterial({ map: _targetTex, side: THREE.DoubleSide, emissive: 0x0d0d0d })
+  );
+  g.add(face);
+  const rim = new THREE.Mesh(
+    new THREE.TorusGeometry(.51, .05, 8, 24),
+    new THREE.MeshLambertMaterial({ color: 0x2b2f34 })
+  );
+  g.add(rim);
+  // a thin backing so it is visible from behind too
+  const back = new THREE.Mesh(
+    new THREE.CircleGeometry(.5, 26),
+    new THREE.MeshLambertMaterial({ color: 0x3a4046, side: THREE.DoubleSide })
+  );
+  back.position.z = -.02;
+  g.add(back);
+  g.userData.face = face;
+  return g;
+}
+
+/* A drifting practice target: chaos-moving, pops when hit, then respawns.
+   Kept intentionally standalone (not a Zombie) because it needs none of the
+   horde AI — only the small interface that horde.raycast() reads. */
+class Target {
+  constructor(x, y, z, radius) {
+    this.id = 'target';
+    this.isTarget = true;              // the horde must never reap practices
+    this.pos = { x, y, z };
+    this.yaw = 0;
+    this.alive = true;
+    this.dying = false;
+    this.deadT = 0;
+    this.radius = radius || .5;
+    this.anchor = { x, y, z };
+    this.range = 3.2;                    // how far it may drift from its anchor
+    this.speed = 2.2 + Math.random() * 2.4;
+    this.vel = { x: 0, y: 0, z: 0 };
+    this.wanderT = 0;
+    this.hitFlash = 0;
+    this.respawnT = 0;
+    this.group = buildTargetMesh();
+    this.group.scale.setScalar(this.radius / .5);
+    this.group.position.set(x, y, z);
+  }
+
+  /* One symmetric box: orientation-independent, so the board can always face
+     the player for looks without affecting hit detection. */
+  hitboxDefs() {
+    const r = this.radius;
+    return [{ part: 'body', cx: 0, cy: 0, cz: 0, hw: r, hh: r, hd: r }];
+  }
+
+  takeDamage() { return false; }   // scoring happens in Game.onTargetHit
+
+  pop() {
+    this.alive = false;
+    this.dying = true;
+    this.deadT = 0;
+    this.group.visible = false;
+  }
+
+  respawn(x, y, z, radius) {
+    this.pos.x = x; this.pos.y = y; this.pos.z = z;
+    this.anchor.x = x; this.anchor.y = y; this.anchor.z = z;
+    this.radius = radius;
+    this.group.scale.setScalar(radius / .5);
+    this.group.visible = true;
+    this.alive = true; this.dying = false; this.deadT = 0;
+    this.vel.x = this.vel.y = this.vel.z = 0;
+    this.hitFlash = 0;
+  }
+
+  update(dt, ctx) {
+    dt = dt || 0;
+    this.hitFlash = Math.max(0, this.hitFlash - dt);
+    if (!this.alive) { this.deadT += dt; return; }
+
+    // chaotic wander: pick a new drift direction every so often
+    this.wanderT -= dt;
+    if (this.wanderT <= 0) {
+      this.wanderT = U.rand(.35, 1.0);
+      this.vel.x = U.rand(-1, 1) * this.speed;
+      this.vel.y = U.rand(-.5, 1) * this.speed * .55;
+      this.vel.z = U.rand(-1, 1) * this.speed;
+    }
+    // steer back toward the anchor when drifting too far
+    const dx = this.anchor.x - this.pos.x, dy = this.anchor.y - this.pos.y, dz = this.anchor.z - this.pos.z;
+    const d = Math.hypot(dx, dy, dz);
+    if (d > this.range) {
+      const k = (d - this.range) * 6 * dt;
+      this.vel.x += dx / d * k; this.vel.y += dy / d * k; this.vel.z += dz / d * k;
+    }
+    // keep the vertical drift gentle so targets stay shootable
+    this.vel.y = U.clamp(this.vel.y, -2.2, 2.2);
+
+    this.pos.x += this.vel.x * dt;
+    this.pos.y += this.vel.y * dt;
+    this.pos.z += this.vel.z * dt;
+
+    // hover above the ground
+    const gy = ctx && ctx.world ? ctx.world.groundAt(this.pos.x, this.pos.z, 8) : 0;
+    const minY = (gy === null ? 0 : gy) + 1.0;
+    if (this.pos.y < minY) { this.pos.y = minY; this.vel.y = Math.abs(this.vel.y) * .5; }
+
+    // face the shooter so the rings are always readable
+    if (ctx && ctx.player) {
+      this.yaw = Math.atan2(-(ctx.player.pos.x - this.pos.x), -(ctx.player.pos.z - this.pos.z));
+    }
+    // pop when hit
+    if (this.hitFlash > 0) {
+      const k = this.hitFlash / .14;
+      this.group.scale.setScalar((this.radius / .5) * (1 + k * .28));
+    } else {
+      this.group.scale.setScalar(this.radius / .5);
+    }
+
+    this.group.position.set(this.pos.x, this.pos.y, this.pos.z);
+    this.group.rotation.y = this.yaw;
+  }
+
+  dispose(scene) {
+    scene.remove(this.group);
+    this.group.traverse(o => { if (o.geometry) o.geometry.dispose(); });
+  }
+}
+
 /* A target dummy: reuses the zombie hitboxes/animation but never dies, never
    moves and never attacks. Damage is accumulated to report damage-per-second. */
 class Dummy extends Zombie {
   constructor(x, z, y) {
     super('walker', x, z, y);
     this.isDummy = true;
+    this.isTarget = true;              // the horde must never reap these
     this.dummyName = 'МАНЕКЕН';
     this.group.scale.setScalar(1);
     // neutral colouring so it reads as a target, not an enemy
@@ -477,6 +627,10 @@ const Game = {
   bindUI() {
     bindClick('btnOffline', () => this.startOffline());
     bindClick('btnRange', () => this.startRange());
+    bindClick('rpToggle', () => {
+      if (this.mode !== CS.MODE.RANGE) return;
+      this.toggleAimTrain(!this.aim);
+    });
     bindClick('btnOnline', () => { UI.show('lobby'); this.resetLobby(); Net.warmup(); });
     bindClick('btnControls', () => { this._prevScreen = 'menu'; UI.show('controls'); });
     bindClick('btnControlsBack', () => UI.show(this._prevScreen || 'menu'));
@@ -486,7 +640,7 @@ const Game = {
     bindClick('btnLeave', () => this.stopToMenu());
     bindClick('btnReset', () => {
       if (confirm('Сбросить весь прогресс и настройки?')) {
-        Store.data = { sens: 2.2, fov: 80, vol: 60, quality: 1, name: '', best: 0, bestWave: 0, killsTotal: 0, matches: 0, wins: 0, signalSrv: 0 };
+        Store.data = { sens: 2.2, fov: 80, vol: 60, quality: 1, name: '', best: 0, bestWave: 0, killsTotal: 0, matches: 0, wins: 0, signalSrv: 0, aimBest: 0 };
         Store.save();
         UI.renderMenuStats(); UI.toast('Прогресс сброшен');
       }
@@ -737,6 +891,9 @@ const Game = {
     // no horde hunting the player; dummies are separate, static targets
     this.horde = new Horde(this.scene, this.world, this);
     this.dummies = [];
+    this.targets = [];
+    this.aim = null;                     // aim-training state (null = off)
+    this.targetSeq = 1;
     this.effects = new Effects(this.scene, Store.data.quality);
     this.effects.clear();
 
@@ -744,6 +901,7 @@ const Game = {
     this.spawnDummies();
     this.beginBuyPhase(99999, 'ПОЛИГОН');   // never times out
     this.enterGame();
+    this.updateRangePanel();
     UI.toast('Полигон: всё бесплатно · B — магазин', '#ff9d21');
   },
 
@@ -774,20 +932,167 @@ const Game = {
     this.dummies = [];
   },
 
+  clearTargets() {
+    if (this.targets) for (const t of this.targets) t.dispose(this.scene);
+    this.targets = [];
+    this.aim = null;
+  },
+
   /* dummies report their own DPS; the range HUD shows the total */
   updateRange(dt) {
     let totalDps = 0;
     for (const d of this.dummies) {
       if (!d) continue;
       totalDps += d.dps || 0;
-      // keep the label facing the camera and above the head
       const dist = Math.hypot(d.pos.x - this.player.pos.x, d.pos.z - this.player.pos.z);
       d.label.visible = dist < 60;
     }
     this._rangeDps = totalDps;
+    if (this.targets && this.aim) this.updateTargets(dt);
     // the range never ends: keep it out of the round-flow timers
     this.roundState = 'live';
     this.roundT = 0;
+  },
+
+  /* ---------------- aim training ---------------- */
+  toggleAimTrain(on) {
+    if (!on && this.aim) {
+      // remember the best score across sessions
+      if (this.aim.score > (Store.data.aimBest || 0)) {
+        Store.data.aimBest = this.aim.score;
+        Store.save();
+        UI.toast('Новый рекорд: ' + this.aim.score + '!', '#f5d33c');
+      }
+    }
+    this.aim = on ? {
+      score: 0, hits: 0, shots: 0, streak: 0, bestStreak: 0,
+      sinceSpawn: 0, alive: 0, spawnT: 0
+    } : null;
+    // clear any leftover targets
+    if (this.targets) for (const t of this.targets) t.dispose(this.scene);
+    this.targets = [];
+    if (on) {
+      this._shotsAtStart = this.player.bulletsFired;
+      // hide the dummies so the two modes do not overlap visually
+      for (const d of this.dummies) d.group.visible = false;
+      this.spawnTargetWave(true);
+      UI.toast('Аим-тренировка: ВКЛ', '#57d16a');
+    } else {
+      for (const d of this.dummies) d.group.visible = true;
+      UI.toast('Аим-тренировка: ВЫКЛ');
+    }
+    this.updateRangePanel();
+  },
+
+  /* targets spawn at a spread of distances and drift chaotically */
+  spawnTargetWave(initial) {
+    if (!this.aim) return;
+    const p = this.player;
+    const face = p.yaw;
+    const fx = -Math.sin(face), fz = -Math.cos(face);
+    const rx = Math.cos(face), rz = -Math.sin(face);
+    const n = initial ? 6 : 1;
+    for (let i = 0; i < n; i++) {
+      // distances from 10 m to 42 m, sizes shrink with distance
+      const fwd = U.rand(10, 42);
+      const side = U.rand(-14, 14);
+      const x = p.pos.x + fx * fwd + rx * side;
+      const z = p.pos.z + fz * fwd + rz * side;
+      const gy = this.world.groundAt(x, z, 10);
+      const y = (gy === null ? 0 : gy) + U.rand(1.1, 2.6);
+      const radius = U.clamp(0.62 - fwd * 0.006, 0.22, 0.62);
+      const t = new Target(x, y, z, radius);
+      this.scene.add(t.group);
+      this.targets.push(t);
+      this.horde.list.push(t);          // so horde.raycast finds them
+    }
+    this.aim.alive = this.targets.length;
+  },
+
+  updateTargets(dt) {
+    const ctx = { player: this.player, world: this.world };
+    if (!this.aim) return;
+    for (const t of this.targets) t.update(dt, ctx);
+    // respawn popped targets after a short delay
+    for (let i = this.targets.length - 1; i >= 0; i--) {
+      const t = this.targets[i];
+      if (t.alive) continue;
+      if (t.deadT < 0.45) continue;
+      t.dispose(this.scene);
+      this.targets.splice(i, 1);
+      const idx = this.horde.list.indexOf(t);
+      if (idx >= 0) this.horde.list.splice(idx, 1);
+    }
+    // keep a steady population so the drill never runs dry
+    this.aim.spawnT -= dt;
+    const want = 6;
+    if (this.targets.length < want && this.aim.spawnT <= 0) {
+      this.aim.spawnT = 0.35;
+      this.spawnTargetWave(false);
+    }
+    this.aim.alive = this.targets.filter(t => t.alive).length;
+  },
+
+  /* called by the shooting code when a target is hit */
+  onTargetHit(t, part) {
+    if (!this.aim) return;
+    t.hitFlash = .14;
+    t.pop();
+    this.aim.hits++;
+    this.aim.streak++;
+    if (this.aim.streak > this.aim.bestStreak) this.aim.bestStreak = this.aim.streak;
+    // closer targets are worth less; a smaller board is worth more
+    const dist = Math.hypot(t.pos.x - this.player.pos.x, t.pos.z - this.player.pos.z);
+    const base = Math.round(120 - dist * 1.6);
+    const sizeBonus = Math.round((0.62 - t.radius) * 180);
+    const pts = Math.max(20, base + sizeBonus);
+    this.aim.score += pts;
+    UI.hitmark(true);
+    UI.feed('<b>+' + pts + '</b> <span style="color:#8b98a5">' + Math.round(dist) + 'м</span>');
+    Audio3D_SFX.kill();
+    this.updateRangePanel();
+  },
+  onTargetMiss() {
+    if (!this.aim) return;
+    this.aim.streak = 0;
+  },
+
+  updateRangePanel() {
+    const el = {
+      panel: document.getElementById('rangePanel'),
+      title: document.getElementById('rpTitle'),
+      score: document.getElementById('rpScore'),
+      hits: document.getElementById('rpHits'),
+      acc: document.getElementById('rpAcc'),
+      streak: document.getElementById('rpStreak'),
+      best: document.getElementById('rpBest'),
+      toggle: document.getElementById('rpToggle')
+    };
+    if (!el.panel) return;
+    const inRange = this.mode === CS.MODE.RANGE && this.running;
+    el.panel.classList.toggle('hidden', !inRange);
+    if (!inRange) return;
+    const a = this.aim;
+    if (a) {
+      el.title.textContent = 'АИМ-ТРЕНИРОВКА';
+      el.score.textContent = String(a.score);
+      const acc = a.shots > 0 ? Math.min(100, Math.round(a.hits / a.shots * 100)) : 0;
+      el.hits.textContent = a.hits + ' / ' + a.shots;
+      el.acc.textContent = a.shots > 0 ? acc + '%' : '—';
+      el.streak.textContent = String(a.streak) + ' (луч. ' + a.bestStreak + ')';
+      el.best.textContent = String(Store.data.aimBest || 0);
+      el.toggle.textContent = 'ОСТАНОВИТЬ';
+      el.toggle.classList.add('on');
+    } else {
+      el.title.textContent = 'ПОЛИГОН · МАНЕКЕНЫ';
+      el.score.textContent = String(Math.round(this._rangeDps || 0));
+      el.hits.textContent = (this.dummies || []).length + ' шт.';
+      el.acc.textContent = '—';
+      el.streak.textContent = '—';
+      el.best.textContent = String(Store.data.aimBest || 0);
+      el.toggle.textContent = 'АИМ-ТРЕНИРОВКА';
+      el.toggle.classList.remove('on');
+    }
   },
 
   startOnlineHost() { this.startOnline(CS.NETROLE.HOST); },
@@ -863,6 +1168,7 @@ const Game = {
       this.mode = CS.MODE.MENU;
       this.clearProjectiles();
       this.clearDummies();
+      this.clearTargets();
       if (this.horde) { this.horde.clear(); this.horde = null; }
       if (this.remote) { this.scene.remove(this.remote.mesh); this.remote = null; }
       if (this.player && this.player.vmGroup && this.player.vmGroup.parent) this.player.vmGroup.parent.remove(this.player.vmGroup);
@@ -876,6 +1182,7 @@ const Game = {
     } else {
       this.clearProjectiles();
       this.clearDummies();
+      this.clearTargets();
       if (this.horde) { this.horde.clear(); this.horde = null; }
       if (this.remote) { this.scene.remove(this.remote.mesh); this.remote = null; }
       if (this.player && this.player.vmGroup && this.player.vmGroup.parent) this.player.vmGroup.parent.remove(this.player.vmGroup);
@@ -884,6 +1191,8 @@ const Game = {
     }
     this.buyOpen = false;
     this.roundState = 'idle';
+    // hide the range scoreboard when we are no longer on the range
+    this.updateRangePanel();
   },
 
   spawnPlayerLocal(spawnIdx) {
@@ -1300,6 +1609,7 @@ const Game = {
     if (w.mag !== Infinity) w.mag--;
     p.fireCd = 60 / def.rpm;
     p.bulletsFired++;
+    if (this.aim) this.aim.shots++;
 
     const origin = this.eyePos();
     const baseDir = this.cameraDir();
@@ -1605,6 +1915,15 @@ const Game = {
     }
 
     if (zHit && zHit.t <= stopT) {
+      // practice targets: no damage model, just scoring + a pop
+      if (zHit.zombie.isTarget) {
+        p.bulletsHit++;
+        this.effects.impact(zHit.point, dir, 'concrete');
+        this.effects.tracer(muzzleWorld, zHit.point, 1, true);
+        Audio3D_SFX.hit(zHit.point.x, zHit.point.y, zHit.point.z, false);
+        this.onTargetHit(zHit.zombie, zHit.part);
+        return;
+      }
       p.bulletsHit++;
       const dmg = def.dmg * dmgMul;
       const killed = zHit.zombie.takeDamage(dmg, zHit.part, dir);
@@ -1614,6 +1933,9 @@ const Game = {
       this.effects.tracer(muzzleWorld, zHit.point, 1, true);
       return;
     }
+
+    // a shot that hits nothing breaks the streak
+    if (this.aim) this.onTargetMiss();
 
     // hit geometry
     if (stopPoint) {
@@ -2290,8 +2612,13 @@ const Game = {
       objective = this.roundState === 'buy' ? 'ЗАКУПКА' : this.roundState === 'live' ? 'РАУНД ' + this.roundNo : 'КОНЕЦ РАУНДА';
     } else if (this.mode === CS.MODE.RANGE) {
       timer = 0;
-      const dps = this._rangeDps || 0;
-      objective = 'ПОЛИГОН · ' + (dps > 0 ? Math.round(dps) + ' урон/с' : 'стреляйте по манекенам');
+      if (this.aim) {
+        objective = 'АИМ · счёт ' + this.aim.score + ' · точность ' +
+          (this.aim.shots > 0 ? Math.round(this.aim.hits / this.aim.shots * 100) + '%' : '—');
+      } else {
+        const dps = this._rangeDps || 0;
+        objective = 'ПОЛИГОН · ' + (dps > 0 ? Math.round(dps) + ' урон/с' : 'стреляйте по манекенам');
+      }
     }
     if (this._uiT <= 0) {
       this._uiT = .1;
@@ -2302,6 +2629,11 @@ const Game = {
         role: Net.role === CS.NETROLE.HOST ? 'ХОСТ' : 'КЛИЕНТ'
       });
       if (this.mode === CS.MODE.OFFLINE || this.mode === CS.MODE.ONLINE || this.mode === CS.MODE.RANGE) UI.drawMinimap(this);
+    }
+    // the range scoreboard refreshes a few times a second
+    if (this.mode === CS.MODE.RANGE) {
+      this._panelT = (this._panelT || 0) - dt;
+      if (this._panelT <= 0) { this._panelT = .2; this.updateRangePanel(); }
     }
     if (this._restartPending && (Input.keys['Enter'] || Input.keys['NumpadEnter'])) {
       this._restartPending = false; this._offeredRestart = false; this.offlineDead = false; this.offlineDeadT = 0;

@@ -1,10 +1,10 @@
-﻿param([string]$Scenario = 'play', [string]$Out = 'cs_play.png', [int]$W = 1600, [int]$H = 900, [switch]$Touch, [switch]$Mobile)
+﻿param([string]$Scenario = 'play', [string]$Out = 'cs_play.png', [int]$W = 1600, [int]$H = 900, [switch]$Touch, [switch]$Mobile, [string]$Inject = '_shot-inject.js')
 $ErrorActionPreference = 'Continue'
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $root
 
 $html = [System.IO.File]::ReadAllText((Join-Path $root 'banana-shooter.html'))
-$inject = [System.IO.File]::ReadAllText((Join-Path $root '_shot-inject.js'))
+$inject = [System.IO.File]::ReadAllText((Join-Path $root $Inject))
 $test = $html.Replace('</body>', "<script>`n$inject`n</script>`n</body>")
 $testPath = Join-Path $root '_shot.html'
 [System.IO.File]::WriteAllText($testPath, $test, (New-Object System.Text.UTF8Encoding($false)))

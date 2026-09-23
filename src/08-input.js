@@ -477,6 +477,19 @@ function initSettings() {
     });
   }
 
+  // touch aim-assist (auto-fire when the crosshair is on an enemy)
+  const aim = document.getElementById('sAim'), oa = document.getElementById('oAim');
+  const aimNames = ['Выкл', 'Вкл'];
+  if (aim) {
+    aim.value = S.aimAssist === 0 ? 0 : 1;
+    if (oa) oa.textContent = aimNames[parseInt(aim.value, 10)];
+    aim.addEventListener('input', () => {
+      S.aimAssist = parseInt(aim.value, 10);
+      if (oa) oa.textContent = aimNames[S.aimAssist];
+      Store.save();
+    });
+  }
+
   applySetting('sens', S.sens);
   applySetting('fov', S.fov);
   applySetting('vol', S.vol);
@@ -484,7 +497,9 @@ function initSettings() {
 
 function applySetting(key, v) {
   if (key === 'sens') Input.sens = v;
-  else if (key === 'touchSens') { if (typeof Touch !== 'undefined') TouchUI.setSens(v); }
+  // NOTE: the object is `TouchUI`, not `Touch`. The old guard checked for a
+  // non-existent global, so the touch-sensitivity slider silently did nothing.
+  else if (key === 'touchSens') { if (typeof TouchUI !== 'undefined') TouchUI.setSens(v); }
   else if (key === 'vol') Audio3D_SFX.setVol(v / 100);
   else if (key === 'fov') { if (window.Game) Game.baseFov = v; }
 }

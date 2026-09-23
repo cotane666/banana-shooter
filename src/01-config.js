@@ -28,6 +28,10 @@ const CFG = {
   maxAP: 100,
   stepUp: 0.62,
   snapDown: 0.14,       // minimum distance the ground snap may pull the player down
+  climbTime: 1.35,       // seconds of holding forward against a surface to start the climb
+  climbDuration: 0.50,   // base vault animation time (a normal low ledge)
+  climbDurationPerM: 0.13, // extra animation time per metre of height
+  climbDurationMax: 2.6, // cap so a huge climb still finishes in a sensible time
   buyTime: 30,          // seconds of the buy phase (CS-style freeze/buy time)
   roundTime: 300,
   zombieStartCount: 4,
@@ -40,6 +44,27 @@ const CFG = {
   netSendLocalHz: 34,   // local player state rate
   netInterpMs: 120,     // render the remote player this far behind the newest snapshot
   netMaxExtrapMs: 160   // keep extrapolating through a packet gap for at most this long
+};
+
+/* ---------------- match settings (chosen in the lobby / settings) ----------------
+   These are shared by every mode: the map is picked in the online lobby and in
+   the settings panel, and carries over to offline / полигон. */
+const MATCH = window.MATCH = {
+  maps: [],                 // filled from MAPS once 04-map.js has loaded
+  playerCounts: [1, 2, 3, 4],
+  hpOptions: [50, 75, 100, 125, 150, 200],
+  maxPlayers: 4,
+  minPlayers: 2,
+
+  mapName(id) {
+    const m = (typeof mapById === 'function') ? mapById(id) : null;
+    return m ? m.name : 'АРЕНА';
+  },
+  clampPlayers(n, online) {
+    n = Math.round(n || 2);
+    const lo = online ? 2 : 1;
+    return U.clamp(n, lo, MATCH.maxPlayers);
+  }
 };
 
 /* ---------------- weapons (CS-inspired) ----------------
@@ -173,7 +198,8 @@ function makeRng(seed) {
 /* ---------------- persistent settings & progress ---------------- */
 const Store = {
   key: 'cs3d.save.v1',
-  data: { sens: 2.2, fov: 80, vol: 60, quality: 1, touchSens: 1.5, name: '', best: 0, bestWave: 0, killsTotal: 0, matches: 0, wins: 0, signalSrv: 0, aimBest: 0 },
+  data: { sens: 2.2, fov: 80, vol: 60, quality: 1, touchSens: 1.5, name: '', best: 0, bestWave: 0, killsTotal: 0, matches: 0, wins: 0, signalSrv: 0, aimBest: 0, aimAutoFire: 1,
+          map: 'arena', players: 2, maxHP: 100, aimAssist: 1 },
   load() {
     try { const r = localStorage.getItem(this.key); if (r) Object.assign(this.data, JSON.parse(r)); } catch (e) { }
     return this.data;

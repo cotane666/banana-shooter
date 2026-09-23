@@ -36,7 +36,9 @@
     <div class="menu-btns">
       <button class="mbtn primary" id="btnOffline"><b>ОФФЛАЙН</b><i>Волны зомби — зарабатывай счёт</i></button>
       <button class="mbtn" id="btnRange"><b>ПОЛИГОН</b><i>Всё оружие бесплатно · манекены и урон в секунду</i></button>
-      <button class="mbtn" id="btnOnline"><b>ОНЛАЙН</b><i>Дуэль против другого игрока</i></button>
+      <button class="mbtn" id="btnOnline"><b>ОНЛАЙН</b><i>Бой против друзей: 2–4 игрока, выбор карты</i></button>
+      <button class="mbtn" id="btnMatch"><b>ПАРАМЕТРЫ МАТЧА</b><i>Карта · число игроков · здоровье</i></button>
+      <button class="mbtn" id="btnIos"><b>СКАЧАТЬ НА iOS</b><i>Установка на iPhone / iPad</i></button>
       <button class="mbtn hidden" id="btnInstall"><b>УСТАНОВИТЬ НА ТЕЛЕФОН</b><i>Играть как приложение, оффлайн</i></button>
       <button class="mbtn" id="btnControls"><b>УПРАВЛЕНИЕ</b><i>Клавиши и настройки</i></button>
     </div>
@@ -77,6 +79,18 @@
       <input type="range" id="sVol" min="0" max="100" step="1" value="60"></label>
     <label class="slider">Качество теней <output id="oQual">Среднее</output>
       <input type="range" id="sQual" min="0" max="2" step="1" value="1"></label>
+    <label class="slider">Автоприцел (телефон) <output id="oAim">Вкл</output>
+      <input type="range" id="sAim" min="0" max="1" step="1" value="1"></label>
+    <h2 class="mt">ПАРАМЕТРЫ МАТЧА</h2>
+    <div class="fld">Карта
+      <div class="chips" id="mapChips"></div>
+    </div>
+    <div class="fld">Игроков (онлайн)
+      <div class="chips" id="playerChips"></div>
+    </div>
+    <div class="fld">Здоровье игрока
+      <div class="chips" id="hpChips"></div>
+    </div>
     <div class="btnrow">
       <button class="mbtn small" id="btnReset">Сбросить прогресс</button>
       <button class="mbtn small primary" id="btnControlsBack">НАЗАД</button>
@@ -92,6 +106,16 @@
       <label class="fld">Ваш ник
         <input id="inName" maxlength="14" placeholder="Игрок" autocomplete="off">
       </label>
+      <h2 class="mt">ПАРАМЕТРЫ МАТЧА</h2>
+      <div class="fld">Карта
+        <div class="chips" id="lobbyMaps"></div>
+      </div>
+      <div class="fld">Игроков в комнате
+        <div class="chips" id="lobbyPlayers"></div>
+      </div>
+      <div class="fld">Здоровье игрока
+        <div class="chips" id="lobbyHp"></div>
+      </div>
       <div class="btnrow">
         <button class="mbtn primary" id="btnHost"><b>СОЗДАТЬ ИГРУ</b><i>Вы хост · получите код</i></button>
         <button class="mbtn" id="btnJoin"><b>ПОДКЛЮЧИТЬСЯ</b><i>Введите код друга</i></button>
@@ -107,15 +131,42 @@
           <div class="code" id="roomCode">·····</div>
           <button class="mbtn tiny" id="btnCopy">Копировать</button>
         </div>
-        <div class="waiting" id="waiting"><span class="spin"></span> Ожидание второго игрока…</div>
+        <div class="waiting" id="waiting"><span class="spin"></span> <span id="waitingTxt">Ожидание игроков…</span></div>
+        <div id="peerList" class="peerlist"></div>
         <div class="hintbox">
-          Отправьте код другу. Игра идёт напрямую между браузерами (P2P / WebRTC) —
-          сервер нужен только для знакомства. Играйте в одном браузере (Chrome/Edge) на разных компьютерах.
+          Отправьте код друзьям — они вводят его через <b>ПОДКЛЮЧИТЬСЯ</b>. Подключаются до
+          4 игроков. Матч идёт напрямую между браузерами (P2P / WebRTC), сервер нужен
+          только для знакомства. Карту и здоровье выбирает хост; они уезжают всем при старте.
         </div>
+      </div>
+      <div id="joinWait" class="hidden">
+        <div class="waiting"><span class="spin"></span> Ожидание старта матча хостом…</div>
+        <div id="peerListJoin" class="peerlist"></div>
       </div>
     </div>
     <div id="lobbyStatus" class="status"></div>
     <div class="btnrow"><button class="mbtn small" id="btnLobbyBack">НАЗАД</button></div>
+  </div>
+</div>
+
+<!-- ============ iOS INSTALL ============ -->
+<div id="ios" class="screen hidden">
+  <div class="panel">
+    <h2>УСТАНОВКА НА iOS</h2>
+    <div class="ios-steps">
+      <div class="ios-row"><b>1</b><span>Откройте эту страницу в <strong>Safari</strong> на iPhone или iPad.</span></div>
+      <div class="ios-row"><b>2</b><span>Нажмите кнопку <strong>«Поделиться»</strong> <span class="ios-ic">⎋</span> внизу экрана.</span></div>
+      <div class="ios-row"><b>3</b><span>Выберите <strong>«На экран "Домой"»</strong> и подтвердите.</span></div>
+      <div class="ios-row"><b>4</b><span>Запустите игру со значка — она откроется на весь экран и будет работать оффлайн.</span></div>
+    </div>
+    <div class="hintbox">
+      Safari устанавливает веб-игры сам, без App Store: отдельного файла скачивать не нужно.
+      Из Chrome на iPhone установка недоступна — используйте именно Safari.
+    </div>
+    <div class="btnrow">
+      <button class="mbtn small" id="btnIosCopy">Скопировать ссылку</button>
+      <button class="mbtn small primary" id="btnIosBack">ПОНЯТНО</button>
+    </div>
   </div>
 </div>
 
@@ -124,6 +175,7 @@
   <div id="crosshair"><span class="ch t"></span><span class="ch b"></span><span class="ch l"></span><span class="ch r"></span><span class="ch dot"></span></div>
   <div id="hitmark"><span></span><span></span><span></span><span></span></div>
   <div id="scope" class="hidden"></div>
+  <div id="reloadTag" class="hidden">ПЕРЕЗАРЯДКА</div>
 
   <div class="hud-tl">
     <div class="bar hp"><i id="hpFill"></i><em id="hpVal">100</em></div>

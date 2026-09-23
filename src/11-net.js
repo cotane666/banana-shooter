@@ -1,13 +1,16 @@
 /* ============================================================
-   11 — NET: peer-to-peer duels over WebRTC (PeerJS / DataChannel)
-   The host is authoritative for round flow & scoring.
-   Movement is peer-to-peer; shots are resolved by the shooter.
+   11 — NET: peer-to-peer online brawls over WebRTC (PeerJS / DataChannel)
+   The room is a star: one HOST, up to 3 CLIENTS (4 players total). The host is
+   authoritative for round flow and match settings; clients talk only to the
+   host, which relays player state so everyone sees the whole room.
+   Movement is peer-to-peer through the host relay; shots are resolved by the
+   shooter and reported to the host.
    ============================================================ */
 
 const PEER_PREFIX = 'cs3d1-';
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
-/* Signalling is only used to introduce the two browsers; the match itself runs
+/* Signalling is only used to introduce the browsers; the match itself runs
    peer-to-peer over WebRTC. The public PeerJS cloud (0.peerjs.com) is blocked
    by Cloudflare in many regions, so we keep a list of servers and fall back to
    the next one whenever the current one is unreachable. */
@@ -16,12 +19,12 @@ const SIGNAL_SERVERS = [
   { host: '0.peerjs.com', port: 443, secure: true, path: '/' },
   { host: 'peerjs.92k.de', port: 443, secure: true, path: '/' }
 ];
-/* How long to wait for one signalling server before trying the next. */
 const SIGNAL_TIMEOUT = 9000;
 
 const Net = {
   peer: null,
-  conn: null,
+  conn: null,                  // host: first connection (kept for legacy checks)
+  conns: [],                   // host: every client {conn, id, name}
   role: CS.NETROLE.NONE,       // HOST | CLIENT
   code: '',
   name: 'Игрок',
@@ -34,6 +37,7 @@ const Net = {
   _handlers: {},
   _closedByUser: false,
   _srv: 0,                     // index into SIGNAL_SERVERS
+  peers: [],                   // roster: [{id, name, isHost}]
 
   /* ---------- helpers ---------- */
   makeCode() {
@@ -41,6 +45,16 @@ const Net = {
     for (let i = 0; i < 5; i++) s += CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)];
     return s;
   },
+
+  /* a stable identity for this browser, so the host can tell players apart */
+  myId() {
+    if (!this._myId) this._myId = 'p' + Math.floor(Math.random() * 1e9).toString(36) + Date.now().toString(36).slice(-4);
+    return this._myId;
+  },
+  /* The canonical id for the local player. The host assigns each connection the
+     id the client announced in its hello, so `myId()` is the same string on both
+     sides — no handshake is needed to know our own name in the room. */
+  selfId() { return this.myId(); },
 
   peerOptions() {
     const srv = SIGNAL_SERVERS[this._srv] || SIGNAL_SERVERS[0];
@@ -52,7 +66,7 @@ const Net = {
       path: srv.path,
       config: {
         // STUN discovers each player's public address; TURN relays the traffic
-        // when both players sit behind strict NATs. The TURN entries below are
+        // when players sit behind strict NATs. The TURN entries below are
         // OpenRelay's free public server — no account needed.
         iceServers: [
           { urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] },
@@ -93,6 +107,22 @@ const Net = {
     if (l) for (let i = 0; i < l.length; i++) { try { l[i](data); } catch (e) { console.warn('net handler', type, e); } }
   },
 
+  /* ---------- roster ---------- */
+  refreshRoster() {
+    if (this.role === CS.NETROLE.HOST) {
+      const list = [{ id: this.myId(), name: this.name, isHost: true }];
+      for (const c of this.conns) {
+        if (c.open) list.push({ id: c.id, name: c.name || 'Игрок', isHost: false });
+      }
+      this.peers = list;
+    }
+  },
+  peerCount() { return this.peers.length; },
+  playerCount() {
+    // host knows everyone; a client counts itself plus whoever the host reports
+    return Math.max(2, this.peers.length);
+  },
+
   /* ---------- host ---------- */
   host(name, onReady, onError) {
     this.role = CS.NETROLE.HOST;
@@ -100,6 +130,8 @@ const Net = {
     this._closedByUser = false;
     this.code = this.makeCode();
     this._srv = this.preferredServer();
+    this.conns = [];
+    this.refreshRoster();
     this._createPeer(PEER_PREFIX + this.code, onReady, onError, 0, 0);
   },
 
@@ -157,9 +189,12 @@ const Net = {
     });
 
     peer.on('connection', conn => {
-      if (this.conn && this.conn.open) {
-        // already have a partner — politely refuse extras
-        try { conn.close(); } catch (e) { }
+      // the host accepts up to MAX players; refusals are visible to the guest
+      const max = (typeof MATCH !== 'undefined' ? MATCH.maxPlayers : 4);
+      this.refreshRoster();
+      if (this.conns.filter(c => c.open).length >= max - 1) {
+        try { conn.on('open', () => conn.send({ t: 'full' })); } catch (e) { }
+        setTimeout(() => { try { conn.close(); } catch (e) { } }, 400);
         return;
       }
       this._setupConn(conn);
@@ -195,7 +230,6 @@ const Net = {
     });
 
     peer.on('disconnected', () => {
-      // try to keep the signalling socket alive
       if (!this._closedByUser && this.peer && !this.peer.destroyed) {
         try { this.peer.reconnect(); } catch (e) { }
       }
@@ -203,7 +237,6 @@ const Net = {
     peer.on('close', () => {
       if (!this._closedByUser) this.emit('closed', {});
     });
-    // connection timeout guard
     setTimeout(() => {
       if (!settled && this.peer === peer && !this.connected) {
         tryNextServer('Не удалось подключиться к серверу знакомства (тайм-аут).');
@@ -253,67 +286,131 @@ const Net = {
       else fail('Ошибка сети: ' + (err.message || t));
     });
 
-    // if the server accepts the socket but never answers, fall through too
     setTimeout(() => { if (!settled && !this.connected) tryNextServer('Сервер знакомства не отвечает. Попробуйте позже.'); }, SIGNAL_TIMEOUT + 4000);
   },
 
   _setupConn(conn, onOpenCb) {
     this.conn = conn;
+    const rec = { conn, id: null, name: '', open: false, ping: 0, rtt: [] };
+    if (this.role === CS.NETROLE.HOST) this.conns.push(rec);
+
     conn.on('open', () => {
+      rec.open = true;
       this.connected = true;
       this.connecting = false;
       this.startHeartbeat();
       onOpenCb && onOpenCb();
-      this.send({ t: 'hello', name: this.name, role: this.role === CS.NETROLE.HOST ? 'host' : 'client', ver: CS.version });
+      this.send({ t: 'hello', name: this.name, role: this.role === CS.NETROLE.HOST ? 'host' : 'client', ver: CS.version, id: this.myId() });
+      this.refreshRoster();
       this.emit('connected', { role: this.role });
+      this.emit('roster', this.peers);
     });
     conn.on('data', raw => {
       let m = raw;
       if (typeof raw === 'string') { try { m = JSON.parse(raw); } catch (e) { return; } }
       if (!m || !m.t) return;
-      this._handle(m);
+      this._handle(m, rec);
     });
     conn.on('close', () => {
+      rec.open = false;
+      if (this.role === CS.NETROLE.HOST) {
+        this.conns = this.conns.filter(c => c !== rec);
+        this.refreshRoster();
+        this.emit('roster', this.peers);
+        this.emit('peerleft', { id: rec.id, name: rec.name });
+      }
+      const anyOpen = this.conns.some(c => c.open);
       const was = this.connected;
-      this.connected = false;
-      if (was) this.emit('disconnected', {});
+      this.connected = (this.role === CS.NETROLE.HOST) ? anyOpen : false;
+      if (was && !this.connected) this.emit('disconnected', {});
     });
     conn.on('error', e => {
       this.emit('error', { message: (e && e.message) || 'Ошибка соединения' });
     });
+    return rec;
   },
 
-  /* ---------- messaging ---------- */
+  /* ---------- messaging ----------
+     The host relays any message it receives from a client to every other
+     client, so all players see each other in a star topology. `from` and `to`
+     survive the relay untouched. */
   send(msg) {
+    if (this.role === CS.NETROLE.HOST) {
+      if (!this.conns.length) return false;
+      let ok = false;
+      try { this.conns.forEach(c => { if (c.open) { c.conn.send(msg); ok = true; } }); } catch (e) { }
+      return ok;
+    }
     if (!this.conn || !this.conn.open) return false;
     try { this.conn.send(msg); return true; } catch (e) { return false; }
   },
+  /* host-only: forward to every client except `exceptRec` */
+  relay(msg, exceptRec) {
+    if (this.role !== CS.NETROLE.HOST) return;
+    try {
+      this.conns.forEach(c => {
+        if (c.open && c !== exceptRec) c.conn.send(msg);
+      });
+    } catch (e) { }
+  },
+  /* host-only: send to exactly one connection record */
+  sendTo(rec, msg) {
+    if (!rec || !rec.open) return false;
+    try { rec.conn.send(msg); return true; } catch (e) { return false; }
+  },
 
-  _handle(m) {
+  _handle(m, rec) {
     switch (m.t) {
-      case 'hello':
+      case 'hello': {
+        if (rec) { rec.id = m.id || ('c' + this.conns.indexOf(rec)); rec.name = m.name || 'Игрок'; }
         this.partnerName = m.name || 'Игрок';
+        this.refreshRoster();
+        // the host announces the roster (which now includes the new client)
+        if (this.role === CS.NETROLE.HOST && rec) {
+          this.emit('peerjoined', { id: rec.id, name: rec.name });
+        }
         this.emit('hello', m);
+        this.emit('roster', this.peers);
+        break;
+      }
+      case 'roster':
+        // host → everyone: the authoritative list of players in the room
+        this.peers = m.roster || [];
+        if (this.role !== CS.NETROLE.HOST) this.emit('roster', this.peers);
+        break;
+      case 'full':
+        this.emit('full', {});
         break;
       case 'ping':
         this.send({ t: 'pong', s: m.s, time: m.time });
         break;
       case 'pong': {
         const rtt = U.now() - m.time;
-        this.rttSamples.push(rtt);
-        if (this.rttSamples.length > 8) this.rttSamples.shift();
-        this.ping = this.rttSamples.reduce((a, b) => a + b, 0) / this.rttSamples.length;
+        if (this.role === CS.NETROLE.HOST && rec) {
+          rec.rtt.push(rtt); if (rec.rtt.length > 8) rec.rtt.shift();
+          rec.ping = rec.rtt.reduce((a, b) => a + b, 0) / rec.rtt.length;
+          this.ping = Math.max(...this.conns.map(c => c.ping || 0), 0);
+        } else {
+          this.rttSamples.push(rtt);
+          if (this.rttSamples.length > 8) this.rttSamples.shift();
+          this.ping = this.rttSamples.reduce((a, b) => a + b, 0) / this.rttSamples.length;
+        }
         break;
       }
-      case 'state': this.emit('state', m); break;
-      case 'shot': this.emit('shot', m); break;
-      case 'hit': this.emit('hit', m); break;
-      case 'died': this.emit('died', m); break;
-      case 'respawn': this.emit('respawn', m); break;
-      case 'round': this.emit('round', m); break;
-      case 'score': this.emit('score', m); break;
-      case 'chat': this.emit('chat', m); break;
-      case 'bye': this.emit('bye', m); break;
+      /* relayed game messages: `from` names the sender so receivers can route */
+      case 'state': case 'shot': case 'hit': case 'died': case 'respawn':
+      case 'score': case 'chat':
+        if (this.role === CS.NETROLE.HOST) this.relay(m, rec);
+        this.emit(m.t, m);
+        break;
+      case 'round':
+        // round/settings flow is host → clients only; a client never drives it
+        if (this.role === CS.NETROLE.HOST) this.relay(m, rec);
+        this.emit('round', m);
+        break;
+      case 'bye':
+        this.emit('bye', m);
+        break;
       default: this.emit('message', m);
     }
   },
@@ -327,12 +424,6 @@ const Net = {
     }
   },
 
-  /* Keep the data channel warm from a timer rather than the render loop: when
-     the tab is backgrounded (or the phone locks) requestAnimationFrame stops and
-     tick() is never called, so the other side saw a silent peer and eventually
-     dropped it. A 1 Hz heartbeat also gives a cheap liveness signal.
-     `keepalive` is set by Game so a backgrounded tab still sends its state —
-     otherwise the opponent's model would freeze while we are hidden. */
   startHeartbeat() {
     this.stopHeartbeat();
     this._hb = setInterval(() => {
@@ -349,13 +440,16 @@ const Net = {
     this._closedByUser = true;
     this.stopHeartbeat();
     if (notify && this.connected) { try { this.send({ t: 'bye' }); } catch (e) { } }
+    const conns = this.conns.slice();
     setTimeout(() => {
+      conns.forEach(c => { try { c.conn.close(); } catch (e) { } });
       try { if (this.conn) this.conn.close(); } catch (e) { }
       try { if (this.peer) this.peer.destroy(); } catch (e) { }
     }, notify ? 60 : 0);
-    this.conn = null; this.peer = null;
+    this.conn = null; this.peer = null; this.conns = [];
     this.connected = false; this.connecting = false;
     this.role = CS.NETROLE.NONE;
+    this.peers = [];
     this.rttSamples.length = 0; this.ping = 0;
   }
 };

@@ -169,25 +169,34 @@ class CollisionWorld {
     const res = { hitX: false, hitZ: false, hitY: false, landed: false, groundY: null, ceiling: false };
     const r = ent.radius, h = ent.height;
     const tmp = [];
+    const stepUp = opts.stepUp || 0;
+    /* Boxes that blocked the last horizontal attempt, so the post-move step-up
+       can check whether they are low enough to be a stair (and not a wall). */
+    let blockBoxes = [];
 
-    const tryAxis = (axis, amount, sign) => {
+    const tryAxis = (axis, amount) => {
       if (amount === 0) return false;
       const px = ent.x, py = ent.y, pz = ent.z;
       if (axis === 'x') ent.x += amount; else if (axis === 'z') ent.z += amount; else ent.y += amount;
       const cyl = { x: ent.x, y: ent.y, z: ent.z, radius: r, height: h };
       const bb = AABB(ent.x - r, ent.y, ent.z - r, ent.x + r, ent.y + h, ent.z + r);
       const list = this.query(bb, tmp);
-      let blocked = false;
+      const hit = [];
       for (let i = 0; i < list.length; i++) {
-        const b = list[i];
-        if (!cylinderOverlapsAABB(cyl, b)) continue;
-        blocked = true;
-        break;
+        if (cylinderOverlapsAABB(cyl, list[i])) hit.push(list[i]);
       }
-      if (blocked) {
-        // step-up: try lifting the entity by stepUp then re-test (only for horizontal)
-        if (opts.stepUp && (axis === 'x' || axis === 'z')) {
-          const lift = opts.stepUp;
+      if (hit.length) {
+        if (axis === 'x' || axis === 'z') blockBoxes = hit;
+        /* Step-up only makes sense over something we could stand on. A box whose
+           top is higher than `stepUp` above our feet is a wall, and lifting onto
+           it would let the player climb any wall instantly — the old code did
+           exactly that because it never looked at the obstacle's height. */
+        let tooTall = false;
+        for (let i = 0; i < hit.length; i++) {
+          if (hit[i].maxY > ent.y + stepUp + 0.02) { tooTall = true; break; }
+        }
+        if (stepUp && (axis === 'x' || axis === 'z') && !tooTall) {
+          const lift = stepUp;
           const cyl2 = { x: ent.x, y: ent.y + lift, z: ent.z, radius: r, height: h };
           const bb2 = AABB(ent.x - r, ent.y + lift, ent.z - r, ent.x + r, ent.y + lift + h, ent.z + r);
           const list2 = this.query(bb2, tmp.slice());
@@ -196,6 +205,17 @@ class CollisionWorld {
             if (cylinderOverlapsAABB(cyl2, list2[j])) { blocked2 = true; break; }
           }
           if (!blocked2) return false; // allow the move, y will be adjusted below
+        }
+        // genuinely blocked: report what is in the way (for the climb mechanic)
+        if (axis === 'x' || axis === 'z') {
+          let top = -Infinity, low = Infinity;
+          for (let i = 0; i < hit.length; i++) {
+            if (hit[i].maxY > top) top = hit[i].maxY;
+            if (hit[i].minY < low) low = hit[i].minY;
+          }
+          res.blockTop = top;
+          res.blockLow = low;
+          res.blockedH = true;
         }
         // nudge to the surface to avoid jitter
         if (axis === 'x') ent.x = px; else if (axis === 'z') ent.z = pz; else ent.y = py;
@@ -206,25 +226,31 @@ class CollisionWorld {
 
     // Y first (gravity / jump) then horizontal — stable on stairs
     if (disp.y !== 0) {
-      const before = ent.y;
-      if (tryAxis('y', disp.y, Math.sign(disp.y))) {
+      if (tryAxis('y', disp.y)) {
         res.hitY = true;
         if (disp.y < 0) res.landed = true;
         else res.ceiling = true;
       }
     }
-    if (disp.x !== 0 && tryAxis('x', disp.x, Math.sign(disp.x))) res.hitX = true;
-    if (disp.z !== 0 && tryAxis('z', disp.z, Math.sign(disp.z))) res.hitZ = true;
+    if (disp.x !== 0 && tryAxis('x', disp.x)) res.hitX = true;
+    if (disp.z !== 0 && tryAxis('z', disp.z)) res.hitZ = true;
 
     // auto step-up resolution: after horizontal move, if we are penetrating, raise
-    if (opts.stepUp && (res.hitX || res.hitZ)) {
-      const lift = opts.stepUp;
-      const cyl2 = { x: ent.x, y: ent.y + lift, z: ent.z, radius: r, height: h };
-      const bb2 = AABB(ent.x - r, ent.y + lift, ent.z - r, ent.x + r, ent.y + lift + h, ent.z + r);
-      const list2 = this.query(bb2, tmp.slice());
-      let blocked2 = false;
-      for (let j = 0; j < list2.length; j++) if (cylinderOverlapsAABB(cyl2, list2[j])) { blocked2 = true; break; }
-      if (!blocked2) { ent.y += lift; res.hitX = res.hitZ = false; }
+    if (stepUp && (res.hitX || res.hitZ)) {
+      const lift = stepUp;
+      // only if every blocker is a low ledge, never a wall
+      let tooTall = false;
+      for (let i = 0; i < blockBoxes.length; i++) {
+        if (blockBoxes[i].maxY > ent.y + lift + 0.02) { tooTall = true; break; }
+      }
+      if (!tooTall) {
+        const cyl2 = { x: ent.x, y: ent.y + lift, z: ent.z, radius: r, height: h };
+        const bb2 = AABB(ent.x - r, ent.y + lift, ent.z - r, ent.x + r, ent.y + lift + h, ent.z + r);
+        const list2 = this.query(bb2, tmp.slice());
+        let blocked2 = false;
+        for (let j = 0; j < list2.length; j++) if (cylinderOverlapsAABB(cyl2, list2[j])) { blocked2 = true; break; }
+        if (!blocked2) { ent.y += lift; res.hitX = res.hitZ = false; }
+      }
     }
 
     // ---------- ground probe / snap ----------

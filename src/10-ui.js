@@ -11,19 +11,22 @@ const UI = {
 
   init() {
     const ids = ['loading', 'loadTxt', 'menu', 'menuStats', 'controls', 'lobby', 'lobbyMain', 'lobbyStatus',
-      'hud', 'crosshair', 'hitmark', 'scope', 'hpFill', 'hpVal', 'apFill', 'apVal', 'ammoMag', 'ammoRes',
+      'hud', 'crosshair', 'hitmark', 'scope', 'reloadTag', 'hpFill', 'hpVal', 'apFill', 'apVal', 'ammoMag', 'ammoRes',
       'weaponName', 'money', 'roundTimer', 'objective', 'netInfo', 'killCount', 'scoreVal', 'minimap',
       'feed', 'centerMsg', 'dmgFlash', 'lowhp', 'buy', 'buyMoney', 'buyTimer', 'buyCats', 'buyGrid',
       'buyHint', 'buyOwned', 'btnBuySkip', 'btnBuyClose', 'scoreboard', 'sbTitle', 'sbTable', 'pause', 'toast', 'fps', 'clickToPlay',
-      'connect', 'connTitle', 'connStatus', 'joinRow', 'hostRow', 'roomCode', 'waiting', 'inName', 'inCode',
-      'btnCopy', 'dmgDirs'];
+      'connect', 'connTitle', 'connStatus', 'joinRow', 'hostRow', 'joinWait', 'roomCode', 'waiting', 'waitingTxt',
+      'inName', 'inCode', 'peerList', 'peerListJoin',
+      'btnCopy', 'dmgDirs', 'ios',
+      'mapChips', 'playerChips', 'hpChips', 'lobbyMaps', 'lobbyPlayers', 'lobbyHp'];
     ids.forEach(i => this.el[i] = $(i));
     this.buildBuyCats();
+    this.buildChips();
   },
 
   /* ---------------- screens ---------------- */
   show(name) {
-    ['loading', 'menu', 'controls', 'lobby', 'hud', 'buy', 'scoreboard', 'pause', 'connect', 'clickToPlay'].forEach(s => {
+    ['loading', 'menu', 'controls', 'lobby', 'hud', 'buy', 'scoreboard', 'pause', 'connect', 'ios', 'clickToPlay'].forEach(s => {
       const e = this.el[s];
       if (!e) return;
       const on = s === name;
@@ -32,12 +35,105 @@ const UI = {
     this.current = name;
   },
   hideOverlays() {
-    ['buy', 'scoreboard', 'pause', 'controls', 'lobby', 'menu', 'connect'].forEach(s => {
+    ['buy', 'scoreboard', 'pause', 'controls', 'lobby', 'menu', 'connect', 'ios'].forEach(s => {
       if (this.el[s]) this.el[s].classList.add('hidden');
     });
   },
   overlayOpen() {
-    return ['buy', 'scoreboard', 'pause', 'controls', 'lobby', 'menu', 'connect'].some(s => this.el[s] && !this.el[s].classList.contains('hidden'));
+    return ['buy', 'scoreboard', 'pause', 'controls', 'lobby', 'menu', 'connect', 'ios'].some(s => this.el[s] && !this.el[s].classList.contains('hidden'));
+  },
+
+  /* ============================================================
+     MATCH SETTINGS CHIPS (map / players / health)
+     Rendered into both the settings panel and the online lobby. The two sets
+     stay in sync because every chip writes to Store and then refreshes.
+     ============================================================ */
+  buildChips() {
+    const maps = (typeof MAPS !== 'undefined') ? MAPS : [];
+    const fillMaps = (wrap, onPick) => {
+      if (!wrap) return;
+      wrap.innerHTML = '';
+      maps.forEach(m => {
+        const b = document.createElement('button');
+        b.dataset.map = m.id;
+        b.innerHTML = '<b>' + U.esc(m.short) + '</b><i>' + U.esc(m.desc) + '</i>';
+        b.addEventListener('click', () => { onPick(m.id); Audio3D_SFX.uiClick(); });
+        wrap.appendChild(b);
+      });
+    };
+    const pickMap = id => {
+      Store.data.map = id; Store.save();
+      this.refreshChips();
+      // rebuild immediately unless we are mid-match
+      if ((typeof Game !== 'undefined') && Game.running) {
+        if (Game.mode === CS.MODE.RANGE || Game.mode === CS.MODE.OFFLINE) { Game.ensureMap(id); Game.spawnPlayerLocal(0); UI.toast('Карта: ' + mapById(id).name); }
+      }
+    };
+    const fillPlayers = (wrap, online) => {
+      if (!wrap) return;
+      wrap.innerHTML = '';
+      MATCH.playerCounts.forEach(n => {
+        if (online && n < 2) return;
+        const b = document.createElement('button');
+        b.dataset.n = n;
+        b.innerHTML = '<b>' + n + '</b>';
+        b.addEventListener('click', () => {
+          Store.data.players = n; Store.save(); this.refreshChips();
+          if (typeof Net !== 'undefined' && Net.role === CS.NETROLE.HOST && Net.connected) {
+            Net.send({ t: 'round', st: 'settings', players: n, hp: Store.data.maxHP, map: Store.data.map });
+          }
+          Audio3D_SFX.uiClick();
+        });
+        wrap.appendChild(b);
+      });
+    };
+    const fillHp = (wrap) => {
+      if (!wrap) return;
+      wrap.innerHTML = '';
+      MATCH.hpOptions.forEach(n => {
+        const b = document.createElement('button');
+        b.dataset.hp = n;
+        b.innerHTML = '<b>' + n + '</b><i>HP</i>';
+        b.addEventListener('click', () => {
+          Store.data.maxHP = n; Store.save(); this.refreshChips();
+          if (typeof Net !== 'undefined' && Net.role === CS.NETROLE.HOST && Net.connected) {
+            Net.send({ t: 'round', st: 'settings', players: Store.data.players, hp: n, map: Store.data.map });
+          }
+          Audio3D_SFX.uiClick();
+        });
+        wrap.appendChild(b);
+      });
+    };
+    fillMaps(this.el.mapChips, pickMap);
+    fillMaps(this.el.lobbyMaps, pickMap);
+    fillPlayers(this.el.playerChips, false);
+    fillPlayers(this.el.lobbyPlayers, true);
+    fillHp(this.el.hpChips);
+    fillHp(this.el.lobbyHp);
+    this.refreshChips();
+  },
+
+  refreshChips() {
+    const S = Store.data;
+    const mark = (wrap, attr, val) => {
+      if (!wrap) return;
+      Array.from(wrap.children).forEach(b => b.classList.toggle('on', String(b.dataset[attr]) === String(val)));
+    };
+    mark(this.el.mapChips, 'map', S.map); mark(this.el.lobbyMaps, 'map', S.map);
+    mark(this.el.playerChips, 'n', S.players); mark(this.el.lobbyPlayers, 'n', S.players);
+    mark(this.el.hpChips, 'hp', S.maxHP); mark(this.el.lobbyHp, 'hp', S.maxHP);
+  },
+
+  /* connected peers, shown in the lobby so the host can see who is in */
+  renderPeerList() {
+    const list = (typeof Net !== 'undefined' && Net.peers) ? Net.peers : [];
+    const html = list.map(p =>
+      '<div><span>' + U.esc(p.name || 'Игрок') + '</span><em>' + (p.isHost ? 'ХОСТ' : 'ИГРОК') + '</em></div>'
+    ).join('') || '<div><span>Пока никого</span><em>1/4</em></div>';
+    if (this.el.peerList) this.el.peerList.innerHTML = html;
+    if (this.el.peerListJoin) this.el.peerListJoin.innerHTML = html;
+    const wt = this.el.waitingTxt;
+    if (wt) wt.textContent = list.length >= 2 ? 'Игроков в комнате: ' + list.length + ' · ждём остальных…' : 'Ожидание игроков…';
   },
   loading(pct, txt) {
     const bar = document.querySelector('#loading .load-bar i');
@@ -99,13 +195,14 @@ const UI = {
     const e = this.el;
     if (!e.hud || e.hud.classList.contains('hidden')) return;
     // health / armor
-    const hp = U.clamp(p.health, 0, 100);
-    e.hpFill.style.transform = 'scaleX(' + (hp / 100) + ')';
+    const maxHP = (typeof Game !== 'undefined' && Game.matchHP) ? Game.matchHP : 100;
+    const hp = U.clamp(p.health, 0, maxHP);
+    e.hpFill.style.transform = 'scaleX(' + (hp / maxHP) + ')';
     e.hpVal.textContent = Math.max(0, Math.round(p.health));
-    e.hpFill.parentElement.classList.toggle('low', hp <= 35);
+    e.hpFill.parentElement.classList.toggle('low', hp <= maxHP * .35);
     e.apFill.style.transform = 'scaleX(' + (U.clamp(p.armor, 0, 100) / 100) + ')';
     e.apVal.textContent = Math.round(p.armor);
-    this.lowHP(hp > 0 && hp <= 32);
+    this.lowHP(hp > 0 && hp <= maxHP * .32);
 
     // ammo
     const w = p.weapon;
@@ -115,6 +212,12 @@ const UI = {
       e.ammoRes.textContent = w.id === 'knife' ? '' : '/ ' + (w.reserve === Infinity ? '∞' : Math.max(0, w.reserve));
       e.weaponName.textContent = def.name;
       e.ammoMag.style.color = (w.mag !== Infinity && w.mag <= Math.max(2, def.mag * .2)) ? '#e05141' : '#fff';
+      // reload / low-ammo hint under the crosshair
+      if (e.reloadTag) {
+        if (p.reloadT > 0) { e.reloadTag.textContent = 'ПЕРЕЗАРЯДКА'; e.reloadTag.classList.remove('hidden'); }
+        else if (w.mag !== Infinity && w.mag === 0) { e.reloadTag.textContent = 'ПУСТО · R'; e.reloadTag.classList.remove('hidden'); }
+        else e.reloadTag.classList.add('hidden');
+      }
     }
     // money / kills / score
     e.money.textContent = U.money(p.money);
@@ -141,15 +244,11 @@ const UI = {
   },
   scope(on) { this.el.scope.classList.toggle('hidden', !on); },
 
-  /* dynamic crosshair gap */
+  /* dynamic crosshair gap (drives the CSS variable the arms are built from) */
   setCrosshairSpread(px) {
     const e = this.el.crosshair;
     if (!e) return;
-    const g = U.clamp(px, 0, 26);
-    e.querySelector('.t').style.transform = 'translateY(' + (-g) + 'px)';
-    e.querySelector('.b').style.transform = 'translateY(' + g + 'px)';
-    e.querySelector('.l').style.transform = 'translateX(' + (-g) + 'px)';
-    e.querySelector('.r').style.transform = 'translateX(' + g + 'px)';
+    e.style.setProperty('--g', U.clamp(px, 0, 26) + 'px');
   },
 
   /* ---------------- buy menu ---------------- */
@@ -264,7 +363,7 @@ const UI = {
     }
     // sites
     ctx.strokeStyle = 'rgba(255,90,60,.55)'; ctx.lineWidth = 2;
-    Object.keys(MAP.sites).forEach(k => {
+    Object.keys(MAP.sites || {}).forEach(k => {
       const s = MAP.sites[k];
       ctx.beginPath(); ctx.arc(tx(s.x), tz(s.z), 11, 0, 7); ctx.stroke();
       ctx.fillStyle = 'rgba(255,140,110,.8)'; ctx.font = 'bold 11px Arial'; ctx.textAlign = 'center';
@@ -336,14 +435,16 @@ const UI = {
       rows.push(game.player);
       if (game.remotePlayers) game.remotePlayers.forEach(rp => rows.push(rp));
       rows.sort((a, b) => b.score - a.score || b.kills - a.kills);
-      t.innerHTML = '<tr><th>ИГРОК</th><th>УБИЙСТВА</th><th>СМЕРТИ</th><th>ТОЧН.</th><th>СЧЁТ</th></tr>' +
-        rows.map(r =>
+      t.innerHTML = '<tr><th>#</th><th>ИГРОК</th><th>УБИЙСТВА</th><th>СМЕРТИ</th><th>ТОЧН.</th><th>СЧЁТ</th></tr>' +
+        rows.map((r, i) =>
           '<tr class="' + (r === game.player ? 'me' : '') + '">' +
+          '<td class="t">' + (i + 1) + '</td>' +
           '<td class="n">' + U.esc(r.name) + (r === game.player ? ' <span class="t">(вы)</span>' : '') + '</td>' +
           '<td class="k">' + r.kills + '</td>' +
           '<td class="d">' + r.deaths + '</td>' +
           '<td class="t">' + (r.bulletsFired ? Math.round(r.bulletsHit / r.bulletsFired * 100) : 0) + '%</td>' +
           '<td class="s">' + r.score + '</td></tr>').join('');
+      this.el.sbTitle.textContent = 'СЧЁТ · ' + U.esc(game.mapName()) + ' · HP ' + game.matchHP;
     } else {
       const p = game.player;
       t.innerHTML = '<tr><th>ПОКАЗАТЕЛЬ</th><th>ЗНАЧЕНИЕ</th></tr>' +

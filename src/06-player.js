@@ -555,6 +555,7 @@ class Player {
       z: { get() { return this.pos.z; }, set(v) { this.pos.z = v; } }
     });
     // ---- state ----
+    this.maxHealth = CFG.maxHP;
     this.health = CFG.maxHP;
     this.armor = 0;
     this.helmet = false;
@@ -586,6 +587,12 @@ class Player {
     this.isAiming = false;
     this.spinT = 0;           // minigun spin-up (0..1)
     this._spinSnd = false;
+    this.climbing = false;    // mid-vault onto a ledge
+    this.climbT = 0;
+    this.climbDur = CFG.climbDuration;
+    this.climbHold = 0;
+    this.climbFrom = null;
+    this.climbTo = null;
     this.deployT = 0;
     this.triggerDown = false;
     this.shotsSinceRelease = 0;
@@ -659,7 +666,7 @@ class Player {
     this.vel.x = this.vel.y = this.vel.z = 0;
     this.yaw = yaw === undefined ? 0 : yaw;
     this.pitch = 0;
-    this.health = CFG.maxHP;
+    this.health = this.maxHealth || CFG.maxHP;
     this.alive = true;
     this.recoil = this.recoilYaw = this.viewPunchP = this.viewPunchY = 0;
     this.reloadT = 0; this.fireCd = 0; this.zoom = 0; this.deployT = .3;
@@ -708,6 +715,74 @@ class Player {
     this.vmKind = id;
     if (parent) parent.add(group);
     return group;
+  }
+
+  /* ---------- climb mechanic ----------
+     Hold forward against a surface and, after climbTime, the player pulls
+     themselves up onto it — a deliberate animated vault, not a teleport.
+     Height is not limited: a crate, a container, a roof or the 9 m perimeter
+     wall can all be scaled. Taller climbs simply take longer to animate, and
+     the vault is refused only if there is genuinely nowhere to stand on top. */
+  updateClimb(dt, world, input, res, wl) {
+    const blocked = !!(res.hitX || res.hitZ);
+    const top = res.blockTop;
+
+    // the surface must be a real ledge (above stepping height) and must actually
+    // rise from around our feet, so we never latch onto a floating platform above
+    const climbable = blocked && top !== undefined && isFinite(top) &&
+      top > this.pos.y + CFG.stepUp + 0.05 &&
+      this.pos.y > (res.blockLow === undefined ? -Infinity : res.blockLow) - 1;
+
+    if (this.climbing) {
+      // animate the vault: rise, then step forward onto the ledge. The easing is
+      // symmetric so tall climbs accelerate smoothly instead of snapping.
+      this.climbT += dt;
+      const k = U.clamp(this.climbT / this.climbDur, 0, 1);
+      const ease = k < .5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
+      this.pos.y = U.lerp(this.climbFrom.y, this.climbTo.y, ease);
+      this.pos.x = U.lerp(this.climbFrom.x, this.climbTo.x, ease);
+      this.pos.z = U.lerp(this.climbFrom.z, this.climbTo.z, ease);
+      this.vel.x = this.vel.y = this.vel.z = 0;
+      this.onGround = true;
+      if (k >= 1) { this.climbing = false; this.climbHold = 0; }
+      return;
+    }
+
+    // only a deliberate forward push climbs: sideways contact never triggers it
+    const pressing = input.f > 0.01 && wl > 0.01;
+    if (!climbable || !this.onGround || !pressing) { this.climbHold = 0; return; }
+
+    this.climbHold += dt;
+    if (this.climbHold >= CFG.climbTime) {
+      // Pick a landing spot on top of the obstacle, just past its near face.
+      // Walking further in overshoots narrow cover (the climber landed past a
+      // 2 m wall and fell off the far side), so the step is kept small and the
+      // spot is validated against the world before committing.
+      const cy = Math.cos(this.yaw), sy = Math.sin(this.yaw);
+      const fx = -sy, fz = -cy;                     // forward
+      let tx = this.pos.x, tz = this.pos.z, landY = top;
+      let found = false;
+      for (const step of [this.radius + 0.25, this.radius + 0.55, this.radius + 0.95]) {
+        const px = this.pos.x + fx * step, pz = this.pos.z + fz * step;
+        const gy = world.groundAt(px, pz, top + 1.2);
+        const y = (gy === null || gy === undefined || gy < top - 0.4) ? top : gy;
+        if (!world.overlaps(px, y + 0.05, pz, this.radius * 0.95, this.height)) {
+          tx = px; tz = pz; landY = y; found = true; break;
+        }
+      }
+      // nothing clear on top: refuse the climb rather than vault into a wall
+      if (!found) { this.climbHold = Math.min(this.climbHold, CFG.climbTime * 0.75); return; }
+
+      const rise = Math.max(0, landY - this.pos.y);
+      this.climbing = true;
+      this.climbT = 0;
+      this.climbDur = U.clamp(CFG.climbDuration + rise * CFG.climbDurationPerM, CFG.climbDuration, CFG.climbDurationMax);
+      this.climbFrom = { x: this.pos.x, y: this.pos.y, z: this.pos.z };
+      this.climbTo = { x: tx, y: landY, z: tz };
+      this.climbHold = 0;
+      Bus.emit('climb', this);
+      if (this.isLocal && typeof Audio3D_SFX !== 'undefined') Audio3D_SFX.pickup();
+    }
   }
 
   /* ---------- movement + physics ---------- */
@@ -775,6 +850,13 @@ class Player {
     if (res.hitZ) this.vel.z = 0;
     if (res.ceiling) this.vel.y = Math.min(this.vel.y, 0);
 
+     /* ---- climb: hold forward against a tall object to scale it ----
+        Walking into a wall used to teleport the player to its top in a single
+        frame (fixed in moveCylinder). In its place this gives a deliberate
+        mechanic: press into a surface for climbTime and the player vaults onto
+        it. There is no height limit — taller surfaces just take longer. */
+    this.updateClimb(dt, world, input, res, wl);
+
     // ---- ground: land on, or step up to, the surface under our feet ----
     // A ground snap must only pull us DOWN by a small amount (stairs and
     // ledges). Snapping from any height would teleport a jumping player back
@@ -807,16 +889,23 @@ class Player {
       this.onGround = false;
     }
     // keep inside the world — but never clamp the player out of the aim room,
-    // which sits outside the arena bounds
+    // which sits outside the arena bounds. The perimeter wall is climbable now,
+    // so the clamp relaxes just enough to touch its inner face at ground level
+    // and to stand on top of it, while still never letting the player walk off
+    // the outer edge into the void.
     const room = (typeof MAP !== 'undefined') ? MAP.aimRoom : null;
     const inRoom = room && this.pos.z < room.maxZ + 6 && this.pos.z > room.minZ - 6 &&
       this.pos.x > room.minX - 6 && this.pos.x < room.maxX + 6;
     if (!inRoom) {
-      this.pos.x = U.clamp(this.pos.x, -MAP.size / 2 + 2, MAP.size / 2 - 2);
-      this.pos.z = U.clamp(this.pos.z, -MAP.size / 2 + 2, MAP.size / 2 - 2);
+      const half = MAP.size / 2;
+      const inner = half - 1.5;                        // reach the wall's inner face
+      const onWall = this.pos.y > (MAP.wallH || 9) - 2.5;
+      const lim = onWall ? half : inner;               // on the wall, don't step outward
+      this.pos.x = U.clamp(this.pos.x, -lim, lim);
+      this.pos.z = U.clamp(this.pos.z, -lim, lim);
     }
     if (this.pos.y < -8) {
-      this.pos.y = this.world ? this.world.groundAt(this.pos.x, this.pos.z, 4) : 0;
+      this.pos.y = world ? world.groundAt(this.pos.x, this.pos.z, 4) : 0;
       this.vel.x = this.vel.y = this.vel.z = 0;
     }
 

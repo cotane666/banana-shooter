@@ -92,6 +92,33 @@ canvas{display:block}
   border-bottom:2px solid #3a444d;color:#fff;padding:11px 13px;font-size:15px;font-family:inherit;
   border-radius:3px;outline:none;letter-spacing:1px}
 .fld input:focus{border-bottom-color:var(--or);background:#11161a}
+
+/* selectable chips: map / player count / health */
+.chips{display:flex;gap:7px;margin-top:8px;flex-wrap:wrap}
+.chips button{background:#171d22;border:1px solid var(--line);color:var(--dim);padding:8px 13px;
+  font-size:11.5px;letter-spacing:1.2px;cursor:pointer;border-radius:3px;font-family:inherit;
+  transition:.12s;line-height:1.25;text-align:center}
+.chips button b{display:block;font-size:12.5px;color:#c3ccd4;font-weight:700}
+.chips button i{display:block;font-style:normal;font-size:9.5px;color:#5d6873;margin-top:2px}
+.chips button:hover{border-color:#414d57;color:#fff}
+.chips button.on{background:var(--or);border-color:var(--or);color:#12161a}
+.chips button.on b,.chips button.on i{color:#12161a}
+
+/* connected peers in the lobby */
+.peerlist{display:flex;flex-direction:column;gap:5px;margin-top:10px}
+.peerlist div{background:#0c0f12;border:1px solid var(--line);border-left:3px solid var(--green);
+  padding:6px 11px;border-radius:3px;font-size:12.5px;color:#c3ccd4;display:flex;justify-content:space-between}
+.peerlist div em{font-style:normal;color:var(--or);font-size:10px;letter-spacing:1.4px}
+
+/* iOS install guide */
+.ios-steps{display:flex;flex-direction:column;gap:10px;margin-bottom:6px}
+.ios-row{display:flex;gap:13px;align-items:flex-start;font-size:13.5px;color:#c3ccd4;line-height:1.5}
+.ios-row>b{flex:0 0 26px;height:26px;border-radius:50%;background:var(--or);color:#12161a;
+  display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:800}
+.ios-row>span{flex:1 1 auto;min-width:0}
+.ios-row strong{color:#fff;font-weight:700}
+.ios-ic{display:inline-block;background:#0c0f12;border:1px solid var(--line);border-radius:3px;
+  padding:0 6px;color:var(--or2);font-weight:700}
 .slider{display:block;font-size:12px;color:var(--dim);letter-spacing:1.2px;margin:0 0 16px}
 .slider output{color:var(--or);font-weight:700;float:right}
 .slider input{width:100%;margin-top:8px;-webkit-appearance:none;height:5px;border-radius:3px;
@@ -154,14 +181,22 @@ kbd{background:#0c0f12;border:1px solid var(--line);border-bottom:2px solid #333
 #minimap{position:absolute;left:22px;top:18px;width:150px;height:150px;border:1px solid rgba(255,255,255,.18);
   border-radius:3px;background:rgba(0,0,0,.42)}
 
-/* crosshair */
-#crosshair{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:40px;height:40px;transition:opacity .12s}
-.ch{position:absolute;background:#4dff6a;box-shadow:0 0 3px rgba(0,0,0,.95)}
-#crosshair .t{left:19px;top:0;width:2px;height:11px}
-#crosshair .b{left:19px;bottom:0;width:2px;height:11px}
-#crosshair .l{top:19px;left:0;height:2px;width:11px}
-#crosshair .r{top:19px;right:0;height:2px;width:11px}
-#crosshair .dot{left:19px;top:19px;width:2px;height:2px;background:#4dff6a}
+/* crosshair
+   Every arm is anchored dead-centre (left:50%;top:50%) and its gap comes from
+   the CSS variable --g. The old layout hard-coded 19px offsets, which only line
+   up inside a 40px box: on phones the crosshair shrinks to 30px, so the left and
+   top arms were pushed visibly off-centre. -50% centres the arm on its axis and
+   the 11px term is exactly the arm length, so the inner edge lands at --g. */
+#crosshair{--g:8px;position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+  width:40px;height:40px;transition:opacity .12s}
+#crosshair .t,#crosshair .b,#crosshair .l,#crosshair .r{position:absolute;
+  left:50%;top:50%;background:#4dff6a;box-shadow:0 0 3px rgba(0,0,0,.95)}
+#crosshair .t{width:2px;height:11px;transform:translate(-50%,calc(-11px - var(--g)))}
+#crosshair .b{width:2px;height:11px;transform:translate(-50%,var(--g))}
+#crosshair .l{width:11px;height:2px;transform:translate(calc(-11px - var(--g)),-50%)}
+#crosshair .r{width:11px;height:2px;transform:translate(var(--g),-50%)}
+#crosshair .dot{position:absolute;left:50%;top:50%;width:2px;height:2px;
+  transform:translate(-50%,-50%);background:#4dff6a}
 #crosshair.enemy .ch{background:#ff4438}
 #crosshair.hide{opacity:0}
 
@@ -170,6 +205,12 @@ kbd{background:#0c0f12;border:1px solid var(--line);border-bottom:2px solid #333
 #scope:before,#scope:after{content:"";position:absolute;background:rgba(0,0,0,.9)}
 #scope:before{left:50%;top:0;bottom:0;width:1px;transform:translateX(-50%)}
 #scope:after{top:50%;left:0;right:0;height:1px;transform:translateY(-50%)}
+
+/* reload / low-ammo indicator, just under the crosshair */
+#reloadTag{position:absolute;left:50%;top:calc(50% + 34px);transform:translateX(-50%);
+  font-size:12px;font-weight:800;letter-spacing:3px;color:#ffd24a;text-shadow:0 2px 8px #000;
+  pointer-events:none;animation:pulse 1s infinite}
+html.touch #reloadTag{top:calc(50% + 27px);font-size:11px;letter-spacing:2px}
 
 #hitmark{position:absolute;left:50%;top:50%;width:34px;height:34px;transform:translate(-50%,-50%) scale(.6);
   opacity:0;transition:opacity .1s,transform .1s}
@@ -497,7 +538,9 @@ html.touch .fld input{padding:10px;font-size:15px}
     <div class="menu-btns">
       <button class="mbtn primary" id="btnOffline"><b>ОФФЛАЙН</b><i>Волны зомби — зарабатывай счёт</i></button>
       <button class="mbtn" id="btnRange"><b>ПОЛИГОН</b><i>Всё оружие бесплатно · манекены и урон в секунду</i></button>
-      <button class="mbtn" id="btnOnline"><b>ОНЛАЙН</b><i>Дуэль против другого игрока</i></button>
+      <button class="mbtn" id="btnOnline"><b>ОНЛАЙН</b><i>Бой против друзей: 2–4 игрока, выбор карты</i></button>
+      <button class="mbtn" id="btnMatch"><b>ПАРАМЕТРЫ МАТЧА</b><i>Карта · число игроков · здоровье</i></button>
+      <button class="mbtn" id="btnIos"><b>СКАЧАТЬ НА iOS</b><i>Установка на iPhone / iPad</i></button>
       <button class="mbtn hidden" id="btnInstall"><b>УСТАНОВИТЬ НА ТЕЛЕФОН</b><i>Играть как приложение, оффлайн</i></button>
       <button class="mbtn" id="btnControls"><b>УПРАВЛЕНИЕ</b><i>Клавиши и настройки</i></button>
     </div>
@@ -538,6 +581,18 @@ html.touch .fld input{padding:10px;font-size:15px}
       <input type="range" id="sVol" min="0" max="100" step="1" value="60"></label>
     <label class="slider">Качество теней <output id="oQual">Среднее</output>
       <input type="range" id="sQual" min="0" max="2" step="1" value="1"></label>
+    <label class="slider">Автоприцел (телефон) <output id="oAim">Вкл</output>
+      <input type="range" id="sAim" min="0" max="1" step="1" value="1"></label>
+    <h2 class="mt">ПАРАМЕТРЫ МАТЧА</h2>
+    <div class="fld">Карта
+      <div class="chips" id="mapChips"></div>
+    </div>
+    <div class="fld">Игроков (онлайн)
+      <div class="chips" id="playerChips"></div>
+    </div>
+    <div class="fld">Здоровье игрока
+      <div class="chips" id="hpChips"></div>
+    </div>
     <div class="btnrow">
       <button class="mbtn small" id="btnReset">Сбросить прогресс</button>
       <button class="mbtn small primary" id="btnControlsBack">НАЗАД</button>
@@ -553,6 +608,16 @@ html.touch .fld input{padding:10px;font-size:15px}
       <label class="fld">Ваш ник
         <input id="inName" maxlength="14" placeholder="Игрок" autocomplete="off">
       </label>
+      <h2 class="mt">ПАРАМЕТРЫ МАТЧА</h2>
+      <div class="fld">Карта
+        <div class="chips" id="lobbyMaps"></div>
+      </div>
+      <div class="fld">Игроков в комнате
+        <div class="chips" id="lobbyPlayers"></div>
+      </div>
+      <div class="fld">Здоровье игрока
+        <div class="chips" id="lobbyHp"></div>
+      </div>
       <div class="btnrow">
         <button class="mbtn primary" id="btnHost"><b>СОЗДАТЬ ИГРУ</b><i>Вы хост · получите код</i></button>
         <button class="mbtn" id="btnJoin"><b>ПОДКЛЮЧИТЬСЯ</b><i>Введите код друга</i></button>
@@ -568,15 +633,42 @@ html.touch .fld input{padding:10px;font-size:15px}
           <div class="code" id="roomCode">·····</div>
           <button class="mbtn tiny" id="btnCopy">Копировать</button>
         </div>
-        <div class="waiting" id="waiting"><span class="spin"></span> Ожидание второго игрока…</div>
+        <div class="waiting" id="waiting"><span class="spin"></span> <span id="waitingTxt">Ожидание игроков…</span></div>
+        <div id="peerList" class="peerlist"></div>
         <div class="hintbox">
-          Отправьте код другу. Игра идёт напрямую между браузерами (P2P / WebRTC) —
-          сервер нужен только для знакомства. Играйте в одном браузере (Chrome/Edge) на разных компьютерах.
+          Отправьте код друзьям — они вводят его через <b>ПОДКЛЮЧИТЬСЯ</b>. Подключаются до
+          4 игроков. Матч идёт напрямую между браузерами (P2P / WebRTC), сервер нужен
+          только для знакомства. Карту и здоровье выбирает хост; они уезжают всем при старте.
         </div>
+      </div>
+      <div id="joinWait" class="hidden">
+        <div class="waiting"><span class="spin"></span> Ожидание старта матча хостом…</div>
+        <div id="peerListJoin" class="peerlist"></div>
       </div>
     </div>
     <div id="lobbyStatus" class="status"></div>
     <div class="btnrow"><button class="mbtn small" id="btnLobbyBack">НАЗАД</button></div>
+  </div>
+</div>
+
+<!-- ============ iOS INSTALL ============ -->
+<div id="ios" class="screen hidden">
+  <div class="panel">
+    <h2>УСТАНОВКА НА iOS</h2>
+    <div class="ios-steps">
+      <div class="ios-row"><b>1</b><span>Откройте эту страницу в <strong>Safari</strong> на iPhone или iPad.</span></div>
+      <div class="ios-row"><b>2</b><span>Нажмите кнопку <strong>«Поделиться»</strong> <span class="ios-ic">⎋</span> внизу экрана.</span></div>
+      <div class="ios-row"><b>3</b><span>Выберите <strong>«На экран "Домой"»</strong> и подтвердите.</span></div>
+      <div class="ios-row"><b>4</b><span>Запустите игру со значка — она откроется на весь экран и будет работать оффлайн.</span></div>
+    </div>
+    <div class="hintbox">
+      Safari устанавливает веб-игры сам, без App Store: отдельного файла скачивать не нужно.
+      Из Chrome на iPhone установка недоступна — используйте именно Safari.
+    </div>
+    <div class="btnrow">
+      <button class="mbtn small" id="btnIosCopy">Скопировать ссылку</button>
+      <button class="mbtn small primary" id="btnIosBack">ПОНЯТНО</button>
+    </div>
   </div>
 </div>
 
@@ -585,6 +677,7 @@ html.touch .fld input{padding:10px;font-size:15px}
   <div id="crosshair"><span class="ch t"></span><span class="ch b"></span><span class="ch l"></span><span class="ch r"></span><span class="ch dot"></span></div>
   <div id="hitmark"><span></span><span></span><span></span><span></span></div>
   <div id="scope" class="hidden"></div>
+  <div id="reloadTag" class="hidden">ПЕРЕЗАРЯДКА</div>
 
   <div class="hud-tl">
     <div class="bar hp"><i id="hpFill"></i><em id="hpVal">100</em></div>
@@ -731,6 +824,10 @@ const CFG = {
   maxAP: 100,
   stepUp: 0.62,
   snapDown: 0.14,       // minimum distance the ground snap may pull the player down
+  climbTime: 1.35,       // seconds of holding forward against a surface to start the climb
+  climbDuration: 0.50,   // base vault animation time (a normal low ledge)
+  climbDurationPerM: 0.13, // extra animation time per metre of height
+  climbDurationMax: 2.6, // cap so a huge climb still finishes in a sensible time
   buyTime: 30,          // seconds of the buy phase (CS-style freeze/buy time)
   roundTime: 300,
   zombieStartCount: 4,
@@ -743,6 +840,27 @@ const CFG = {
   netSendLocalHz: 34,   // local player state rate
   netInterpMs: 120,     // render the remote player this far behind the newest snapshot
   netMaxExtrapMs: 160   // keep extrapolating through a packet gap for at most this long
+};
+
+/* ---------------- match settings (chosen in the lobby / settings) ----------------
+   These are shared by every mode: the map is picked in the online lobby and in
+   the settings panel, and carries over to offline / полигон. */
+const MATCH = window.MATCH = {
+  maps: [],                 // filled from MAPS once 04-map.js has loaded
+  playerCounts: [1, 2, 3, 4],
+  hpOptions: [50, 75, 100, 125, 150, 200],
+  maxPlayers: 4,
+  minPlayers: 2,
+
+  mapName(id) {
+    const m = (typeof mapById === 'function') ? mapById(id) : null;
+    return m ? m.name : 'АРЕНА';
+  },
+  clampPlayers(n, online) {
+    n = Math.round(n || 2);
+    const lo = online ? 2 : 1;
+    return U.clamp(n, lo, MATCH.maxPlayers);
+  }
 };
 
 /* ---------------- weapons (CS-inspired) ----------------
@@ -876,7 +994,8 @@ function makeRng(seed) {
 /* ---------------- persistent settings & progress ---------------- */
 const Store = {
   key: 'cs3d.save.v1',
-  data: { sens: 2.2, fov: 80, vol: 60, quality: 1, touchSens: 1.5, name: '', best: 0, bestWave: 0, killsTotal: 0, matches: 0, wins: 0, signalSrv: 0, aimBest: 0 },
+  data: { sens: 2.2, fov: 80, vol: 60, quality: 1, touchSens: 1.5, name: '', best: 0, bestWave: 0, killsTotal: 0, matches: 0, wins: 0, signalSrv: 0, aimBest: 0, aimAutoFire: 1,
+          map: 'arena', players: 2, maxHP: 100, aimAssist: 1 },
   load() {
     try { const r = localStorage.getItem(this.key); if (r) Object.assign(this.data, JSON.parse(r)); } catch (e) { }
     return this.data;
@@ -1066,25 +1185,34 @@ class CollisionWorld {
     const res = { hitX: false, hitZ: false, hitY: false, landed: false, groundY: null, ceiling: false };
     const r = ent.radius, h = ent.height;
     const tmp = [];
+    const stepUp = opts.stepUp || 0;
+    /* Boxes that blocked the last horizontal attempt, so the post-move step-up
+       can check whether they are low enough to be a stair (and not a wall). */
+    let blockBoxes = [];
 
-    const tryAxis = (axis, amount, sign) => {
+    const tryAxis = (axis, amount) => {
       if (amount === 0) return false;
       const px = ent.x, py = ent.y, pz = ent.z;
       if (axis === 'x') ent.x += amount; else if (axis === 'z') ent.z += amount; else ent.y += amount;
       const cyl = { x: ent.x, y: ent.y, z: ent.z, radius: r, height: h };
       const bb = AABB(ent.x - r, ent.y, ent.z - r, ent.x + r, ent.y + h, ent.z + r);
       const list = this.query(bb, tmp);
-      let blocked = false;
+      const hit = [];
       for (let i = 0; i < list.length; i++) {
-        const b = list[i];
-        if (!cylinderOverlapsAABB(cyl, b)) continue;
-        blocked = true;
-        break;
+        if (cylinderOverlapsAABB(cyl, list[i])) hit.push(list[i]);
       }
-      if (blocked) {
-        // step-up: try lifting the entity by stepUp then re-test (only for horizontal)
-        if (opts.stepUp && (axis === 'x' || axis === 'z')) {
-          const lift = opts.stepUp;
+      if (hit.length) {
+        if (axis === 'x' || axis === 'z') blockBoxes = hit;
+        /* Step-up only makes sense over something we could stand on. A box whose
+           top is higher than `stepUp` above our feet is a wall, and lifting onto
+           it would let the player climb any wall instantly — the old code did
+           exactly that because it never looked at the obstacle's height. */
+        let tooTall = false;
+        for (let i = 0; i < hit.length; i++) {
+          if (hit[i].maxY > ent.y + stepUp + 0.02) { tooTall = true; break; }
+        }
+        if (stepUp && (axis === 'x' || axis === 'z') && !tooTall) {
+          const lift = stepUp;
           const cyl2 = { x: ent.x, y: ent.y + lift, z: ent.z, radius: r, height: h };
           const bb2 = AABB(ent.x - r, ent.y + lift, ent.z - r, ent.x + r, ent.y + lift + h, ent.z + r);
           const list2 = this.query(bb2, tmp.slice());
@@ -1093,6 +1221,17 @@ class CollisionWorld {
             if (cylinderOverlapsAABB(cyl2, list2[j])) { blocked2 = true; break; }
           }
           if (!blocked2) return false; // allow the move, y will be adjusted below
+        }
+        // genuinely blocked: report what is in the way (for the climb mechanic)
+        if (axis === 'x' || axis === 'z') {
+          let top = -Infinity, low = Infinity;
+          for (let i = 0; i < hit.length; i++) {
+            if (hit[i].maxY > top) top = hit[i].maxY;
+            if (hit[i].minY < low) low = hit[i].minY;
+          }
+          res.blockTop = top;
+          res.blockLow = low;
+          res.blockedH = true;
         }
         // nudge to the surface to avoid jitter
         if (axis === 'x') ent.x = px; else if (axis === 'z') ent.z = pz; else ent.y = py;
@@ -1103,25 +1242,31 @@ class CollisionWorld {
 
     // Y first (gravity / jump) then horizontal — stable on stairs
     if (disp.y !== 0) {
-      const before = ent.y;
-      if (tryAxis('y', disp.y, Math.sign(disp.y))) {
+      if (tryAxis('y', disp.y)) {
         res.hitY = true;
         if (disp.y < 0) res.landed = true;
         else res.ceiling = true;
       }
     }
-    if (disp.x !== 0 && tryAxis('x', disp.x, Math.sign(disp.x))) res.hitX = true;
-    if (disp.z !== 0 && tryAxis('z', disp.z, Math.sign(disp.z))) res.hitZ = true;
+    if (disp.x !== 0 && tryAxis('x', disp.x)) res.hitX = true;
+    if (disp.z !== 0 && tryAxis('z', disp.z)) res.hitZ = true;
 
     // auto step-up resolution: after horizontal move, if we are penetrating, raise
-    if (opts.stepUp && (res.hitX || res.hitZ)) {
-      const lift = opts.stepUp;
-      const cyl2 = { x: ent.x, y: ent.y + lift, z: ent.z, radius: r, height: h };
-      const bb2 = AABB(ent.x - r, ent.y + lift, ent.z - r, ent.x + r, ent.y + lift + h, ent.z + r);
-      const list2 = this.query(bb2, tmp.slice());
-      let blocked2 = false;
-      for (let j = 0; j < list2.length; j++) if (cylinderOverlapsAABB(cyl2, list2[j])) { blocked2 = true; break; }
-      if (!blocked2) { ent.y += lift; res.hitX = res.hitZ = false; }
+    if (stepUp && (res.hitX || res.hitZ)) {
+      const lift = stepUp;
+      // only if every blocker is a low ledge, never a wall
+      let tooTall = false;
+      for (let i = 0; i < blockBoxes.length; i++) {
+        if (blockBoxes[i].maxY > ent.y + lift + 0.02) { tooTall = true; break; }
+      }
+      if (!tooTall) {
+        const cyl2 = { x: ent.x, y: ent.y + lift, z: ent.z, radius: r, height: h };
+        const bb2 = AABB(ent.x - r, ent.y + lift, ent.z - r, ent.x + r, ent.y + lift + h, ent.z + r);
+        const list2 = this.query(bb2, tmp.slice());
+        let blocked2 = false;
+        for (let j = 0; j < list2.length; j++) if (cylinderOverlapsAABB(cyl2, list2[j])) { blocked2 = true; break; }
+        if (!blocked2) { ent.y += lift; res.hitX = res.hitZ = false; }
+      }
     }
 
     // ---------- ground probe / snap ----------
@@ -1446,6 +1591,9 @@ function buildTextures() {
 /* ===== 04-map.js ===== */
 /* ============================================================
    04 — MAP: geometry, lighting, navigation grid + pathfinding
+   Five selectable arenas share one set of builders. Everything the map
+   creates lives in MAP.group, so switching maps at runtime is just
+   "dispose the group, rebuild".
    ============================================================ */
 
 const MAP = {
@@ -1458,12 +1606,17 @@ const MAP = {
   nav: null,
   scene: null,
   world: null,
-  sites: {}
+  group: null,
+  sites: {},
+  id: 'arena',
+  def: null,
+  aimRoom: null
 };
 
 /* ---------------- material cache ---------------- */
 let MAT = {};
 function buildMaterials() {
+  if (MAT.floor) return;                 // built once; reused across map rebuilds
   const mk = (canvasKey, rep, color, opts) => {
     opts = opts || {};
     const m = new THREE.MeshLambertMaterial({
@@ -1494,6 +1647,7 @@ function buildMaterials() {
   MAT.wood.userData.scale = 2.2;
   MAT.metal.userData.scale = 3;
   MAT.sand.userData.scale = 1.6;
+  MAT._cache = {};
 }
 
 /* Build a box mesh whose texture repeats according to its world size. */
@@ -1521,8 +1675,8 @@ function makeBoxMesh(w, h, d, mat, faceTopMat) {
   return mesh;
 }
 
-/* add a solid box: bottom-center anchored at (x,y,z) */
-function solid(scene, world, x, y, z, w, h, d, mat, opts) {
+/* add a solid box: bottom-center anchored at (x,y,z). `parent` is MAP.group. */
+function solid(parent, world, x, y, z, w, h, d, mat, opts) {
   opts = opts || {};
   const aabb = aabbFromBase(x, y, z, w, h, d, opts.tag || 'solid');
   if (!opts.noCollide) world.addBox(aabb);
@@ -1531,206 +1685,588 @@ function solid(scene, world, x, y, z, w, h, d, mat, opts) {
   mesh.position.set(x, y + h / 2, z);
   if (opts.rotY) mesh.rotation.y = opts.rotY;
   if (opts.noShadow) { mesh.castShadow = false; }
-  scene.add(mesh);
+  parent.add(mesh);
   if (aabb) aabb.mesh = mesh;
   return aabb;
 }
 
 /* decorative box (no collision), centered on y */
-function decor(scene, x, y, z, w, h, d, mat, rotY) {
+function decor(parent, x, y, z, w, h, d, mat, rotY) {
   const mesh = makeBoxMesh(w, h, d, mat || MAT.concrete);
   mesh.position.set(x, y + h / 2, z);
   if (rotY) mesh.rotation.y = rotY;
   mesh.castShadow = true; mesh.receiveShadow = true;
-  scene.add(mesh);
+  parent.add(mesh);
   return mesh;
 }
 
-/* ---------------- arena construction ---------------- */
-function buildMap(scene, world, quality) {
-  MAP.scene = scene; MAP.world = world;
-  MAP.playerSpawns = []; MAP.zombieSpawns = [];
-  const S = MAP.size, H = MAP.wallH, half = S / 2;
-
-  buildMaterials();
-
-  /* ---------- ground ----------
-     The playable surface is a collision box topped at y=0. The visual plane
-     sits just above it so bullet holes and blood do not z-fight with the mesh. */
-  const groundAABB = solid(scene, world, 0, -2, 0, S + 40, 2, S + 40, MAT.floor, { tag: 'ground' });
+/* ============================================================
+   COMMON MAP PIECES
+   ============================================================ */
+function mapGround(parent, world, opts) {
+  opts = opts || {};
+  const S = MAP.size;
+  world.addBox(AABB(-(S / 2 + 20), -2, -(S / 2 + 20), S / 2 + 20, 0, S / 2 + 20, 'ground'));
   const gpMat = MAT.floor.clone();
   gpMat.map = canvasTexture(TEXTURES.floor, 18, 4);
+  if (opts.tint !== undefined) gpMat.color.setHex(opts.tint);
   const gp = new THREE.Mesh(new THREE.PlaneGeometry(S + 40, S + 40), gpMat);
   gp.rotation.x = -Math.PI / 2;
   gp.position.y = 0.01;
   gp.receiveShadow = true;
-  scene.add(gp);
+  parent.add(gp);
+}
 
-  /* ---------- perimeter walls (with a walkway on top) ---------- */
-  const t = 2.5;
-  solid(scene, world, 0, 0, -half, S + t, H, t, MAT.concrete, { tag: 'wall' });
-  solid(scene, world, 0, 0, half, S + t, H, t, MAT.concrete, { tag: 'wall' });
-  solid(scene, world, -half, 0, 0, t, H, S + t, MAT.concrete, { tag: 'wall' });
-  solid(scene, world, half, 0, 0, t, H, S + t, MAT.concrete, { tag: 'wall' });
+function mapPerimeter(parent, world, mat) {
+  const S = MAP.size, H = MAP.wallH, t = 2.5, half = S / 2;
+  mat = mat || MAT.concrete;
+  solid(parent, world, 0, 0, -half, S + t, H, t, mat, { tag: 'wall' });
+  solid(parent, world, 0, 0, half, S + t, H, t, mat, { tag: 'wall' });
+  solid(parent, world, -half, 0, 0, t, H, S + t, mat, { tag: 'wall' });
+  solid(parent, world, half, 0, 0, t, H, S + t, mat, { tag: 'wall' });
+}
 
-  /* ---------- central raised platform with ramps ---------- */
+/* Cut a doorway through a wall by splitting it into two segments + lintel. */
+function doorwayCut(parent, world, x, z, axis, len, h, thick) {
+  const idx = world.boxes.findIndex(b =>
+    Math.abs(((b.minX + b.maxX) / 2) - x) < .01 && Math.abs(((b.minZ + b.maxZ) / 2) - z) < .01 &&
+    Math.abs((b.maxY - b.minY) - h) < .01);
+  if (idx < 0) return;
+  const b = world.boxes[idx];
+  world.boxes.splice(idx, 1);
+  if (b.mesh) { parent.remove(b.mesh); b.mesh.geometry.dispose(); }
+  world.grid.clear();
+  world.boxes.forEach((bb, i) => world._insert(bb, i));
+
+  const gap = 4.2;
+  const seg = (len - gap) / 2;
+  const y = 0;
+  if (axis === 'z') {
+    solid(parent, world, x, y, z - (gap / 2 + seg / 2), thick, h, seg, MAT.brick, { tag: 'wall' });
+    solid(parent, world, x, y, z + (gap / 2 + seg / 2), thick, h, seg, MAT.brick, { tag: 'wall' });
+    solid(parent, world, x, y + h - .9, z, thick, .9, gap, MAT.brick, { tag: 'wall' });
+  } else {
+    solid(parent, world, x - (gap / 2 + seg / 2), y, z, seg, h, thick, MAT.brick, { tag: 'wall' });
+    solid(parent, world, x + (gap / 2 + seg / 2), y, z, seg, h, thick, MAT.brick, { tag: 'wall' });
+    solid(parent, world, x, y + h - .9, z, gap, .9, thick, MAT.brick, { tag: 'wall' });
+  }
+}
+
+/* ---------------- stepped ramp ---------------- */
+function makeRamp(parent, world, x, z, width, height, dir) {
+  const steps = Math.max(4, Math.ceil(height / 0.38));
+  const depth = height * 1.5;
+  for (let i = 0; i < steps; i++) {
+    const h = (i + 1) / steps * height;
+    const off = (i + .5) / steps * depth;
+    let px = x, pz = z;
+    let w = width, d = depth / steps + .02;
+    if (dir === 'south') { pz = z + off; w = width; d = depth / steps + .02; }
+    if (dir === 'north') { pz = z - off; }
+    if (dir === 'east') { px = x + off; w = depth / steps + .02; d = width; }
+    if (dir === 'west') { px = x - off; w = depth / steps + .02; d = width; }
+    solid(parent, world, px, 0, pz, w, h, d, MAT.concrete, { tag: 'ramp' });
+  }
+}
+
+/* ---------------- building with interior ---------------- */
+function buildBuilding(parent, world, cx, cz, w, d, h, site) {
+  const wall = .55;
+  const door = 3.4;
+  const hw = w / 2, hd = d / 2;
+  const mat = site ? MAT.brick : MAT.concrete;
+
+  solid(parent, world, cx - (door / 2 + (w - door) / 4), 0, cz - hd, (w - door) / 2, h, wall, mat, { tag: 'wall' });
+  solid(parent, world, cx + (door / 2 + (w - door) / 4), 0, cz - hd, (w - door) / 2, h, wall, mat, { tag: 'wall' });
+  solid(parent, world, cx, h - 1.1, cz - hd, door, 1.1, wall, mat, { tag: 'wall' });
+  solid(parent, world, cx - (door / 2 + (w - door) / 4), 0, cz + hd, (w - door) / 2, h, wall, mat, { tag: 'wall' });
+  solid(parent, world, cx + (door / 2 + (w - door) / 4), 0, cz + hd, (w - door) / 2, h, wall, mat, { tag: 'wall' });
+  solid(parent, world, cx, h - 1.1, cz + hd, door, 1.1, wall, mat, { tag: 'wall' });
+  solid(parent, world, cx - hw, 0, cz - (door / 2 + (d - door) / 4), wall, h, (d - door) / 2, mat, { tag: 'wall' });
+  solid(parent, world, cx - hw, 0, cz + (door / 2 + (d - door) / 4), wall, h, (d - door) / 2, mat, { tag: 'wall' });
+  solid(parent, world, cx - hw, h - 1.1, cz, wall, 1.1, door, mat, { tag: 'wall' });
+  solid(parent, world, cx + hw, 0, cz - (door / 2 + (d - door) / 4), wall, h, (d - door) / 2, mat, { tag: 'wall' });
+  solid(parent, world, cx + hw, 0, cz + (door / 2 + (d - door) / 4), wall, h, (d - door) / 2, mat, { tag: 'wall' });
+  solid(parent, world, cx + hw, h - 1.1, cz, wall, 1.1, door, mat, { tag: 'wall' });
+
+  solid(parent, world, cx, h, cz, w + .6, .5, d + .6, MAT.concrete, { tag: 'roof' });
+  decor(parent, cx, h + .5, cz - hd, w + .6, .8, .35, MAT.dark);
+  decor(parent, cx, h + .5, cz + hd, w + .6, .8, .35, MAT.dark);
+  decor(parent, cx - hw, h + .5, cz, .35, .8, d + .6, MAT.dark);
+  decor(parent, cx + hw, h + .5, cz, .35, .8, d + .6, MAT.dark);
+  const side = cz > 0 ? -1 : 1;
+  makeRamp(parent, world, cx, cz + side * (hd + 1.2), 3, h + .5, cz > 0 ? 'north' : 'south');
+
+  world.addBox(aabbFromCenter(cx, 1.1, cz, 3, 2.2, 1.2, 'cover'));
+  decor(parent, cx, 0, cz, 3, 2.2, 1.2, MAT.wood);
+
+  if (site) {
+    const l = new THREE.PointLight(0xffb050, 22, 22, 2);
+    l.position.set(cx, h - 1, cz);
+    parent.add(l);
+  }
+  return { cx, cz, w, d, h };
+}
+
+/* ---------------- watchtower ---------------- */
+function buildTower(parent, world, x, z) {
+  const legOff = 3.2, legH = 7.5;
+  [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(o => {
+    solid(parent, world, x + o[0] * legOff, 0, z + o[1] * legOff, .8, legH, .8, MAT.wood, { tag: 'cover' });
+  });
+  solid(parent, world, x, legH, z, legOff * 2 + 1.2, .7, legOff * 2 + 1.2, MAT.wood, { tag: 'deck' });
+  const R = legOff + .6;
+  decor(parent, x, legH + .7, z - R, R * 2, 1.1, .25, MAT.wood);
+  decor(parent, x, legH + .7, z + R, R * 2, 1.1, .25, MAT.wood);
+  decor(parent, x - R, legH + .7, z, .25, 1.1, R * 2, MAT.wood);
+  decor(parent, x + R, legH + .7, z, .25, 1.1, R * 2, MAT.wood);
+  solid(parent, world, x, legH + 3.2, z, R * 2 + 2, .45, R * 2 + 2, MAT.metal, { tag: 'roof' });
+  [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(o => {
+    solid(parent, world, x + o[0] * R, legH + .7, z + o[1] * R, .4, 2.5, .4, MAT.wood, { tag: 'cover' });
+  });
+  makeRamp(parent, world, x, z + legOff + 2.2, 3, legH + .7, 'north');
+}
+
+/* ---------------- barrel mesh ---------------- */
+function barrelMesh(parent, world, x, z) {
+  const g = new THREE.CylinderGeometry(.48, .48, 1.15, 12);
+  const m = new THREE.Mesh(g, MAT.metal);
+  m.position.set(x, .575, z);
+  m.castShadow = true; m.receiveShadow = true;
+  parent.add(m);
+  const ring = new THREE.Mesh(new THREE.CylinderGeometry(.51, .51, .12, 12), MAT.dark);
+  ring.position.set(x, .82, z); parent.add(ring);
+  const ring2 = ring.clone(); ring2.position.y = .32; parent.add(ring2);
+  world.addBox(AABB(x - .48, 0, z - .48, x + .48, 1.15, z + .48, 'cover'));
+  return m;
+}
+
+/* container: 2.9 m tall, climbable from a crate, solid wall from the ground */
+function container(parent, world, x, z, rot, len) {
+  len = len || 12;
+  const w = 2.9, h = 2.9;
+  solid(parent, world, x, 0, z, rot ? w : len, h, rot ? len : w, MAT.metal, { tag: 'cover' });
+  decor(parent, x + (rot ? 0 : len / 2 - .06), h / 2, z + (rot ? len / 2 - .06 : 0),
+    rot ? w + .1 : .12, h, rot ? .12 : w + .1, MAT.dark);
+}
+
+function sandbag(parent, world, x, z, len, rot) {
+  for (let i = 0; i < len; i++) {
+    const ox = rot ? 0 : (i - len / 2 + .5) * 1.15;
+    const oz = rot ? (i - len / 2 + .5) * 1.15 : 0;
+    solid(parent, world, x + ox, 0, z + oz, 1.15, .72, 1.15, MAT.sand, { tag: 'cover' });
+    if (i % 2 === 0) solid(parent, world, x + ox, .72, z + oz, 1.15, .72, 1.15, MAT.sand, { tag: 'cover' });
+  }
+}
+
+/* ============================================================
+   MAP 1 — BANANA ARENA (the original layout)
+   ============================================================ */
+function buildMapArena(parent, world) {
+  mapGround(parent, world);
+  mapPerimeter(parent, world);
+
   const PH = 2.6, PS = 20;
-  solid(scene, world, 0, 0, 0, PS, PH, PS, MAT.concrete, { tag: 'plat' });
-  // decorative edge trim
-  decor(scene, 0, PH, PS / 2 - .3, PS, .35, .6, MAT.dark);
-  decor(scene, 0, PH, -PS / 2 + .3, PS, .35, .6, MAT.dark);
-  decor(scene, PS / 2 - .3, PH, 0, .6, .35, PS, MAT.dark);
-  decor(scene, -PS / 2 + .3, PH, 0, .6, .35, PS, MAT.dark);
-  // ramps (stepped so collision is simple and reliable)
-  makeRamp(scene, world, 0, PS / 2, 4, PH, 'south');
-  makeRamp(scene, world, 0, -PS / 2, 4, PH, 'north');
-  makeRamp(scene, world, PS / 2, 0, 4, PH, 'east');
-  makeRamp(scene, world, -PS / 2, 0, 4, PH, 'west');
-  // platform cover
-  solid(scene, world, 0, PH, 0, 3.2, 1.5, 3.2, MAT.metal, { tag: 'cover' });
-  solid(scene, world, 6.4, PH, 6.4, 1.8, 2.2, 1.8, MAT.wood, { tag: 'cover' });
-  solid(scene, world, -6.4, PH, -6.4, 1.8, 2.2, 1.8, MAT.wood, { tag: 'cover' });
+  solid(parent, world, 0, 0, 0, PS, PH, PS, MAT.concrete, { tag: 'plat' });
+  decor(parent, 0, PH, PS / 2 - .3, PS, .35, .6, MAT.dark);
+  decor(parent, 0, PH, -PS / 2 + .3, PS, .35, .6, MAT.dark);
+  decor(parent, PS / 2 - .3, PH, 0, .6, .35, PS, MAT.dark);
+  decor(parent, -PS / 2 + .3, PH, 0, .6, .35, PS, MAT.dark);
+  makeRamp(parent, world, 0, PS / 2, 4, PH, 'south');
+  makeRamp(parent, world, 0, -PS / 2, 4, PH, 'north');
+  makeRamp(parent, world, PS / 2, 0, 4, PH, 'east');
+  makeRamp(parent, world, -PS / 2, 0, 4, PH, 'west');
+  solid(parent, world, 0, PH, 0, 3.2, 1.5, 3.2, MAT.metal, { tag: 'cover' });
+  solid(parent, world, 6.4, PH, 6.4, 1.8, 2.2, 1.8, MAT.wood, { tag: 'cover' });
+  solid(parent, world, -6.4, PH, -6.4, 1.8, 2.2, 1.8, MAT.wood, { tag: 'cover' });
 
-  /* ---------- four corner buildings ---------- */
-  const bd = 22;  // building offset
-  buildBuilding(scene, world, -bd, -bd, 18, 14, 5.2, 'A');
-  buildBuilding(scene, world, bd, bd, 18, 14, 5.2, 'B');
-  buildBuilding(scene, world, -bd, bd, 16, 12, 4.6, null);
-  buildBuilding(scene, world, bd, -bd, 16, 12, 4.6, null);
+  const bd = 22;
+  buildBuilding(parent, world, -bd, -bd, 18, 14, 5.2, 'A');
+  buildBuilding(parent, world, bd, bd, 18, 14, 5.2, 'B');
+  buildBuilding(parent, world, -bd, bd, 16, 12, 4.6, null);
+  buildBuilding(parent, world, bd, -bd, 16, 12, 4.6, null);
 
-  /* ---------- long cover walls (mid lanes) ---------- */
-  solid(scene, world, -34, 0, 0, 2, 3.4, 30, MAT.brick, { tag: 'wall' });
-  solid(scene, world, 34, 0, 0, 2, 3.4, 30, MAT.brick, { tag: 'wall' });
-  solid(scene, world, 0, 0, -34, 30, 3.4, 2, MAT.brick, { tag: 'wall' });
-  solid(scene, world, 0, 0, 34, 30, 3.4, 2, MAT.brick, { tag: 'wall' });
+  solid(parent, world, -34, 0, 0, 2, 3.4, 30, MAT.brick, { tag: 'wall' });
+  solid(parent, world, 34, 0, 0, 2, 3.4, 30, MAT.brick, { tag: 'wall' });
+  solid(parent, world, 0, 0, -34, 30, 3.4, 2, MAT.brick, { tag: 'wall' });
+  solid(parent, world, 0, 0, 34, 30, 3.4, 2, MAT.brick, { tag: 'wall' });
+  doorwayCut(parent, world, -34, 0, 'z', 30, 3.4, 2);
+  doorwayCut(parent, world, 34, 0, 'z', 30, 3.4, 2);
+  doorwayCut(parent, world, 0, -34, 'x', 30, 3.4, 2);
+  doorwayCut(parent, world, 0, 34, 'x', 30, 3.4, 2);
 
-  // gaps through the long walls (doorways)
-  world.boxes.forEach(b => { }); // (walls above are continuous — open doorways handled by segments instead)
-  // carve doorways by adding shorter segments: replace via explicit segments
-  // (we instead cut them visually with lintels below)
-  doorwayCut(scene, world, -34, 0, 'z', 30, 3.4, 2);
-  doorwayCut(scene, world, 34, 0, 'z', 30, 3.4, 2);
-  doorwayCut(scene, world, 0, -34, 'x', 30, 3.4, 2);
-  doorwayCut(scene, world, 0, 34, 'x', 30, 3.4, 2);
+  container(parent, world, -14, 32, false, 13);
+  container(parent, world, 20, -36, true, 11);
+  container(parent, world, -40, -18, true, 12);
+  container(parent, world, 38, 16, false, 12);
+  container(parent, world, -8, -46, false, 10);
 
-  /* ---------- shipping containers (cover) ---------- */
-  const cont = (x, z, rot, len) => {
-    len = len || 12;
-    const w = 2.9, h = 2.9;
-    solid(scene, world, x, 0, z, rot ? w : len, h, rot ? len : w, MAT.metal, { tag: 'cover' });
-    // stripes / door lines
-    decor(scene, x + (rot ? 0 : len / 2 - .06), h / 2, z + (rot ? len / 2 - .06 : 0), rot ? w + .1 : .12, h, rot ? .12 : w + .1, MAT.dark);
-  };
-  cont(-14, 32, false, 13); cont(20, -36, true, 11);
-  cont(-40, -18, true, 12); cont(38, 16, false, 12);
-  cont(-8, -46, false, 10);
-
-  /* ---------- crates & barrels (stackable cover) ---------- */
   const rng = makeRng(90210);
   for (let i = 0; i < 40; i++) {
     const x = (rng() * 2 - 1) * 42, z = (rng() * 2 - 1) * 42;
     if (Math.hypot(x, z) < 15) continue;
     if (world.overlaps(x, .1, z, 1.3, 1.3)) continue;
     const s = .95 + rng() * .35;
-    solid(scene, world, x, 0, z, s, s, s, MAT.wood, { tag: 'cover' });
-    if (rng() < .45) solid(scene, world, x + s * .1, s, z - s * .1, s * .85, s * .85, s * .85, MAT.wood, { tag: 'cover' });
+    solid(parent, world, x, 0, z, s, s, s, MAT.wood, { tag: 'cover' });
+    if (rng() < .45) solid(parent, world, x + s * .1, s, z - s * .1, s * .85, s * .85, s * .85, MAT.wood, { tag: 'cover' });
   }
   for (let i = 0; i < 22; i++) {
     const x = (rng() * 2 - 1) * 44, z = (rng() * 2 - 1) * 44;
     if (Math.hypot(x, z) < 15) continue;
     if (world.overlaps(x, .1, z, 1.1, 1.2)) continue;
-    const b = barrelMesh(scene, x, z);
-    world.addBox(AABB(x - .48, 0, z - .48, x + .48, 1.15, z + .48, 'cover'));
+    barrelMesh(parent, world, x, z);
   }
 
-  /* ---------- sandbag emplacements ---------- */
-  const bag = (x, z, len, rot) => {
-    for (let i = 0; i < len; i++) {
-      const ox = rot ? 0 : (i - len / 2 + .5) * 1.15;
-      const oz = rot ? (i - len / 2 + .5) * 1.15 : 0;
-      solid(scene, world, x + ox, 0, z + oz, 1.15, .72, 1.15, MAT.sand, { tag: 'cover' });
-      if (i % 2 === 0) solid(scene, world, x + ox, .72, z + oz, 1.15, .72, 1.15, MAT.sand, { tag: 'cover' });
-    }
-  };
-  bag(-18, -20, 5, false); bag(18, 20, 5, false);
-  bag(-18, 20, 4, false); bag(18, -20, 4, false);
-  bag(-44, 8, 6, true); bag(44, -8, 6, true);
+  sandbag(parent, world, -18, -20, 5, false);
+  sandbag(parent, world, 18, 20, 5, false);
+  sandbag(parent, world, -18, 20, 4, false);
+  sandbag(parent, world, 18, -20, 4, false);
+  sandbag(parent, world, -44, 8, 6, true);
+  sandbag(parent, world, 44, -8, 6, true);
 
-  /* ---------- pillars ---------- */
   [[-26, -26], [26, 26], [-26, 26], [26, -26]].forEach(p => {
-    solid(scene, world, p[0], 0, p[1], 2.2, 6.5, 2.2, MAT.concrete, { tag: 'cover' });
-    solid(scene, world, p[0], 6.5, p[1], 3.2, .5, 3.2, MAT.dark, { tag: 'cover' });
+    solid(parent, world, p[0], 0, p[1], 2.2, 6.5, 2.2, MAT.concrete, { tag: 'cover' });
+    solid(parent, world, p[0], 6.5, p[1], 3.2, .5, 3.2, MAT.dark, { tag: 'cover' });
   });
 
-  /* ---------- watchtower (verticality) ---------- */
-  buildTower(scene, world, 0, -44);
+  buildTower(parent, world, 0, -44);
 
-  /* ---------- bomb site markers (decorative, CS flavour) ---------- */
-  const siteMesh = (mat, x, z, s) => {
-    const m = new THREE.Mesh(new THREE.PlaneGeometry(s, s), mat);
-    m.rotation.x = -Math.PI / 2;
-    m.position.set(x, .02, z);
-    m.renderOrder = 1;
-    scene.add(m);
-  };
-  siteMesh(MAT.siteA, -20, -20, 9);
-  siteMesh(MAT.siteB, 20, 20, 9);
+  siteMesh(parent, MAT.siteA, -20, -20, 9);
+  siteMesh(parent, MAT.siteB, 20, 20, 9);
   MAP.sites = { A: { x: -20, z: -20 }, B: { x: 20, z: 20 } };
+}
 
-  /* ---------- lighting ---------- */
-  buildLighting(scene, quality);
+/* ============================================================
+   MAP 2 — WAREHOUSE: shelf rows, a loading dock and a mezzanine
+   ============================================================ */
+function buildMapWarehouse(parent, world) {
+  mapGround(parent, world, { tint: 0xc9ccc4 });
+  mapPerimeter(parent, world, MAT.concrete);
 
-  /* ---------- sky dome ----------
-     The sphere must stay comfortably inside the camera's far plane, otherwise
-     it is clipped and looking up at an empty angle renders pure black.
-     The camera sits inside the arena (±52) so the radius also has to exceed
-     that plus the far-plane margin. 340 is comfortably within far = 420. */
-  {
-    const skyGeo = new THREE.SphereGeometry(340, 32, 20);
-    const skyMat = new THREE.MeshBasicMaterial({
-      map: canvasTexture(TEXTURES.sky, 1, 1),
-      side: THREE.BackSide,
-      fog: false,
-      depthWrite: false
-    });
-    skyMat.map.repeat.set(1, 1);
-    const sky = new THREE.Mesh(skyGeo, skyMat);
-    sky.renderOrder = -1000;          // always drawn behind the world
-    sky.frustumCulled = false;        // never skipped, even at odd angles
-    scene.add(sky);
-    scene.userData.sky = sky;
+  // loading dock along the north wall, reachable by two ramps
+  solid(parent, world, 0, 0, -36, 60, 1.7, 14, MAT.concrete, { tag: 'plat' });
+  makeRamp(parent, world, -18, -28.4, 5, 1.7, 'south');
+  makeRamp(parent, world, 18, -28.4, 5, 1.7, 'south');
+  solid(parent, world, -18, 1.7, -36, 3, 1.0, 8, MAT.metal, { tag: 'cover' });
+  solid(parent, world, 18, 1.7, -36, 3, 1.0, 8, MAT.metal, { tag: 'cover' });
+
+  // long shelf rows split by a central cross aisle
+  for (let i = 0; i < 6; i++) {
+    const x = -30 + i * 12;
+    solid(parent, world, x, 0, -14, 1.5, 4.3, 17, MAT.metal, { tag: 'cover' });
+    solid(parent, world, x, 0, 15, 1.5, 4.3, 16, MAT.metal, { tag: 'cover' });
+    // a low shelf section so you can climb onto the rack
+    solid(parent, world, x, 2.2, -6.5, 1.5, 1.0, 3.0, MAT.wood, { tag: 'cover' });
+  }
+  // cross shelves
+  for (let k = -1; k <= 1; k++) {
+    const z = k * 8;
+    solid(parent, world, -24, 0, z, 20, 3.4, 1.5, MAT.metal, { tag: 'cover' });
+    solid(parent, world, 24, 0, z, 20, 3.4, 1.5, MAT.metal, { tag: 'cover' });
   }
 
-  /* ---------- spawn points ----------
-     Validated against the world so nobody ever spawns inside geometry. */
+  // mezzanine in the south-east corner
+  solid(parent, world, 34, 0, 34, 20, 3.0, 20, MAT.concrete, { tag: 'plat' });
+  makeRamp(parent, world, 34, 21.6, 5, 3.0, 'south');
+  solid(parent, world, 34, 3.0, 34, 2.4, 1.2, 10, MAT.wood, { tag: 'cover' });
+
+  // crate / pallet clutter
+  const rng = makeRng(5150);
+  for (let i = 0; i < 46; i++) {
+    const x = (rng() * 2 - 1) * 44, z = (rng() * 2 - 1) * 44;
+    if (Math.abs(z) < 10 && Math.abs(x) < 40) continue;
+    if (world.overlaps(x, .1, z, 1.4, 1.4)) continue;
+    const s = 1.0 + rng() * .5;
+    solid(parent, world, x, 0, z, s, s, s, MAT.wood, { tag: 'cover' });
+    if (rng() < .5) solid(parent, world, x, s, z, s * .9, s * .9, s * .9, MAT.wood, { tag: 'cover' });
+  }
+  for (let i = 0; i < 16; i++) {
+    const x = (rng() * 2 - 1) * 44, z = (rng() * 2 - 1) * 44;
+    if (world.overlaps(x, .1, z, 1.1, 1.2)) continue;
+    barrelMesh(parent, world, x, z);
+  }
+
+  sandbag(parent, world, -44, -20, 5, true);
+  sandbag(parent, world, 44, 20, 5, true);
+
+  buildTower(parent, world, -42, 42);
+
+  siteMesh(parent, MAT.siteA, -34, 30, 8);
+  siteMesh(parent, MAT.siteB, 36, -6, 8);
+  MAP.sites = { A: { x: -34, z: 30 }, B: { x: 36, z: -6 } };
+}
+
+/* ============================================================
+   MAP 3 — TOWERS: verticality, four corner towers joined by catwalks
+   ============================================================ */
+function buildMapTowers(parent, world) {
+  mapGround(parent, world);
+  mapPerimeter(parent, world);
+
+  // four corner towers with decks at ~6 m
+  const T = [[-34, -34], [34, -34], [-34, 34], [34, 34]];
+  T.forEach(t => buildTower(parent, world, t[0], t[1]));
+
+  // catwalks joining adjacent towers (solid decks with rails). They are well
+  // above the nav sample window, so the arena floor stays walkable underneath.
+  const deckH = 6.5, deckW = 3.2;
+  const edge = (x, z, w, d) => {
+    solid(parent, world, x, deckH, z, w, .55, d, MAT.metal, { tag: 'deck' });
+    if (w > d) {
+      decor(parent, x, deckH + .55, z - d / 2 + .2, w, 1.0, .25, MAT.metal);
+      decor(parent, x, deckH + .55, z + d / 2 - .2, w, 1.0, .25, MAT.metal);
+    } else {
+      decor(parent, x - w / 2 + .2, deckH + .55, z, .25, 1.0, d, MAT.metal);
+      decor(parent, x + w / 2 - .2, deckH + .55, z, .25, 1.0, d, MAT.metal);
+    }
+  };
+  edge(0, -34, 68, deckW);
+  edge(0, 34, 68, deckW);
+  edge(-34, 0, deckW, 68);
+  edge(34, 0, deckW, 68);
+
+  // central raised bunker with ramps (an objective point)
+  solid(parent, world, 0, 0, 0, 16, 2.4, 16, MAT.concrete, { tag: 'plat' });
+  makeRamp(parent, world, 0, 10.2, 5, 2.4, 'south');
+  makeRamp(parent, world, 0, -10.2, 5, 2.4, 'north');
+  solid(parent, world, 0, 2.4, 0, 4, 1.6, 4, MAT.metal, { tag: 'cover' });
+
+  // ground cover so the open floor is not a killing field
+  container(parent, world, -14, 10, false, 12);
+  container(parent, world, 14, -10, true, 12);
+  const rng = makeRng(3110);
+  for (let i = 0; i < 34; i++) {
+    const x = (rng() * 2 - 1) * 42, z = (rng() * 2 - 1) * 42;
+    if (Math.abs(x) < 12 && Math.abs(z) < 12) continue;
+    if (world.overlaps(x, .1, z, 1.3, 1.3)) continue;
+    const s = .95 + rng() * .4;
+    solid(parent, world, x, 0, z, s, s, s, MAT.wood, { tag: 'cover' });
+  }
+  sandbag(parent, world, -20, 0, 4, true);
+  sandbag(parent, world, 20, 0, 4, true);
+  sandbag(parent, world, 0, -20, 4, false);
+  sandbag(parent, world, 0, 20, 4, false);
+
+  siteMesh(parent, MAT.siteA, 0, -24, 8);
+  siteMesh(parent, MAT.siteB, 0, 24, 8);
+  MAP.sites = { A: { x: 0, z: -24 }, B: { x: 0, z: 24 } };
+}
+
+/* ============================================================
+   MAP 4 — CRATES: a climbable crate maze (the vaulting playground)
+   ============================================================ */
+function buildMapCrates(parent, world) {
+  mapGround(parent, world, { tint: 0xc6c0b2 });
+  mapPerimeter(parent, world, MAT.brick);
+
+  // A grid of stacked crates with wide corridors between blocks. Blocks are kept
+  // modest in height (1–2 crates) so the floor plan stays open and connected.
+  const rng = makeRng(7777);
+  const block = (cx, cz) => {
+    const s = 1.15;
+    const h = 1 + Math.floor(rng() * 2);           // 1 or 2 crates tall
+    for (let iy = 0; iy < h; iy++) {
+      for (let ix = -1; ix <= 1; ix++) {
+        for (let iz = -1; iz <= 1; iz++) {
+          if (iy === h - 1 && rng() < .45 && (ix !== 0 || iz !== 0)) continue;
+          solid(parent, world, cx + ix * s, iy * s, cz + iz * s, s * .94, s * .94, s * .94, MAT.wood, { tag: 'cover' });
+        }
+      }
+    }
+  };
+  for (let gx = -2; gx <= 2; gx++) {
+    for (let gz = -2; gz <= 2; gz++) {
+      const x = gx * 18, z = gz * 18;
+      if (Math.hypot(x, z) < 10) continue;          // keep a clear centre
+      block(x, z);
+    }
+  }
+
+  // centre: a stepped pyramid you can climb to the top of (0.55 m steps keep it
+  // walkable for the player AND navigable for the horde)
+  for (let k = 0; k < 8; k++) {
+    const size = 12 - k * 1.35;
+    solid(parent, world, 0, k * 0.55, 0, size, 0.55, size, MAT.concrete, { tag: 'plat' });
+  }
+
+  // sandbag lines and a few tall pillars for sightline breaks
+  sandbag(parent, world, -40, -40, 6, false);
+  sandbag(parent, world, 40, 40, 6, false);
+  sandbag(parent, world, -40, 40, 6, true);
+  sandbag(parent, world, 40, -40, 6, true);
+  [[-30, 0], [30, 0], [0, -30], [0, 30]].forEach(p => {
+    solid(parent, world, p[0], 0, p[1], 2.0, 5.0, 2.0, MAT.concrete, { tag: 'cover' });
+  });
+  container(parent, world, -30, 24, false, 12);
+  container(parent, world, 30, -24, true, 12);
+
+  siteMesh(parent, MAT.siteA, -18, -18, 8);
+  siteMesh(parent, MAT.siteB, 18, 18, 8);
+  MAP.sites = { A: { x: -18, z: -18 }, B: { x: 18, z: 18 } };
+}
+
+/* ============================================================
+   MAP 5 — DESERT: open dunes, rocks and ruins (long sightlines)
+   ============================================================ */
+function buildMapDesert(parent, world) {
+  mapGround(parent, world, { tint: 0xd9c48d });
+  mapPerimeter(parent, world, MAT.sand);
+
+  const rng = makeRng(4242);
+  // low dunes: wide, gently stepped platforms
+  for (let i = 0; i < 26; i++) {
+    const x = (rng() * 2 - 1) * 44, z = (rng() * 2 - 1) * 44;
+    if (Math.hypot(x, z) < 8) continue;
+    if (world.overlaps(x, .1, z, 4.5, 1.0)) continue;
+    const w = 7 + rng() * 9, d = 7 + rng() * 9, h = .7 + rng() * .9;
+    solid(parent, world, x, 0, z, w, h, d, MAT.sand, { tag: 'cover' });
+  }
+  // rock formations: tall, unclimbable cover
+  for (let i = 0; i < 14; i++) {
+    const x = (rng() * 2 - 1) * 42, z = (rng() * 2 - 1) * 42;
+    if (Math.hypot(x, z) < 10) continue;
+    if (world.overlaps(x, .1, z, 3.4, 3)); continue;
+    const w = 2.6 + rng() * 3.4, d = 2.6 + rng() * 3.4, h = 4.2 + rng() * 3.2;
+    solid(parent, world, x, 0, z, w, h, d, MAT.brick, { tag: 'wall' });
+    solid(parent, world, x, h, z, w * .8, .4, d * .8, MAT.sand, { tag: 'cover' });
+  }
+
+  // ruined compound in the north
+  const rx = 0, rz = -36;
+  solid(parent, world, rx - 14, 0, rz, 20, 3.6, 1.8, MAT.brick, { tag: 'wall' });
+  solid(parent, world, rx + 14, 0, rz, 20, 3.6, 1.8, MAT.brick, { tag: 'wall' });
+  solid(parent, world, rx, 0, rz - 0, 1.8, 3.6, 10, MAT.brick, { tag: 'wall' });
+  solid(parent, world, rx, 0, rz + 12, 34, 3.6, 1.8, MAT.brick, { tag: 'wall' });
+  doorwayCut(parent, world, rx, rz + 12, 'x', 34, 3.6, 1.8);
+  solid(parent, world, rx, 0, rz + 4, 6, 2.2, 6, MAT.concrete, { tag: 'plat' });
+  makeRamp(parent, world, rx + 5, rz + 4, 3.5, 2.2, 'east');
+
+  // a wrecked container and a water tower
+  container(parent, world, -30, 30, false, 12);
+  buildTower(parent, world, 34, 26);
+
+  sandbag(parent, world, -10, 24, 5, false);
+  sandbag(parent, world, 12, 20, 5, false);
+  sandbag(parent, world, -26, -6, 5, true);
+
+  siteMesh(parent, MAT.siteA, -26, 6, 8);
+  siteMesh(parent, MAT.siteB, 30, -14, 8);
+  MAP.sites = { A: { x: -26, z: 6 }, B: { x: 30, z: -14 } };
+}
+
+/* ---------------- bomb site marker ---------------- */
+function siteMesh(parent, mat, x, z, s) {
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(s, s), mat);
+  m.rotation.x = -Math.PI / 2;
+  m.position.set(x, .02, z);
+  m.renderOrder = 1;
+  parent.add(m);
+  return m;
+}
+
+/* ---------------- registry ---------------- */
+const MAPS = [
+  { id: 'arena',     name: 'БАНАНОВАЯ АРЕНА', short: 'АРЕНА',   desc: 'Центральная платформа и четыре здания', build: buildMapArena },
+  { id: 'warehouse', name: 'СКЛАД',           short: 'СКЛАД',   desc: 'Стеллажи, пандус и антресоль',          build: buildMapWarehouse },
+  { id: 'towers',    name: 'ВЫШКИ',           short: 'ВЫШКИ',   desc: 'Вертикальный бой: вышки и мосты',       build: buildMapTowers },
+  { id: 'crates',    name: 'ЯЩИКИ',           short: 'ЯЩИКИ',   desc: 'Лабиринт из ящиков — залезай и стреляй', build: buildMapCrates },
+  { id: 'desert',    name: 'ПУСТЫНЯ',         short: 'ПУСТЫНЯ', desc: 'Дюны, скалы и руины',                   build: buildMapDesert }
+];
+
+function mapById(id) {
+  return MAPS.find(m => m.id === id) || MAPS[0];
+}
+
+/* ============================================================
+   BUILD / REBUILD
+   ============================================================ */
+function disposeGroupDeep(g) {
+  if (!g) return;
+  g.traverse(o => {
+    if (o.geometry) o.geometry.dispose();
+  });
+}
+
+function buildMap(scene, quality, mapId) {
+  MAP.scene = scene;
+  MAP.id = mapById(mapId).id;
+  MAP.def = mapById(mapId);
+
+  // tear down the previous arena (everything lives under MAP.group)
+  if (MAP.group) {
+    scene.remove(MAP.group);
+    disposeGroupDeep(MAP.group);
+  }
+
+  buildMaterials();
+
+  const group = MAP.group = new THREE.Group();
+  scene.add(group);
+  const world = MAP.world = new CollisionWorld();
+
+  MAP.playerSpawns = [];
+  MAP.zombieSpawns = [];
+  MAP.sites = {};
+  MAP.aimRoom = null;
+
+  MAP.def.build(group, world);
+
+  buildAimRoom(group, world);
+  buildLighting(group, quality);
+  buildSky(group);
+
+  MAP.nav = buildNav(world, MAP);
+
+  scene.fog = new THREE.FogExp2(MAP.def.fog || 0xbcc6cf, MAP.def.fogDensity || 0.0055);
+
+  computeSpawns(world);
+  return MAP;
+}
+
+function buildSky(parent) {
+  const skyGeo = new THREE.SphereGeometry(340, 32, 20);
+  const skyMat = new THREE.MeshBasicMaterial({
+    map: canvasTexture(TEXTURES.sky, 1, 1),
+    side: THREE.BackSide,
+    fog: false,
+    depthWrite: false
+  });
+  skyMat.map.repeat.set(1, 1);
+  const sky = new THREE.Mesh(skyGeo, skyMat);
+  sky.renderOrder = -1000;
+  sky.frustumCulled = false;
+  parent.add(sky);
+  parent.userData.sky = sky;
+}
+
+/* player + zombie spawns, validated against the world */
+function computeSpawns(world) {
   const clearAt = (x, z, radius, height) => {
     const g = world.groundAt(x, z, 3);
     if (g === null || g === undefined) return false;
     if (Math.abs(g) > 0.001) return false;          // must be on the flat arena floor
     if (world.overlaps(x, g + 0.06, z, radius, height)) return false;
-    // keep clear of other structures horizontally too
     return !world.overlaps(x, g + 0.06, z, radius + 0.5, height * 0.5);
   };
 
-  const candidates = [
-    { x: 0, z: 42 }, { x: 42, z: 0 }, { x: 0, z: -36 }, { x: -42, z: 0 },
-    { x: -30, z: 30 }, { x: 30, z: -30 }, { x: 30, z: 30 }, { x: -30, z: -30 },
-    { x: 0, z: 30 }, { x: 30, z: 0 }, { x: 0, z: -30 }, { x: -30, z: 0 },
-    { x: 18, z: 42 }, { x: -18, z: 42 }, { x: 42, z: 18 }, { x: 42, z: -18 },
-    { x: 18, z: -36 }, { x: -18, z: -36 }
-  ];
+  const candidates = [];
+  for (let i = 0; i < 12; i++) {
+    const a = (i / 12) * Math.PI * 2;
+    candidates.push({ x: Math.cos(a) * 42, z: Math.sin(a) * 42 });
+  }
+  candidates.push({ x: 0, z: 42 }, { x: 42, z: 0 }, { x: 0, z: -40 }, { x: -42, z: 0 });
+  candidates.push({ x: -30, z: 30 }, { x: 30, z: -30 }, { x: 30, z: 30 }, { x: -30, z: -30 });
+
   MAP.playerSpawns = [];
-  for (let i = 0; i < candidates.length && MAP.playerSpawns.length < 8; i++) {
+  for (let i = 0; i < candidates.length && MAP.playerSpawns.length < 10; i++) {
     const c = candidates[i];
     if (!clearAt(c.x, c.z, CFG.playerRadius + 0.05, CFG.playerHeight)) continue;
-    // require some separation from already-chosen spawns
     if (MAP.playerSpawns.some(s => Math.hypot(s.x - c.x, s.z - c.z) < 9)) continue;
     MAP.playerSpawns.push({ x: c.x, y: 0, z: c.z });
   }
   if (MAP.playerSpawns.length === 0) MAP.playerSpawns.push({ x: 0, y: 0, z: 42 });
   MAP.spawns = MAP.playerSpawns.map(p => ({ x: p.x, z: p.z }));
 
-  /* zombie spawn ring — keep only points that are actually standable */
   MAP.zombieSpawns = [];
   for (let i = 0; i < 36; i++) {
     const a = (i / 36) * Math.PI * 2;
@@ -1745,92 +2281,84 @@ function buildMap(scene, world, quality) {
   if (MAP.zombieSpawns.length < 6) {
     MAP.zombieSpawns = [{ x: 0, z: 42 }, { x: 42, z: 0 }, { x: 0, z: -36 }, { x: -42, z: 0 }];
   }
+  // Prefer spawn points the horde can actually walk from. A point sealed in by
+  // geometry would spawn a zombie that just presses against a rock forever.
+  if (MAP.nav) {
+    const good = MAP.zombieSpawns.filter(s => MAP.nav.ok(MAP.nav.nearest(s.x, s.z)));
+    if (good.length >= 6) MAP.zombieSpawns = good;
+  }
   MAP.spawnReport = {
     players: MAP.playerSpawns.map(s => '(' + s.x + ',' + s.z + ')').join(' '),
     zombies: MAP.zombieSpawns.length
   };
-
-  /* ---------- aim-training room (outside the arena) ---------- */
-  buildAimRoom(scene, world);
-
-  /* ---------- navigation grid ---------- */
-  MAP.nav = buildNav(world, MAP);
-  return MAP;
 }
 
 /* ============================================================
    AIM-TRAINING ROOM
-   A sealed room outside the arena, used by the test range. It is built once with
-   the map so it costs nothing at runtime. `MAP.aimRoom` describes its bounds and
-   the entry point the player is placed at.
+   A sealed room outside the arena, used by the test range. It is rebuilt with
+   the map (cheap) and `MAP.aimRoom` describes its bounds and entry point.
    ============================================================ */
-function buildAimRoom(scene, world) {
-  const cx = 0, cz = -84;                 // room centre
-  const halfW = 15, halfD = 22;           // interior half-extents
-  const H = 8, T = 1.6;                   // wall height / thickness
+function buildAimRoom(parent, world) {
+  const cx = 0, cz = -84;
+  const halfW = 15, halfD = 22;
+  const H = 8, T = 1.6;
   const minX = cx - halfW, maxX = cx + halfW;
   const minZ = cz - halfD, maxZ = cz + halfD;
-  const S = MAP.size;
 
-  // floor (top at y = 0, same as the arena)
-  solid(scene, world, cx, -2, cz, halfW * 2 + T * 2, 2, halfD * 2 + T * 2,
-    MAT.floor, { tag: 'ground', noShadow: true });
+  world.addBox(AABB(cx - (halfW + T), -2, cz - (halfD + T), cx + (halfW + T), 0, cz + (halfD + T), 'ground'));
+  const gpMat = MAT.floor.clone();
+  gpMat.map = canvasTexture(TEXTURES.floor, 4, 4);
+  const gp = new THREE.Mesh(new THREE.PlaneGeometry(halfW * 2 + T * 2, halfD * 2 + T * 2), gpMat);
+  gp.rotation.x = -Math.PI / 2;
+  gp.position.set(cx, .01, cz);
+  gp.receiveShadow = true;
+  parent.add(gp);
 
-  // side walls
-  solid(scene, world, minX - T / 2, 0, cz, T, H, halfD * 2 + T * 2, MAT.concrete, { tag: 'wall' });
-  solid(scene, world, maxX + T / 2, 0, cz, T, H, halfD * 2 + T * 2, MAT.concrete, { tag: 'wall' });
-  // far / near walls
-  solid(scene, world, cx, 0, minZ - T / 2, halfW * 2 + T * 2, H, T, MAT.concrete, { tag: 'wall' });
-  solid(scene, world, cx, 0, maxZ + T / 2, halfW * 2 + T * 2, H, T, MAT.concrete, { tag: 'wall' });
+  solid(parent, world, minX - T / 2, 0, cz, T, H, halfD * 2 + T * 2, MAT.concrete, { tag: 'wall' });
+  solid(parent, world, maxX + T / 2, 0, cz, T, H, halfD * 2 + T * 2, MAT.concrete, { tag: 'wall' });
+  solid(parent, world, cx, 0, minZ - T / 2, halfW * 2 + T * 2, H, T, MAT.concrete, { tag: 'wall' });
+  solid(parent, world, cx, 0, maxZ + T / 2, halfW * 2 + T * 2, H, T, MAT.concrete, { tag: 'wall' });
 
-  // ceiling (decorative only) so it reads as an indoor room
   const roof = new THREE.Mesh(
     new THREE.BoxGeometry(halfW * 2 + T * 2, .5, halfD * 2 + T * 2),
     MAT.dark
   );
   roof.position.set(cx, H + .25, cz);
   roof.castShadow = false; roof.receiveShadow = true;
-  scene.add(roof);
+  parent.add(roof);
 
-  /* The room is roofed, so the arena sun is shadowed out of it. Give it its own
-     lighting — but three.js lights are GLOBAL, so these must be switched off
-     while the player is in the arena, otherwise the whole map gets brighter.
-     `MAP.aimRoom.lights` holds them for the game to toggle. */
   const roomHemi = new THREE.HemisphereLight(0xdfe9f5, 0x8a8070, 2.4);
   roomHemi.position.set(cx, H * .6, cz);
-  scene.add(roomHemi);
+  parent.add(roomHemi);
 
   const roomSun = new THREE.DirectionalLight(0xfff6e6, 2.6);
   roomSun.position.set(cx + 12, H + 10, cz + 14);
   roomSun.target.position.set(cx, 0, cz);
-  scene.add(roomSun.target);
-  scene.add(roomSun);
+  parent.add(roomSun.target);
+  parent.add(roomSun);
 
   const roomSun2 = new THREE.DirectionalLight(0xdfe9f5, 1.1);
   roomSun2.position.set(cx - 14, H + 8, cz - 16);
   roomSun2.target.position.set(cx, 0, cz);
-  scene.add(roomSun2.target);
-  scene.add(roomSun2);
+  parent.add(roomSun2.target);
+  parent.add(roomSun2);
 
-  // warm ambient so nothing reads as pure black
   const roomAmb = new THREE.AmbientLight(0xffffff, 0.55);
-  scene.add(roomAmb);
+  parent.add(roomAmb);
 
   const roomLights = [roomHemi, roomSun, roomSun2, roomAmb];
 
-  // floor lane markings: a firing line and distance ticks
   const line = (z, w, col) => {
     const m = new THREE.Mesh(new THREE.PlaneGeometry(w, .18),
       new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: .5, fog: false }));
     m.rotation.x = -Math.PI / 2;
     m.position.set(cx, .02, z);
     m.renderOrder = 1;
-    scene.add(m);
+    parent.add(m);
   };
-  line(maxZ - 3, halfW * 2 - 1, 0xff9d21);            // firing line
+  line(maxZ - 3, halfW * 2 - 1, 0xff9d21);
   for (let d = 10; d <= 35; d += 5) line(maxZ - 3 - d, halfW * 1.4, 0x4aa3ff);
 
-  // distance numbers painted on the floor
   for (let d = 10; d <= 35; d += 5) {
     const c = makeCanvas(64); c.height = 64;
     const g2 = c.getContext('2d');
@@ -1843,178 +2371,42 @@ function buildAimRoom(scene, world) {
     m.rotation.x = -Math.PI / 2;
     m.position.set(cx - 6, .03, maxZ - 3 - d);
     m.renderOrder = 2;
-    scene.add(m);
+    parent.add(m);
   }
 
   MAP.aimRoom = {
     minX: minX, maxX: maxX, minZ: minZ, maxZ: maxZ,
-    entry: { x: cx, z: maxZ - 3, yaw: 0 },            // yaw 0 faces -Z, into the room
+    entry: { x: cx, z: maxZ - 3, yaw: 0 },
     floorY: 0,
     lights: roomLights
   };
-  // the room starts dark: its lights are enabled only while the player is inside
   setAimRoomLights(false);
   return MAP.aimRoom;
 }
 
-/* Aim-room lights are global in three.js, so they are switched on only while the
-   player is inside the room. Otherwise they brighten the whole arena. */
+/* Aim-room lights are global in three.js, so they are switched on only while
+   the player is inside the room. Otherwise they brighten the whole arena. */
 function setAimRoomLights(on) {
   const room = MAP.aimRoom;
   if (!room || !room.lights) return;
   for (const l of room.lights) l.visible = !!on;
 }
 
-/* ---------------- stepped ramp ----------------
-   Steps are sized so the player's step-up height always clears them. */
-function makeRamp(scene, world, x, z, width, height, dir) {
-  const steps = Math.max(4, Math.ceil(height / 0.38));
-  const depth = height * 1.5;
-  for (let i = 0; i < steps; i++) {
-    const h = (i + 1) / steps * height;
-    const off = (i + .5) / steps * depth;
-    let px = x, pz = z;
-    let w = width, d = depth / steps + .02;
-    if (dir === 'south') { pz = z + off; w = width; d = depth / steps + .02; }
-    if (dir === 'north') { pz = z - off; }
-    if (dir === 'east') { px = x + off; w = depth / steps + .02; d = width; }
-    if (dir === 'west') { px = x - off; w = depth / steps + .02; d = width; }
-    solid(scene, world, px, 0, pz, w, h, d, MAT.concrete, { tag: 'ramp' });
-  }
-}
-
-/* Cut a doorway through a wall by splitting it into two segments + lintel. */
-function doorwayCut(scene, world, x, z, axis, len, h, thick) {
-  // find the wall AABB we just added and split it
-  const idx = world.boxes.findIndex(b =>
-    Math.abs(((b.minX + b.maxX) / 2) - x) < .01 && Math.abs(((b.minZ + b.maxZ) / 2) - z) < .01 &&
-    Math.abs((b.maxY - b.minY) - h) < .01);
-  if (idx < 0) return;
-  const b = world.boxes[idx];
-  // remove from grid: easiest correct way — rebuild grid without it
-  world.boxes.splice(idx, 1);
-  // remove its mesh
-  if (b.mesh) { scene.remove(b.mesh); b.mesh.geometry.dispose(); }
-  // rebuild the grid fully (cheap enough at load time)
-  world.grid.clear();
-  world.boxes.forEach((bb, i) => world._insert(bb, i));
-
-  const gap = 4.2;
-  const seg = (len - gap) / 2;
-  const y = 0;
-  if (axis === 'z') {
-    solid(scene, world, x, y, z - (gap / 2 + seg / 2), thick, h, seg, MAT.brick, { tag: 'wall' });
-    solid(scene, world, x, y, z + (gap / 2 + seg / 2), thick, h, seg, MAT.brick, { tag: 'wall' });
-    solid(scene, world, x, y + h - .9, z, thick, .9, gap, MAT.brick, { tag: 'wall' }); // lintel
-  } else {
-    solid(scene, world, x - (gap / 2 + seg / 2), y, z, seg, h, thick, MAT.brick, { tag: 'wall' });
-    solid(scene, world, x + (gap / 2 + seg / 2), y, z, seg, h, thick, MAT.brick, { tag: 'wall' });
-    solid(scene, world, x, y + h - .9, z, gap, .9, thick, MAT.brick, { tag: 'wall' });
-  }
-}
-
-/* ---------------- building with interior ---------------- */
-function buildBuilding(scene, world, cx, cz, w, d, h, site) {
-  const wall = .55;
-  const door = 3.4;
-  const hw = w / 2, hd = d / 2;
-  const mat = site ? MAT.brick : MAT.concrete;
-
-  // four walls with a doorway on the sides facing the centre
-  // north wall (z = cz - hd)
-  solid(scene, world, cx - (door / 2 + (w - door) / 4), 0, cz - hd, (w - door) / 2, h, wall, mat, { tag: 'wall' });
-  solid(scene, world, cx + (door / 2 + (w - door) / 4), 0, cz - hd, (w - door) / 2, h, wall, mat, { tag: 'wall' });
-  solid(scene, world, cx, h - 1.1, cz - hd, door, 1.1, wall, mat, { tag: 'wall' });
-  // south wall
-  solid(scene, world, cx - (door / 2 + (w - door) / 4), 0, cz + hd, (w - door) / 2, h, wall, mat, { tag: 'wall' });
-  solid(scene, world, cx + (door / 2 + (w - door) / 4), 0, cz + hd, (w - door) / 2, h, wall, mat, { tag: 'wall' });
-  solid(scene, world, cx, h - 1.1, cz + hd, door, 1.1, wall, mat, { tag: 'wall' });
-  // west wall
-  solid(scene, world, cx - hw, 0, cz - (door / 2 + (d - door) / 4), wall, h, (d - door) / 2, mat, { tag: 'wall' });
-  solid(scene, world, cx - hw, 0, cz + (door / 2 + (d - door) / 4), wall, h, (d - door) / 2, mat, { tag: 'wall' });
-  solid(scene, world, cx - hw, h - 1.1, cz, wall, 1.1, door, mat, { tag: 'wall' });
-  // east wall
-  solid(scene, world, cx + hw, 0, cz - (door / 2 + (d - door) / 4), wall, h, (d - door) / 2, mat, { tag: 'wall' });
-  solid(scene, world, cx + hw, 0, cz + (door / 2 + (d - door) / 4), wall, h, (d - door) / 2, mat, { tag: 'wall' });
-  solid(scene, world, cx + hw, h - 1.1, cz, wall, 1.1, door, mat, { tag: 'wall' });
-
-  // roof
-  solid(scene, world, cx, h, cz, w + .6, .5, d + .6, MAT.concrete, { tag: 'roof' });
-  // roof parapet
-  decor(scene, cx, h + .5, cz - hd, w + .6, .8, .35, MAT.dark);
-  decor(scene, cx, h + .5, cz + hd, w + .6, .8, .35, MAT.dark);
-  decor(scene, cx - hw, h + .5, cz, .35, .8, d + .6, MAT.dark);
-  decor(scene, cx + hw, h + .5, cz, .35, .8, d + .6, MAT.dark);
-  // access stairs outside (stepped ramp) to the roof, on the far side
-  const side = cz > 0 ? -1 : 1;
-  makeRamp(scene, world, cx, cz + side * (hd + 1.2), 3, h + .5, cz > 0 ? 'north' : 'south');
-
-  // interior cover
-  world.addBox(aabbFromCenter(cx, 1.1, cz, 3, 2.2, 1.2, 'cover'));
-  decor(scene, cx, 0, cz, 3, 2.2, 1.2, MAT.wood);
-
-  if (site) {
-    // bomb-site flavour: crates + light
-    const l = new THREE.PointLight(0xffb050, 22, 22, 2);
-    l.position.set(cx, h - 1, cz);
-    scene.add(l);
-  }
-  return { cx, cz, w, d, h };
-}
-
-/* ---------------- watchtower ---------------- */
-function buildTower(scene, world, x, z) {
-  const legOff = 3.2, legH = 7.5;
-  [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(o => {
-    solid(scene, world, x + o[0] * legOff, 0, z + o[1] * legOff, .8, legH, .8, MAT.wood, { tag: 'cover' });
-  });
-  // deck
-  solid(scene, world, x, legH, z, legOff * 2 + 1.2, .7, legOff * 2 + 1.2, MAT.wood, { tag: 'deck' });
-  // railings
-  const R = legOff + .6;
-  decor(scene, x, legH + .7, z - R, R * 2, 1.1, .25, MAT.wood);
-  decor(scene, x, legH + .7, z + R, R * 2, 1.1, .25, MAT.wood);
-  decor(scene, x - R, legH + .7, z, .25, 1.1, R * 2, MAT.wood);
-  decor(scene, x + R, legH + .7, z, .25, 1.1, R * 2, MAT.wood);
-  // roof
-  solid(scene, world, x, legH + 3.2, z, R * 2 + 2, .45, R * 2 + 2, MAT.metal, { tag: 'roof' });
-  [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(o => {
-    solid(scene, world, x + o[0] * R, legH + .7, z + o[1] * R, .4, 2.5, .4, MAT.wood, { tag: 'cover' });
-  });
-  // ramp up
-  makeRamp(scene, world, x, z + legOff + 2.2, 3, legH + .7, 'north');
-}
-
-/* ---------------- barrel mesh ---------------- */
-function barrelMesh(scene, x, z) {
-  const g = new THREE.CylinderGeometry(.48, .48, 1.15, 12);
-  const m = new THREE.Mesh(g, MAT.metal);
-  m.position.set(x, .575, z);
-  m.castShadow = true; m.receiveShadow = true;
-  scene.add(m);
-  const ring = new THREE.Mesh(new THREE.CylinderGeometry(.51, .51, .12, 12), MAT.dark);
-  ring.position.set(x, .82, z); scene.add(ring);
-  const ring2 = ring.clone(); ring2.position.y = .32; scene.add(ring2);
-  return m;
-}
-
 /* ---------------- lighting ---------------- */
-function buildLighting(scene, quality) {
+function buildLighting(parent, quality) {
   const hemi = new THREE.HemisphereLight(0xbdd6f2, 0x554e42, 0.85);
-  scene.add(hemi);
+  parent.add(hemi);
 
   const sun = new THREE.DirectionalLight(0xfff2dc, 2.0);
   sun.position.set(48, 72, 26);
   sun.target.position.set(0, 0, 0);
-  scene.add(sun.target);
-  scene.add(sun);
+  parent.add(sun.target);
+  parent.add(sun);
 
   const shadowSize = quality === 0 ? 1024 : quality === 1 ? 2048 : 4096;
   sun.castShadow = true;
   sun.shadow.mapSize.width = shadowSize;
   sun.shadow.mapSize.height = shadowSize;
-  // The shadow camera must enclose the WHOLE arena. Anything outside it gets a
-  // clamped lookup, which shows up as large false-shadow bands on the ground.
   const d = 82;
   sun.shadow.camera.left = -d; sun.shadow.camera.right = d;
   sun.shadow.camera.top = d; sun.shadow.camera.bottom = -d;
@@ -2022,12 +2414,11 @@ function buildLighting(scene, quality) {
   sun.shadow.bias = -0.0012;
   sun.shadow.normalBias = 0.055;
   sun.shadow.camera.updateProjectionMatrix();
-  scene.userData.sun = sun;
+  parent.userData.sun = sun;
 
   const amb = new THREE.AmbientLight(0xffffff, 0.18);
-  scene.add(amb);
+  parent.add(amb);
 
-  scene.fog = new THREE.FogExp2(0xbcc6cf, 0.0055);
   return { sun, hemi };
 }
 
@@ -2042,25 +2433,30 @@ function buildNav(world, map) {
   const walk = new Uint8Array(W * H);
   const groundY = new Float32Array(W * H);
   const AGENT_H = 1.5, AGENT_R = 0.46;
+  // Only sample surfaces in this window above the floor. Overhead decks and
+  // catwalks sit higher; sampling them would put nav cells in mid-air and the
+  // flood fill could never cross beneath them, splitting the arena into islands.
+  const NAV_SAMPLE_CEIL = 1.5;
 
   for (let gz = 0; gz < H; gz++) {
     for (let gx = 0; gx < W; gx++) {
       const x = minX + (gx + .5) * cell, z = minZ + (gz + .5) * cell;
-      const gy = world.groundAt(x, z, 12);
+      // Sample only LOW surfaces (floor, steps, ramp treads). Overhead decks and
+      // catwalks sit above this window; sampling them would place nav cells up in
+      // the air, and the flood fill could then never cross beneath them, chopping
+      // the arena into disconnected islands.
+      const gy = world.groundAt(x, z, NAV_SAMPLE_CEIL);
       groundY[gz * W + gx] = gy;
-      // headroom + footprint clear?
-      if (gy > 11) { walk[gz * W + gx] = 0; continue; }
       const blocked = world.overlaps(x, gy + .06, z, AGENT_R, AGENT_H);
       walk[gz * W + gx] = blocked ? 0 : 1;
     }
   }
 
-  // flood fill from the arena centre so unreachable pockets are excluded
   const reach = new Uint8Array(W * H);
   const startX = Math.round((0 - minX) / cell), startZ = Math.round((-44 - minZ) / cell);
   const q = [startZ * W + startX];
   if (walk[q[0]]) reach[q[0]] = 1;
-  else { // fall back to any walkable cell
+  else {
     for (let i = 0; i < walk.length; i++) if (walk[i]) { q[0] = i; reach[i] = 1; break; }
   }
   const dirs4 = [1, -1, W, -W];
@@ -2073,7 +2469,7 @@ function buildNav(world, map) {
       if (nx < 0 || nz < 0 || nx >= W || nz >= H) continue;
       const j = nz * W + nx;
       if (reach[j] || !walk[j]) continue;
-      if (Math.abs(groundY[j] - groundY[i]) > 1.35) continue; // no big drops
+      if (Math.abs(groundY[j] - groundY[i]) > 1.35) continue;
       reach[j] = 1; q.push(j);
     }
   }
@@ -2090,7 +2486,6 @@ function buildNav(world, map) {
       return { x: minX + (gx + .5) * cell, z: minZ + (gz + .5) * cell, y: groundY[i] };
     },
     ok(i) { return i >= 0 && reach[i] === 1; },
-    /* nearest walkable cell to (x,z), spiral search */
     nearest(x, z) {
       let i = this.idx(x, z);
       if (this.ok(i)) return i;
@@ -2126,7 +2521,6 @@ function navPath(nav, from, to, maxNodes) {
   const gx = g % W, gz = (g / W) | 0;
   const hf = (i) => { const x = i % W, z = (i / W) | 0; const dx = Math.abs(x - gx), dz = Math.abs(z - gz); return (dx + dz) + 0.414 * Math.min(dx, dz); };
 
-  // binary heap
   const heap = [s], f = new Float32Array(W * H); f[s] = hf(s);
   const push = (i) => {
     heap.push(i); let c = heap.length - 1;
@@ -2152,8 +2546,7 @@ function navPath(nav, from, to, maxNodes) {
   };
 
   let expanded = 0, found = false;
-  const limit = maxNodes || 4200;
-  const nbr = [1, -1, W, -W, W + 1, W - 1, -W + 1, -W - 1];
+  const limit = maxNodes || 8000;
   while (heap.length && expanded < limit) {
     const cur = pop();
     if (closed[cur]) continue;
@@ -2168,7 +2561,7 @@ function navPath(nav, from, to, maxNodes) {
       if (!nav.reach[j] || closed[j]) continue;
       const dy = Math.abs(nav.groundY[j] - nav.groundY[cur]);
       if (dy > .62) continue;
-      if (k >= 4) { // diagonal: both orthogonals must be open
+      if (k >= 4) {
         if (!nav.reach[czg * W + nx] || !nav.reach[nz * W + cxg]) continue;
         if (Math.abs(nav.groundY[czg * W + nx] - nav.groundY[cur]) > .62) continue;
         if (Math.abs(nav.groundY[nz * W + cxg] - nav.groundY[cur]) > .62) continue;
@@ -2183,13 +2576,11 @@ function navPath(nav, from, to, maxNodes) {
   }
   if (!found) return null;
 
-  // reconstruct
   const cells = [];
   for (let i = g; i >= 0; i = came[i]) { cells.push(i); if (i === s) break; }
   cells.reverse();
   if (cells.length < 2) return [{ x: to.x, y: to.y, z: to.z }];
 
-  // string-pull: keep only waypoints with a clear grid line of sight
   const out = [];
   let anchor = 0;
   out.push(nav.cellCenter(cells[0]));
@@ -2201,7 +2592,6 @@ function navPath(nav, from, to, maxNodes) {
   }
   const last = nav.cellCenter(cells[cells.length - 1]);
   out.push(last);
-  // replace final waypoint with the true target for precision
   out[out.length - 1] = { x: to.x, y: U.lerp(last.y, to.y === undefined ? last.y : to.y, .25), z: to.z };
   return out;
 }
@@ -2219,11 +2609,6 @@ function navLineClear(nav, a, b) {
     const e2 = 2 * err;
     if (e2 > -dz) { err -= dz; x += sx; }
     if (e2 < dx) { err += dx; z += sz; }
-    // prevent corner cutting
-    if (x !== x1 && z !== z1) {
-      const a2 = z * nav.W + x, b2 = z0 * nav.W + x1;
-      // (approximation — allow)
-    }
   }
   return true;
 }
@@ -3121,6 +3506,7 @@ class Player {
       z: { get() { return this.pos.z; }, set(v) { this.pos.z = v; } }
     });
     // ---- state ----
+    this.maxHealth = CFG.maxHP;
     this.health = CFG.maxHP;
     this.armor = 0;
     this.helmet = false;
@@ -3152,6 +3538,12 @@ class Player {
     this.isAiming = false;
     this.spinT = 0;           // minigun spin-up (0..1)
     this._spinSnd = false;
+    this.climbing = false;    // mid-vault onto a ledge
+    this.climbT = 0;
+    this.climbDur = CFG.climbDuration;
+    this.climbHold = 0;
+    this.climbFrom = null;
+    this.climbTo = null;
     this.deployT = 0;
     this.triggerDown = false;
     this.shotsSinceRelease = 0;
@@ -3225,7 +3617,7 @@ class Player {
     this.vel.x = this.vel.y = this.vel.z = 0;
     this.yaw = yaw === undefined ? 0 : yaw;
     this.pitch = 0;
-    this.health = CFG.maxHP;
+    this.health = this.maxHealth || CFG.maxHP;
     this.alive = true;
     this.recoil = this.recoilYaw = this.viewPunchP = this.viewPunchY = 0;
     this.reloadT = 0; this.fireCd = 0; this.zoom = 0; this.deployT = .3;
@@ -3274,6 +3666,74 @@ class Player {
     this.vmKind = id;
     if (parent) parent.add(group);
     return group;
+  }
+
+  /* ---------- climb mechanic ----------
+     Hold forward against a surface and, after climbTime, the player pulls
+     themselves up onto it — a deliberate animated vault, not a teleport.
+     Height is not limited: a crate, a container, a roof or the 9 m perimeter
+     wall can all be scaled. Taller climbs simply take longer to animate, and
+     the vault is refused only if there is genuinely nowhere to stand on top. */
+  updateClimb(dt, world, input, res, wl) {
+    const blocked = !!(res.hitX || res.hitZ);
+    const top = res.blockTop;
+
+    // the surface must be a real ledge (above stepping height) and must actually
+    // rise from around our feet, so we never latch onto a floating platform above
+    const climbable = blocked && top !== undefined && isFinite(top) &&
+      top > this.pos.y + CFG.stepUp + 0.05 &&
+      this.pos.y > (res.blockLow === undefined ? -Infinity : res.blockLow) - 1;
+
+    if (this.climbing) {
+      // animate the vault: rise, then step forward onto the ledge. The easing is
+      // symmetric so tall climbs accelerate smoothly instead of snapping.
+      this.climbT += dt;
+      const k = U.clamp(this.climbT / this.climbDur, 0, 1);
+      const ease = k < .5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
+      this.pos.y = U.lerp(this.climbFrom.y, this.climbTo.y, ease);
+      this.pos.x = U.lerp(this.climbFrom.x, this.climbTo.x, ease);
+      this.pos.z = U.lerp(this.climbFrom.z, this.climbTo.z, ease);
+      this.vel.x = this.vel.y = this.vel.z = 0;
+      this.onGround = true;
+      if (k >= 1) { this.climbing = false; this.climbHold = 0; }
+      return;
+    }
+
+    // only a deliberate forward push climbs: sideways contact never triggers it
+    const pressing = input.f > 0.01 && wl > 0.01;
+    if (!climbable || !this.onGround || !pressing) { this.climbHold = 0; return; }
+
+    this.climbHold += dt;
+    if (this.climbHold >= CFG.climbTime) {
+      // Pick a landing spot on top of the obstacle, just past its near face.
+      // Walking further in overshoots narrow cover (the climber landed past a
+      // 2 m wall and fell off the far side), so the step is kept small and the
+      // spot is validated against the world before committing.
+      const cy = Math.cos(this.yaw), sy = Math.sin(this.yaw);
+      const fx = -sy, fz = -cy;                     // forward
+      let tx = this.pos.x, tz = this.pos.z, landY = top;
+      let found = false;
+      for (const step of [this.radius + 0.25, this.radius + 0.55, this.radius + 0.95]) {
+        const px = this.pos.x + fx * step, pz = this.pos.z + fz * step;
+        const gy = world.groundAt(px, pz, top + 1.2);
+        const y = (gy === null || gy === undefined || gy < top - 0.4) ? top : gy;
+        if (!world.overlaps(px, y + 0.05, pz, this.radius * 0.95, this.height)) {
+          tx = px; tz = pz; landY = y; found = true; break;
+        }
+      }
+      // nothing clear on top: refuse the climb rather than vault into a wall
+      if (!found) { this.climbHold = Math.min(this.climbHold, CFG.climbTime * 0.75); return; }
+
+      const rise = Math.max(0, landY - this.pos.y);
+      this.climbing = true;
+      this.climbT = 0;
+      this.climbDur = U.clamp(CFG.climbDuration + rise * CFG.climbDurationPerM, CFG.climbDuration, CFG.climbDurationMax);
+      this.climbFrom = { x: this.pos.x, y: this.pos.y, z: this.pos.z };
+      this.climbTo = { x: tx, y: landY, z: tz };
+      this.climbHold = 0;
+      Bus.emit('climb', this);
+      if (this.isLocal && typeof Audio3D_SFX !== 'undefined') Audio3D_SFX.pickup();
+    }
   }
 
   /* ---------- movement + physics ---------- */
@@ -3341,6 +3801,13 @@ class Player {
     if (res.hitZ) this.vel.z = 0;
     if (res.ceiling) this.vel.y = Math.min(this.vel.y, 0);
 
+     /* ---- climb: hold forward against a tall object to scale it ----
+        Walking into a wall used to teleport the player to its top in a single
+        frame (fixed in moveCylinder). In its place this gives a deliberate
+        mechanic: press into a surface for climbTime and the player vaults onto
+        it. There is no height limit — taller surfaces just take longer. */
+    this.updateClimb(dt, world, input, res, wl);
+
     // ---- ground: land on, or step up to, the surface under our feet ----
     // A ground snap must only pull us DOWN by a small amount (stairs and
     // ledges). Snapping from any height would teleport a jumping player back
@@ -3373,16 +3840,23 @@ class Player {
       this.onGround = false;
     }
     // keep inside the world — but never clamp the player out of the aim room,
-    // which sits outside the arena bounds
+    // which sits outside the arena bounds. The perimeter wall is climbable now,
+    // so the clamp relaxes just enough to touch its inner face at ground level
+    // and to stand on top of it, while still never letting the player walk off
+    // the outer edge into the void.
     const room = (typeof MAP !== 'undefined') ? MAP.aimRoom : null;
     const inRoom = room && this.pos.z < room.maxZ + 6 && this.pos.z > room.minZ - 6 &&
       this.pos.x > room.minX - 6 && this.pos.x < room.maxX + 6;
     if (!inRoom) {
-      this.pos.x = U.clamp(this.pos.x, -MAP.size / 2 + 2, MAP.size / 2 - 2);
-      this.pos.z = U.clamp(this.pos.z, -MAP.size / 2 + 2, MAP.size / 2 - 2);
+      const half = MAP.size / 2;
+      const inner = half - 1.5;                        // reach the wall's inner face
+      const onWall = this.pos.y > (MAP.wallH || 9) - 2.5;
+      const lim = onWall ? half : inner;               // on the wall, don't step outward
+      this.pos.x = U.clamp(this.pos.x, -lim, lim);
+      this.pos.z = U.clamp(this.pos.z, -lim, lim);
     }
     if (this.pos.y < -8) {
-      this.pos.y = this.world ? this.world.groundAt(this.pos.x, this.pos.z, 4) : 0;
+      this.pos.y = world ? world.groundAt(this.pos.x, this.pos.z, 4) : 0;
       this.vel.x = this.vel.y = this.vel.z = 0;
     }
 
@@ -4591,6 +5065,19 @@ function initSettings() {
     });
   }
 
+  // touch aim-assist (auto-fire when the crosshair is on an enemy)
+  const aim = document.getElementById('sAim'), oa = document.getElementById('oAim');
+  const aimNames = ['Выкл', 'Вкл'];
+  if (aim) {
+    aim.value = S.aimAssist === 0 ? 0 : 1;
+    if (oa) oa.textContent = aimNames[parseInt(aim.value, 10)];
+    aim.addEventListener('input', () => {
+      S.aimAssist = parseInt(aim.value, 10);
+      if (oa) oa.textContent = aimNames[S.aimAssist];
+      Store.save();
+    });
+  }
+
   applySetting('sens', S.sens);
   applySetting('fov', S.fov);
   applySetting('vol', S.vol);
@@ -4598,7 +5085,9 @@ function initSettings() {
 
 function applySetting(key, v) {
   if (key === 'sens') Input.sens = v;
-  else if (key === 'touchSens') { if (typeof Touch !== 'undefined') TouchUI.setSens(v); }
+  // NOTE: the object is `TouchUI`, not `Touch`. The old guard checked for a
+  // non-existent global, so the touch-sensitivity slider silently did nothing.
+  else if (key === 'touchSens') { if (typeof TouchUI !== 'undefined') TouchUI.setSens(v); }
   else if (key === 'vol') Audio3D_SFX.setVol(v / 100);
   else if (key === 'fov') { if (window.Game) Game.baseFov = v; }
 }
@@ -4896,19 +5385,22 @@ const UI = {
 
   init() {
     const ids = ['loading', 'loadTxt', 'menu', 'menuStats', 'controls', 'lobby', 'lobbyMain', 'lobbyStatus',
-      'hud', 'crosshair', 'hitmark', 'scope', 'hpFill', 'hpVal', 'apFill', 'apVal', 'ammoMag', 'ammoRes',
+      'hud', 'crosshair', 'hitmark', 'scope', 'reloadTag', 'hpFill', 'hpVal', 'apFill', 'apVal', 'ammoMag', 'ammoRes',
       'weaponName', 'money', 'roundTimer', 'objective', 'netInfo', 'killCount', 'scoreVal', 'minimap',
       'feed', 'centerMsg', 'dmgFlash', 'lowhp', 'buy', 'buyMoney', 'buyTimer', 'buyCats', 'buyGrid',
       'buyHint', 'buyOwned', 'btnBuySkip', 'btnBuyClose', 'scoreboard', 'sbTitle', 'sbTable', 'pause', 'toast', 'fps', 'clickToPlay',
-      'connect', 'connTitle', 'connStatus', 'joinRow', 'hostRow', 'roomCode', 'waiting', 'inName', 'inCode',
-      'btnCopy', 'dmgDirs'];
+      'connect', 'connTitle', 'connStatus', 'joinRow', 'hostRow', 'joinWait', 'roomCode', 'waiting', 'waitingTxt',
+      'inName', 'inCode', 'peerList', 'peerListJoin',
+      'btnCopy', 'dmgDirs', 'ios',
+      'mapChips', 'playerChips', 'hpChips', 'lobbyMaps', 'lobbyPlayers', 'lobbyHp'];
     ids.forEach(i => this.el[i] = $(i));
     this.buildBuyCats();
+    this.buildChips();
   },
 
   /* ---------------- screens ---------------- */
   show(name) {
-    ['loading', 'menu', 'controls', 'lobby', 'hud', 'buy', 'scoreboard', 'pause', 'connect', 'clickToPlay'].forEach(s => {
+    ['loading', 'menu', 'controls', 'lobby', 'hud', 'buy', 'scoreboard', 'pause', 'connect', 'ios', 'clickToPlay'].forEach(s => {
       const e = this.el[s];
       if (!e) return;
       const on = s === name;
@@ -4917,12 +5409,105 @@ const UI = {
     this.current = name;
   },
   hideOverlays() {
-    ['buy', 'scoreboard', 'pause', 'controls', 'lobby', 'menu', 'connect'].forEach(s => {
+    ['buy', 'scoreboard', 'pause', 'controls', 'lobby', 'menu', 'connect', 'ios'].forEach(s => {
       if (this.el[s]) this.el[s].classList.add('hidden');
     });
   },
   overlayOpen() {
-    return ['buy', 'scoreboard', 'pause', 'controls', 'lobby', 'menu', 'connect'].some(s => this.el[s] && !this.el[s].classList.contains('hidden'));
+    return ['buy', 'scoreboard', 'pause', 'controls', 'lobby', 'menu', 'connect', 'ios'].some(s => this.el[s] && !this.el[s].classList.contains('hidden'));
+  },
+
+  /* ============================================================
+     MATCH SETTINGS CHIPS (map / players / health)
+     Rendered into both the settings panel and the online lobby. The two sets
+     stay in sync because every chip writes to Store and then refreshes.
+     ============================================================ */
+  buildChips() {
+    const maps = (typeof MAPS !== 'undefined') ? MAPS : [];
+    const fillMaps = (wrap, onPick) => {
+      if (!wrap) return;
+      wrap.innerHTML = '';
+      maps.forEach(m => {
+        const b = document.createElement('button');
+        b.dataset.map = m.id;
+        b.innerHTML = '<b>' + U.esc(m.short) + '</b><i>' + U.esc(m.desc) + '</i>';
+        b.addEventListener('click', () => { onPick(m.id); Audio3D_SFX.uiClick(); });
+        wrap.appendChild(b);
+      });
+    };
+    const pickMap = id => {
+      Store.data.map = id; Store.save();
+      this.refreshChips();
+      // rebuild immediately unless we are mid-match
+      if ((typeof Game !== 'undefined') && Game.running) {
+        if (Game.mode === CS.MODE.RANGE || Game.mode === CS.MODE.OFFLINE) { Game.ensureMap(id); Game.spawnPlayerLocal(0); UI.toast('Карта: ' + mapById(id).name); }
+      }
+    };
+    const fillPlayers = (wrap, online) => {
+      if (!wrap) return;
+      wrap.innerHTML = '';
+      MATCH.playerCounts.forEach(n => {
+        if (online && n < 2) return;
+        const b = document.createElement('button');
+        b.dataset.n = n;
+        b.innerHTML = '<b>' + n + '</b>';
+        b.addEventListener('click', () => {
+          Store.data.players = n; Store.save(); this.refreshChips();
+          if (typeof Net !== 'undefined' && Net.role === CS.NETROLE.HOST && Net.connected) {
+            Net.send({ t: 'round', st: 'settings', players: n, hp: Store.data.maxHP, map: Store.data.map });
+          }
+          Audio3D_SFX.uiClick();
+        });
+        wrap.appendChild(b);
+      });
+    };
+    const fillHp = (wrap) => {
+      if (!wrap) return;
+      wrap.innerHTML = '';
+      MATCH.hpOptions.forEach(n => {
+        const b = document.createElement('button');
+        b.dataset.hp = n;
+        b.innerHTML = '<b>' + n + '</b><i>HP</i>';
+        b.addEventListener('click', () => {
+          Store.data.maxHP = n; Store.save(); this.refreshChips();
+          if (typeof Net !== 'undefined' && Net.role === CS.NETROLE.HOST && Net.connected) {
+            Net.send({ t: 'round', st: 'settings', players: Store.data.players, hp: n, map: Store.data.map });
+          }
+          Audio3D_SFX.uiClick();
+        });
+        wrap.appendChild(b);
+      });
+    };
+    fillMaps(this.el.mapChips, pickMap);
+    fillMaps(this.el.lobbyMaps, pickMap);
+    fillPlayers(this.el.playerChips, false);
+    fillPlayers(this.el.lobbyPlayers, true);
+    fillHp(this.el.hpChips);
+    fillHp(this.el.lobbyHp);
+    this.refreshChips();
+  },
+
+  refreshChips() {
+    const S = Store.data;
+    const mark = (wrap, attr, val) => {
+      if (!wrap) return;
+      Array.from(wrap.children).forEach(b => b.classList.toggle('on', String(b.dataset[attr]) === String(val)));
+    };
+    mark(this.el.mapChips, 'map', S.map); mark(this.el.lobbyMaps, 'map', S.map);
+    mark(this.el.playerChips, 'n', S.players); mark(this.el.lobbyPlayers, 'n', S.players);
+    mark(this.el.hpChips, 'hp', S.maxHP); mark(this.el.lobbyHp, 'hp', S.maxHP);
+  },
+
+  /* connected peers, shown in the lobby so the host can see who is in */
+  renderPeerList() {
+    const list = (typeof Net !== 'undefined' && Net.peers) ? Net.peers : [];
+    const html = list.map(p =>
+      '<div><span>' + U.esc(p.name || 'Игрок') + '</span><em>' + (p.isHost ? 'ХОСТ' : 'ИГРОК') + '</em></div>'
+    ).join('') || '<div><span>Пока никого</span><em>1/4</em></div>';
+    if (this.el.peerList) this.el.peerList.innerHTML = html;
+    if (this.el.peerListJoin) this.el.peerListJoin.innerHTML = html;
+    const wt = this.el.waitingTxt;
+    if (wt) wt.textContent = list.length >= 2 ? 'Игроков в комнате: ' + list.length + ' · ждём остальных…' : 'Ожидание игроков…';
   },
   loading(pct, txt) {
     const bar = document.querySelector('#loading .load-bar i');
@@ -4984,13 +5569,14 @@ const UI = {
     const e = this.el;
     if (!e.hud || e.hud.classList.contains('hidden')) return;
     // health / armor
-    const hp = U.clamp(p.health, 0, 100);
-    e.hpFill.style.transform = 'scaleX(' + (hp / 100) + ')';
+    const maxHP = (typeof Game !== 'undefined' && Game.matchHP) ? Game.matchHP : 100;
+    const hp = U.clamp(p.health, 0, maxHP);
+    e.hpFill.style.transform = 'scaleX(' + (hp / maxHP) + ')';
     e.hpVal.textContent = Math.max(0, Math.round(p.health));
-    e.hpFill.parentElement.classList.toggle('low', hp <= 35);
+    e.hpFill.parentElement.classList.toggle('low', hp <= maxHP * .35);
     e.apFill.style.transform = 'scaleX(' + (U.clamp(p.armor, 0, 100) / 100) + ')';
     e.apVal.textContent = Math.round(p.armor);
-    this.lowHP(hp > 0 && hp <= 32);
+    this.lowHP(hp > 0 && hp <= maxHP * .32);
 
     // ammo
     const w = p.weapon;
@@ -5000,6 +5586,12 @@ const UI = {
       e.ammoRes.textContent = w.id === 'knife' ? '' : '/ ' + (w.reserve === Infinity ? '∞' : Math.max(0, w.reserve));
       e.weaponName.textContent = def.name;
       e.ammoMag.style.color = (w.mag !== Infinity && w.mag <= Math.max(2, def.mag * .2)) ? '#e05141' : '#fff';
+      // reload / low-ammo hint under the crosshair
+      if (e.reloadTag) {
+        if (p.reloadT > 0) { e.reloadTag.textContent = 'ПЕРЕЗАРЯДКА'; e.reloadTag.classList.remove('hidden'); }
+        else if (w.mag !== Infinity && w.mag === 0) { e.reloadTag.textContent = 'ПУСТО · R'; e.reloadTag.classList.remove('hidden'); }
+        else e.reloadTag.classList.add('hidden');
+      }
     }
     // money / kills / score
     e.money.textContent = U.money(p.money);
@@ -5026,15 +5618,11 @@ const UI = {
   },
   scope(on) { this.el.scope.classList.toggle('hidden', !on); },
 
-  /* dynamic crosshair gap */
+  /* dynamic crosshair gap (drives the CSS variable the arms are built from) */
   setCrosshairSpread(px) {
     const e = this.el.crosshair;
     if (!e) return;
-    const g = U.clamp(px, 0, 26);
-    e.querySelector('.t').style.transform = 'translateY(' + (-g) + 'px)';
-    e.querySelector('.b').style.transform = 'translateY(' + g + 'px)';
-    e.querySelector('.l').style.transform = 'translateX(' + (-g) + 'px)';
-    e.querySelector('.r').style.transform = 'translateX(' + g + 'px)';
+    e.style.setProperty('--g', U.clamp(px, 0, 26) + 'px');
   },
 
   /* ---------------- buy menu ---------------- */
@@ -5149,7 +5737,7 @@ const UI = {
     }
     // sites
     ctx.strokeStyle = 'rgba(255,90,60,.55)'; ctx.lineWidth = 2;
-    Object.keys(MAP.sites).forEach(k => {
+    Object.keys(MAP.sites || {}).forEach(k => {
       const s = MAP.sites[k];
       ctx.beginPath(); ctx.arc(tx(s.x), tz(s.z), 11, 0, 7); ctx.stroke();
       ctx.fillStyle = 'rgba(255,140,110,.8)'; ctx.font = 'bold 11px Arial'; ctx.textAlign = 'center';
@@ -5221,14 +5809,16 @@ const UI = {
       rows.push(game.player);
       if (game.remotePlayers) game.remotePlayers.forEach(rp => rows.push(rp));
       rows.sort((a, b) => b.score - a.score || b.kills - a.kills);
-      t.innerHTML = '<tr><th>ИГРОК</th><th>УБИЙСТВА</th><th>СМЕРТИ</th><th>ТОЧН.</th><th>СЧЁТ</th></tr>' +
-        rows.map(r =>
+      t.innerHTML = '<tr><th>#</th><th>ИГРОК</th><th>УБИЙСТВА</th><th>СМЕРТИ</th><th>ТОЧН.</th><th>СЧЁТ</th></tr>' +
+        rows.map((r, i) =>
           '<tr class="' + (r === game.player ? 'me' : '') + '">' +
+          '<td class="t">' + (i + 1) + '</td>' +
           '<td class="n">' + U.esc(r.name) + (r === game.player ? ' <span class="t">(вы)</span>' : '') + '</td>' +
           '<td class="k">' + r.kills + '</td>' +
           '<td class="d">' + r.deaths + '</td>' +
           '<td class="t">' + (r.bulletsFired ? Math.round(r.bulletsHit / r.bulletsFired * 100) : 0) + '%</td>' +
           '<td class="s">' + r.score + '</td></tr>').join('');
+      this.el.sbTitle.textContent = 'СЧЁТ · ' + U.esc(game.mapName()) + ' · HP ' + game.matchHP;
     } else {
       const p = game.player;
       t.innerHTML = '<tr><th>ПОКАЗАТЕЛЬ</th><th>ЗНАЧЕНИЕ</th></tr>' +
@@ -5267,15 +5857,18 @@ function bindClick(id, fn) {
 
 /* ===== 11-net.js ===== */
 /* ============================================================
-   11 — NET: peer-to-peer duels over WebRTC (PeerJS / DataChannel)
-   The host is authoritative for round flow & scoring.
-   Movement is peer-to-peer; shots are resolved by the shooter.
+   11 — NET: peer-to-peer online brawls over WebRTC (PeerJS / DataChannel)
+   The room is a star: one HOST, up to 3 CLIENTS (4 players total). The host is
+   authoritative for round flow and match settings; clients talk only to the
+   host, which relays player state so everyone sees the whole room.
+   Movement is peer-to-peer through the host relay; shots are resolved by the
+   shooter and reported to the host.
    ============================================================ */
 
 const PEER_PREFIX = 'cs3d1-';
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
-/* Signalling is only used to introduce the two browsers; the match itself runs
+/* Signalling is only used to introduce the browsers; the match itself runs
    peer-to-peer over WebRTC. The public PeerJS cloud (0.peerjs.com) is blocked
    by Cloudflare in many regions, so we keep a list of servers and fall back to
    the next one whenever the current one is unreachable. */
@@ -5284,12 +5877,12 @@ const SIGNAL_SERVERS = [
   { host: '0.peerjs.com', port: 443, secure: true, path: '/' },
   { host: 'peerjs.92k.de', port: 443, secure: true, path: '/' }
 ];
-/* How long to wait for one signalling server before trying the next. */
 const SIGNAL_TIMEOUT = 9000;
 
 const Net = {
   peer: null,
-  conn: null,
+  conn: null,                  // host: first connection (kept for legacy checks)
+  conns: [],                   // host: every client {conn, id, name}
   role: CS.NETROLE.NONE,       // HOST | CLIENT
   code: '',
   name: 'Игрок',
@@ -5302,6 +5895,7 @@ const Net = {
   _handlers: {},
   _closedByUser: false,
   _srv: 0,                     // index into SIGNAL_SERVERS
+  peers: [],                   // roster: [{id, name, isHost}]
 
   /* ---------- helpers ---------- */
   makeCode() {
@@ -5309,6 +5903,16 @@ const Net = {
     for (let i = 0; i < 5; i++) s += CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)];
     return s;
   },
+
+  /* a stable identity for this browser, so the host can tell players apart */
+  myId() {
+    if (!this._myId) this._myId = 'p' + Math.floor(Math.random() * 1e9).toString(36) + Date.now().toString(36).slice(-4);
+    return this._myId;
+  },
+  /* The canonical id for the local player. The host assigns each connection the
+     id the client announced in its hello, so `myId()` is the same string on both
+     sides — no handshake is needed to know our own name in the room. */
+  selfId() { return this.myId(); },
 
   peerOptions() {
     const srv = SIGNAL_SERVERS[this._srv] || SIGNAL_SERVERS[0];
@@ -5320,7 +5924,7 @@ const Net = {
       path: srv.path,
       config: {
         // STUN discovers each player's public address; TURN relays the traffic
-        // when both players sit behind strict NATs. The TURN entries below are
+        // when players sit behind strict NATs. The TURN entries below are
         // OpenRelay's free public server — no account needed.
         iceServers: [
           { urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] },
@@ -5361,6 +5965,22 @@ const Net = {
     if (l) for (let i = 0; i < l.length; i++) { try { l[i](data); } catch (e) { console.warn('net handler', type, e); } }
   },
 
+  /* ---------- roster ---------- */
+  refreshRoster() {
+    if (this.role === CS.NETROLE.HOST) {
+      const list = [{ id: this.myId(), name: this.name, isHost: true }];
+      for (const c of this.conns) {
+        if (c.open) list.push({ id: c.id, name: c.name || 'Игрок', isHost: false });
+      }
+      this.peers = list;
+    }
+  },
+  peerCount() { return this.peers.length; },
+  playerCount() {
+    // host knows everyone; a client counts itself plus whoever the host reports
+    return Math.max(2, this.peers.length);
+  },
+
   /* ---------- host ---------- */
   host(name, onReady, onError) {
     this.role = CS.NETROLE.HOST;
@@ -5368,6 +5988,8 @@ const Net = {
     this._closedByUser = false;
     this.code = this.makeCode();
     this._srv = this.preferredServer();
+    this.conns = [];
+    this.refreshRoster();
     this._createPeer(PEER_PREFIX + this.code, onReady, onError, 0, 0);
   },
 
@@ -5425,9 +6047,12 @@ const Net = {
     });
 
     peer.on('connection', conn => {
-      if (this.conn && this.conn.open) {
-        // already have a partner — politely refuse extras
-        try { conn.close(); } catch (e) { }
+      // the host accepts up to MAX players; refusals are visible to the guest
+      const max = (typeof MATCH !== 'undefined' ? MATCH.maxPlayers : 4);
+      this.refreshRoster();
+      if (this.conns.filter(c => c.open).length >= max - 1) {
+        try { conn.on('open', () => conn.send({ t: 'full' })); } catch (e) { }
+        setTimeout(() => { try { conn.close(); } catch (e) { } }, 400);
         return;
       }
       this._setupConn(conn);
@@ -5463,7 +6088,6 @@ const Net = {
     });
 
     peer.on('disconnected', () => {
-      // try to keep the signalling socket alive
       if (!this._closedByUser && this.peer && !this.peer.destroyed) {
         try { this.peer.reconnect(); } catch (e) { }
       }
@@ -5471,7 +6095,6 @@ const Net = {
     peer.on('close', () => {
       if (!this._closedByUser) this.emit('closed', {});
     });
-    // connection timeout guard
     setTimeout(() => {
       if (!settled && this.peer === peer && !this.connected) {
         tryNextServer('Не удалось подключиться к серверу знакомства (тайм-аут).');
@@ -5521,67 +6144,131 @@ const Net = {
       else fail('Ошибка сети: ' + (err.message || t));
     });
 
-    // if the server accepts the socket but never answers, fall through too
     setTimeout(() => { if (!settled && !this.connected) tryNextServer('Сервер знакомства не отвечает. Попробуйте позже.'); }, SIGNAL_TIMEOUT + 4000);
   },
 
   _setupConn(conn, onOpenCb) {
     this.conn = conn;
+    const rec = { conn, id: null, name: '', open: false, ping: 0, rtt: [] };
+    if (this.role === CS.NETROLE.HOST) this.conns.push(rec);
+
     conn.on('open', () => {
+      rec.open = true;
       this.connected = true;
       this.connecting = false;
       this.startHeartbeat();
       onOpenCb && onOpenCb();
-      this.send({ t: 'hello', name: this.name, role: this.role === CS.NETROLE.HOST ? 'host' : 'client', ver: CS.version });
+      this.send({ t: 'hello', name: this.name, role: this.role === CS.NETROLE.HOST ? 'host' : 'client', ver: CS.version, id: this.myId() });
+      this.refreshRoster();
       this.emit('connected', { role: this.role });
+      this.emit('roster', this.peers);
     });
     conn.on('data', raw => {
       let m = raw;
       if (typeof raw === 'string') { try { m = JSON.parse(raw); } catch (e) { return; } }
       if (!m || !m.t) return;
-      this._handle(m);
+      this._handle(m, rec);
     });
     conn.on('close', () => {
+      rec.open = false;
+      if (this.role === CS.NETROLE.HOST) {
+        this.conns = this.conns.filter(c => c !== rec);
+        this.refreshRoster();
+        this.emit('roster', this.peers);
+        this.emit('peerleft', { id: rec.id, name: rec.name });
+      }
+      const anyOpen = this.conns.some(c => c.open);
       const was = this.connected;
-      this.connected = false;
-      if (was) this.emit('disconnected', {});
+      this.connected = (this.role === CS.NETROLE.HOST) ? anyOpen : false;
+      if (was && !this.connected) this.emit('disconnected', {});
     });
     conn.on('error', e => {
       this.emit('error', { message: (e && e.message) || 'Ошибка соединения' });
     });
+    return rec;
   },
 
-  /* ---------- messaging ---------- */
+  /* ---------- messaging ----------
+     The host relays any message it receives from a client to every other
+     client, so all players see each other in a star topology. `from` and `to`
+     survive the relay untouched. */
   send(msg) {
+    if (this.role === CS.NETROLE.HOST) {
+      if (!this.conns.length) return false;
+      let ok = false;
+      try { this.conns.forEach(c => { if (c.open) { c.conn.send(msg); ok = true; } }); } catch (e) { }
+      return ok;
+    }
     if (!this.conn || !this.conn.open) return false;
     try { this.conn.send(msg); return true; } catch (e) { return false; }
   },
+  /* host-only: forward to every client except `exceptRec` */
+  relay(msg, exceptRec) {
+    if (this.role !== CS.NETROLE.HOST) return;
+    try {
+      this.conns.forEach(c => {
+        if (c.open && c !== exceptRec) c.conn.send(msg);
+      });
+    } catch (e) { }
+  },
+  /* host-only: send to exactly one connection record */
+  sendTo(rec, msg) {
+    if (!rec || !rec.open) return false;
+    try { rec.conn.send(msg); return true; } catch (e) { return false; }
+  },
 
-  _handle(m) {
+  _handle(m, rec) {
     switch (m.t) {
-      case 'hello':
+      case 'hello': {
+        if (rec) { rec.id = m.id || ('c' + this.conns.indexOf(rec)); rec.name = m.name || 'Игрок'; }
         this.partnerName = m.name || 'Игрок';
+        this.refreshRoster();
+        // the host announces the roster (which now includes the new client)
+        if (this.role === CS.NETROLE.HOST && rec) {
+          this.emit('peerjoined', { id: rec.id, name: rec.name });
+        }
         this.emit('hello', m);
+        this.emit('roster', this.peers);
+        break;
+      }
+      case 'roster':
+        // host → everyone: the authoritative list of players in the room
+        this.peers = m.roster || [];
+        if (this.role !== CS.NETROLE.HOST) this.emit('roster', this.peers);
+        break;
+      case 'full':
+        this.emit('full', {});
         break;
       case 'ping':
         this.send({ t: 'pong', s: m.s, time: m.time });
         break;
       case 'pong': {
         const rtt = U.now() - m.time;
-        this.rttSamples.push(rtt);
-        if (this.rttSamples.length > 8) this.rttSamples.shift();
-        this.ping = this.rttSamples.reduce((a, b) => a + b, 0) / this.rttSamples.length;
+        if (this.role === CS.NETROLE.HOST && rec) {
+          rec.rtt.push(rtt); if (rec.rtt.length > 8) rec.rtt.shift();
+          rec.ping = rec.rtt.reduce((a, b) => a + b, 0) / rec.rtt.length;
+          this.ping = Math.max(...this.conns.map(c => c.ping || 0), 0);
+        } else {
+          this.rttSamples.push(rtt);
+          if (this.rttSamples.length > 8) this.rttSamples.shift();
+          this.ping = this.rttSamples.reduce((a, b) => a + b, 0) / this.rttSamples.length;
+        }
         break;
       }
-      case 'state': this.emit('state', m); break;
-      case 'shot': this.emit('shot', m); break;
-      case 'hit': this.emit('hit', m); break;
-      case 'died': this.emit('died', m); break;
-      case 'respawn': this.emit('respawn', m); break;
-      case 'round': this.emit('round', m); break;
-      case 'score': this.emit('score', m); break;
-      case 'chat': this.emit('chat', m); break;
-      case 'bye': this.emit('bye', m); break;
+      /* relayed game messages: `from` names the sender so receivers can route */
+      case 'state': case 'shot': case 'hit': case 'died': case 'respawn':
+      case 'score': case 'chat':
+        if (this.role === CS.NETROLE.HOST) this.relay(m, rec);
+        this.emit(m.t, m);
+        break;
+      case 'round':
+        // round/settings flow is host → clients only; a client never drives it
+        if (this.role === CS.NETROLE.HOST) this.relay(m, rec);
+        this.emit('round', m);
+        break;
+      case 'bye':
+        this.emit('bye', m);
+        break;
       default: this.emit('message', m);
     }
   },
@@ -5595,12 +6282,6 @@ const Net = {
     }
   },
 
-  /* Keep the data channel warm from a timer rather than the render loop: when
-     the tab is backgrounded (or the phone locks) requestAnimationFrame stops and
-     tick() is never called, so the other side saw a silent peer and eventually
-     dropped it. A 1 Hz heartbeat also gives a cheap liveness signal.
-     `keepalive` is set by Game so a backgrounded tab still sends its state —
-     otherwise the opponent's model would freeze while we are hidden. */
   startHeartbeat() {
     this.stopHeartbeat();
     this._hb = setInterval(() => {
@@ -5617,13 +6298,16 @@ const Net = {
     this._closedByUser = true;
     this.stopHeartbeat();
     if (notify && this.connected) { try { this.send({ t: 'bye' }); } catch (e) { } }
+    const conns = this.conns.slice();
     setTimeout(() => {
+      conns.forEach(c => { try { c.conn.close(); } catch (e) { } });
       try { if (this.conn) this.conn.close(); } catch (e) { }
       try { if (this.peer) this.peer.destroy(); } catch (e) { }
     }, notify ? 60 : 0);
-    this.conn = null; this.peer = null;
+    this.conn = null; this.peer = null; this.conns = [];
     this.connected = false; this.connecting = false;
     this.role = CS.NETROLE.NONE;
+    this.peers = [];
     this.rttSamples.length = 0; this.ping = 0;
   }
 };
@@ -5956,15 +6640,18 @@ class Dummy extends Zombie {
 }
 
 /* ---------------- remote player (online) ---------------- */
+let REMOTE_SKIN = 0;
 class RemotePlayer {
-  constructor(name, team, isHostSide) {
-    this.id = 'remote';
+  constructor(name, team, peerId) {
+    this.id = peerId || ('remote' + (REMOTE_SKIN + 1));
+    this.peerId = peerId || this.id;
     this.name = name || 'Игрок';
     this.team = team || 't';
     this.pos = { x: 0, y: 0, z: 0 };
     this.vel = { x: 0, y: 0, z: 0 };
     this.yaw = 0; this.pitch = 0;
     this.health = CFG.maxHP; this.armor = 0; this.helmet = false;
+    this.maxHealth = CFG.maxHP;
     this.alive = true;
     this.kills = 0; this.deaths = 0; this.score = 0;
     this.zombieKills = 0; this.bulletsFired = 0; this.bulletsHit = 0;
@@ -5979,12 +6666,13 @@ class RemotePlayer {
     this.buf = [];
     this.renderPos = { x: 0, y: 0, z: 0 };
     this.renderYaw = 0;
-    this.playT = undefined;         // play-out clock on our own timeline (ms)
+    this.playT = undefined;
     this.weaponGroup = null;
     this.walkPhase = 0;
     this.lastPacket = 0;
     this.slot = 2;
     this.hitFlash = 0;
+    this.seen = false;              // has sent at least one state packet
   }
   /* Snapshots are stamped with the LOCAL ARRIVAL time. That is monotonic by
      construction, so the interpolation search can never be confused by a moving
@@ -6143,10 +6831,11 @@ const _v1 = new THREE.Vector3(), _v2 = new THREE.Vector3(), _v3 = new THREE.Vect
 const Game = {
   /* ---- engine ---- */
   renderer: null, scene: null, camera: null, vmScene: null, vmCamera: null,
-  world: null, effects: null, horde: null, player: null,
+  world: null, effects: null, horde: null, player: null, dummies: [], targets: [], aim: null,
   running: false, mode: CS.MODE.MENU, paused: false,
   baseFov: 80, _last: 0, _loopBound: null, _acc: 0,
   remotePlayers: [], remote: null,
+  matchHP: 100,               // health chosen for this match
   offline: null,
   online: null,
   buyOpen: false,
@@ -6154,6 +6843,7 @@ const Game = {
   roundState: 'idle',   // buy | live | end
   roundT: 0,
   roundNo: 0,
+  aliveRemotes: 0,
   _netStateT: 0,
   _uiT: 0,
   _lastShotFx: 0,
@@ -6161,6 +6851,7 @@ const Game = {
   projectiles: [],
   _projT: 0,
   _enemyCheck: 0, _enemyFound: false,
+  _aimFireHold: 0,
 
   /* ============================================================
      INIT
@@ -6183,7 +6874,8 @@ const Game = {
   },
 
   finishInit() {
-    buildMap(this.scene, this.world, Store.data.quality);
+    buildMap(this.scene, Store.data.quality, Store.data.map);
+    this.world = MAP.world;
     UI.loading(62, 'Компилируем шейдеры…');
     setTimeout(() => {
       if (this.world.raycastAll === undefined) { /* safety no-op */ }
@@ -6257,17 +6949,31 @@ const Game = {
     const q = Store.data.quality;
     this.renderer.shadowMap.enabled = q > 0;
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, q === 2 ? 2 : q === 1 ? 1.4 : 1));
-    if (this.scene) {
-      const sun = this.scene.userData.sun;
-      if (sun) {
-        const size = q === 0 ? 1024 : q === 1 ? 2048 : 4096;
-        if (sun.shadow.mapSize.width !== size) {
-          sun.shadow.mapSize.width = size; sun.shadow.mapSize.height = size;
-          if (sun.shadow.map) { sun.shadow.map.dispose(); sun.shadow.map = null; }
-        }
+    const sun = MAP.group && MAP.group.userData ? MAP.group.userData.sun : null;
+    if (sun) {
+      const size = q === 0 ? 1024 : q === 1 ? 2048 : 4096;
+      if (sun.shadow.mapSize.width !== size) {
+        sun.shadow.mapSize.width = size; sun.shadow.mapSize.height = size;
+        if (sun.shadow.map) { sun.shadow.map.dispose(); sun.shadow.map = null; }
       }
     }
   },
+
+  /* ============================================================
+     MAP SELECTION
+     ============================================================ */
+  setMap(mapId, rebuild) {
+    if (!mapById(mapId)) return;
+    Store.data.map = mapId; Store.save();
+    if (rebuild && this.scene && MAP.group) {
+      buildMap(this.scene, Store.data.quality, mapId);
+      this.world = MAP.world;
+      this.applyQuality();
+      this.scene.fog = new THREE.FogExp2(MAP.def.fog || 0xbcc6cf, MAP.def.fogDensity || 0.0055);
+    }
+    UI.refreshChips();
+  },
+  mapName() { return mapById(Store.data.map).name; },
 
   /* ============================================================
      UI WIRING
@@ -6275,6 +6981,14 @@ const Game = {
   bindUI() {
     bindClick('btnOffline', () => this.startOffline());
     bindClick('btnRange', () => this.startRange());
+    bindClick('btnMatch', () => { this._prevScreen = 'menu'; UI.refreshChips(); UI.show('controls'); });
+    bindClick('btnIos', () => UI.show('ios'));
+    bindClick('btnIosBack', () => UI.show('menu'));
+    bindClick('btnIosCopy', () => {
+      const url = location.href.split('#')[0];
+      try { navigator.clipboard.writeText(url); UI.toast('Ссылка скопирована', '#57d16a'); }
+      catch (e) { UI.toast(url); }
+    });
     bindClick('rpToggle', () => {
       if (this.mode !== CS.MODE.RANGE) return;
       this.toggleAimTrain(!this.aim);
@@ -6288,9 +7002,9 @@ const Game = {
     bindClick('btnLeave', () => this.stopToMenu());
     bindClick('btnReset', () => {
       if (confirm('Сбросить весь прогресс и настройки?')) {
-        Store.data = { sens: 2.2, fov: 80, vol: 60, quality: 1, name: '', best: 0, bestWave: 0, killsTotal: 0, matches: 0, wins: 0, signalSrv: 0, aimBest: 0 };
+        Store.data = { sens: 2.2, fov: 80, vol: 60, quality: 1, touchSens: 1.5, name: '', best: 0, bestWave: 0, killsTotal: 0, matches: 0, wins: 0, signalSrv: 0, aimBest: 0, aimAutoFire: 1, map: 'arena', players: 2, maxHP: 100, aimAssist: 1 };
         Store.save();
-        UI.renderMenuStats(); UI.toast('Прогресс сброшен');
+        UI.refreshChips(); UI.renderMenuStats(); UI.toast('Прогресс сброшен');
       }
     });
     bindClick('btnCopy', () => {
@@ -6308,6 +7022,7 @@ const Game = {
     bindClick('btnJoin', () => {
       UI.el.joinRow.classList.remove('hidden');
       UI.el.hostRow.classList.add('hidden');
+      UI.el.joinWait.classList.add('hidden');
       UI.el.inCode.focus();
     });
     bindClick('btnJoinGo', () => this.doJoin());
@@ -6320,7 +7035,6 @@ const Game = {
       Audio3D_SFX.init(); Audio3D_SFX.resume();
       Input.requestLock();
     });
-
     // pointer lock behaviour
     Input.onLockChange = (locked, wasLocked) => {
       if (!this.running) return;
@@ -6384,6 +7098,10 @@ const Game = {
 
     // network events
     Net.on('hello', m => this.onPeerHello(m));
+    Net.on('peerjoined', p => this.onPeerJoined(p));
+    Net.on('peerleft', p => this.onPeerLeft(p));
+    Net.on('roster', r => this.onRoster(r));
+    Net.on('full', () => { this.setLobbyStatus('Комната заполнена (максимум ' + MATCH.maxPlayers + ' игроков)', true); UI.toast('Комната заполнена', '#e33a2e'); });
     Net.on('connected', () => this.onNetConnected());
     Net.on('disconnected', () => this.onNetDisconnected());
     Net.on('state', s => this.onRemoteState(s));
@@ -6500,6 +7218,8 @@ const Game = {
   startOffline() {
     this.stopToMenu(true);
     this.mode = CS.MODE.OFFLINE;
+    this.ensureMap(Store.data.map);
+    this.matchHP = Store.data.maxHP || 100;
     this.offline = {
       wave: 0, toSpawn: 0, spawnedThisWave: 0, totalThisWave: 0,
       betweenWaves: false, breakT: 0, alive: 0, kills: 0, startTime: U.now()
@@ -6507,6 +7227,8 @@ const Game = {
     this.remotePlayers = []; this.remote = null;
     this.player = new Player({ id: 'p1', name: 'Вы', isLocal: true, team: 'ct' });
     this.player.money = 800;
+    this.player.maxHealth = this.matchHP;
+    this.player.health = this.matchHP;
     this.player.give('glock'); this.player.give('knife');
     this.player.slot = 1;
     this.player.height = CFG.playerHeight;
@@ -6520,7 +7242,19 @@ const Game = {
     this.spawnPlayerLocal(0);
     this.beginBuyPhase(30, 'ВОЛНА 1');
     this.enterGame();
-    UI.toast('Найдите магазин: клавиша B');
+    UI.toast('Карта: ' + this.mapName() + ' · магазин: B', '#ff9d21');
+  },
+
+  /* rebuild the arena when the chosen map differs from the loaded one */
+  ensureMap(mapId) {
+    mapId = mapById(mapId).id;
+    if (!MAP.group || MAP.id !== mapId) {
+      buildMap(this.scene, Store.data.quality, mapId);
+      this.world = MAP.world;
+      this.applyQuality();
+    }
+    Store.data.map = mapId;
+    UI.refreshChips();
   },
 
   attachViewModel() {
@@ -6535,6 +7269,7 @@ const Game = {
   startRange() {
     this.stopToMenu(true);
     this.mode = CS.MODE.RANGE;
+    this.ensureMap(Store.data.map);
     this.offline = null;
     this.online = null;
     this.remotePlayers = []; this.remote = null;
@@ -6543,6 +7278,9 @@ const Game = {
     this.player.money = 999999;          // everything is free here
     this.player.give('glock'); this.player.give('knife');
     this.player.slot = 1;
+    this.player.maxHealth = 100;
+    this.player.health = 100;
+    this.matchHP = 100;
     this.attachViewModel();
 
     // no horde hunting the player; dummies are separate, static targets
@@ -6780,28 +7518,40 @@ const Game = {
   startOnlineHost() { this.startOnline(CS.NETROLE.HOST); },
   startOnlineClient() { this.startOnline(CS.NETROLE.CLIENT); },
 
-  startOnline(role) {
+  startOnline(role, opts) {
+    opts = opts || {};
     this.stopToMenu(true);
     this.mode = CS.MODE.ONLINE;
-    this.online = { role, roundWins: { me: 0, them: 0 }, opponentLeft: false, scoreMe: 0, scoreThem: 0, skipVoteMe: false, skipVoteThem: false };
-    this.remotePlayers = [];
-    this.player = new Player({ id: 'p1', name: (Store.data.name || 'Игрок').slice(0, 14), isLocal: true, team: role === CS.NETROLE.HOST ? 'ct' : 't' });
+    this.online = {
+      role, roundWins: { me: 0, them: 0 }, opponentLeft: false,
+      scoreMe: 0, scoreThem: 0, skipVoteMe: 0, votes: {},
+      voteNeeded: 2, roster: Net.peers.slice(),
+      players: Math.max(2, Net.peerCount ? Net.peerCount() : 2), alive: 1
+    };
+    // settings come from the host (or from the local choice when not networked)
+    const mapId = opts.map || Store.data.map;
+    this.ensureMap(mapId);
+    this.matchHP = opts.hp || (Store.data.maxHP || 100);
+    if (this.online.role === CS.NETROLE.HOST) { Store.data.map = mapId; Store.data.maxHP = this.matchHP; Store.save(); }
+
+    this.remotePlayers = []; this.remote = null;
+    this.player = new Player({ id: 'p1', name: (Store.data.name || 'Игрок').slice(0, 14), isLocal: true, team: 'ct' });
     this.player.money = 800;
     this.player.give('glock'); this.player.give('knife');
     this.player.slot = 1;
+    this.player.maxHealth = this.matchHP;
+    this.player.health = this.matchHP;
     this.attachViewModel();
 
-    const rp = new RemotePlayer(Net.partnerName || 'Соперник', role === CS.NETROLE.HOST ? 't' : 'ct');
-    this.remote = rp;
-    this.remotePlayers = [rp];
-    this.scene.add(rp.mesh);
+    // build a RemotePlayer for every other member of the roster
+    this.syncRemoteRoster();
 
     this.horde = null;
     this.effects = new Effects(this.scene, Store.data.quality);
     this.effects.clear();
 
-    this.spawnPlayerLocal(role === CS.NETROLE.HOST ? 0 : 3);
-    this.beginBuyPhase(30, role === CS.NETROLE.HOST ? 'РАУНД 1' : 'РАУНД 1');
+    this.spawnPlayerLocal(0);
+    this.beginBuyPhase(30, 'РАУНД 1');
     this.enterGame();
     this._peerWarned = false; this._peerLost = false;
     this._silentT = 0; this._lastSeenPacket = 0;
@@ -6812,7 +7562,72 @@ const Game = {
       if (this.mode !== CS.MODE.ONLINE || !Net.connected) return;
       this.broadcastState();
     };
-    UI.toast('Убейте соперника. Магазин: B');
+    UI.toast('Карта: ' + this.mapName() + ' · HP ' + this.matchHP, '#ff9d21');
+  },
+
+  /* ============================================================
+     ONLINE ROSTER
+     A star network: the host keeps the authoritative roster and relays it.
+     Every other player gets a RemotePlayer mesh; the local player's own entry
+     in the roster is skipped.
+     ============================================================ */
+  onRoster(roster) {
+    UI.renderPeerList();
+    if (this.mode !== CS.MODE.ONLINE || !this.online) return;
+    this.online.roster = roster || [];
+    this.online.players = Math.max(2, this.online.roster.length || Net.peerCount());
+    this.syncRemoteRoster();
+    this.refreshSkipUI();
+  },
+
+  /* add/remove RemotePlayer objects so the scene matches the roster */
+  syncRemoteRoster() {
+    if (this.mode !== CS.MODE.ONLINE || !this.online) return;
+    const roster = (this.online.roster && this.online.roster.length)
+      ? this.online.roster
+      : (Net.peers && Net.peers.length ? Net.peers : [{ id: 'them', name: Net.partnerName || 'Соперник', isHost: Net.role === CS.NETROLE.CLIENT }]);
+
+    // never model ourselves
+    const myId = Net.selfId();
+    const others = roster.filter(p => p.id !== myId && !(Net.role === CS.NETROLE.HOST && p.isHost));
+    const seen = {};
+
+    for (const p of others) {
+      seen[p.id] = true;
+      let rp = this.remotePlayers.find(r => r.peerId === p.id);
+      if (!rp) {
+        const team = 't';
+        rp = new RemotePlayer(p.name, team, p.id);
+        rp.maxHealth = this.matchHP;
+        this.remotePlayers.push(rp);
+        this.scene.add(rp.mesh);
+      } else if (rp.name !== p.name) {
+        rp.name = p.name;
+        rp.plate.material.map.dispose();
+        const np = makeNameplate(p.name); rp.plate.material.map = np.material.map;
+      }
+    }
+    // drop remotes that left
+    for (let i = this.remotePlayers.length - 1; i >= 0; i--) {
+      const rp = this.remotePlayers[i];
+      if (!seen[rp.peerId]) {
+        this.scene.remove(rp.mesh);
+        rp.mesh.traverse(o => { if (o.geometry) o.geometry.dispose(); });
+        this.remotePlayers.splice(i, 1);
+        if (this.remote === rp) this.remote = null;
+      }
+    }
+    this.remote = this.remotePlayers[0] || null;
+  },
+
+  onPeerJoined(p) {
+    UI.toast('Подключился: ' + (p.name || 'Игрок'), '#57d16a');
+    UI.renderPeerList();
+  },
+
+  onPeerLeft(p) {
+    UI.toast('Игрок вышел: ' + (p.name || '?'), '#e33a2e');
+    UI.renderPeerList();
   },
 
   enterGame() {
@@ -6844,19 +7659,26 @@ const Game = {
   },
 
   stopToMenu(keepRunning) {
+    const clearWorld = () => {
+      this.clearProjectiles();
+      this.clearDummies();
+      this.clearTargets();
+      if (this.horde) { this.horde.clear(); this.horde = null; }
+      for (const rp of this.remotePlayers || []) {
+        this.scene.remove(rp.mesh);
+        rp.mesh.traverse(o => { if (o.geometry) o.geometry.dispose(); });
+      }
+      this.remotePlayers = []; this.remote = null;
+      if (this.player && this.player.vmGroup && this.player.vmGroup.parent) this.player.vmGroup.parent.remove(this.player.vmGroup);
+      if (this.effects) { this.effects.clear(); }
+    };
     if (!keepRunning) {
       this.running = false;
       Input.enabled = false;
       Input.releaseLock();
       Audio3D_SFX.ambientStop();
       this.mode = CS.MODE.MENU;
-      this.clearProjectiles();
-      this.clearDummies();
-      this.clearTargets();
-      if (this.horde) { this.horde.clear(); this.horde = null; }
-      if (this.remote) { this.scene.remove(this.remote.mesh); this.remote = null; }
-      if (this.player && this.player.vmGroup && this.player.vmGroup.parent) this.player.vmGroup.parent.remove(this.player.vmGroup);
-      if (this.effects) { this.effects.clear(); }
+      clearWorld();
       this.offline = null; this.online = null;
       UI.hideOverlays();
       UI.lowHP(false);
@@ -6864,14 +7686,7 @@ const Game = {
       UI.show('menu');
       Net.close(true);
     } else {
-      this.clearProjectiles();
-      this.clearDummies();
-      this.clearTargets();
-      if (this.horde) { this.horde.clear(); this.horde = null; }
-      if (this.remote) { this.scene.remove(this.remote.mesh); this.remote = null; }
-      if (this.player && this.player.vmGroup && this.player.vmGroup.parent) this.player.vmGroup.parent.remove(this.player.vmGroup);
-      if (this.effects) this.effects.clear();
-      this.remotePlayers = [];
+      clearWorld();
     }
     this.buyOpen = false;
     this.roundState = 'idle';
@@ -6913,71 +7728,82 @@ const Game = {
     }
   },
 
-  /* ---------------- ready-up: both players may skip the buy phase ----------
-     The buy phase is a fixed clock, so waiting out the full time when both
-     players have already finished shopping is dead time. Either side may press
-     ГОТОВ; the round starts as soon as BOTH have voted (or the clock runs out). */
+  /* ---------------- ready-up: every player may skip the buy phase ----------
+     The buy phase is a fixed clock, so waiting out the full time when everyone
+     has already shopped is dead time. Each player presses ГОТОВ; the round
+     starts as soon as ALL players have voted (or the clock runs out). The host
+     tallies the votes and broadcasts the start. */
   resetSkipVotes() {
-    if (this.online) { this.online.skipVoteMe = false; this.online.skipVoteThem = false; }
+    if (this.online) {
+      this.online.skipVoteMe = 0;
+      this.online.votes = {};      // host only: peerId → true
+    }
     this.refreshSkipUI();
+  },
+
+  onlinePlayerCount() {
+    if (!this.online) return 2;
+    return this.online.players || 2;
   },
 
   refreshSkipUI() {
     const b = UI.el.btnBuySkip;
     if (!b) return;
-    const me = !!(this.online && this.online.skipVoteMe);
-    const them = !!(this.online && this.online.skipVoteThem);
     if (this.mode === CS.MODE.OFFLINE) {
       b.textContent = 'НАЧАТЬ ВОЛНУ';
       b.classList.remove('waiting');
       return;
     }
     if (this.mode === CS.MODE.RANGE) {
-      // there is no buy timer to skip on the range
       b.textContent = 'ПОЛИГОН';
       b.classList.add('waiting');
       return;
     }
-    if (me && them) { b.textContent = 'СТАРТ…'; b.classList.add('waiting'); }
-    else if (me) { b.textContent = 'ЖДЁМ СОПЕРНИКА…'; b.classList.add('waiting'); }
-    else if (them) { b.textContent = 'СОПЕРНИК ГОТОВ · ГОТОВ'; b.classList.remove('waiting'); }
+    const me = !!(this.online && this.online.skipVoteMe);
+    const voted = this.online ? Object.keys(this.online.votes || {}).length : 0;
+    const need = this.onlinePlayerCount();
+    if (me && voted >= need) { b.textContent = 'СТАРТ…'; b.classList.add('waiting'); }
+    else if (me) { b.textContent = 'ГОТОВ ✓ · ' + voted + '/' + need; b.classList.add('waiting'); }
+    else if (voted > 0) { b.textContent = 'ГОТОВ · ' + voted + '/' + need; b.classList.remove('waiting'); }
     else { b.textContent = 'ГОТОВ'; b.classList.remove('waiting'); }
   },
 
   voteSkipBuy() {
-    if (this.mode === CS.MODE.RANGE) return;          // nothing to skip
+    if (this.mode === CS.MODE.RANGE) return;
     if (this.roundState !== 'buy') { Audio3D_SFX.deny(); return; }
-    // offline survival: the button simply starts the wave early
     if (this.mode === CS.MODE.OFFLINE) {
       if (this.buyOpen) this.toggleBuy(false);
       this.startLive();
       return;
     }
     if (this.mode !== CS.MODE.ONLINE || !this.online) return;
-    if (this.online.skipVoteMe) return;                 // already voted
-    this.online.skipVoteMe = true;
-    Net.send({ t: 'round', st: 'skip', no: this.roundNo });
+    if (this.online.skipVoteMe) return;
+    this.online.skipVoteMe = 1;
+    const id = Net.selfId();
+    if (Net.role === CS.NETROLE.HOST) this.online.votes[id] = true;
+    Net.send({ t: 'round', st: 'skip', no: this.roundNo, from: id });
     this.refreshSkipUI();
     if (this.buyOpen) UI.renderBuy(this.player, this.buyTimer);
     this.maybeEndBuy();
   },
 
-  /* host-only: start the round once both sides are ready */
+  /* host-only: start the round once every player is ready */
   maybeEndBuy() {
     if (this.roundState !== 'buy') return;
     if (this.mode !== CS.MODE.ONLINE) return;
-    if (!this.online || !this.online.skipVoteMe || !this.online.skipVoteThem) return;
-    if (Net.role !== CS.NETROLE.HOST) return;            // client waits for host's 'live'
+    if (!this.online) return;
+    if (Net.role !== CS.NETROLE.HOST) return;
+    const need = this.onlinePlayerCount();
+    if (Object.keys(this.online.votes || {}).length < need) return;
     if (this.buyOpen) this.toggleBuy(false);
     this.startLive();
   },
 
-  onSkipVoteMsg() {
+  onSkipVoteMsg(m) {
     if (!this.online) return;
-    this.online.skipVoteThem = true;
+    if (Net.role === CS.NETROLE.HOST && m && m.from) this.online.votes[m.from] = true;
     this.refreshSkipUI();
     if (this.buyOpen) UI.renderBuy(this.player, this.buyTimer);
-    // as the client, both-ready is resolved by the host's 'live' broadcast
     this.maybeEndBuy();
   },
 
@@ -7062,12 +7888,13 @@ const Game = {
   startLive() {
     this.roundState = 'live';
     this.roundT = CFG.roundTime;
-    UI.center('В БОЙ!', this.mode === 'online' ? 'Уничтожьте соперника' : 'Волна ' + (this.offline ? this.offline.wave : 1), 1.4);
+    const last = this.onlinePlayerCount() > 2;
+    UI.center('В БОЙ!', this.mode === 'online' ? (last ? 'Выживает сильнейший · ' + this.matchHP + ' HP' : 'Уничтожьте соперника') : 'Волна ' + (this.offline ? this.offline.wave : 1), 1.4);
     if (this.mode === CS.MODE.OFFLINE && this.offline) {
       this.startWave();
     }
     if (this.mode === CS.MODE.ONLINE && Net.role === CS.NETROLE.HOST) {
-      Net.send({ t: 'round', st: 'live', time: CFG.roundTime, no: this.roundNo });
+      Net.send({ t: 'round', st: 'live', time: CFG.roundTime, no: this.roundNo, hp: this.matchHP, map: MAP.id, players: this.onlinePlayerCount() });
     }
   },
 
@@ -7076,8 +7903,7 @@ const Game = {
     this.roundState = 'end';
     this.roundT = 4.0;
     if (this.mode === CS.MODE.ONLINE) {
-      // The host owns the authoritative result and broadcasts it, so both
-      // clients agree on the score no matter who died first.
+      // The host owns the authoritative result and broadcasts it.
       if (Net.role === CS.NETROLE.HOST) {
         if (winnerIsMe === true) this.online.roundWins.me++;
         else if (winnerIsMe === false) this.online.roundWins.them++;
@@ -7085,9 +7911,9 @@ const Game = {
         this.online.scoreThem = this.online.roundWins.them;
         const won = winnerIsMe === true;
         const txt = won ? 'РАУНД ВЫИГРАН' : winnerIsMe === false ? 'РАУНД ПРОИГРАН' : 'НИЧЬЯ';
-        UI.center(txt, this.online.scoreMe + ' : ' + this.online.scoreThem, 2.6);
+        UI.center(txt, this.online.scoreMe + ' : ' + this.online.scoreThem + (reason ? ' · ' + reason : ''), 2.6);
         Audio3D_SFX.roundEnd(won);
-        Net.send({ t: 'round', st: 'end', win: won ? 'host' : winnerIsMe === false ? 'client' : 'draw' });
+        Net.send({ t: 'round', st: 'end', win: won ? 'host' : winnerIsMe === false ? 'client' : 'draw', no: this.roundNo });
         setTimeout(() => { if (this.roundState === 'end' && this.mode === CS.MODE.ONLINE) this.nextRound(); }, 4200);
       }
       // clients react to the host's 'round:end' message instead
@@ -7097,21 +7923,21 @@ const Game = {
   nextRound() {
     if (this.mode !== CS.MODE.ONLINE) return;
     if (Net.role !== CS.NETROLE.HOST) return;   // host drives the flow
-    // only advance to a new round once the round actually ended
     if (this.roundState !== 'end') return;
     this.doNewRound();
     Net.send({ t: 'round', st: 'newround', no: this.roundNo });
   },
 
   doNewRound() {
-    // host-only: reset both fighters, hand out cash, then open the buy phase
-    this.player.health = CFG.maxHP;
+    // host-only: reset every fighter, hand out cash, then open the buy phase
+    this.player.maxHealth = this.matchHP;
+    this.player.health = this.matchHP;
     this.player.armor = 0; this.player.helmet = false;
     this.player.alive = true;
     this.player.money = Math.min(16000, this.player.money + 1400);
-    this.spawnPlayerLocal(Math.random() < .5 ? 0 : 3);
-    if (this.remote) { this.remote.alive = true; this.remote.health = CFG.maxHP; }
-    Net.send({ t: 'respawn', x: this.player.pos.x, y: this.player.pos.y, z: this.player.pos.z, yaw: this.player.yaw });
+    this.spawnPlayerLocal(Math.floor(Math.random() * Math.max(1, MAP.playerSpawns.length)));
+    for (const rp of this.remotePlayers) { rp.alive = true; rp.health = this.matchHP; rp.maxHealth = this.matchHP; }
+    this.broadcastRespawn();
     this.beginBuyPhase(25, 'РАУНД ' + (this.roundNo + 1));
   },
 
@@ -7221,19 +8047,19 @@ const Game = {
      rather than aims for the player). */
   touchAssist() {
     if (!IS_TOUCH) return { x: 0, y: 0 };
+    if (Store.data.aimAssist === 0) return { x: 0, y: 0 };
     const p = this.player;
     if (!p || !p.alive) return { x: 0, y: 0 };
     const eye = this.eyePos();
     const o = { x: eye.x, y: eye.y, z: eye.z };
     const dir = this.cameraDir();
     const T = 60;
-    const hit = (this.mode === CS.MODE.OFFLINE && this.horde) ? this.horde.raycast(o, dir, T) : null;
+    let hit = null;
+    if (this.mode === CS.MODE.OFFLINE && this.horde) hit = this.horde.raycast(o, dir, T);
+    else if (this.mode === CS.MODE.ONLINE) hit = this.rayRemoteAny(o, dir, T);
     let tp = null;
-    if (hit) tp = { x: o.x + dir.x * hit.t, y: o.y + dir.y * hit.t, z: o.z + dir.z * hit.t };
-    else if (this.mode === CS.MODE.ONLINE && this.remote && this.remote.alive) {
-      const h = this.rayRemotePlayer(o, dir, T);
-      if (h) tp = h.point;
-    }
+    if (hit && hit.point) tp = hit.point;
+    else if (hit) tp = { x: o.x + dir.x * hit.t, y: o.y + dir.y * hit.t, z: o.z + dir.z * hit.t };
     if (!tp) return { x: 0, y: 0 };
     const dx = tp.x - o.x, dy = tp.y - o.y, dz = tp.z - o.z;
     const dist = Math.hypot(dx, dy, dz) || 1;
@@ -7242,8 +8068,9 @@ const Game = {
     let dYaw = ((wantYaw - p.yaw + Math.PI) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2) - Math.PI;
     let dPitch = wantPitch - p.pitch;
     // only assist when already pointing close to the target
-    if (Math.abs(dYaw) > 0.10 || Math.abs(dPitch) > 0.10) return { x: 0, y: 0 };
-    return { x: dYaw * 0.14, y: dPitch * 0.14 };
+    const lim = (this.mode === CS.MODE.ONLINE) ? 0.14 : 0.10;
+    if (Math.abs(dYaw) > lim || Math.abs(dPitch) > lim) return { x: 0, y: 0 };
+    return { x: dYaw * 0.16, y: dPitch * 0.16 };
   },
 
   cameraDir() {
@@ -7403,10 +8230,10 @@ const Game = {
       // ---- hit the horde? ----
       let hitZ = null;
       if (this.horde) hitZ = this.horde.raycast(pr.pos, dir, segLen + 0.35);
-      // ---- hit the opponent? ----
+      // ---- hit an opponent? ----
       let hitP = null;
-      if (this.mode === CS.MODE.ONLINE && this.remote && this.remote.alive) {
-        const h = this.rayRemotePlayer(pr.pos, dir, segLen + 0.35);
+      if (this.mode === CS.MODE.ONLINE) {
+        const h = this.rayRemoteAny(pr.pos, dir, segLen + 0.35);
         if (h && (!hitZ || h.t < hitZ.t)) hitP = h;
       }
       // ---- hit the world? ----
@@ -7424,7 +8251,7 @@ const Game = {
           const hs = hitP.part === 'head';
           const limb = hitP.part === 'legs';
           const mul = hs ? pr.headMul : limb ? CFG.limbMultiplier : 1;
-          this.sendPvpHit(pr.dmg * mul, hitP.part, hs);
+          this.sendPvpHit(pr.dmg * mul, hitP.part, hs, hitP.rp);
           impactPoint = hitP.point;
         } else {
           const killed = hitZ.zombie.takeDamage(pr.dmg, hitZ.part, dir);
@@ -7491,13 +8318,15 @@ const Game = {
         if (killed) { /* scored in onZombieDied */ }
       }
     }
-    // the opponent
-    if (this.mode === CS.MODE.ONLINE && this.remote && this.remote.alive) {
-      const rp = this.remote;
-      const d = Math.hypot(rp.pos.x - center.x, (rp.pos.y + 1) - center.y, rp.pos.z - center.z);
-      if (d <= R) {
-        const k = 1 - d / R;
-        this.sendPvpHit(dmg * k, 'body', false);
+    // the opponents
+    if (this.mode === CS.MODE.ONLINE) {
+      for (const rp of this.remotePlayers) {
+        if (!rp.alive) continue;
+        const d = Math.hypot(rp.pos.x - center.x, (rp.pos.y + 1) - center.y, rp.pos.z - center.z);
+        if (d <= R) {
+          const k = 1 - d / R;
+          this.sendPvpHit(dmg * k, 'body', false, rp);
+        }
       }
     }
     // splash back on the shooter, so point-blank rockets hurt
@@ -7573,23 +8402,24 @@ const Game = {
       break;
     }
 
-    // online: also test the opponent
+    // the opponents (everyone else in the room)
     let pvpHit = null;
-    if (this.mode === CS.MODE.ONLINE && this.remote && this.remote.alive) {
-      pvpHit = this.rayRemotePlayer(origin, dir, maxDist);
+    if (this.mode === CS.MODE.ONLINE) {
+      pvpHit = this.rayRemoteAny(origin, dir, maxDist);
+      // resolve below if it is closer than the wall and any zombie
       if (pvpHit && (zHit ? pvpHit.t < zHit.t || !zHit : true) && pvpHit.t <= stopT) {
-        // resolve below
+        // ok
       } else pvpHit = null;
     }
 
     if (pvpHit && pvpHit.t <= stopT && (!zHit || pvpHit.t < zHit.t)) {
-      // hit the opposing player
+      // hit an opposing player
       p.bulletsHit++;
       const hs = pvpHit.part === 'head';
       const limb = pvpHit.part === 'legs';
       const partMul = hs ? (def.headMul || CFG.headshotMultiplier) : limb ? CFG.limbMultiplier : 1;
       const dmg = def.dmg * partMul * dmgMul;
-      this.sendPvpHit(dmg, pvpHit.part, hs);
+      this.sendPvpHit(dmg, pvpHit.part, hs, pvpHit.rp);
       this.hitEffect(pvpHit.point, dir, pvpHit.part, hs);
       Audio3D_SFX.hit(pvpHit.point.x, pvpHit.point.y, pvpHit.point.z, hs);
       this.effects.tracer(muzzleWorld, pvpHit.point, 1, true);
@@ -7641,22 +8471,36 @@ const Game = {
   },
 
   traceRemotePlayer(origin, dir, maxDist, def) {
-    // knife swing against the opponent
-    if (this.mode !== CS.MODE.ONLINE || !this.remote || !this.remote.alive) return;
-    const h = this.rayRemotePlayer(origin, dir, maxDist);
+    // knife swing against everyone else in the room
+    if (this.mode !== CS.MODE.ONLINE) return;
+    const h = this.rayRemoteAny(origin, dir, maxDist);
     if (h) {
       const hs = h.part === 'head';
       const dmg = def.dmg * (hs ? 2 : 1);
-      this.sendPvpHit(dmg, h.part, hs);
+      this.sendPvpHit(dmg, h.part, hs, h.rp);
       this.effects.bloodBurst(h.point, dir, 8);
       Audio3D_SFX.hit(h.point.x, h.point.y, h.point.z, hs);
     }
   },
 
+  /* closest hit among every remote player */
+  rayRemoteAny(origin, dir, maxDist) {
+    let best = null;
+    for (const rp of this.remotePlayers) {
+      if (!rp.alive) continue;
+      const h = this.rayRemotePlayerFor(rp, origin, dir, maxDist);
+      if (h && (!best || h.t < best.t)) { h.rp = rp; best = h; }
+    }
+    return best;
+  },
+
+  /* kept for compatibility: raycast against the first remote */
   rayRemotePlayer(origin, dir, maxDist) {
-    const rp = this.remote;
+    return this.remote ? this.rayRemotePlayerFor(this.remote, origin, dir, maxDist) : null;
+  },
+
+  rayRemotePlayerFor(rp, origin, dir, maxDist) {
     if (!rp || !rp.alive) return null;
-    const r = rp.crouching ? .42 : .44;
     const base = { x: rp.pos.x, y: rp.pos.y, z: rp.pos.z };
     const parts = [
       { part: 'head', y0: rp.height * .78, y1: rp.height * 1.02, r: .19 },
@@ -7673,10 +8517,17 @@ const Game = {
     return best;
   },
 
-  sendPvpHit(dmg, part, headshot) {
+  /* Report a hit to the shooter's victim. In the star network only the victim
+     may apply it, so every hit carries the target's peer id. */
+  sendPvpHit(dmg, part, headshot, rp) {
     UI.hitmark(false);
     this._hitmarkT = U.now();
-    Net.send({ t: 'hit', dmg: Math.round(dmg), part, hs: headshot ? 1 : 0, at: U.now() });
+    const target = rp || this.remote;
+    Net.send({
+      t: 'hit', dmg: Math.round(dmg), part, hs: headshot ? 1 : 0, at: U.now(),
+      to: target ? target.peerId : undefined,
+      from: Net.selfId()
+    });
   },
 
   playerHurt(dmg, source) {
@@ -7726,9 +8577,15 @@ const Game = {
       this.offlineDead = true;
     } else {
       UI.center('ВАС УБИЛИ', this.online ? ('Счёт ' + this.online.scoreMe + ' : ' + this.online.scoreThem) : '', 2.6);
-      Net.send({ t: 'died', at: U.now() });
+      // report who killed us so only they get the credit in a 3–4 player room
+      Net.send({
+        t: 'died', at: U.now(),
+        from: Net.selfId(),
+        by: this._lastHitBy || undefined
+      });
+      this._lastHitBy = null;
       // the host decides the round result; the client waits for its message
-      if (Net.role === CS.NETROLE.HOST) this.endRound(false, 'death');
+      if (Net.role === CS.NETROLE.HOST) this.checkRoundEnd();
     }
   },
 
@@ -7826,56 +8683,57 @@ const Game = {
 
   onPeerHello(m) {
     Net.partnerName = m.name;
-    UI.toast('Подключился: ' + m.name, '#57d16a');
-    // both peers start the match; the host's beginBuyPhase (called inside
-    // startOnline) broadcasts the authoritative round state to the client
+    // The first hello starts the match. Later joins just add a remote; the host
+    // resends the current round state so a late arrival is not left behind.
+    if (this.mode === CS.MODE.ONLINE) {
+      this.syncRemoteRoster();
+      return;
+    }
     this.startOnline(Net.role);
+    // as host, tell everyone already here about the new player
+    if (Net.role === CS.NETROLE.HOST) Net.send({ t: 'roster', roster: Net.peers });
   },
 
   onNetConnected() {
     UI.el.connTitle.textContent = 'СОЕДИНЕНО';
-    UI.el.connStatus.textContent = 'Ожидание соперника…';
+    UI.el.connStatus.textContent = 'Ожидание игроков…';
     this.setLobbyStatus('Соединено!', false);
+    UI.renderPeerList();
   },
 
   onNetDisconnected() {
     if (this.mode !== CS.MODE.ONLINE) return;
     if (this._leaving) return;
+    // A client losing its only link to the host means the room is gone.
+    if (Net.role === CS.NETROLE.HOST && Net.conns.some(c => c.open)) return;
     this._leaving = true;
-    UI.toast('Соперник отключился', '#e33a2e');
-    UI.center('СОПЕРНИК ОТКЛЮЧИЛСЯ', 'Выход в меню через 5 секунд', 5.0);
+    UI.toast('Связь потеряна', '#e33a2e');
+    UI.center('СОЕДИНЕНИЕ ПОТЕРЯНО', 'Выход в меню через 5 секунд', 5.0);
     setTimeout(() => { if (this.mode === CS.MODE.ONLINE && this._leaving) this.stopToMenu(); }, 5200);
   },
 
-  /* Watchdog: the data channel can stay "open" while the peer stops sending
-     (backgrounded tab, locked phone, dead NAT mapping).
-     Silence is measured in GAME time (accumulated dt), never in wall-clock time:
-     when the page is hidden or the phone locks, rAF stops and dt stops too, so
-     our own stall is not mistaken for a dead opponent. (Measuring with
-     performance.now() made a returning tab see a multi-second "gap" and eject
-     the match instantly.) */
+  /* Watchdog: the data channel can stay "open" while a peer stops sending
+     (backgrounded tab, locked phone, dead NAT mapping). We only drop the match
+     when everyone has gone quiet; one silent player is handled by roster. */
   checkPeerAlive(dt) {
-    if (this.mode !== CS.MODE.ONLINE) return;
-    if (!this.remote || !Net.connected) return;
-    if (!this.remote.lastPacket) return;
+    if (this.mode !== CS.MODE.ONLINE || !Net.connected) return;
+    const any = this.remotePlayers.some(rp => rp.lastPacket);
+    if (!any) return;
 
-    // a fresh packet clears the timer
-    if (this.remote.lastPacket !== this._lastSeenPacket) {
-      this._lastSeenPacket = this.remote.lastPacket;
-      this._silentT = 0;
-      this._peerWarned = false;
-      return;
+    let fresh = false;
+    for (const rp of this.remotePlayers) {
+      if (rp.lastPacket && rp.lastPacket !== rp._seenPacket) { rp._seenPacket = rp.lastPacket; fresh = true; }
     }
+    if (fresh) { this._silentT = 0; this._peerWarned = false; return; }
 
     this._silentT = (this._silentT || 0) + dt;
     if (this._silentT > 4 && !this._peerWarned) {
       this._peerWarned = true;
-      UI.toast('Соперник не отвечает…', '#f5d33c');
-      UI.center('ЖДЁМ СОПЕРНИКА', 'Проверьте соединение', 2.0);
-      // nudge the transport: this often revives a stalled channel
-      try { if (Net.conn && Net.conn.open) Net.send({ t: 'ping', s: 'hb', time: U.now() }); } catch (e) { }
+      UI.toast('Игроки не отвечают…', '#f5d33c');
+      UI.center('ЖДЁМ ИГРОКОВ', 'Проверьте соединение', 2.0);
+      try { if (Net.connected) Net.send({ t: 'ping', s: 'hb', time: U.now() }); } catch (e) { }
     }
-    if (this._silentT > 12 && !this._peerLost) {
+    if (this._silentT > 14 && !this._peerLost) {
       this._peerLost = true;
       this.onNetDisconnected();
     }
@@ -7886,6 +8744,7 @@ const Game = {
     const p = this.player;
     Net.send({
       t: 'state', rt: U.now(),
+      from: Net.selfId(),
       x: +p.pos.x.toFixed(2), y: +p.pos.y.toFixed(2), z: +p.pos.z.toFixed(2),
       yw: +p.yaw.toFixed(3), pt: +p.pitch.toFixed(3),
       alive: p.alive ? 1 : 0, cr: p.crouching ? 1 : 0,
@@ -7897,28 +8756,33 @@ const Game = {
   broadcastScore() {
     if (this.mode !== CS.MODE.ONLINE || !Net.connected) return;
     const p = this.player;
-    Net.send({ t: 'score', k: p.kills, d: p.deaths, sc: p.score, hp: Math.round(p.health), ar: Math.round(p.armor), m: Math.round(p.money) });
+    Net.send({ t: 'score', from: Net.selfId(), k: p.kills, d: p.deaths, sc: p.score, hp: Math.round(p.health), ar: Math.round(p.armor), m: Math.round(p.money) });
+  },
+
+  /* find the RemotePlayer a relayed message came from */
+  remoteById(id) {
+    if (!id) return this.remote;
+    return this.remotePlayers.find(r => r.peerId === id) || this.remote;
   },
 
   onRemoteState(s) {
-    if (!this.remote) return;
+    const rp = this.remoteById(s.from);
+    if (!rp) return;
     this._silentT = 0; this._peerWarned = false; this._peerLost = false;
-    this.remote.pushSnapshot(s);
-    if (s.k !== undefined) { this.remote.kills = s.k; this.remote.deaths = s.d; this.remote.score = s.sc; }
-    if (s.hp !== undefined) this.remote.health = s.hp;
-    this.remote.slot = s.sl;
-    if (!s.alive && this.remote.alive) { /* they died */ }
+    rp.seen = true;
+    rp.pushSnapshot(s);
+    if (s.k !== undefined) { rp.kills = s.k; rp.deaths = s.d; rp.score = s.sc; }
+    if (s.hp !== undefined) rp.health = s.hp;
+    rp.slot = s.sl;
   },
 
   onRemoteShot(s) {
-    if (!this.remote) return;
+    const rp = this.remoteById(s.from);
+    if (!rp) return;
     const def = WEAPONS[s.wid] || WEAPONS.ak47;
-    // tracer from their muzzle
-    const rp = this.remote;
     const from = { x: s.ox, y: s.oy, z: s.oz };
     const dir = { x: s.dx, y: s.dy, z: s.dz };
     const maxDist = def.range || 100;
-    // compute where it lands against our world (visual only)
     const wallHits = this.world.raycastAll(from, dir, maxDist, ['ground']);
     let endT = maxDist, p = null, n = null;
     for (const h of wallHits) { endT = h.t; p = h.point; n = h.normal; break; }
@@ -7929,77 +8793,111 @@ const Game = {
   },
 
   onRemoteHit(h) {
-    // the opponent reports they hit *us* → apply the damage locally
+    // A hit is only ours when we are the named victim; otherwise the host's
+    // relay delivered a hit that belongs to another player.
     if (this.mode !== CS.MODE.ONLINE) return;
-    // trust the shooter's hit; apply it
-    this.applyDamageToSelf(h.dmg, this.remote ? { x: this.remote.pos.x, y: this.remote.pos.y + 1.2, z: this.remote.pos.z } : null);
+    const myId = Net.selfId();
+    const me = !h.to || h.to === myId || (this.remotePlayers.length === 1 && !h.to);
+    if (!me) return;
+    const src = this.remoteById(h.from);
+    this._lastHitBy = h.from;                // remembered so we can name our killer
+    this.applyDamageToSelf(h.dmg, src ? { x: src.pos.x, y: src.pos.y + 1.2, z: src.pos.z } : null);
   },
 
   onRemoteDied(d) {
-    if (!this.remote) return;
-    this.remote.alive = false;
-    // Credit the local player: the opponent's death is authoritative from
-    // their own client, so this is the correct place to score the kill.
-    this.player.kills++;
-    this.player.score += 300;
-    Audio3D_SFX.kill();
-    UI.hitmark(true);
-    UI.feed('<b>' + U.esc(this.player.name) + '</b> ✖ <span style="color:#ff6b5b">' + U.esc(this.remote.name) + '</span>');
-    UI.center('СОПЕРНИК УНИЧТОЖЕН', '', 2.0);
-    Store.data.killsTotal++;
-    Store.save();
-    if (Net.role === CS.NETROLE.HOST) this.endRound(true, 'kill');
-    else if (this.online) this.online.scoreMe = this.online.roundWins.me;
+    const rp = this.remoteById(d.from);
+    if (!rp) return;
+    rp.alive = false;
+    // Credit is only given when the victim named us as the killer. In a 2-player
+    // room there is only one possible killer, so an untagged death still counts.
+    const myId = Net.selfId();
+    const credited = d.by ? d.by === myId : this.remotePlayers.length === 1;
+    if (credited) {
+      this.player.kills++;
+      this.player.score += 300;
+      Audio3D_SFX.kill();
+      UI.hitmark(true);
+      UI.feed('<b>' + U.esc(this.player.name) + '</b> ✖ <span style="color:#ff6b5b">' + U.esc(rp.name) + '</span>');
+      UI.center('ИГРОК УНИЧТОЖЕН', '', 2.0);
+      Store.data.killsTotal++;
+      Store.save();
+    } else {
+      UI.feed('<span style="color:#ff6b5b">' + U.esc(rp.name) + '</span> ✖ уничтожен');
+    }
+    // Host checks the win condition with the new death count.
+    if (Net.role === CS.NETROLE.HOST) this.checkRoundEnd();
   },
 
   onRemoteRespawn(r) {
-    if (!this.remote) return;
-    this.remote.alive = true;
-    this.remote.health = CFG.maxHP;
-    this.remote.applySnap({ x: r.x, y: r.y, z: r.z, yw: r.yaw, pt: 0, alive: 1, cr: 0 });
-    this.remote.buf.length = 0;
-    this.remote.mesh.visible = true;
-    this.remote.mesh.scale.y = 1;
+    // a respawn applies to the player named in `from`; when untagged (older
+    // peer) fall back to moving everyone so the round still restarts
+    const rp = this.remoteById(r.from);
+    const list = (r.from && rp) ? [rp] : this.remotePlayers.slice();
+    for (const x of list) {
+      x.alive = true;
+      x.health = r.hp || this.matchHP;
+      x.maxHealth = r.hp || this.matchHP;
+      x.applySnap({ x: r.x, y: r.y, z: r.z, yw: r.yaw, pt: 0, alive: 1, cr: 0 });
+      x.buf.length = 0;
+      x.mesh.visible = true;
+      x.mesh.scale.y = 1;
+    }
   },
 
+  /* tell the room where we respawned */
+  broadcastRespawn() {
+    if (this.mode !== CS.MODE.ONLINE || !Net.connected) return;
+    const p = this.player;
+    Net.send({
+      t: 'respawn', from: Net.selfId(),
+      x: p.pos.x, y: p.pos.y, z: p.pos.z, yaw: p.yaw, hp: this.matchHP
+    });
+  },
   onRoundMsg(r) {
     if (this.mode !== CS.MODE.ONLINE) return;
-    // The ready-up vote is symmetrical: either side may send it, so it must be
-    // handled before the client-only guard below (otherwise the host silently
-    // ignored the client's vote and the buy phase never skipped).
-    if (r.st === 'skip') { this.onSkipVoteMsg(); return; }
+    if (r.st === 'skip') { this.onSkipVoteMsg(r); return; }
+    if (r.st === 'settings') {
+      // the host may retune the room between rounds; clients just follow along
+      if (r.hp) { this.matchHP = r.hp; this.player.maxHealth = r.hp; }
+      if (r.map && r.map !== MAP.id && (this.roundState === 'buy' || this.roundState === 'idle')) this.ensureMap(r.map);
+      if (r.players) { this.online.players = r.players; this.refreshSkipUI(); }
+      UI.renderPeerList();
+      return;
+    }
     if (Net.role !== CS.NETROLE.CLIENT) return;
     switch (r.st) {
       case 'buy':
-        this.beginBuyPhaseClient(r.time || 30, r.no);
+        this.beginBuyPhaseClient(r.time || 30, r.no, r.hp, r.map);
         break;
       case 'live':
         this.roundState = 'live';
         this.roundT = r.time || CFG.roundTime;
-        UI.center('В БОЙ!', 'Уничтожьте соперника', 1.4);
+        UI.center('В БОЙ!', this.onlinePlayerCount() > 2 ? 'Выживает сильнейший' : 'Уничтожьте соперника', 1.4);
         break;
       case 'end':
-        this.endRoundClient(r.win);
+        this.endRoundClient(r.win, r.no);
         break;
       case 'newround':
-        this.doNewRoundClient();
+        this.doNewRoundClient(r.hp);
         break;
     }
   },
 
-  beginBuyPhaseClient(sec, roundNo) {
+  beginBuyPhaseClient(sec, roundNo, hp, mapId) {
     this.roundState = 'buy';
     this.buyTimer = sec;
     this.roundT = sec;
-    // the host's number is authoritative; only advance if it is missing
     this.roundNo = (roundNo !== undefined && roundNo > 0) ? roundNo : this.roundNo + 1;
+    if (hp) { this.matchHP = hp; this.player.maxHealth = hp; }
+    if (mapId && mapId !== MAP.id) { this.ensureMap(mapId); }
     this.resetSkipVotes();
     UI.center('ЗАКУПКА', 'B — магазин', 1.8);
   },
 
-  endRoundClient(win) {
+  endRoundClient(win, roundNo) {
     if (this.roundState === 'end') return;
     this.roundState = 'end'; this.roundT = 4.2;
+    // 'host' wins the last-man-standing duel; anything else is our side
     if (win === 'host') this.online.roundWins.them++;
     else if (win === 'client') this.online.roundWins.me++;
     this.online.scoreMe = this.online.roundWins.me;
@@ -8009,21 +8907,33 @@ const Game = {
     Audio3D_SFX.roundEnd(win !== 'host');
   },
 
-  doNewRoundClient() {
-    this.player.health = CFG.maxHP;
+  doNewRoundClient(hp) {
+    this.matchHP = hp || this.matchHP;
+    this.player.maxHealth = this.matchHP;
+    this.player.health = this.matchHP;
     this.player.armor = 0; this.player.helmet = false;
     this.player.alive = true;
     this.player.money = Math.min(16000, this.player.money + 1400);
-    if (this.remote) { this.remote.alive = true; this.remote.health = CFG.maxHP; }
-    this.spawnPlayerLocal(Math.random() < .5 ? 1 : 4);
-    this.beginBuyPhaseClient(25);
+    for (const rp of this.remotePlayers) { rp.alive = true; rp.health = this.matchHP; rp.maxHealth = this.matchHP; }
+    this.spawnPlayerLocal(Math.floor(Math.random() * Math.max(1, MAP.playerSpawns.length)));
+    this.beginBuyPhaseClient(25, undefined, this.matchHP);
+  },
+
+  /* host: a round ends when only one fighter is left standing */
+  checkRoundEnd() {
+    if (this.mode !== CS.MODE.ONLINE || Net.role !== CS.NETROLE.HOST) return;
+    if (this.roundState === 'end') return;
+    const alive = (this.player.alive ? 1 : 0) + this.remotePlayers.filter(r => r.alive).length;
+    if (alive > 1) return;
+    const iWin = this.player.alive;
+    this.endRound(iWin, iWin ? 'последний выживший' : 'все уничтожены');
   },
 
   onScoreMsg(s) {
-    if (!this.remote) return;
-    this.remote.kills = s.k; this.remote.deaths = s.d; this.remote.score = s.sc;
-    if (s.hp !== undefined) this.remote.health = s.hp;
-    this.online.scoreThem = s.sc;
+    const rp = this.remoteById(s.from);
+    if (!rp) return;
+    rp.kills = s.k; rp.deaths = s.d; rp.score = s.sc;
+    if (s.hp !== undefined) rp.health = s.hp;
   },
 
   /* ============================================================
@@ -8087,8 +8997,8 @@ const Game = {
     if (IS_TOUCH) {
       if (Input.consumeReload()) p.reload();
       if (Input.consumeWeaponSwitch()) this.switchSlot(p.nextSlot());
-      // Touch firing: a single tap fires one shot; a double tap (or the fire
-      // button held) locks automatic fire on, exactly like holding LMB on a PC.
+      // Touch firing: a single tap fires one shot; the АВТО button locks
+      // automatic fire on, exactly like holding LMB on a PC.
       if (TouchUI.tapFire) { TouchUI.tapFire = false; p.triggerDown = true; this._tapFireRelease = 2; }
       if (this._tapFireRelease > 0 && --this._tapFireRelease === 0) p.triggerDown = false;
       if (TouchUI.autoFire) p.triggerDown = true;
@@ -8097,6 +9007,19 @@ const Game = {
     }
 
     p._wantAim = Input.aimDown() && canLook;
+
+    /* Touch aim-assist firing: whenever the crosshair is on an enemy the weapon
+       fires on its own. On a phone the thumb that aims cannot also tap to shoot,
+       so this is what makes touch combat playable. It can be turned off in the
+       settings (Автоприцел). */
+    if (IS_TOUCH && Store.data.aimAssist !== 0 && p.alive && !this.buyOpen &&
+        this.roundState === 'live' && this._enemyFound) {
+      p.triggerDown = true;
+      this._aimFireHold = 0.12;
+    } else if (this._aimFireHold > 0) {
+      this._aimFireHold -= dt;
+      if (this._aimFireHold <= 0 && !TouchUI.autoFire && !TouchUI.firePressed) p.triggerDown = false;
+    }
 
     // scroll to switch weapons
     if (m.wheel && !this.buyOpen) this.switchSlot(p.nextSlot());
@@ -8145,7 +9068,7 @@ const Game = {
       Net.tick(dt);
       this._netStateT -= dt;
       if (this._netStateT <= 0) { this._netStateT = 1 / CFG.netSendLocalHz; this.broadcastState(); }
-      if (this.remote) { this.remote.advance(dt); this.remote.interp(CFG.netInterpMs); this.remote.sync(dt); }
+      for (const rp of this.remotePlayers) { rp.advance(dt); rp.interp(CFG.netInterpMs); rp.sync(dt); }
       this.checkPeerAlive(dt);
     }
 
@@ -8245,7 +9168,7 @@ const Game = {
         const h = this.horde.raycast(o, d, 90);
         this._enemyFound = !!h;
       } else if (this.mode === CS.MODE.ONLINE) {
-        const h = this.rayRemotePlayer(o, d, 90);
+        const h = this.rayRemoteAny(o, d, 90);
         this._enemyFound = !!h;
       } else this._enemyFound = false;
     }
@@ -8295,7 +9218,10 @@ const Game = {
       else if (o.betweenWaves) { objective = 'ПЕРЕДЫШКА · волна ' + (o.wave + 1); timer = o.breakT; }
       else objective = 'ЗАКУПКА · волна ' + (o.wave + 1);
     } else if (this.mode === CS.MODE.ONLINE) {
-      objective = this.roundState === 'buy' ? 'ЗАКУПКА' : this.roundState === 'live' ? 'РАУНД ' + this.roundNo : 'КОНЕЦ РАУНДА';
+      const alive = (p.alive ? 1 : 0) + this.remotePlayers.filter(r => r.alive).length;
+      objective = this.roundState === 'buy' ? 'ЗАКУПКА' :
+        this.roundState === 'live' ? 'РАУНД ' + this.roundNo + ' · ' + alive + '/' + this.onlinePlayerCount() + ' живых' :
+        'КОНЕЦ РАУНДА';
     } else if (this.mode === CS.MODE.RANGE) {
       timer = 0;
       if (this.aim) {
@@ -8334,6 +9260,7 @@ const Game = {
 /* ---------------- exports (also used by the automated test harness) ---------------- */
 window.CS = CS; window.CFG = CFG; window.WEAPONS = WEAPONS; window.GEAR = GEAR;
 window.ZOMBIES = ZOMBIES; window.U = U; window.Store = Store; window.Bus = Bus;
+window.MATCH = MATCH; window.MAPS = MAPS; window.mapById = mapById;
 window.AABB = AABB; window.rayBox = rayBox; window.navPath = navPath;
 window.FlowField = FlowField; window.Horde = Horde; window.Zombie = Zombie;
 window.Player = Player; window.Effects = Effects; window.RemotePlayer = RemotePlayer;

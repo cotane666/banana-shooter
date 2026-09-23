@@ -10,6 +10,11 @@ _shot-inject.js
 _dbg-inject.js
 _test-inject.js
 
+# --- диагностические/отладочные заготовки (не коммитим) ---
+/_*.js
+/_*.html
+/_*.ps1
+
 # --- устаревшее имя сборки ---
 counterstrike.html
 

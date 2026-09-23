@@ -77,6 +77,33 @@ canvas{display:block}
   border-bottom:2px solid #3a444d;color:#fff;padding:11px 13px;font-size:15px;font-family:inherit;
   border-radius:3px;outline:none;letter-spacing:1px}
 .fld input:focus{border-bottom-color:var(--or);background:#11161a}
+
+/* selectable chips: map / player count / health */
+.chips{display:flex;gap:7px;margin-top:8px;flex-wrap:wrap}
+.chips button{background:#171d22;border:1px solid var(--line);color:var(--dim);padding:8px 13px;
+  font-size:11.5px;letter-spacing:1.2px;cursor:pointer;border-radius:3px;font-family:inherit;
+  transition:.12s;line-height:1.25;text-align:center}
+.chips button b{display:block;font-size:12.5px;color:#c3ccd4;font-weight:700}
+.chips button i{display:block;font-style:normal;font-size:9.5px;color:#5d6873;margin-top:2px}
+.chips button:hover{border-color:#414d57;color:#fff}
+.chips button.on{background:var(--or);border-color:var(--or);color:#12161a}
+.chips button.on b,.chips button.on i{color:#12161a}
+
+/* connected peers in the lobby */
+.peerlist{display:flex;flex-direction:column;gap:5px;margin-top:10px}
+.peerlist div{background:#0c0f12;border:1px solid var(--line);border-left:3px solid var(--green);
+  padding:6px 11px;border-radius:3px;font-size:12.5px;color:#c3ccd4;display:flex;justify-content:space-between}
+.peerlist div em{font-style:normal;color:var(--or);font-size:10px;letter-spacing:1.4px}
+
+/* iOS install guide */
+.ios-steps{display:flex;flex-direction:column;gap:10px;margin-bottom:6px}
+.ios-row{display:flex;gap:13px;align-items:flex-start;font-size:13.5px;color:#c3ccd4;line-height:1.5}
+.ios-row>b{flex:0 0 26px;height:26px;border-radius:50%;background:var(--or);color:#12161a;
+  display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:800}
+.ios-row>span{flex:1 1 auto;min-width:0}
+.ios-row strong{color:#fff;font-weight:700}
+.ios-ic{display:inline-block;background:#0c0f12;border:1px solid var(--line);border-radius:3px;
+  padding:0 6px;color:var(--or2);font-weight:700}
 .slider{display:block;font-size:12px;color:var(--dim);letter-spacing:1.2px;margin:0 0 16px}
 .slider output{color:var(--or);font-weight:700;float:right}
 .slider input{width:100%;margin-top:8px;-webkit-appearance:none;height:5px;border-radius:3px;
@@ -139,14 +166,22 @@ kbd{background:#0c0f12;border:1px solid var(--line);border-bottom:2px solid #333
 #minimap{position:absolute;left:22px;top:18px;width:150px;height:150px;border:1px solid rgba(255,255,255,.18);
   border-radius:3px;background:rgba(0,0,0,.42)}
 
-/* crosshair */
-#crosshair{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:40px;height:40px;transition:opacity .12s}
-.ch{position:absolute;background:#4dff6a;box-shadow:0 0 3px rgba(0,0,0,.95)}
-#crosshair .t{left:19px;top:0;width:2px;height:11px}
-#crosshair .b{left:19px;bottom:0;width:2px;height:11px}
-#crosshair .l{top:19px;left:0;height:2px;width:11px}
-#crosshair .r{top:19px;right:0;height:2px;width:11px}
-#crosshair .dot{left:19px;top:19px;width:2px;height:2px;background:#4dff6a}
+/* crosshair
+   Every arm is anchored dead-centre (left:50%;top:50%) and its gap comes from
+   the CSS variable --g. The old layout hard-coded 19px offsets, which only line
+   up inside a 40px box: on phones the crosshair shrinks to 30px, so the left and
+   top arms were pushed visibly off-centre. -50% centres the arm on its axis and
+   the 11px term is exactly the arm length, so the inner edge lands at --g. */
+#crosshair{--g:8px;position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+  width:40px;height:40px;transition:opacity .12s}
+#crosshair .t,#crosshair .b,#crosshair .l,#crosshair .r{position:absolute;
+  left:50%;top:50%;background:#4dff6a;box-shadow:0 0 3px rgba(0,0,0,.95)}
+#crosshair .t{width:2px;height:11px;transform:translate(-50%,calc(-11px - var(--g)))}
+#crosshair .b{width:2px;height:11px;transform:translate(-50%,var(--g))}
+#crosshair .l{width:11px;height:2px;transform:translate(calc(-11px - var(--g)),-50%)}
+#crosshair .r{width:11px;height:2px;transform:translate(var(--g),-50%)}
+#crosshair .dot{position:absolute;left:50%;top:50%;width:2px;height:2px;
+  transform:translate(-50%,-50%);background:#4dff6a}
 #crosshair.enemy .ch{background:#ff4438}
 #crosshair.hide{opacity:0}
 
@@ -155,6 +190,12 @@ kbd{background:#0c0f12;border:1px solid var(--line);border-bottom:2px solid #333
 #scope:before,#scope:after{content:"";position:absolute;background:rgba(0,0,0,.9)}
 #scope:before{left:50%;top:0;bottom:0;width:1px;transform:translateX(-50%)}
 #scope:after{top:50%;left:0;right:0;height:1px;transform:translateY(-50%)}
+
+/* reload / low-ammo indicator, just under the crosshair */
+#reloadTag{position:absolute;left:50%;top:calc(50% + 34px);transform:translateX(-50%);
+  font-size:12px;font-weight:800;letter-spacing:3px;color:#ffd24a;text-shadow:0 2px 8px #000;
+  pointer-events:none;animation:pulse 1s infinite}
+html.touch #reloadTag{top:calc(50% + 27px);font-size:11px;letter-spacing:2px}
 
 #hitmark{position:absolute;left:50%;top:50%;width:34px;height:34px;transform:translate(-50%,-50%) scale(.6);
   opacity:0;transition:opacity .1s,transform .1s}

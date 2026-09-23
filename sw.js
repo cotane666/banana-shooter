@@ -3,7 +3,7 @@
    Caches the whole game (it is one self-contained HTML file plus icons) so it
    starts instantly and works offline once installed.
    ============================================================ */
-const VERSION = 'banana-shooter-v1';
+const VERSION = 'banana-shooter-v2';
 const CORE = [
   './',
   './index.html',

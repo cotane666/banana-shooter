@@ -324,15 +324,18 @@ class Dummy extends Zombie {
 }
 
 /* ---------------- remote player (online) ---------------- */
+let REMOTE_SKIN = 0;
 class RemotePlayer {
-  constructor(name, team, isHostSide) {
-    this.id = 'remote';
+  constructor(name, team, peerId) {
+    this.id = peerId || ('remote' + (REMOTE_SKIN + 1));
+    this.peerId = peerId || this.id;
     this.name = name || 'Игрок';
     this.team = team || 't';
     this.pos = { x: 0, y: 0, z: 0 };
     this.vel = { x: 0, y: 0, z: 0 };
     this.yaw = 0; this.pitch = 0;
     this.health = CFG.maxHP; this.armor = 0; this.helmet = false;
+    this.maxHealth = CFG.maxHP;
     this.alive = true;
     this.kills = 0; this.deaths = 0; this.score = 0;
     this.zombieKills = 0; this.bulletsFired = 0; this.bulletsHit = 0;
@@ -347,12 +350,13 @@ class RemotePlayer {
     this.buf = [];
     this.renderPos = { x: 0, y: 0, z: 0 };
     this.renderYaw = 0;
-    this.playT = undefined;         // play-out clock on our own timeline (ms)
+    this.playT = undefined;
     this.weaponGroup = null;
     this.walkPhase = 0;
     this.lastPacket = 0;
     this.slot = 2;
     this.hitFlash = 0;
+    this.seen = false;              // has sent at least one state packet
   }
   /* Snapshots are stamped with the LOCAL ARRIVAL time. That is monotonic by
      construction, so the interpolation search can never be confused by a moving
@@ -511,10 +515,11 @@ const _v1 = new THREE.Vector3(), _v2 = new THREE.Vector3(), _v3 = new THREE.Vect
 const Game = {
   /* ---- engine ---- */
   renderer: null, scene: null, camera: null, vmScene: null, vmCamera: null,
-  world: null, effects: null, horde: null, player: null,
+  world: null, effects: null, horde: null, player: null, dummies: [], targets: [], aim: null,
   running: false, mode: CS.MODE.MENU, paused: false,
   baseFov: 80, _last: 0, _loopBound: null, _acc: 0,
   remotePlayers: [], remote: null,
+  matchHP: 100,               // health chosen for this match
   offline: null,
   online: null,
   buyOpen: false,
@@ -522,6 +527,7 @@ const Game = {
   roundState: 'idle',   // buy | live | end
   roundT: 0,
   roundNo: 0,
+  aliveRemotes: 0,
   _netStateT: 0,
   _uiT: 0,
   _lastShotFx: 0,
@@ -529,6 +535,7 @@ const Game = {
   projectiles: [],
   _projT: 0,
   _enemyCheck: 0, _enemyFound: false,
+  _aimFireHold: 0,
 
   /* ============================================================
      INIT
@@ -551,7 +558,8 @@ const Game = {
   },
 
   finishInit() {
-    buildMap(this.scene, this.world, Store.data.quality);
+    buildMap(this.scene, Store.data.quality, Store.data.map);
+    this.world = MAP.world;
     UI.loading(62, 'Компилируем шейдеры…');
     setTimeout(() => {
       if (this.world.raycastAll === undefined) { /* safety no-op */ }
@@ -625,17 +633,31 @@ const Game = {
     const q = Store.data.quality;
     this.renderer.shadowMap.enabled = q > 0;
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, q === 2 ? 2 : q === 1 ? 1.4 : 1));
-    if (this.scene) {
-      const sun = this.scene.userData.sun;
-      if (sun) {
-        const size = q === 0 ? 1024 : q === 1 ? 2048 : 4096;
-        if (sun.shadow.mapSize.width !== size) {
-          sun.shadow.mapSize.width = size; sun.shadow.mapSize.height = size;
-          if (sun.shadow.map) { sun.shadow.map.dispose(); sun.shadow.map = null; }
-        }
+    const sun = MAP.group && MAP.group.userData ? MAP.group.userData.sun : null;
+    if (sun) {
+      const size = q === 0 ? 1024 : q === 1 ? 2048 : 4096;
+      if (sun.shadow.mapSize.width !== size) {
+        sun.shadow.mapSize.width = size; sun.shadow.mapSize.height = size;
+        if (sun.shadow.map) { sun.shadow.map.dispose(); sun.shadow.map = null; }
       }
     }
   },
+
+  /* ============================================================
+     MAP SELECTION
+     ============================================================ */
+  setMap(mapId, rebuild) {
+    if (!mapById(mapId)) return;
+    Store.data.map = mapId; Store.save();
+    if (rebuild && this.scene && MAP.group) {
+      buildMap(this.scene, Store.data.quality, mapId);
+      this.world = MAP.world;
+      this.applyQuality();
+      this.scene.fog = new THREE.FogExp2(MAP.def.fog || 0xbcc6cf, MAP.def.fogDensity || 0.0055);
+    }
+    UI.refreshChips();
+  },
+  mapName() { return mapById(Store.data.map).name; },
 
   /* ============================================================
      UI WIRING
@@ -643,6 +665,14 @@ const Game = {
   bindUI() {
     bindClick('btnOffline', () => this.startOffline());
     bindClick('btnRange', () => this.startRange());
+    bindClick('btnMatch', () => { this._prevScreen = 'menu'; UI.refreshChips(); UI.show('controls'); });
+    bindClick('btnIos', () => UI.show('ios'));
+    bindClick('btnIosBack', () => UI.show('menu'));
+    bindClick('btnIosCopy', () => {
+      const url = location.href.split('#')[0];
+      try { navigator.clipboard.writeText(url); UI.toast('Ссылка скопирована', '#57d16a'); }
+      catch (e) { UI.toast(url); }
+    });
     bindClick('rpToggle', () => {
       if (this.mode !== CS.MODE.RANGE) return;
       this.toggleAimTrain(!this.aim);
@@ -656,9 +686,9 @@ const Game = {
     bindClick('btnLeave', () => this.stopToMenu());
     bindClick('btnReset', () => {
       if (confirm('Сбросить весь прогресс и настройки?')) {
-        Store.data = { sens: 2.2, fov: 80, vol: 60, quality: 1, name: '', best: 0, bestWave: 0, killsTotal: 0, matches: 0, wins: 0, signalSrv: 0, aimBest: 0 };
+        Store.data = { sens: 2.2, fov: 80, vol: 60, quality: 1, touchSens: 1.5, name: '', best: 0, bestWave: 0, killsTotal: 0, matches: 0, wins: 0, signalSrv: 0, aimBest: 0, aimAutoFire: 1, map: 'arena', players: 2, maxHP: 100, aimAssist: 1 };
         Store.save();
-        UI.renderMenuStats(); UI.toast('Прогресс сброшен');
+        UI.refreshChips(); UI.renderMenuStats(); UI.toast('Прогресс сброшен');
       }
     });
     bindClick('btnCopy', () => {
@@ -676,6 +706,7 @@ const Game = {
     bindClick('btnJoin', () => {
       UI.el.joinRow.classList.remove('hidden');
       UI.el.hostRow.classList.add('hidden');
+      UI.el.joinWait.classList.add('hidden');
       UI.el.inCode.focus();
     });
     bindClick('btnJoinGo', () => this.doJoin());
@@ -688,7 +719,6 @@ const Game = {
       Audio3D_SFX.init(); Audio3D_SFX.resume();
       Input.requestLock();
     });
-
     // pointer lock behaviour
     Input.onLockChange = (locked, wasLocked) => {
       if (!this.running) return;
@@ -752,6 +782,10 @@ const Game = {
 
     // network events
     Net.on('hello', m => this.onPeerHello(m));
+    Net.on('peerjoined', p => this.onPeerJoined(p));
+    Net.on('peerleft', p => this.onPeerLeft(p));
+    Net.on('roster', r => this.onRoster(r));
+    Net.on('full', () => { this.setLobbyStatus('Комната заполнена (максимум ' + MATCH.maxPlayers + ' игроков)', true); UI.toast('Комната заполнена', '#e33a2e'); });
     Net.on('connected', () => this.onNetConnected());
     Net.on('disconnected', () => this.onNetDisconnected());
     Net.on('state', s => this.onRemoteState(s));
@@ -868,6 +902,8 @@ const Game = {
   startOffline() {
     this.stopToMenu(true);
     this.mode = CS.MODE.OFFLINE;
+    this.ensureMap(Store.data.map);
+    this.matchHP = Store.data.maxHP || 100;
     this.offline = {
       wave: 0, toSpawn: 0, spawnedThisWave: 0, totalThisWave: 0,
       betweenWaves: false, breakT: 0, alive: 0, kills: 0, startTime: U.now()
@@ -875,6 +911,8 @@ const Game = {
     this.remotePlayers = []; this.remote = null;
     this.player = new Player({ id: 'p1', name: 'Вы', isLocal: true, team: 'ct' });
     this.player.money = 800;
+    this.player.maxHealth = this.matchHP;
+    this.player.health = this.matchHP;
     this.player.give('glock'); this.player.give('knife');
     this.player.slot = 1;
     this.player.height = CFG.playerHeight;
@@ -888,7 +926,19 @@ const Game = {
     this.spawnPlayerLocal(0);
     this.beginBuyPhase(30, 'ВОЛНА 1');
     this.enterGame();
-    UI.toast('Найдите магазин: клавиша B');
+    UI.toast('Карта: ' + this.mapName() + ' · магазин: B', '#ff9d21');
+  },
+
+  /* rebuild the arena when the chosen map differs from the loaded one */
+  ensureMap(mapId) {
+    mapId = mapById(mapId).id;
+    if (!MAP.group || MAP.id !== mapId) {
+      buildMap(this.scene, Store.data.quality, mapId);
+      this.world = MAP.world;
+      this.applyQuality();
+    }
+    Store.data.map = mapId;
+    UI.refreshChips();
   },
 
   attachViewModel() {
@@ -903,6 +953,7 @@ const Game = {
   startRange() {
     this.stopToMenu(true);
     this.mode = CS.MODE.RANGE;
+    this.ensureMap(Store.data.map);
     this.offline = null;
     this.online = null;
     this.remotePlayers = []; this.remote = null;
@@ -911,6 +962,9 @@ const Game = {
     this.player.money = 999999;          // everything is free here
     this.player.give('glock'); this.player.give('knife');
     this.player.slot = 1;
+    this.player.maxHealth = 100;
+    this.player.health = 100;
+    this.matchHP = 100;
     this.attachViewModel();
 
     // no horde hunting the player; dummies are separate, static targets
@@ -1148,28 +1202,40 @@ const Game = {
   startOnlineHost() { this.startOnline(CS.NETROLE.HOST); },
   startOnlineClient() { this.startOnline(CS.NETROLE.CLIENT); },
 
-  startOnline(role) {
+  startOnline(role, opts) {
+    opts = opts || {};
     this.stopToMenu(true);
     this.mode = CS.MODE.ONLINE;
-    this.online = { role, roundWins: { me: 0, them: 0 }, opponentLeft: false, scoreMe: 0, scoreThem: 0, skipVoteMe: false, skipVoteThem: false };
-    this.remotePlayers = [];
-    this.player = new Player({ id: 'p1', name: (Store.data.name || 'Игрок').slice(0, 14), isLocal: true, team: role === CS.NETROLE.HOST ? 'ct' : 't' });
+    this.online = {
+      role, roundWins: { me: 0, them: 0 }, opponentLeft: false,
+      scoreMe: 0, scoreThem: 0, skipVoteMe: 0, votes: {},
+      voteNeeded: 2, roster: Net.peers.slice(),
+      players: Math.max(2, Net.peerCount ? Net.peerCount() : 2), alive: 1
+    };
+    // settings come from the host (or from the local choice when not networked)
+    const mapId = opts.map || Store.data.map;
+    this.ensureMap(mapId);
+    this.matchHP = opts.hp || (Store.data.maxHP || 100);
+    if (this.online.role === CS.NETROLE.HOST) { Store.data.map = mapId; Store.data.maxHP = this.matchHP; Store.save(); }
+
+    this.remotePlayers = []; this.remote = null;
+    this.player = new Player({ id: 'p1', name: (Store.data.name || 'Игрок').slice(0, 14), isLocal: true, team: 'ct' });
     this.player.money = 800;
     this.player.give('glock'); this.player.give('knife');
     this.player.slot = 1;
+    this.player.maxHealth = this.matchHP;
+    this.player.health = this.matchHP;
     this.attachViewModel();
 
-    const rp = new RemotePlayer(Net.partnerName || 'Соперник', role === CS.NETROLE.HOST ? 't' : 'ct');
-    this.remote = rp;
-    this.remotePlayers = [rp];
-    this.scene.add(rp.mesh);
+    // build a RemotePlayer for every other member of the roster
+    this.syncRemoteRoster();
 
     this.horde = null;
     this.effects = new Effects(this.scene, Store.data.quality);
     this.effects.clear();
 
-    this.spawnPlayerLocal(role === CS.NETROLE.HOST ? 0 : 3);
-    this.beginBuyPhase(30, role === CS.NETROLE.HOST ? 'РАУНД 1' : 'РАУНД 1');
+    this.spawnPlayerLocal(0);
+    this.beginBuyPhase(30, 'РАУНД 1');
     this.enterGame();
     this._peerWarned = false; this._peerLost = false;
     this._silentT = 0; this._lastSeenPacket = 0;
@@ -1180,7 +1246,72 @@ const Game = {
       if (this.mode !== CS.MODE.ONLINE || !Net.connected) return;
       this.broadcastState();
     };
-    UI.toast('Убейте соперника. Магазин: B');
+    UI.toast('Карта: ' + this.mapName() + ' · HP ' + this.matchHP, '#ff9d21');
+  },
+
+  /* ============================================================
+     ONLINE ROSTER
+     A star network: the host keeps the authoritative roster and relays it.
+     Every other player gets a RemotePlayer mesh; the local player's own entry
+     in the roster is skipped.
+     ============================================================ */
+  onRoster(roster) {
+    UI.renderPeerList();
+    if (this.mode !== CS.MODE.ONLINE || !this.online) return;
+    this.online.roster = roster || [];
+    this.online.players = Math.max(2, this.online.roster.length || Net.peerCount());
+    this.syncRemoteRoster();
+    this.refreshSkipUI();
+  },
+
+  /* add/remove RemotePlayer objects so the scene matches the roster */
+  syncRemoteRoster() {
+    if (this.mode !== CS.MODE.ONLINE || !this.online) return;
+    const roster = (this.online.roster && this.online.roster.length)
+      ? this.online.roster
+      : (Net.peers && Net.peers.length ? Net.peers : [{ id: 'them', name: Net.partnerName || 'Соперник', isHost: Net.role === CS.NETROLE.CLIENT }]);
+
+    // never model ourselves
+    const myId = Net.selfId();
+    const others = roster.filter(p => p.id !== myId && !(Net.role === CS.NETROLE.HOST && p.isHost));
+    const seen = {};
+
+    for (const p of others) {
+      seen[p.id] = true;
+      let rp = this.remotePlayers.find(r => r.peerId === p.id);
+      if (!rp) {
+        const team = 't';
+        rp = new RemotePlayer(p.name, team, p.id);
+        rp.maxHealth = this.matchHP;
+        this.remotePlayers.push(rp);
+        this.scene.add(rp.mesh);
+      } else if (rp.name !== p.name) {
+        rp.name = p.name;
+        rp.plate.material.map.dispose();
+        const np = makeNameplate(p.name); rp.plate.material.map = np.material.map;
+      }
+    }
+    // drop remotes that left
+    for (let i = this.remotePlayers.length - 1; i >= 0; i--) {
+      const rp = this.remotePlayers[i];
+      if (!seen[rp.peerId]) {
+        this.scene.remove(rp.mesh);
+        rp.mesh.traverse(o => { if (o.geometry) o.geometry.dispose(); });
+        this.remotePlayers.splice(i, 1);
+        if (this.remote === rp) this.remote = null;
+      }
+    }
+    this.remote = this.remotePlayers[0] || null;
+  },
+
+  onPeerJoined(p) {
+    UI.toast('Подключился: ' + (p.name || 'Игрок'), '#57d16a');
+    UI.renderPeerList();
+  },
+
+  onPeerLeft(p) {
+    UI.toast('Игрок вышел: ' + (p.name || '?'), '#e33a2e');
+    UI.renderPeerList();
   },
 
   enterGame() {
@@ -1212,19 +1343,26 @@ const Game = {
   },
 
   stopToMenu(keepRunning) {
+    const clearWorld = () => {
+      this.clearProjectiles();
+      this.clearDummies();
+      this.clearTargets();
+      if (this.horde) { this.horde.clear(); this.horde = null; }
+      for (const rp of this.remotePlayers || []) {
+        this.scene.remove(rp.mesh);
+        rp.mesh.traverse(o => { if (o.geometry) o.geometry.dispose(); });
+      }
+      this.remotePlayers = []; this.remote = null;
+      if (this.player && this.player.vmGroup && this.player.vmGroup.parent) this.player.vmGroup.parent.remove(this.player.vmGroup);
+      if (this.effects) { this.effects.clear(); }
+    };
     if (!keepRunning) {
       this.running = false;
       Input.enabled = false;
       Input.releaseLock();
       Audio3D_SFX.ambientStop();
       this.mode = CS.MODE.MENU;
-      this.clearProjectiles();
-      this.clearDummies();
-      this.clearTargets();
-      if (this.horde) { this.horde.clear(); this.horde = null; }
-      if (this.remote) { this.scene.remove(this.remote.mesh); this.remote = null; }
-      if (this.player && this.player.vmGroup && this.player.vmGroup.parent) this.player.vmGroup.parent.remove(this.player.vmGroup);
-      if (this.effects) { this.effects.clear(); }
+      clearWorld();
       this.offline = null; this.online = null;
       UI.hideOverlays();
       UI.lowHP(false);
@@ -1232,14 +1370,7 @@ const Game = {
       UI.show('menu');
       Net.close(true);
     } else {
-      this.clearProjectiles();
-      this.clearDummies();
-      this.clearTargets();
-      if (this.horde) { this.horde.clear(); this.horde = null; }
-      if (this.remote) { this.scene.remove(this.remote.mesh); this.remote = null; }
-      if (this.player && this.player.vmGroup && this.player.vmGroup.parent) this.player.vmGroup.parent.remove(this.player.vmGroup);
-      if (this.effects) this.effects.clear();
-      this.remotePlayers = [];
+      clearWorld();
     }
     this.buyOpen = false;
     this.roundState = 'idle';
@@ -1281,71 +1412,82 @@ const Game = {
     }
   },
 
-  /* ---------------- ready-up: both players may skip the buy phase ----------
-     The buy phase is a fixed clock, so waiting out the full time when both
-     players have already finished shopping is dead time. Either side may press
-     ГОТОВ; the round starts as soon as BOTH have voted (or the clock runs out). */
+  /* ---------------- ready-up: every player may skip the buy phase ----------
+     The buy phase is a fixed clock, so waiting out the full time when everyone
+     has already shopped is dead time. Each player presses ГОТОВ; the round
+     starts as soon as ALL players have voted (or the clock runs out). The host
+     tallies the votes and broadcasts the start. */
   resetSkipVotes() {
-    if (this.online) { this.online.skipVoteMe = false; this.online.skipVoteThem = false; }
+    if (this.online) {
+      this.online.skipVoteMe = 0;
+      this.online.votes = {};      // host only: peerId → true
+    }
     this.refreshSkipUI();
+  },
+
+  onlinePlayerCount() {
+    if (!this.online) return 2;
+    return this.online.players || 2;
   },
 
   refreshSkipUI() {
     const b = UI.el.btnBuySkip;
     if (!b) return;
-    const me = !!(this.online && this.online.skipVoteMe);
-    const them = !!(this.online && this.online.skipVoteThem);
     if (this.mode === CS.MODE.OFFLINE) {
       b.textContent = 'НАЧАТЬ ВОЛНУ';
       b.classList.remove('waiting');
       return;
     }
     if (this.mode === CS.MODE.RANGE) {
-      // there is no buy timer to skip on the range
       b.textContent = 'ПОЛИГОН';
       b.classList.add('waiting');
       return;
     }
-    if (me && them) { b.textContent = 'СТАРТ…'; b.classList.add('waiting'); }
-    else if (me) { b.textContent = 'ЖДЁМ СОПЕРНИКА…'; b.classList.add('waiting'); }
-    else if (them) { b.textContent = 'СОПЕРНИК ГОТОВ · ГОТОВ'; b.classList.remove('waiting'); }
+    const me = !!(this.online && this.online.skipVoteMe);
+    const voted = this.online ? Object.keys(this.online.votes || {}).length : 0;
+    const need = this.onlinePlayerCount();
+    if (me && voted >= need) { b.textContent = 'СТАРТ…'; b.classList.add('waiting'); }
+    else if (me) { b.textContent = 'ГОТОВ ✓ · ' + voted + '/' + need; b.classList.add('waiting'); }
+    else if (voted > 0) { b.textContent = 'ГОТОВ · ' + voted + '/' + need; b.classList.remove('waiting'); }
     else { b.textContent = 'ГОТОВ'; b.classList.remove('waiting'); }
   },
 
   voteSkipBuy() {
-    if (this.mode === CS.MODE.RANGE) return;          // nothing to skip
+    if (this.mode === CS.MODE.RANGE) return;
     if (this.roundState !== 'buy') { Audio3D_SFX.deny(); return; }
-    // offline survival: the button simply starts the wave early
     if (this.mode === CS.MODE.OFFLINE) {
       if (this.buyOpen) this.toggleBuy(false);
       this.startLive();
       return;
     }
     if (this.mode !== CS.MODE.ONLINE || !this.online) return;
-    if (this.online.skipVoteMe) return;                 // already voted
-    this.online.skipVoteMe = true;
-    Net.send({ t: 'round', st: 'skip', no: this.roundNo });
+    if (this.online.skipVoteMe) return;
+    this.online.skipVoteMe = 1;
+    const id = Net.selfId();
+    if (Net.role === CS.NETROLE.HOST) this.online.votes[id] = true;
+    Net.send({ t: 'round', st: 'skip', no: this.roundNo, from: id });
     this.refreshSkipUI();
     if (this.buyOpen) UI.renderBuy(this.player, this.buyTimer);
     this.maybeEndBuy();
   },
 
-  /* host-only: start the round once both sides are ready */
+  /* host-only: start the round once every player is ready */
   maybeEndBuy() {
     if (this.roundState !== 'buy') return;
     if (this.mode !== CS.MODE.ONLINE) return;
-    if (!this.online || !this.online.skipVoteMe || !this.online.skipVoteThem) return;
-    if (Net.role !== CS.NETROLE.HOST) return;            // client waits for host's 'live'
+    if (!this.online) return;
+    if (Net.role !== CS.NETROLE.HOST) return;
+    const need = this.onlinePlayerCount();
+    if (Object.keys(this.online.votes || {}).length < need) return;
     if (this.buyOpen) this.toggleBuy(false);
     this.startLive();
   },
 
-  onSkipVoteMsg() {
+  onSkipVoteMsg(m) {
     if (!this.online) return;
-    this.online.skipVoteThem = true;
+    if (Net.role === CS.NETROLE.HOST && m && m.from) this.online.votes[m.from] = true;
     this.refreshSkipUI();
     if (this.buyOpen) UI.renderBuy(this.player, this.buyTimer);
-    // as the client, both-ready is resolved by the host's 'live' broadcast
     this.maybeEndBuy();
   },
 
@@ -1430,12 +1572,13 @@ const Game = {
   startLive() {
     this.roundState = 'live';
     this.roundT = CFG.roundTime;
-    UI.center('В БОЙ!', this.mode === 'online' ? 'Уничтожьте соперника' : 'Волна ' + (this.offline ? this.offline.wave : 1), 1.4);
+    const last = this.onlinePlayerCount() > 2;
+    UI.center('В БОЙ!', this.mode === 'online' ? (last ? 'Выживает сильнейший · ' + this.matchHP + ' HP' : 'Уничтожьте соперника') : 'Волна ' + (this.offline ? this.offline.wave : 1), 1.4);
     if (this.mode === CS.MODE.OFFLINE && this.offline) {
       this.startWave();
     }
     if (this.mode === CS.MODE.ONLINE && Net.role === CS.NETROLE.HOST) {
-      Net.send({ t: 'round', st: 'live', time: CFG.roundTime, no: this.roundNo });
+      Net.send({ t: 'round', st: 'live', time: CFG.roundTime, no: this.roundNo, hp: this.matchHP, map: MAP.id, players: this.onlinePlayerCount() });
     }
   },
 
@@ -1444,8 +1587,7 @@ const Game = {
     this.roundState = 'end';
     this.roundT = 4.0;
     if (this.mode === CS.MODE.ONLINE) {
-      // The host owns the authoritative result and broadcasts it, so both
-      // clients agree on the score no matter who died first.
+      // The host owns the authoritative result and broadcasts it.
       if (Net.role === CS.NETROLE.HOST) {
         if (winnerIsMe === true) this.online.roundWins.me++;
         else if (winnerIsMe === false) this.online.roundWins.them++;
@@ -1453,9 +1595,9 @@ const Game = {
         this.online.scoreThem = this.online.roundWins.them;
         const won = winnerIsMe === true;
         const txt = won ? 'РАУНД ВЫИГРАН' : winnerIsMe === false ? 'РАУНД ПРОИГРАН' : 'НИЧЬЯ';
-        UI.center(txt, this.online.scoreMe + ' : ' + this.online.scoreThem, 2.6);
+        UI.center(txt, this.online.scoreMe + ' : ' + this.online.scoreThem + (reason ? ' · ' + reason : ''), 2.6);
         Audio3D_SFX.roundEnd(won);
-        Net.send({ t: 'round', st: 'end', win: won ? 'host' : winnerIsMe === false ? 'client' : 'draw' });
+        Net.send({ t: 'round', st: 'end', win: won ? 'host' : winnerIsMe === false ? 'client' : 'draw', no: this.roundNo });
         setTimeout(() => { if (this.roundState === 'end' && this.mode === CS.MODE.ONLINE) this.nextRound(); }, 4200);
       }
       // clients react to the host's 'round:end' message instead
@@ -1465,21 +1607,21 @@ const Game = {
   nextRound() {
     if (this.mode !== CS.MODE.ONLINE) return;
     if (Net.role !== CS.NETROLE.HOST) return;   // host drives the flow
-    // only advance to a new round once the round actually ended
     if (this.roundState !== 'end') return;
     this.doNewRound();
     Net.send({ t: 'round', st: 'newround', no: this.roundNo });
   },
 
   doNewRound() {
-    // host-only: reset both fighters, hand out cash, then open the buy phase
-    this.player.health = CFG.maxHP;
+    // host-only: reset every fighter, hand out cash, then open the buy phase
+    this.player.maxHealth = this.matchHP;
+    this.player.health = this.matchHP;
     this.player.armor = 0; this.player.helmet = false;
     this.player.alive = true;
     this.player.money = Math.min(16000, this.player.money + 1400);
-    this.spawnPlayerLocal(Math.random() < .5 ? 0 : 3);
-    if (this.remote) { this.remote.alive = true; this.remote.health = CFG.maxHP; }
-    Net.send({ t: 'respawn', x: this.player.pos.x, y: this.player.pos.y, z: this.player.pos.z, yaw: this.player.yaw });
+    this.spawnPlayerLocal(Math.floor(Math.random() * Math.max(1, MAP.playerSpawns.length)));
+    for (const rp of this.remotePlayers) { rp.alive = true; rp.health = this.matchHP; rp.maxHealth = this.matchHP; }
+    this.broadcastRespawn();
     this.beginBuyPhase(25, 'РАУНД ' + (this.roundNo + 1));
   },
 
@@ -1589,19 +1731,19 @@ const Game = {
      rather than aims for the player). */
   touchAssist() {
     if (!IS_TOUCH) return { x: 0, y: 0 };
+    if (Store.data.aimAssist === 0) return { x: 0, y: 0 };
     const p = this.player;
     if (!p || !p.alive) return { x: 0, y: 0 };
     const eye = this.eyePos();
     const o = { x: eye.x, y: eye.y, z: eye.z };
     const dir = this.cameraDir();
     const T = 60;
-    const hit = (this.mode === CS.MODE.OFFLINE && this.horde) ? this.horde.raycast(o, dir, T) : null;
+    let hit = null;
+    if (this.mode === CS.MODE.OFFLINE && this.horde) hit = this.horde.raycast(o, dir, T);
+    else if (this.mode === CS.MODE.ONLINE) hit = this.rayRemoteAny(o, dir, T);
     let tp = null;
-    if (hit) tp = { x: o.x + dir.x * hit.t, y: o.y + dir.y * hit.t, z: o.z + dir.z * hit.t };
-    else if (this.mode === CS.MODE.ONLINE && this.remote && this.remote.alive) {
-      const h = this.rayRemotePlayer(o, dir, T);
-      if (h) tp = h.point;
-    }
+    if (hit && hit.point) tp = hit.point;
+    else if (hit) tp = { x: o.x + dir.x * hit.t, y: o.y + dir.y * hit.t, z: o.z + dir.z * hit.t };
     if (!tp) return { x: 0, y: 0 };
     const dx = tp.x - o.x, dy = tp.y - o.y, dz = tp.z - o.z;
     const dist = Math.hypot(dx, dy, dz) || 1;
@@ -1610,8 +1752,9 @@ const Game = {
     let dYaw = ((wantYaw - p.yaw + Math.PI) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2) - Math.PI;
     let dPitch = wantPitch - p.pitch;
     // only assist when already pointing close to the target
-    if (Math.abs(dYaw) > 0.10 || Math.abs(dPitch) > 0.10) return { x: 0, y: 0 };
-    return { x: dYaw * 0.14, y: dPitch * 0.14 };
+    const lim = (this.mode === CS.MODE.ONLINE) ? 0.14 : 0.10;
+    if (Math.abs(dYaw) > lim || Math.abs(dPitch) > lim) return { x: 0, y: 0 };
+    return { x: dYaw * 0.16, y: dPitch * 0.16 };
   },
 
   cameraDir() {
@@ -1771,10 +1914,10 @@ const Game = {
       // ---- hit the horde? ----
       let hitZ = null;
       if (this.horde) hitZ = this.horde.raycast(pr.pos, dir, segLen + 0.35);
-      // ---- hit the opponent? ----
+      // ---- hit an opponent? ----
       let hitP = null;
-      if (this.mode === CS.MODE.ONLINE && this.remote && this.remote.alive) {
-        const h = this.rayRemotePlayer(pr.pos, dir, segLen + 0.35);
+      if (this.mode === CS.MODE.ONLINE) {
+        const h = this.rayRemoteAny(pr.pos, dir, segLen + 0.35);
         if (h && (!hitZ || h.t < hitZ.t)) hitP = h;
       }
       // ---- hit the world? ----
@@ -1792,7 +1935,7 @@ const Game = {
           const hs = hitP.part === 'head';
           const limb = hitP.part === 'legs';
           const mul = hs ? pr.headMul : limb ? CFG.limbMultiplier : 1;
-          this.sendPvpHit(pr.dmg * mul, hitP.part, hs);
+          this.sendPvpHit(pr.dmg * mul, hitP.part, hs, hitP.rp);
           impactPoint = hitP.point;
         } else {
           const killed = hitZ.zombie.takeDamage(pr.dmg, hitZ.part, dir);
@@ -1859,13 +2002,15 @@ const Game = {
         if (killed) { /* scored in onZombieDied */ }
       }
     }
-    // the opponent
-    if (this.mode === CS.MODE.ONLINE && this.remote && this.remote.alive) {
-      const rp = this.remote;
-      const d = Math.hypot(rp.pos.x - center.x, (rp.pos.y + 1) - center.y, rp.pos.z - center.z);
-      if (d <= R) {
-        const k = 1 - d / R;
-        this.sendPvpHit(dmg * k, 'body', false);
+    // the opponents
+    if (this.mode === CS.MODE.ONLINE) {
+      for (const rp of this.remotePlayers) {
+        if (!rp.alive) continue;
+        const d = Math.hypot(rp.pos.x - center.x, (rp.pos.y + 1) - center.y, rp.pos.z - center.z);
+        if (d <= R) {
+          const k = 1 - d / R;
+          this.sendPvpHit(dmg * k, 'body', false, rp);
+        }
       }
     }
     // splash back on the shooter, so point-blank rockets hurt
@@ -1941,23 +2086,24 @@ const Game = {
       break;
     }
 
-    // online: also test the opponent
+    // the opponents (everyone else in the room)
     let pvpHit = null;
-    if (this.mode === CS.MODE.ONLINE && this.remote && this.remote.alive) {
-      pvpHit = this.rayRemotePlayer(origin, dir, maxDist);
+    if (this.mode === CS.MODE.ONLINE) {
+      pvpHit = this.rayRemoteAny(origin, dir, maxDist);
+      // resolve below if it is closer than the wall and any zombie
       if (pvpHit && (zHit ? pvpHit.t < zHit.t || !zHit : true) && pvpHit.t <= stopT) {
-        // resolve below
+        // ok
       } else pvpHit = null;
     }
 
     if (pvpHit && pvpHit.t <= stopT && (!zHit || pvpHit.t < zHit.t)) {
-      // hit the opposing player
+      // hit an opposing player
       p.bulletsHit++;
       const hs = pvpHit.part === 'head';
       const limb = pvpHit.part === 'legs';
       const partMul = hs ? (def.headMul || CFG.headshotMultiplier) : limb ? CFG.limbMultiplier : 1;
       const dmg = def.dmg * partMul * dmgMul;
-      this.sendPvpHit(dmg, pvpHit.part, hs);
+      this.sendPvpHit(dmg, pvpHit.part, hs, pvpHit.rp);
       this.hitEffect(pvpHit.point, dir, pvpHit.part, hs);
       Audio3D_SFX.hit(pvpHit.point.x, pvpHit.point.y, pvpHit.point.z, hs);
       this.effects.tracer(muzzleWorld, pvpHit.point, 1, true);
@@ -2009,22 +2155,36 @@ const Game = {
   },
 
   traceRemotePlayer(origin, dir, maxDist, def) {
-    // knife swing against the opponent
-    if (this.mode !== CS.MODE.ONLINE || !this.remote || !this.remote.alive) return;
-    const h = this.rayRemotePlayer(origin, dir, maxDist);
+    // knife swing against everyone else in the room
+    if (this.mode !== CS.MODE.ONLINE) return;
+    const h = this.rayRemoteAny(origin, dir, maxDist);
     if (h) {
       const hs = h.part === 'head';
       const dmg = def.dmg * (hs ? 2 : 1);
-      this.sendPvpHit(dmg, h.part, hs);
+      this.sendPvpHit(dmg, h.part, hs, h.rp);
       this.effects.bloodBurst(h.point, dir, 8);
       Audio3D_SFX.hit(h.point.x, h.point.y, h.point.z, hs);
     }
   },
 
+  /* closest hit among every remote player */
+  rayRemoteAny(origin, dir, maxDist) {
+    let best = null;
+    for (const rp of this.remotePlayers) {
+      if (!rp.alive) continue;
+      const h = this.rayRemotePlayerFor(rp, origin, dir, maxDist);
+      if (h && (!best || h.t < best.t)) { h.rp = rp; best = h; }
+    }
+    return best;
+  },
+
+  /* kept for compatibility: raycast against the first remote */
   rayRemotePlayer(origin, dir, maxDist) {
-    const rp = this.remote;
+    return this.remote ? this.rayRemotePlayerFor(this.remote, origin, dir, maxDist) : null;
+  },
+
+  rayRemotePlayerFor(rp, origin, dir, maxDist) {
     if (!rp || !rp.alive) return null;
-    const r = rp.crouching ? .42 : .44;
     const base = { x: rp.pos.x, y: rp.pos.y, z: rp.pos.z };
     const parts = [
       { part: 'head', y0: rp.height * .78, y1: rp.height * 1.02, r: .19 },
@@ -2041,10 +2201,17 @@ const Game = {
     return best;
   },
 
-  sendPvpHit(dmg, part, headshot) {
+  /* Report a hit to the shooter's victim. In the star network only the victim
+     may apply it, so every hit carries the target's peer id. */
+  sendPvpHit(dmg, part, headshot, rp) {
     UI.hitmark(false);
     this._hitmarkT = U.now();
-    Net.send({ t: 'hit', dmg: Math.round(dmg), part, hs: headshot ? 1 : 0, at: U.now() });
+    const target = rp || this.remote;
+    Net.send({
+      t: 'hit', dmg: Math.round(dmg), part, hs: headshot ? 1 : 0, at: U.now(),
+      to: target ? target.peerId : undefined,
+      from: Net.selfId()
+    });
   },
 
   playerHurt(dmg, source) {
@@ -2094,9 +2261,15 @@ const Game = {
       this.offlineDead = true;
     } else {
       UI.center('ВАС УБИЛИ', this.online ? ('Счёт ' + this.online.scoreMe + ' : ' + this.online.scoreThem) : '', 2.6);
-      Net.send({ t: 'died', at: U.now() });
+      // report who killed us so only they get the credit in a 3–4 player room
+      Net.send({
+        t: 'died', at: U.now(),
+        from: Net.selfId(),
+        by: this._lastHitBy || undefined
+      });
+      this._lastHitBy = null;
       // the host decides the round result; the client waits for its message
-      if (Net.role === CS.NETROLE.HOST) this.endRound(false, 'death');
+      if (Net.role === CS.NETROLE.HOST) this.checkRoundEnd();
     }
   },
 
@@ -2194,56 +2367,57 @@ const Game = {
 
   onPeerHello(m) {
     Net.partnerName = m.name;
-    UI.toast('Подключился: ' + m.name, '#57d16a');
-    // both peers start the match; the host's beginBuyPhase (called inside
-    // startOnline) broadcasts the authoritative round state to the client
+    // The first hello starts the match. Later joins just add a remote; the host
+    // resends the current round state so a late arrival is not left behind.
+    if (this.mode === CS.MODE.ONLINE) {
+      this.syncRemoteRoster();
+      return;
+    }
     this.startOnline(Net.role);
+    // as host, tell everyone already here about the new player
+    if (Net.role === CS.NETROLE.HOST) Net.send({ t: 'roster', roster: Net.peers });
   },
 
   onNetConnected() {
     UI.el.connTitle.textContent = 'СОЕДИНЕНО';
-    UI.el.connStatus.textContent = 'Ожидание соперника…';
+    UI.el.connStatus.textContent = 'Ожидание игроков…';
     this.setLobbyStatus('Соединено!', false);
+    UI.renderPeerList();
   },
 
   onNetDisconnected() {
     if (this.mode !== CS.MODE.ONLINE) return;
     if (this._leaving) return;
+    // A client losing its only link to the host means the room is gone.
+    if (Net.role === CS.NETROLE.HOST && Net.conns.some(c => c.open)) return;
     this._leaving = true;
-    UI.toast('Соперник отключился', '#e33a2e');
-    UI.center('СОПЕРНИК ОТКЛЮЧИЛСЯ', 'Выход в меню через 5 секунд', 5.0);
+    UI.toast('Связь потеряна', '#e33a2e');
+    UI.center('СОЕДИНЕНИЕ ПОТЕРЯНО', 'Выход в меню через 5 секунд', 5.0);
     setTimeout(() => { if (this.mode === CS.MODE.ONLINE && this._leaving) this.stopToMenu(); }, 5200);
   },
 
-  /* Watchdog: the data channel can stay "open" while the peer stops sending
-     (backgrounded tab, locked phone, dead NAT mapping).
-     Silence is measured in GAME time (accumulated dt), never in wall-clock time:
-     when the page is hidden or the phone locks, rAF stops and dt stops too, so
-     our own stall is not mistaken for a dead opponent. (Measuring with
-     performance.now() made a returning tab see a multi-second "gap" and eject
-     the match instantly.) */
+  /* Watchdog: the data channel can stay "open" while a peer stops sending
+     (backgrounded tab, locked phone, dead NAT mapping). We only drop the match
+     when everyone has gone quiet; one silent player is handled by roster. */
   checkPeerAlive(dt) {
-    if (this.mode !== CS.MODE.ONLINE) return;
-    if (!this.remote || !Net.connected) return;
-    if (!this.remote.lastPacket) return;
+    if (this.mode !== CS.MODE.ONLINE || !Net.connected) return;
+    const any = this.remotePlayers.some(rp => rp.lastPacket);
+    if (!any) return;
 
-    // a fresh packet clears the timer
-    if (this.remote.lastPacket !== this._lastSeenPacket) {
-      this._lastSeenPacket = this.remote.lastPacket;
-      this._silentT = 0;
-      this._peerWarned = false;
-      return;
+    let fresh = false;
+    for (const rp of this.remotePlayers) {
+      if (rp.lastPacket && rp.lastPacket !== rp._seenPacket) { rp._seenPacket = rp.lastPacket; fresh = true; }
     }
+    if (fresh) { this._silentT = 0; this._peerWarned = false; return; }
 
     this._silentT = (this._silentT || 0) + dt;
     if (this._silentT > 4 && !this._peerWarned) {
       this._peerWarned = true;
-      UI.toast('Соперник не отвечает…', '#f5d33c');
-      UI.center('ЖДЁМ СОПЕРНИКА', 'Проверьте соединение', 2.0);
-      // nudge the transport: this often revives a stalled channel
-      try { if (Net.conn && Net.conn.open) Net.send({ t: 'ping', s: 'hb', time: U.now() }); } catch (e) { }
+      UI.toast('Игроки не отвечают…', '#f5d33c');
+      UI.center('ЖДЁМ ИГРОКОВ', 'Проверьте соединение', 2.0);
+      try { if (Net.connected) Net.send({ t: 'ping', s: 'hb', time: U.now() }); } catch (e) { }
     }
-    if (this._silentT > 12 && !this._peerLost) {
+    if (this._silentT > 14 && !this._peerLost) {
       this._peerLost = true;
       this.onNetDisconnected();
     }
@@ -2254,6 +2428,7 @@ const Game = {
     const p = this.player;
     Net.send({
       t: 'state', rt: U.now(),
+      from: Net.selfId(),
       x: +p.pos.x.toFixed(2), y: +p.pos.y.toFixed(2), z: +p.pos.z.toFixed(2),
       yw: +p.yaw.toFixed(3), pt: +p.pitch.toFixed(3),
       alive: p.alive ? 1 : 0, cr: p.crouching ? 1 : 0,
@@ -2265,28 +2440,33 @@ const Game = {
   broadcastScore() {
     if (this.mode !== CS.MODE.ONLINE || !Net.connected) return;
     const p = this.player;
-    Net.send({ t: 'score', k: p.kills, d: p.deaths, sc: p.score, hp: Math.round(p.health), ar: Math.round(p.armor), m: Math.round(p.money) });
+    Net.send({ t: 'score', from: Net.selfId(), k: p.kills, d: p.deaths, sc: p.score, hp: Math.round(p.health), ar: Math.round(p.armor), m: Math.round(p.money) });
+  },
+
+  /* find the RemotePlayer a relayed message came from */
+  remoteById(id) {
+    if (!id) return this.remote;
+    return this.remotePlayers.find(r => r.peerId === id) || this.remote;
   },
 
   onRemoteState(s) {
-    if (!this.remote) return;
+    const rp = this.remoteById(s.from);
+    if (!rp) return;
     this._silentT = 0; this._peerWarned = false; this._peerLost = false;
-    this.remote.pushSnapshot(s);
-    if (s.k !== undefined) { this.remote.kills = s.k; this.remote.deaths = s.d; this.remote.score = s.sc; }
-    if (s.hp !== undefined) this.remote.health = s.hp;
-    this.remote.slot = s.sl;
-    if (!s.alive && this.remote.alive) { /* they died */ }
+    rp.seen = true;
+    rp.pushSnapshot(s);
+    if (s.k !== undefined) { rp.kills = s.k; rp.deaths = s.d; rp.score = s.sc; }
+    if (s.hp !== undefined) rp.health = s.hp;
+    rp.slot = s.sl;
   },
 
   onRemoteShot(s) {
-    if (!this.remote) return;
+    const rp = this.remoteById(s.from);
+    if (!rp) return;
     const def = WEAPONS[s.wid] || WEAPONS.ak47;
-    // tracer from their muzzle
-    const rp = this.remote;
     const from = { x: s.ox, y: s.oy, z: s.oz };
     const dir = { x: s.dx, y: s.dy, z: s.dz };
     const maxDist = def.range || 100;
-    // compute where it lands against our world (visual only)
     const wallHits = this.world.raycastAll(from, dir, maxDist, ['ground']);
     let endT = maxDist, p = null, n = null;
     for (const h of wallHits) { endT = h.t; p = h.point; n = h.normal; break; }
@@ -2297,77 +2477,111 @@ const Game = {
   },
 
   onRemoteHit(h) {
-    // the opponent reports they hit *us* → apply the damage locally
+    // A hit is only ours when we are the named victim; otherwise the host's
+    // relay delivered a hit that belongs to another player.
     if (this.mode !== CS.MODE.ONLINE) return;
-    // trust the shooter's hit; apply it
-    this.applyDamageToSelf(h.dmg, this.remote ? { x: this.remote.pos.x, y: this.remote.pos.y + 1.2, z: this.remote.pos.z } : null);
+    const myId = Net.selfId();
+    const me = !h.to || h.to === myId || (this.remotePlayers.length === 1 && !h.to);
+    if (!me) return;
+    const src = this.remoteById(h.from);
+    this._lastHitBy = h.from;                // remembered so we can name our killer
+    this.applyDamageToSelf(h.dmg, src ? { x: src.pos.x, y: src.pos.y + 1.2, z: src.pos.z } : null);
   },
 
   onRemoteDied(d) {
-    if (!this.remote) return;
-    this.remote.alive = false;
-    // Credit the local player: the opponent's death is authoritative from
-    // their own client, so this is the correct place to score the kill.
-    this.player.kills++;
-    this.player.score += 300;
-    Audio3D_SFX.kill();
-    UI.hitmark(true);
-    UI.feed('<b>' + U.esc(this.player.name) + '</b> ✖ <span style="color:#ff6b5b">' + U.esc(this.remote.name) + '</span>');
-    UI.center('СОПЕРНИК УНИЧТОЖЕН', '', 2.0);
-    Store.data.killsTotal++;
-    Store.save();
-    if (Net.role === CS.NETROLE.HOST) this.endRound(true, 'kill');
-    else if (this.online) this.online.scoreMe = this.online.roundWins.me;
+    const rp = this.remoteById(d.from);
+    if (!rp) return;
+    rp.alive = false;
+    // Credit is only given when the victim named us as the killer. In a 2-player
+    // room there is only one possible killer, so an untagged death still counts.
+    const myId = Net.selfId();
+    const credited = d.by ? d.by === myId : this.remotePlayers.length === 1;
+    if (credited) {
+      this.player.kills++;
+      this.player.score += 300;
+      Audio3D_SFX.kill();
+      UI.hitmark(true);
+      UI.feed('<b>' + U.esc(this.player.name) + '</b> ✖ <span style="color:#ff6b5b">' + U.esc(rp.name) + '</span>');
+      UI.center('ИГРОК УНИЧТОЖЕН', '', 2.0);
+      Store.data.killsTotal++;
+      Store.save();
+    } else {
+      UI.feed('<span style="color:#ff6b5b">' + U.esc(rp.name) + '</span> ✖ уничтожен');
+    }
+    // Host checks the win condition with the new death count.
+    if (Net.role === CS.NETROLE.HOST) this.checkRoundEnd();
   },
 
   onRemoteRespawn(r) {
-    if (!this.remote) return;
-    this.remote.alive = true;
-    this.remote.health = CFG.maxHP;
-    this.remote.applySnap({ x: r.x, y: r.y, z: r.z, yw: r.yaw, pt: 0, alive: 1, cr: 0 });
-    this.remote.buf.length = 0;
-    this.remote.mesh.visible = true;
-    this.remote.mesh.scale.y = 1;
+    // a respawn applies to the player named in `from`; when untagged (older
+    // peer) fall back to moving everyone so the round still restarts
+    const rp = this.remoteById(r.from);
+    const list = (r.from && rp) ? [rp] : this.remotePlayers.slice();
+    for (const x of list) {
+      x.alive = true;
+      x.health = r.hp || this.matchHP;
+      x.maxHealth = r.hp || this.matchHP;
+      x.applySnap({ x: r.x, y: r.y, z: r.z, yw: r.yaw, pt: 0, alive: 1, cr: 0 });
+      x.buf.length = 0;
+      x.mesh.visible = true;
+      x.mesh.scale.y = 1;
+    }
   },
 
+  /* tell the room where we respawned */
+  broadcastRespawn() {
+    if (this.mode !== CS.MODE.ONLINE || !Net.connected) return;
+    const p = this.player;
+    Net.send({
+      t: 'respawn', from: Net.selfId(),
+      x: p.pos.x, y: p.pos.y, z: p.pos.z, yaw: p.yaw, hp: this.matchHP
+    });
+  },
   onRoundMsg(r) {
     if (this.mode !== CS.MODE.ONLINE) return;
-    // The ready-up vote is symmetrical: either side may send it, so it must be
-    // handled before the client-only guard below (otherwise the host silently
-    // ignored the client's vote and the buy phase never skipped).
-    if (r.st === 'skip') { this.onSkipVoteMsg(); return; }
+    if (r.st === 'skip') { this.onSkipVoteMsg(r); return; }
+    if (r.st === 'settings') {
+      // the host may retune the room between rounds; clients just follow along
+      if (r.hp) { this.matchHP = r.hp; this.player.maxHealth = r.hp; }
+      if (r.map && r.map !== MAP.id && (this.roundState === 'buy' || this.roundState === 'idle')) this.ensureMap(r.map);
+      if (r.players) { this.online.players = r.players; this.refreshSkipUI(); }
+      UI.renderPeerList();
+      return;
+    }
     if (Net.role !== CS.NETROLE.CLIENT) return;
     switch (r.st) {
       case 'buy':
-        this.beginBuyPhaseClient(r.time || 30, r.no);
+        this.beginBuyPhaseClient(r.time || 30, r.no, r.hp, r.map);
         break;
       case 'live':
         this.roundState = 'live';
         this.roundT = r.time || CFG.roundTime;
-        UI.center('В БОЙ!', 'Уничтожьте соперника', 1.4);
+        UI.center('В БОЙ!', this.onlinePlayerCount() > 2 ? 'Выживает сильнейший' : 'Уничтожьте соперника', 1.4);
         break;
       case 'end':
-        this.endRoundClient(r.win);
+        this.endRoundClient(r.win, r.no);
         break;
       case 'newround':
-        this.doNewRoundClient();
+        this.doNewRoundClient(r.hp);
         break;
     }
   },
 
-  beginBuyPhaseClient(sec, roundNo) {
+  beginBuyPhaseClient(sec, roundNo, hp, mapId) {
     this.roundState = 'buy';
     this.buyTimer = sec;
     this.roundT = sec;
-    // the host's number is authoritative; only advance if it is missing
     this.roundNo = (roundNo !== undefined && roundNo > 0) ? roundNo : this.roundNo + 1;
+    if (hp) { this.matchHP = hp; this.player.maxHealth = hp; }
+    if (mapId && mapId !== MAP.id) { this.ensureMap(mapId); }
     this.resetSkipVotes();
     UI.center('ЗАКУПКА', 'B — магазин', 1.8);
   },
 
-  endRoundClient(win) {
+  endRoundClient(win, roundNo) {
     if (this.roundState === 'end') return;
     this.roundState = 'end'; this.roundT = 4.2;
+    // 'host' wins the last-man-standing duel; anything else is our side
     if (win === 'host') this.online.roundWins.them++;
     else if (win === 'client') this.online.roundWins.me++;
     this.online.scoreMe = this.online.roundWins.me;
@@ -2377,21 +2591,33 @@ const Game = {
     Audio3D_SFX.roundEnd(win !== 'host');
   },
 
-  doNewRoundClient() {
-    this.player.health = CFG.maxHP;
+  doNewRoundClient(hp) {
+    this.matchHP = hp || this.matchHP;
+    this.player.maxHealth = this.matchHP;
+    this.player.health = this.matchHP;
     this.player.armor = 0; this.player.helmet = false;
     this.player.alive = true;
     this.player.money = Math.min(16000, this.player.money + 1400);
-    if (this.remote) { this.remote.alive = true; this.remote.health = CFG.maxHP; }
-    this.spawnPlayerLocal(Math.random() < .5 ? 1 : 4);
-    this.beginBuyPhaseClient(25);
+    for (const rp of this.remotePlayers) { rp.alive = true; rp.health = this.matchHP; rp.maxHealth = this.matchHP; }
+    this.spawnPlayerLocal(Math.floor(Math.random() * Math.max(1, MAP.playerSpawns.length)));
+    this.beginBuyPhaseClient(25, undefined, this.matchHP);
+  },
+
+  /* host: a round ends when only one fighter is left standing */
+  checkRoundEnd() {
+    if (this.mode !== CS.MODE.ONLINE || Net.role !== CS.NETROLE.HOST) return;
+    if (this.roundState === 'end') return;
+    const alive = (this.player.alive ? 1 : 0) + this.remotePlayers.filter(r => r.alive).length;
+    if (alive > 1) return;
+    const iWin = this.player.alive;
+    this.endRound(iWin, iWin ? 'последний выживший' : 'все уничтожены');
   },
 
   onScoreMsg(s) {
-    if (!this.remote) return;
-    this.remote.kills = s.k; this.remote.deaths = s.d; this.remote.score = s.sc;
-    if (s.hp !== undefined) this.remote.health = s.hp;
-    this.online.scoreThem = s.sc;
+    const rp = this.remoteById(s.from);
+    if (!rp) return;
+    rp.kills = s.k; rp.deaths = s.d; rp.score = s.sc;
+    if (s.hp !== undefined) rp.health = s.hp;
   },
 
   /* ============================================================
@@ -2455,8 +2681,8 @@ const Game = {
     if (IS_TOUCH) {
       if (Input.consumeReload()) p.reload();
       if (Input.consumeWeaponSwitch()) this.switchSlot(p.nextSlot());
-      // Touch firing: a single tap fires one shot; a double tap (or the fire
-      // button held) locks automatic fire on, exactly like holding LMB on a PC.
+      // Touch firing: a single tap fires one shot; the АВТО button locks
+      // automatic fire on, exactly like holding LMB on a PC.
       if (TouchUI.tapFire) { TouchUI.tapFire = false; p.triggerDown = true; this._tapFireRelease = 2; }
       if (this._tapFireRelease > 0 && --this._tapFireRelease === 0) p.triggerDown = false;
       if (TouchUI.autoFire) p.triggerDown = true;
@@ -2465,6 +2691,19 @@ const Game = {
     }
 
     p._wantAim = Input.aimDown() && canLook;
+
+    /* Touch aim-assist firing: whenever the crosshair is on an enemy the weapon
+       fires on its own. On a phone the thumb that aims cannot also tap to shoot,
+       so this is what makes touch combat playable. It can be turned off in the
+       settings (Автоприцел). */
+    if (IS_TOUCH && Store.data.aimAssist !== 0 && p.alive && !this.buyOpen &&
+        this.roundState === 'live' && this._enemyFound) {
+      p.triggerDown = true;
+      this._aimFireHold = 0.12;
+    } else if (this._aimFireHold > 0) {
+      this._aimFireHold -= dt;
+      if (this._aimFireHold <= 0 && !TouchUI.autoFire && !TouchUI.firePressed) p.triggerDown = false;
+    }
 
     // scroll to switch weapons
     if (m.wheel && !this.buyOpen) this.switchSlot(p.nextSlot());
@@ -2513,7 +2752,7 @@ const Game = {
       Net.tick(dt);
       this._netStateT -= dt;
       if (this._netStateT <= 0) { this._netStateT = 1 / CFG.netSendLocalHz; this.broadcastState(); }
-      if (this.remote) { this.remote.advance(dt); this.remote.interp(CFG.netInterpMs); this.remote.sync(dt); }
+      for (const rp of this.remotePlayers) { rp.advance(dt); rp.interp(CFG.netInterpMs); rp.sync(dt); }
       this.checkPeerAlive(dt);
     }
 
@@ -2613,7 +2852,7 @@ const Game = {
         const h = this.horde.raycast(o, d, 90);
         this._enemyFound = !!h;
       } else if (this.mode === CS.MODE.ONLINE) {
-        const h = this.rayRemotePlayer(o, d, 90);
+        const h = this.rayRemoteAny(o, d, 90);
         this._enemyFound = !!h;
       } else this._enemyFound = false;
     }
@@ -2663,7 +2902,10 @@ const Game = {
       else if (o.betweenWaves) { objective = 'ПЕРЕДЫШКА · волна ' + (o.wave + 1); timer = o.breakT; }
       else objective = 'ЗАКУПКА · волна ' + (o.wave + 1);
     } else if (this.mode === CS.MODE.ONLINE) {
-      objective = this.roundState === 'buy' ? 'ЗАКУПКА' : this.roundState === 'live' ? 'РАУНД ' + this.roundNo : 'КОНЕЦ РАУНДА';
+      const alive = (p.alive ? 1 : 0) + this.remotePlayers.filter(r => r.alive).length;
+      objective = this.roundState === 'buy' ? 'ЗАКУПКА' :
+        this.roundState === 'live' ? 'РАУНД ' + this.roundNo + ' · ' + alive + '/' + this.onlinePlayerCount() + ' живых' :
+        'КОНЕЦ РАУНДА';
     } else if (this.mode === CS.MODE.RANGE) {
       timer = 0;
       if (this.aim) {
@@ -2702,6 +2944,7 @@ const Game = {
 /* ---------------- exports (also used by the automated test harness) ---------------- */
 window.CS = CS; window.CFG = CFG; window.WEAPONS = WEAPONS; window.GEAR = GEAR;
 window.ZOMBIES = ZOMBIES; window.U = U; window.Store = Store; window.Bus = Bus;
+window.MATCH = MATCH; window.MAPS = MAPS; window.mapById = mapById;
 window.AABB = AABB; window.rayBox = rayBox; window.navPath = navPath;
 window.FlowField = FlowField; window.Horde = Horde; window.Zombie = Zombie;
 window.Player = Player; window.Effects = Effects; window.RemotePlayer = RemotePlayer;

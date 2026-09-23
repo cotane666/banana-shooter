@@ -666,6 +666,13 @@ const Game = {
     bindClick('btnOffline', () => this.startOffline());
     bindClick('btnRange', () => this.startRange());
     bindClick('btnMatch', () => { this._prevScreen = 'menu'; UI.refreshChips(); UI.show('controls'); });
+    bindClick('btnAndroid', () => UI.show('android'));
+    bindClick('btnAndroidBack', () => UI.show('menu'));
+    bindClick('btnAndroidCopy', () => {
+      const url = location.href.split('#')[0];
+      try { navigator.clipboard.writeText(url); UI.toast('Ссылка скопирована', '#57d16a'); }
+      catch (e) { UI.toast(url); }
+    });
     bindClick('btnIos', () => UI.show('ios'));
     bindClick('btnIosBack', () => UI.show('menu'));
     bindClick('btnIosCopy', () => {
@@ -2969,8 +2976,28 @@ function registerServiceWorker() {
   });
 }
 
-/* Let the player install the game to their home screen from inside the menu. */
+/* Let the player install the game to their home screen from the menu.
+   The Android panel shows step-by-step instructions, and — when the browser
+   actually offers one — a real УСТАНОВИТЬ button backed by the saved
+   beforeinstallprompt event. If the browser never offers it (Safari, Firefox,
+   desktop, or Chrome that already installed the app), the button explains where
+   to find "Установить приложение" in the browser menu instead of silently
+   doing nothing. */
 let _installPrompt = null;
+function doInstall() {
+  if (!_installPrompt) {
+    UI.toast('Откройте меню браузера ⋮ → «Установить приложение»', '#f5d33c');
+    return false;
+  }
+  _installPrompt.prompt();
+  _installPrompt.userChoice.then(c => {
+    if (c && c.outcome === 'accepted') UI.toast('Игра устанавливается…', '#57d16a');
+    _installPrompt = null;
+    const b = document.getElementById('btnAndroidInstall');
+    if (b) b.classList.add('hidden');
+  }).catch(() => { _installPrompt = null; });
+  return true;
+}
 function initInstall() {
   window.addEventListener('beforeinstallprompt', e => {
     e.preventDefault();
@@ -2982,16 +3009,12 @@ function initInstall() {
     _installPrompt = null;
     UI.toast('Игра установлена! Найдите значок на главном экране', '#57d16a');
   });
+  // legacy hidden button kept for older bookmarks/markup
   const btn = document.getElementById('btnInstall');
-  if (btn) {
-    btn.addEventListener('click', async () => {
-      if (!_installPrompt) { UI.toast('Откройте меню браузера → «Установить приложение»'); return; }
-      _installPrompt.prompt();
-      try { await _installPrompt.userChoice; } catch (e) { }
-      _installPrompt = null;
-      btn.classList.add('hidden');
-    });
-  }
+  if (btn) btn.addEventListener('click', () => doInstall());
+  // the always-visible Android panel button
+  const ab = document.getElementById('btnAndroidInstall');
+  if (ab) ab.addEventListener('click', () => doInstall());
 }
 
 /* ---------------- boot ---------------- */

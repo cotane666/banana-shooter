@@ -540,8 +540,8 @@ html.touch .fld input{padding:10px;font-size:15px}
       <button class="mbtn" id="btnRange"><b>ПОЛИГОН</b><i>Всё оружие бесплатно · манекены и урон в секунду</i></button>
       <button class="mbtn" id="btnOnline"><b>ОНЛАЙН</b><i>Бой против друзей: 2–4 игрока, выбор карты</i></button>
       <button class="mbtn" id="btnMatch"><b>ПАРАМЕТРЫ МАТЧА</b><i>Карта · число игроков · здоровье</i></button>
+      <button class="mbtn" id="btnAndroid"><b>СКАЧАТЬ НА ANDROID</b><i>Установка на телефон / планшет</i></button>
       <button class="mbtn" id="btnIos"><b>СКАЧАТЬ НА iOS</b><i>Установка на iPhone / iPad</i></button>
-      <button class="mbtn hidden" id="btnInstall"><b>УСТАНОВИТЬ НА ТЕЛЕФОН</b><i>Играть как приложение, оффлайн</i></button>
       <button class="mbtn" id="btnControls"><b>УПРАВЛЕНИЕ</b><i>Клавиши и настройки</i></button>
     </div>
 
@@ -648,6 +648,31 @@ html.touch .fld input{padding:10px;font-size:15px}
     </div>
     <div id="lobbyStatus" class="status"></div>
     <div class="btnrow"><button class="mbtn small" id="btnLobbyBack">НАЗАД</button></div>
+  </div>
+</div>
+
+<!-- ============ ANDROID INSTALL ============ -->
+<div id="android" class="screen hidden">
+  <div class="panel">
+    <h2>УСТАНОВКА НА ANDROID</h2>
+    <div class="ios-steps">
+      <div class="ios-row"><b>1</b><span>Откройте эту страницу в <strong>Chrome</strong> на телефоне или планшете Android.</span></div>
+      <div class="ios-row"><b>2</b><span>Нажмите кнопку <strong>УСТАНОВИТЬ</strong> ниже — или меню <strong>⋮</strong> → <strong>«Установить приложение»</strong>.</span></div>
+      <div class="ios-row"><b>3</b><span>Подтвердите установку. На главном экране появится значок игры.</span></div>
+      <div class="ios-row"><b>4</b><span>Запустите игру со значка — она откроется в полный экран и будет работать <strong>оффлайн</strong>.</span></div>
+    </div>
+    <div class="hintbox">
+      Chrome устанавливает веб-игру сам, без Play Market — скачивать APK не нужно.
+      Работает в Chrome, Edge, Opera и других браузерах на Android.
+      После первой установки игра запускается даже без интернета.
+    </div>
+    <div class="btnrow">
+      <button class="mbtn primary" id="btnAndroidInstall"><b>УСТАНОВИТЬ</b><i>Добавить игру на главный экран</i></button>
+    </div>
+    <div class="btnrow">
+      <button class="mbtn small" id="btnAndroidCopy">Скопировать ссылку</button>
+      <button class="mbtn small primary" id="btnAndroidBack">ПОНЯТНО</button>
+    </div>
   </div>
 </div>
 
@@ -5391,7 +5416,7 @@ const UI = {
       'buyHint', 'buyOwned', 'btnBuySkip', 'btnBuyClose', 'scoreboard', 'sbTitle', 'sbTable', 'pause', 'toast', 'fps', 'clickToPlay',
       'connect', 'connTitle', 'connStatus', 'joinRow', 'hostRow', 'joinWait', 'roomCode', 'waiting', 'waitingTxt',
       'inName', 'inCode', 'peerList', 'peerListJoin',
-      'btnCopy', 'dmgDirs', 'ios',
+      'btnCopy', 'dmgDirs', 'android', 'ios',
       'mapChips', 'playerChips', 'hpChips', 'lobbyMaps', 'lobbyPlayers', 'lobbyHp'];
     ids.forEach(i => this.el[i] = $(i));
     this.buildBuyCats();
@@ -5400,7 +5425,7 @@ const UI = {
 
   /* ---------------- screens ---------------- */
   show(name) {
-    ['loading', 'menu', 'controls', 'lobby', 'hud', 'buy', 'scoreboard', 'pause', 'connect', 'ios', 'clickToPlay'].forEach(s => {
+    ['loading', 'menu', 'controls', 'lobby', 'hud', 'buy', 'scoreboard', 'pause', 'connect', 'android', 'ios', 'clickToPlay'].forEach(s => {
       const e = this.el[s];
       if (!e) return;
       const on = s === name;
@@ -5409,12 +5434,12 @@ const UI = {
     this.current = name;
   },
   hideOverlays() {
-    ['buy', 'scoreboard', 'pause', 'controls', 'lobby', 'menu', 'connect', 'ios'].forEach(s => {
+    ['buy', 'scoreboard', 'pause', 'controls', 'lobby', 'menu', 'connect', 'android', 'ios'].forEach(s => {
       if (this.el[s]) this.el[s].classList.add('hidden');
     });
   },
   overlayOpen() {
-    return ['buy', 'scoreboard', 'pause', 'controls', 'lobby', 'menu', 'connect', 'ios'].some(s => this.el[s] && !this.el[s].classList.contains('hidden'));
+    return ['buy', 'scoreboard', 'pause', 'controls', 'lobby', 'menu', 'connect', 'android', 'ios'].some(s => this.el[s] && !this.el[s].classList.contains('hidden'));
   },
 
   /* ============================================================
@@ -6982,6 +7007,13 @@ const Game = {
     bindClick('btnOffline', () => this.startOffline());
     bindClick('btnRange', () => this.startRange());
     bindClick('btnMatch', () => { this._prevScreen = 'menu'; UI.refreshChips(); UI.show('controls'); });
+    bindClick('btnAndroid', () => UI.show('android'));
+    bindClick('btnAndroidBack', () => UI.show('menu'));
+    bindClick('btnAndroidCopy', () => {
+      const url = location.href.split('#')[0];
+      try { navigator.clipboard.writeText(url); UI.toast('Ссылка скопирована', '#57d16a'); }
+      catch (e) { UI.toast(url); }
+    });
     bindClick('btnIos', () => UI.show('ios'));
     bindClick('btnIosBack', () => UI.show('menu'));
     bindClick('btnIosCopy', () => {
@@ -9285,8 +9317,28 @@ function registerServiceWorker() {
   });
 }
 
-/* Let the player install the game to their home screen from inside the menu. */
+/* Let the player install the game to their home screen from the menu.
+   The Android panel shows step-by-step instructions, and — when the browser
+   actually offers one — a real УСТАНОВИТЬ button backed by the saved
+   beforeinstallprompt event. If the browser never offers it (Safari, Firefox,
+   desktop, or Chrome that already installed the app), the button explains where
+   to find "Установить приложение" in the browser menu instead of silently
+   doing nothing. */
 let _installPrompt = null;
+function doInstall() {
+  if (!_installPrompt) {
+    UI.toast('Откройте меню браузера ⋮ → «Установить приложение»', '#f5d33c');
+    return false;
+  }
+  _installPrompt.prompt();
+  _installPrompt.userChoice.then(c => {
+    if (c && c.outcome === 'accepted') UI.toast('Игра устанавливается…', '#57d16a');
+    _installPrompt = null;
+    const b = document.getElementById('btnAndroidInstall');
+    if (b) b.classList.add('hidden');
+  }).catch(() => { _installPrompt = null; });
+  return true;
+}
 function initInstall() {
   window.addEventListener('beforeinstallprompt', e => {
     e.preventDefault();
@@ -9298,16 +9350,12 @@ function initInstall() {
     _installPrompt = null;
     UI.toast('Игра установлена! Найдите значок на главном экране', '#57d16a');
   });
+  // legacy hidden button kept for older bookmarks/markup
   const btn = document.getElementById('btnInstall');
-  if (btn) {
-    btn.addEventListener('click', async () => {
-      if (!_installPrompt) { UI.toast('Откройте меню браузера → «Установить приложение»'); return; }
-      _installPrompt.prompt();
-      try { await _installPrompt.userChoice; } catch (e) { }
-      _installPrompt = null;
-      btn.classList.add('hidden');
-    });
-  }
+  if (btn) btn.addEventListener('click', () => doInstall());
+  // the always-visible Android panel button
+  const ab = document.getElementById('btnAndroidInstall');
+  if (ab) ab.addEventListener('click', () => doInstall());
 }
 
 /* ---------------- boot ---------------- */

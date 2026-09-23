@@ -857,6 +857,8 @@ const Game = {
         else { UI.toast('Магазин доступен только в фазе закупки'); Audio3D_SFX.deny(); }
         break;
       case 'KeyR': if (!this.paused) this.player.reload(); break;
+      // dedicated climb: E vaults onto whatever the player is facing
+      case 'KeyE': if (!this.paused && this.player) this.player.climbQueued = true; break;
       case 'Digit1': if (!this.paused) this.switchSlot(1); break;
       case 'Digit2': if (!this.paused) this.switchSlot(2); break;
       case 'Digit3': if (!this.paused) this.switchSlot(3); break;
@@ -1334,6 +1336,8 @@ const Game = {
       if (autoBtn) autoBtn.classList.remove('down');
       const tag = document.getElementById('autoFireTag');
       if (tag) tag.classList.add('hidden');
+      TouchUI.climbQueued = false;
+      if (this.player) this.player.climbQueued = false;
     }
     Input.enabled = true;          // arm keyboard, mouse buttons and wheel
     UI.show('hud');
@@ -2696,6 +2700,8 @@ const Game = {
       else if (!TouchUI.firePressed && this._tapFireRelease <= 0) p.triggerDown = false;
       if (TouchUI.firePressed) p.triggerDown = true;
     }
+    // dedicated climb action: a touch button or the PC key, edge-triggered
+    if (Input.consumeClimb()) p.climbQueued = true;
 
     p._wantAim = Input.aimDown() && canLook;
 
@@ -2703,8 +2709,9 @@ const Game = {
        fires on its own. On a phone the thumb that aims cannot also tap to shoot,
        so this is what makes touch combat playable. It can be turned off in the
        settings (Автоприцел). */
-    if (IS_TOUCH && Store.data.aimAssist !== 0 && p.alive && !this.buyOpen &&
-        this.roundState === 'live' && this._enemyFound) {
+    const assistFiring = IS_TOUCH && Store.data.aimAssist !== 0 && p.alive && !this.buyOpen &&
+      this.roundState === 'live' && this._enemyFound;
+    if (assistFiring) {
       p.triggerDown = true;
       this._aimFireHold = 0.12;
     } else if (this._aimFireHold > 0) {
@@ -2715,13 +2722,23 @@ const Game = {
     // scroll to switch weapons
     if (m.wheel && !this.buyOpen) this.switchSlot(p.nextSlot());
 
+    /* `held` means the trigger is being held by a continuous source (АВТО, the
+       on-screen fire button, or the aim assist). Semi-auto weapons must keep
+       firing at their rate while that is true — otherwise the semi latch is set
+       by the first shot and, because the trigger never releases, a pistol fires
+       exactly once and then sits silent. */
+    const held = IS_TOUCH && (TouchUI.autoFire || TouchUI.firePressed || assistFiring ||
+      (this._tapFireRelease > 0));
+
     // ---- shooting ----
     // Firing is only allowed once the match is live: not during the buy phase
     // and not while the buy menu is open.
     if (p.alive && !this.buyOpen && this.roundState === 'live') {
       const def = p.def;
-      if (def.auto || def.slot === 3) {
-        // automatic weapons fire continuously while held
+      if (def.auto || def.slot === 3 || held) {
+        // automatic weapons fire continuously while held; with a continuous
+        // touch source the semi latch is cleared so every weapon repeats
+        if (held) p._semiLatch = false;
         if (p.triggerDown) this.fire();
       } else if (p.triggerDown && !p._semiLatch) {
         // semi-auto fallback for synthetic input (tests/replays) and retry after

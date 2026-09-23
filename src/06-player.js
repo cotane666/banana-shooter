@@ -593,6 +593,7 @@ class Player {
     this.climbHold = 0;
     this.climbFrom = null;
     this.climbTo = null;
+    this.climbQueued = false; // dedicated climb input (button / key) pressed
     this.deployT = 0;
     this.triggerDown = false;
     this.shotsSinceRelease = 0;
@@ -717,21 +718,40 @@ class Player {
     return group;
   }
 
+  /* Probe the space directly in front of the player for a climbable surface.
+     The movement collision only reports a wall while we are actually pushing
+     into it, but the dedicated climb action must also work from a standstill,
+     so it looks ahead by a hand's reach instead. Returns {top, low} or null. */
+  probeWall(world) {
+    const cy = Math.cos(this.yaw), sy = Math.sin(this.yaw);
+    const fx = -sy, fz = -cy;                        // forward
+    const reach = this.radius + 0.5;
+    const px = this.pos.x + fx * reach, pz = this.pos.z + fz * reach;
+    const r = this.radius * 0.9;
+    const cyl = { x: px, y: this.pos.y, z: pz, radius: r, height: this.height };
+    const bb = AABB(px - r, this.pos.y, pz - r, px + r, this.pos.y + this.height, pz + r);
+    const list = world.query(bb, []);
+    let top = -Infinity, low = Infinity;
+    for (let i = 0; i < list.length; i++) {
+      const b = list[i];
+      if (b.tag === 'ground') continue;
+      if (!cylinderOverlapsAABB(cyl, b)) continue;
+      if (b.maxY > top) top = b.maxY;
+      if (b.minY < low) low = b.minY;
+    }
+    return top === -Infinity ? null : { top, low };
+  }
+
   /* ---------- climb mechanic ----------
-     Hold forward against a surface and, after climbTime, the player pulls
-     themselves up onto it — a deliberate animated vault, not a teleport.
+     An explicit action: press the climb button (phone) or key (PC) while facing
+     a surface and the player pulls themselves up onto it — a deliberate animated
+     vault, not a teleport. It never triggers by itself, so leaning against cover
+     no longer throws you on top of it by accident.
      Height is not limited: a crate, a container, a roof or the 9 m perimeter
      wall can all be scaled. Taller climbs simply take longer to animate, and
      the vault is refused only if there is genuinely nowhere to stand on top. */
-  updateClimb(dt, world, input, res, wl) {
-    const blocked = !!(res.hitX || res.hitZ);
-    const top = res.blockTop;
-
-    // the surface must be a real ledge (above stepping height) and must actually
-    // rise from around our feet, so we never latch onto a floating platform above
-    const climbable = blocked && top !== undefined && isFinite(top) &&
-      top > this.pos.y + CFG.stepUp + 0.05 &&
-      this.pos.y > (res.blockLow === undefined ? -Infinity : res.blockLow) - 1;
+  updateClimb(dt, world, input, res, wl) {    let top = res.blockTop, low = res.blockLow;
+    let blocked = !!(res.hitX || res.hitZ);
 
     if (this.climbing) {
       // animate the vault: rise, then step forward onto the ledge. The easing is
@@ -748,41 +768,49 @@ class Player {
       return;
     }
 
-    // only a deliberate forward push climbs: sideways contact never triggers it
-    const pressing = input.f > 0.01 && wl > 0.01;
-    if (!climbable || !this.onGround || !pressing) { this.climbHold = 0; return; }
+    // consume the explicit request (edge-triggered, so holding does not repeat)
+    const want = this.climbQueued;
+    this.climbQueued = false;
+    if (!want || !this.onGround) { this.climbHold = 0; return; }
 
-    this.climbHold += dt;
-    if (this.climbHold >= CFG.climbTime) {
-      // Pick a landing spot on top of the obstacle, just past its near face.
-      // Walking further in overshoots narrow cover (the climber landed past a
-      // 2 m wall and fell off the far side), so the step is kept small and the
-      // spot is validated against the world before committing.
-      const cy = Math.cos(this.yaw), sy = Math.sin(this.yaw);
-      const fx = -sy, fz = -cy;                     // forward
-      let tx = this.pos.x, tz = this.pos.z, landY = top;
-      let found = false;
-      for (const step of [this.radius + 0.25, this.radius + 0.55, this.radius + 0.95]) {
-        const px = this.pos.x + fx * step, pz = this.pos.z + fz * step;
-        const gy = world.groundAt(px, pz, top + 1.2);
-        const y = (gy === null || gy === undefined || gy < top - 0.4) ? top : gy;
-        if (!world.overlaps(px, y + 0.05, pz, this.radius * 0.95, this.height)) {
-          tx = px; tz = pz; landY = y; found = true; break;
-        }
+    const probe = this.probeWall(world);
+    if (probe) { blocked = true; top = probe.top; low = probe.low; }
+
+    // the surface must be a real ledge (above stepping height) and must actually
+    // rise from around our feet, so we never latch onto a floating platform above
+    const climbable = blocked && top !== undefined && isFinite(top) &&
+      top > this.pos.y + CFG.stepUp + 0.05 &&
+      this.pos.y > (low === undefined ? -Infinity : low) - 1;
+    if (!climbable) { this.climbHold = 0; return; }
+
+    // Pick a landing spot on top of the obstacle, just past its near face.
+    // Stepping too far in overshoots narrow cover (the climber landed past a
+    // 2 m wall and fell off the far side), so the step is kept small and the
+    // spot is validated against the world before committing.
+    const cy = Math.cos(this.yaw), sy = Math.sin(this.yaw);
+    const fx = -sy, fz = -cy;                     // forward
+    let tx = this.pos.x, tz = this.pos.z, landY = top;
+    let found = false;
+    for (const step of [this.radius + 0.25, this.radius + 0.55, this.radius + 0.95]) {
+      const px = this.pos.x + fx * step, pz = this.pos.z + fz * step;
+      const gy = world.groundAt(px, pz, top + 1.2);
+      const y = (gy === null || gy === undefined || gy < top - 0.4) ? top : gy;
+      if (!world.overlaps(px, y + 0.05, pz, this.radius * 0.95, this.height)) {
+        tx = px; tz = pz; landY = y; found = true; break;
       }
-      // nothing clear on top: refuse the climb rather than vault into a wall
-      if (!found) { this.climbHold = Math.min(this.climbHold, CFG.climbTime * 0.75); return; }
-
-      const rise = Math.max(0, landY - this.pos.y);
-      this.climbing = true;
-      this.climbT = 0;
-      this.climbDur = U.clamp(CFG.climbDuration + rise * CFG.climbDurationPerM, CFG.climbDuration, CFG.climbDurationMax);
-      this.climbFrom = { x: this.pos.x, y: this.pos.y, z: this.pos.z };
-      this.climbTo = { x: tx, y: landY, z: tz };
-      this.climbHold = 0;
-      Bus.emit('climb', this);
-      if (this.isLocal && typeof Audio3D_SFX !== 'undefined') Audio3D_SFX.pickup();
     }
+    // nothing clear on top: refuse the climb rather than vault into a wall
+    if (!found) { Audio3D_SFX && Audio3D_SFX.deny && this.isLocal && Audio3D_SFX.deny(); return; }
+
+    const rise = Math.max(0, landY - this.pos.y);
+    this.climbing = true;
+    this.climbT = 0;
+    this.climbDur = U.clamp(CFG.climbDuration + rise * CFG.climbDurationPerM, CFG.climbDuration, CFG.climbDurationMax);
+    this.climbFrom = { x: this.pos.x, y: this.pos.y, z: this.pos.z };
+    this.climbTo = { x: tx, y: landY, z: tz };
+    this.climbHold = 0;
+    Bus.emit('climb', this);
+    if (this.isLocal && typeof Audio3D_SFX !== 'undefined') Audio3D_SFX.pickup();
   }
 
   /* ---------- movement + physics ---------- */
@@ -850,11 +878,12 @@ class Player {
     if (res.hitZ) this.vel.z = 0;
     if (res.ceiling) this.vel.y = Math.min(this.vel.y, 0);
 
-     /* ---- climb: hold forward against a tall object to scale it ----
+     /* ---- climb: an explicit action (ЗАЛЕЗТЬ / E) ----
         Walking into a wall used to teleport the player to its top in a single
-        frame (fixed in moveCylinder). In its place this gives a deliberate
-        mechanic: press into a surface for climbTime and the player vaults onto
-        it. There is no height limit — taller surfaces just take longer. */
+        frame (fixed in moveCylinder). In its place this is a deliberate move:
+        press the climb button or key while facing a surface and the player
+        vaults onto it. It never triggers on its own, so brushing against cover
+        is safe — and there is no height limit, taller surfaces just take longer. */
     this.updateClimb(dt, world, input, res, wl);
 
     // ---- ground: land on, or step up to, the surface under our feet ----

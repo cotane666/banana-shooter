@@ -86,6 +86,16 @@ canvas{display:block}
 .menu-stats b{display:block;font-size:22px;color:var(--or);font-weight:800}
 .menu-foot{font-size:11px;color:#4d565f;margin-top:26px;letter-spacing:1.2px;line-height:1.9}
 
+/* On phones the main menu is taller than the screen (six mode buttons plus
+   stats), so it becomes a vertical scroller. `margin:auto 0` centres the card
+   when it fits and collapses to 0 when it overflows, so nothing ever gets cut
+   off at the top. The backdrop is fixed so it keeps covering the viewport. */
+html.touch #menu{display:flex;flex-direction:column;align-items:center;
+  justify-content:flex-start;overflow-y:auto;-webkit-overflow-scrolling:touch;
+  padding:0}
+html.touch #menu .menu-bg{position:fixed}
+html.touch #menu .menu-inner{margin:auto 0;padding:calc(16px + env(safe-area-inset-top,0px)) 14px calc(26px + env(safe-area-inset-bottom,0px))}
+
 /* ---------- inputs ---------- */
 .fld{display:block;font-size:12px;color:var(--dim);letter-spacing:1.6px;margin-bottom:14px}
 .fld input{display:block;width:100%;margin-top:7px;background:#0c0f12;border:1px solid var(--line);
@@ -409,6 +419,10 @@ html.touch #rangePanel{display:none !important}
 #tSwap{left:calc(50% - 30px);top:calc(10px + env(safe-area-inset-top,0px))}
 #tMenu{left:calc(50% + 32px);top:calc(10px + env(safe-area-inset-top,0px))}
 #tBuy{left:18px;bottom:104px;width:72px;height:48px;border-radius:12px;font-size:11.5px}
+/* ЗАЛЕЗТЬ sits in the top-right corner, clear of both thumbs. The HUD's
+   money/kills column is nudged left so the two never overlap. */
+#tClimb{right:12px;top:calc(10px + env(safe-area-inset-top,0px));
+  width:64px;height:48px;border-radius:12px;font-size:10.5px;letter-spacing:.5px}
 
 #tHint{position:fixed;left:50%;bottom:24%;transform:translateX(-50%);text-align:center;
   font-size:12px;color:rgba(255,255,255,.72);background:rgba(0,0,0,.5);
@@ -420,11 +434,11 @@ html.touch .hud-bl{left:12px;bottom:158px}
 html.touch .ammo b{font-size:30px}
 html.touch .ammo span{font-size:15px}
 html.touch .wname{font-size:10.5px;letter-spacing:2px}
-html.touch .hud-tr{right:12px;top:10px}
+html.touch .hud-tr{right:84px;top:10px}
 html.touch .money{font-size:19px}
 html.touch .timer{font-size:21px}
 html.touch .objective{font-size:10px;letter-spacing:1.4px}
-html.touch .hud-br{right:12px;top:96px;bottom:auto;text-align:right}
+html.touch .hud-br{right:12px;top:110px;bottom:auto;text-align:right}
 html.touch .score{font-size:23px}
 html.touch .kills{font-size:9.5px;letter-spacing:1.4px}
 html.touch .kills b{font-size:20px}
@@ -487,6 +501,8 @@ html.touch .fld input{padding:10px;font-size:15px}
   #tSwap{left:calc(50% - 26px);top:calc(6px + env(safe-area-inset-top,0px))}
   #tMenu{left:calc(50% + 32px);top:calc(6px + env(safe-area-inset-top,0px))}
   #tBuy{left:18px;bottom:90px;width:66px;height:44px;font-size:11px}
+  #tClimb{right:10px;top:calc(6px + env(safe-area-inset-top,0px));width:58px;height:42px;font-size:9.5px}
+  html.touch .hud-tr{right:76px;top:6px}
   html.touch .logo.big{font-size:clamp(20px,5vw,30px)}
   html.touch .tagline{margin:8px 0 14px}
   html.touch .menu-foot{display:none}
@@ -514,6 +530,8 @@ html.touch .fld input{padding:10px;font-size:15px}
   #tSwap{left:calc(50% - 28px);top:calc(10px + env(safe-area-inset-top,0px))}
   #tMenu{left:calc(50% + 36px);top:calc(10px + env(safe-area-inset-top,0px))}
   #tBuy{left:14px;bottom:104px;width:66px;height:46px}
+  #tClimb{right:10px;top:calc(10px + env(safe-area-inset-top,0px));width:60px;height:44px;font-size:10px}
+  html.touch .hud-tr{right:78px;top:10px}
 }
 </style>
 </head>
@@ -562,6 +580,7 @@ html.touch .fld input{padding:10px;font-size:15px}
       <div class="krow"><kbd>Shift</kbd><span>Бег</span></div>
       <div class="krow"><kbd>Ctrl</kbd><span>Присесть</span></div>
       <div class="krow"><kbd>Space</kbd><span>Прыжок</span></div>
+      <div class="krow"><kbd>E</kbd><span>Залезть на объект</span></div>
       <div class="krow"><kbd>R</kbd><span>Перезарядка</span></div>
       <div class="krow"><kbd>1 2 3</kbd><span>Пистолет / Основное / Нож</span></div>
       <div class="krow"><kbd>G</kbd><span>Сбросить оружие</span></div>
@@ -849,7 +868,6 @@ const CFG = {
   maxAP: 100,
   stepUp: 0.62,
   snapDown: 0.14,       // minimum distance the ground snap may pull the player down
-  climbTime: 1.35,       // seconds of holding forward against a surface to start the climb
   climbDuration: 0.50,   // base vault animation time (a normal low ledge)
   climbDurationPerM: 0.13, // extra animation time per metre of height
   climbDurationMax: 2.6, // cap so a huge climb still finishes in a sensible time
@@ -3569,6 +3587,7 @@ class Player {
     this.climbHold = 0;
     this.climbFrom = null;
     this.climbTo = null;
+    this.climbQueued = false; // dedicated climb input (button / key) pressed
     this.deployT = 0;
     this.triggerDown = false;
     this.shotsSinceRelease = 0;
@@ -3693,21 +3712,40 @@ class Player {
     return group;
   }
 
+  /* Probe the space directly in front of the player for a climbable surface.
+     The movement collision only reports a wall while we are actually pushing
+     into it, but the dedicated climb action must also work from a standstill,
+     so it looks ahead by a hand's reach instead. Returns {top, low} or null. */
+  probeWall(world) {
+    const cy = Math.cos(this.yaw), sy = Math.sin(this.yaw);
+    const fx = -sy, fz = -cy;                        // forward
+    const reach = this.radius + 0.5;
+    const px = this.pos.x + fx * reach, pz = this.pos.z + fz * reach;
+    const r = this.radius * 0.9;
+    const cyl = { x: px, y: this.pos.y, z: pz, radius: r, height: this.height };
+    const bb = AABB(px - r, this.pos.y, pz - r, px + r, this.pos.y + this.height, pz + r);
+    const list = world.query(bb, []);
+    let top = -Infinity, low = Infinity;
+    for (let i = 0; i < list.length; i++) {
+      const b = list[i];
+      if (b.tag === 'ground') continue;
+      if (!cylinderOverlapsAABB(cyl, b)) continue;
+      if (b.maxY > top) top = b.maxY;
+      if (b.minY < low) low = b.minY;
+    }
+    return top === -Infinity ? null : { top, low };
+  }
+
   /* ---------- climb mechanic ----------
-     Hold forward against a surface and, after climbTime, the player pulls
-     themselves up onto it — a deliberate animated vault, not a teleport.
+     An explicit action: press the climb button (phone) or key (PC) while facing
+     a surface and the player pulls themselves up onto it — a deliberate animated
+     vault, not a teleport. It never triggers by itself, so leaning against cover
+     no longer throws you on top of it by accident.
      Height is not limited: a crate, a container, a roof or the 9 m perimeter
      wall can all be scaled. Taller climbs simply take longer to animate, and
      the vault is refused only if there is genuinely nowhere to stand on top. */
-  updateClimb(dt, world, input, res, wl) {
-    const blocked = !!(res.hitX || res.hitZ);
-    const top = res.blockTop;
-
-    // the surface must be a real ledge (above stepping height) and must actually
-    // rise from around our feet, so we never latch onto a floating platform above
-    const climbable = blocked && top !== undefined && isFinite(top) &&
-      top > this.pos.y + CFG.stepUp + 0.05 &&
-      this.pos.y > (res.blockLow === undefined ? -Infinity : res.blockLow) - 1;
+  updateClimb(dt, world, input, res, wl) {    let top = res.blockTop, low = res.blockLow;
+    let blocked = !!(res.hitX || res.hitZ);
 
     if (this.climbing) {
       // animate the vault: rise, then step forward onto the ledge. The easing is
@@ -3724,41 +3762,49 @@ class Player {
       return;
     }
 
-    // only a deliberate forward push climbs: sideways contact never triggers it
-    const pressing = input.f > 0.01 && wl > 0.01;
-    if (!climbable || !this.onGround || !pressing) { this.climbHold = 0; return; }
+    // consume the explicit request (edge-triggered, so holding does not repeat)
+    const want = this.climbQueued;
+    this.climbQueued = false;
+    if (!want || !this.onGround) { this.climbHold = 0; return; }
 
-    this.climbHold += dt;
-    if (this.climbHold >= CFG.climbTime) {
-      // Pick a landing spot on top of the obstacle, just past its near face.
-      // Walking further in overshoots narrow cover (the climber landed past a
-      // 2 m wall and fell off the far side), so the step is kept small and the
-      // spot is validated against the world before committing.
-      const cy = Math.cos(this.yaw), sy = Math.sin(this.yaw);
-      const fx = -sy, fz = -cy;                     // forward
-      let tx = this.pos.x, tz = this.pos.z, landY = top;
-      let found = false;
-      for (const step of [this.radius + 0.25, this.radius + 0.55, this.radius + 0.95]) {
-        const px = this.pos.x + fx * step, pz = this.pos.z + fz * step;
-        const gy = world.groundAt(px, pz, top + 1.2);
-        const y = (gy === null || gy === undefined || gy < top - 0.4) ? top : gy;
-        if (!world.overlaps(px, y + 0.05, pz, this.radius * 0.95, this.height)) {
-          tx = px; tz = pz; landY = y; found = true; break;
-        }
+    const probe = this.probeWall(world);
+    if (probe) { blocked = true; top = probe.top; low = probe.low; }
+
+    // the surface must be a real ledge (above stepping height) and must actually
+    // rise from around our feet, so we never latch onto a floating platform above
+    const climbable = blocked && top !== undefined && isFinite(top) &&
+      top > this.pos.y + CFG.stepUp + 0.05 &&
+      this.pos.y > (low === undefined ? -Infinity : low) - 1;
+    if (!climbable) { this.climbHold = 0; return; }
+
+    // Pick a landing spot on top of the obstacle, just past its near face.
+    // Stepping too far in overshoots narrow cover (the climber landed past a
+    // 2 m wall and fell off the far side), so the step is kept small and the
+    // spot is validated against the world before committing.
+    const cy = Math.cos(this.yaw), sy = Math.sin(this.yaw);
+    const fx = -sy, fz = -cy;                     // forward
+    let tx = this.pos.x, tz = this.pos.z, landY = top;
+    let found = false;
+    for (const step of [this.radius + 0.25, this.radius + 0.55, this.radius + 0.95]) {
+      const px = this.pos.x + fx * step, pz = this.pos.z + fz * step;
+      const gy = world.groundAt(px, pz, top + 1.2);
+      const y = (gy === null || gy === undefined || gy < top - 0.4) ? top : gy;
+      if (!world.overlaps(px, y + 0.05, pz, this.radius * 0.95, this.height)) {
+        tx = px; tz = pz; landY = y; found = true; break;
       }
-      // nothing clear on top: refuse the climb rather than vault into a wall
-      if (!found) { this.climbHold = Math.min(this.climbHold, CFG.climbTime * 0.75); return; }
-
-      const rise = Math.max(0, landY - this.pos.y);
-      this.climbing = true;
-      this.climbT = 0;
-      this.climbDur = U.clamp(CFG.climbDuration + rise * CFG.climbDurationPerM, CFG.climbDuration, CFG.climbDurationMax);
-      this.climbFrom = { x: this.pos.x, y: this.pos.y, z: this.pos.z };
-      this.climbTo = { x: tx, y: landY, z: tz };
-      this.climbHold = 0;
-      Bus.emit('climb', this);
-      if (this.isLocal && typeof Audio3D_SFX !== 'undefined') Audio3D_SFX.pickup();
     }
+    // nothing clear on top: refuse the climb rather than vault into a wall
+    if (!found) { Audio3D_SFX && Audio3D_SFX.deny && this.isLocal && Audio3D_SFX.deny(); return; }
+
+    const rise = Math.max(0, landY - this.pos.y);
+    this.climbing = true;
+    this.climbT = 0;
+    this.climbDur = U.clamp(CFG.climbDuration + rise * CFG.climbDurationPerM, CFG.climbDuration, CFG.climbDurationMax);
+    this.climbFrom = { x: this.pos.x, y: this.pos.y, z: this.pos.z };
+    this.climbTo = { x: tx, y: landY, z: tz };
+    this.climbHold = 0;
+    Bus.emit('climb', this);
+    if (this.isLocal && typeof Audio3D_SFX !== 'undefined') Audio3D_SFX.pickup();
   }
 
   /* ---------- movement + physics ---------- */
@@ -3826,11 +3872,12 @@ class Player {
     if (res.hitZ) this.vel.z = 0;
     if (res.ceiling) this.vel.y = Math.min(this.vel.y, 0);
 
-     /* ---- climb: hold forward against a tall object to scale it ----
+     /* ---- climb: an explicit action (ЗАЛЕЗТЬ / E) ----
         Walking into a wall used to teleport the player to its top in a single
-        frame (fixed in moveCylinder). In its place this gives a deliberate
-        mechanic: press into a surface for climbTime and the player vaults onto
-        it. There is no height limit — taller surfaces just take longer. */
+        frame (fixed in moveCylinder). In its place this is a deliberate move:
+        press the climb button or key while facing a surface and the player
+        vaults onto it. It never triggers on its own, so brushing against cover
+        is safe — and there is no height limit, taller surfaces just take longer. */
     this.updateClimb(dt, world, input, res, wl);
 
     // ---- ground: land on, or step up to, the surface under our feet ----
@@ -4648,6 +4695,7 @@ const Input = {
   onWheel: null,
   onLockChange: null,
   bindings: {},
+  climbQueued: false,  // set by the PC climb key, consumed once per press
 
   init(el) {
     this.el = el;
@@ -4800,6 +4848,11 @@ const Input = {
   consumeWeaponSwitch() {
     if (IS_TOUCH) { const w = TouchUI.switchQueued; TouchUI.switchQueued = false; return w; }
     return 0;
+  },
+  /* dedicated climb request: the touch button, or the PC key (edge-triggered) */
+  consumeClimb() {
+    if (IS_TOUCH) { const c = TouchUI.climbQueued; TouchUI.climbQueued = false; return c; }
+    const c = this.climbQueued; this.climbQueued = false; return c;
   }
 };
 
@@ -4824,6 +4877,7 @@ const TouchUI = {
   jumpQueued: false,
   reloadQueued: false,
   switchQueued: 0,
+  climbQueued: false,
   autoRun: false,
   runHeld: false,
   sens: 1.5,
@@ -4854,9 +4908,10 @@ const TouchUI = {
       '<button id="tCrouch" class="tbtn small">ПРИСЕСТЬ</button>' +
       '<button id="tReload" class="tbtn small">ПЕРЕЗАРЯДКА</button>' +
       '<button id="tSwap" class="tbtn small">СМЕНА</button>' +
+      '<button id="tClimb" class="tbtn small accent">ЗАЛЕЗТЬ</button>' +
       '<button id="tBuy" class="tbtn small accent">МАГАЗИН</button>' +
       '<button id="tMenu" class="tbtn small">ПАУЗА</button>' +
-      '<div id="tHint">Слева — ходьба · Справа — обзор · Тап — огонь · АВТО — очередь</div>';
+      '<div id="tHint">Слева — ходьба · Справа — обзор · Тап — огонь · АВТО — очередь · ЗАЛЕЗТЬ — паркур</div>';
     document.body.appendChild(wrap);
     this.root = wrap;
     this._els = {
@@ -4869,6 +4924,7 @@ const TouchUI = {
       crouch: document.getElementById('tCrouch'),
       reload: document.getElementById('tReload'),
       swap: document.getElementById('tSwap'),
+      climb: document.getElementById('tClimb'),
       buy: document.getElementById('tBuy'),
       menu: document.getElementById('tMenu'),
       hint: document.getElementById('tHint')
@@ -4907,6 +4963,7 @@ const TouchUI = {
     }, { passive: false });
     E.reload.addEventListener('touchstart', e => { swallow(e); this.reloadQueued = true; E.reload.classList.add('down'); setTimeout(() => E.reload.classList.remove('down'), 130); }, { passive: false });
     E.swap.addEventListener('touchstart', e => { swallow(e); this.switchQueued = 1; E.swap.classList.add('down'); setTimeout(() => E.swap.classList.remove('down'), 130); }, { passive: false });
+    E.climb.addEventListener('touchstart', e => { swallow(e); this.climbQueued = true; E.climb.classList.add('down'); setTimeout(() => E.climb.classList.remove('down'), 160); }, { passive: false });
     E.buy.addEventListener('touchstart', e => { swallow(e); Bus.emit('touchBuy'); E.buy.classList.add('down'); setTimeout(() => E.buy.classList.remove('down'), 130); }, { passive: false });
     E.menu.addEventListener('touchstart', e => { swallow(e); Bus.emit('touchPause'); E.menu.classList.add('down'); setTimeout(() => E.menu.classList.remove('down'), 130); }, { passive: false });
     // double-tap the stick area toggles auto-run
@@ -5023,6 +5080,7 @@ const TouchUI = {
     this._els.crouch.style.opacity = blocked ? '.35' : '1';
     this._els.reload.style.opacity = blocked ? '.35' : '1';
     this._els.swap.style.opacity = blocked ? '.35' : '1';
+    if (this._els.climb) this._els.climb.style.opacity = blocked ? '.35' : '1';
     this._els.menu.style.opacity = blocked ? '.35' : '1';
     // the control hint is only useful at the very start of a match
     if (this._els.hint) {
@@ -7198,6 +7256,8 @@ const Game = {
         else { UI.toast('Магазин доступен только в фазе закупки'); Audio3D_SFX.deny(); }
         break;
       case 'KeyR': if (!this.paused) this.player.reload(); break;
+      // dedicated climb: E vaults onto whatever the player is facing
+      case 'KeyE': if (!this.paused && this.player) this.player.climbQueued = true; break;
       case 'Digit1': if (!this.paused) this.switchSlot(1); break;
       case 'Digit2': if (!this.paused) this.switchSlot(2); break;
       case 'Digit3': if (!this.paused) this.switchSlot(3); break;
@@ -7675,6 +7735,8 @@ const Game = {
       if (autoBtn) autoBtn.classList.remove('down');
       const tag = document.getElementById('autoFireTag');
       if (tag) tag.classList.add('hidden');
+      TouchUI.climbQueued = false;
+      if (this.player) this.player.climbQueued = false;
     }
     Input.enabled = true;          // arm keyboard, mouse buttons and wheel
     UI.show('hud');
@@ -9037,6 +9099,8 @@ const Game = {
       else if (!TouchUI.firePressed && this._tapFireRelease <= 0) p.triggerDown = false;
       if (TouchUI.firePressed) p.triggerDown = true;
     }
+    // dedicated climb action: a touch button or the PC key, edge-triggered
+    if (Input.consumeClimb()) p.climbQueued = true;
 
     p._wantAim = Input.aimDown() && canLook;
 
@@ -9044,8 +9108,9 @@ const Game = {
        fires on its own. On a phone the thumb that aims cannot also tap to shoot,
        so this is what makes touch combat playable. It can be turned off in the
        settings (Автоприцел). */
-    if (IS_TOUCH && Store.data.aimAssist !== 0 && p.alive && !this.buyOpen &&
-        this.roundState === 'live' && this._enemyFound) {
+    const assistFiring = IS_TOUCH && Store.data.aimAssist !== 0 && p.alive && !this.buyOpen &&
+      this.roundState === 'live' && this._enemyFound;
+    if (assistFiring) {
       p.triggerDown = true;
       this._aimFireHold = 0.12;
     } else if (this._aimFireHold > 0) {
@@ -9056,13 +9121,23 @@ const Game = {
     // scroll to switch weapons
     if (m.wheel && !this.buyOpen) this.switchSlot(p.nextSlot());
 
+    /* `held` means the trigger is being held by a continuous source (АВТО, the
+       on-screen fire button, or the aim assist). Semi-auto weapons must keep
+       firing at their rate while that is true — otherwise the semi latch is set
+       by the first shot and, because the trigger never releases, a pistol fires
+       exactly once and then sits silent. */
+    const held = IS_TOUCH && (TouchUI.autoFire || TouchUI.firePressed || assistFiring ||
+      (this._tapFireRelease > 0));
+
     // ---- shooting ----
     // Firing is only allowed once the match is live: not during the buy phase
     // and not while the buy menu is open.
     if (p.alive && !this.buyOpen && this.roundState === 'live') {
       const def = p.def;
-      if (def.auto || def.slot === 3) {
-        // automatic weapons fire continuously while held
+      if (def.auto || def.slot === 3 || held) {
+        // automatic weapons fire continuously while held; with a continuous
+        // touch source the semi latch is cleared so every weapon repeats
+        if (held) p._semiLatch = false;
         if (p.triggerDown) this.fire();
       } else if (p.triggerDown && !p._semiLatch) {
         // semi-auto fallback for synthetic input (tests/replays) and retry after

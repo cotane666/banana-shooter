@@ -28,7 +28,6 @@ const CFG = {
   maxAP: 100,
   stepUp: 0.62,
   snapDown: 0.14,       // minimum distance the ground snap may pull the player down
-  climbTime: 1.35,       // seconds of holding forward against a surface to start the climb
   climbDuration: 0.50,   // base vault animation time (a normal low ledge)
   climbDurationPerM: 0.13, // extra animation time per metre of height
   climbDurationMax: 2.6, // cap so a huge climb still finishes in a sensible time

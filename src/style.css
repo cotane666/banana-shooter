@@ -71,6 +71,16 @@ canvas{display:block}
 .menu-stats b{display:block;font-size:22px;color:var(--or);font-weight:800}
 .menu-foot{font-size:11px;color:#4d565f;margin-top:26px;letter-spacing:1.2px;line-height:1.9}
 
+/* On phones the main menu is taller than the screen (six mode buttons plus
+   stats), so it becomes a vertical scroller. `margin:auto 0` centres the card
+   when it fits and collapses to 0 when it overflows, so nothing ever gets cut
+   off at the top. The backdrop is fixed so it keeps covering the viewport. */
+html.touch #menu{display:flex;flex-direction:column;align-items:center;
+  justify-content:flex-start;overflow-y:auto;-webkit-overflow-scrolling:touch;
+  padding:0}
+html.touch #menu .menu-bg{position:fixed}
+html.touch #menu .menu-inner{margin:auto 0;padding:calc(16px + env(safe-area-inset-top,0px)) 14px calc(26px + env(safe-area-inset-bottom,0px))}
+
 /* ---------- inputs ---------- */
 .fld{display:block;font-size:12px;color:var(--dim);letter-spacing:1.6px;margin-bottom:14px}
 .fld input{display:block;width:100%;margin-top:7px;background:#0c0f12;border:1px solid var(--line);
@@ -394,6 +404,10 @@ html.touch #rangePanel{display:none !important}
 #tSwap{left:calc(50% - 30px);top:calc(10px + env(safe-area-inset-top,0px))}
 #tMenu{left:calc(50% + 32px);top:calc(10px + env(safe-area-inset-top,0px))}
 #tBuy{left:18px;bottom:104px;width:72px;height:48px;border-radius:12px;font-size:11.5px}
+/* ЗАЛЕЗТЬ sits in the top-right corner, clear of both thumbs. The HUD's
+   money/kills column is nudged left so the two never overlap. */
+#tClimb{right:12px;top:calc(10px + env(safe-area-inset-top,0px));
+  width:64px;height:48px;border-radius:12px;font-size:10.5px;letter-spacing:.5px}
 
 #tHint{position:fixed;left:50%;bottom:24%;transform:translateX(-50%);text-align:center;
   font-size:12px;color:rgba(255,255,255,.72);background:rgba(0,0,0,.5);
@@ -405,11 +419,11 @@ html.touch .hud-bl{left:12px;bottom:158px}
 html.touch .ammo b{font-size:30px}
 html.touch .ammo span{font-size:15px}
 html.touch .wname{font-size:10.5px;letter-spacing:2px}
-html.touch .hud-tr{right:12px;top:10px}
+html.touch .hud-tr{right:84px;top:10px}
 html.touch .money{font-size:19px}
 html.touch .timer{font-size:21px}
 html.touch .objective{font-size:10px;letter-spacing:1.4px}
-html.touch .hud-br{right:12px;top:96px;bottom:auto;text-align:right}
+html.touch .hud-br{right:12px;top:110px;bottom:auto;text-align:right}
 html.touch .score{font-size:23px}
 html.touch .kills{font-size:9.5px;letter-spacing:1.4px}
 html.touch .kills b{font-size:20px}
@@ -472,6 +486,8 @@ html.touch .fld input{padding:10px;font-size:15px}
   #tSwap{left:calc(50% - 26px);top:calc(6px + env(safe-area-inset-top,0px))}
   #tMenu{left:calc(50% + 32px);top:calc(6px + env(safe-area-inset-top,0px))}
   #tBuy{left:18px;bottom:90px;width:66px;height:44px;font-size:11px}
+  #tClimb{right:10px;top:calc(6px + env(safe-area-inset-top,0px));width:58px;height:42px;font-size:9.5px}
+  html.touch .hud-tr{right:76px;top:6px}
   html.touch .logo.big{font-size:clamp(20px,5vw,30px)}
   html.touch .tagline{margin:8px 0 14px}
   html.touch .menu-foot{display:none}
@@ -499,4 +515,6 @@ html.touch .fld input{padding:10px;font-size:15px}
   #tSwap{left:calc(50% - 28px);top:calc(10px + env(safe-area-inset-top,0px))}
   #tMenu{left:calc(50% + 36px);top:calc(10px + env(safe-area-inset-top,0px))}
   #tBuy{left:14px;bottom:104px;width:66px;height:46px}
+  #tClimb{right:10px;top:calc(10px + env(safe-area-inset-top,0px));width:60px;height:44px;font-size:10px}
+  html.touch .hud-tr{right:78px;top:10px}
 }

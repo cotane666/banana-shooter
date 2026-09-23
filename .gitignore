@@ -37,3 +37,5 @@ android/captures/
 Thumbs.db
 desktop.ini
 .DS_Store
+
+/_*.txt

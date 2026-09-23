@@ -6257,6 +6257,10 @@ const Net = {
       if (this.role === CS.NETROLE.HOST) {
         this.conns = this.conns.filter(c => c !== rec);
         this.refreshRoster();
+        // Tell the players who remain that the room shrank. `emit` only updates
+        // this machine; without the explicit send the other clients keep the
+        // departed player in their roster and chase a ghost model.
+        this.send({ t: 'roster', roster: this.peers });
         this.emit('roster', this.peers);
         this.emit('peerleft', { id: rec.id, name: rec.name });
       }

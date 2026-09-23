@@ -368,6 +368,10 @@ const Net = {
         // the host announces the roster (which now includes the new client)
         if (this.role === CS.NETROLE.HOST && rec) {
           this.emit('peerjoined', { id: rec.id, name: rec.name });
+          // Send the updated list to the whole room. Without this, players who
+          // joined earlier never learn about a later joiner: every client must
+          // see the same roster to derive a distinct spawn slot from it.
+          this.send({ t: 'roster', roster: this.peers });
         }
         this.emit('hello', m);
         this.emit('roster', this.peers);

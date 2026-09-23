@@ -6309,6 +6309,10 @@ const Net = {
         // the host announces the roster (which now includes the new client)
         if (this.role === CS.NETROLE.HOST && rec) {
           this.emit('peerjoined', { id: rec.id, name: rec.name });
+          // Send the updated list to the whole room. Without this, players who
+          // joined earlier never learn about a later joiner: every client must
+          // see the same roster to derive a distinct spawn slot from it.
+          this.send({ t: 'roster', roster: this.peers });
         }
         this.emit('hello', m);
         this.emit('roster', this.peers);
@@ -7642,7 +7646,7 @@ const Game = {
     this.effects = new Effects(this.scene, Store.data.quality);
     this.effects.clear();
 
-    this.spawnPlayerLocal(0);
+    this.spawnPlayerLocal(this.rosterSpawnIndex());
     this.beginBuyPhase(30, 'РАУНД 1');
     this.enterGame();
     this._peerWarned = false; this._peerLost = false;
@@ -7670,6 +7674,22 @@ const Game = {
     this.online.players = Math.max(2, this.online.roster.length || Net.peerCount());
     this.syncRemoteRoster();
     this.refreshSkipUI();
+    // The roster can arrive just after the match starts (a client is told its
+    // own slot only once the host's list arrives). While we are still shopping,
+    // step onto our own spawn so nobody stands inside anyone else.
+    if (this.roundState === 'buy' || this.roundState === 'idle') this.placeAtRosterSpawn();
+  },
+
+  /* move to our own spawn slot, but only if we are not already standing on it.
+     Used after the roster arrives so two players never share a spawn point. */
+  placeAtRosterSpawn() {
+    const spawns = MAP.playerSpawns || [];
+    const idx = this.rosterSpawnIndex();
+    const s = spawns[idx];
+    if (!s) return;
+    if (Math.hypot(this.player.pos.x - s.x, this.player.pos.z - s.z) > 1.0) {
+      this.spawnPlayerLocal(idx);
+    }
   },
 
   /* add/remove RemotePlayer objects so the scene matches the roster */
@@ -7788,8 +7808,30 @@ const Game = {
     this.updateRangePanel();
   },
 
+  /* ============================================================
+     SPAWN PICKING (local only)
+     Everyone used to spawn on slot #0 at match start, and each round every
+     player picked a random slot independently — so players regularly appeared
+     inside each other. Now each player derives a slot from their own position in
+     the shared roster. The roster has the same order on every machine (the host
+     builds it and sends it out), so the indices are distinct and no two players
+     can land on the same spawn — without changing the network protocol.
+     ============================================================ */
+  rosterSpawnIndex() {
+    const roster = (Net && Net.peers && Net.peers.length) ? Net.peers : [];
+    const myId = Net.selfId();
+    const n = Math.max(1, (MAP.playerSpawns || []).length);
+    const i = roster.findIndex(p => p && p.id === myId);
+    return i >= 0 ? (i % n) : 0;
+  },
+
   spawnPlayerLocal(spawnIdx) {
-    const s = MAP.playerSpawns[spawnIdx % MAP.playerSpawns.length];
+    const spawns = MAP.playerSpawns || [];
+    const n = Math.max(1, spawns.length);
+    const idx = (typeof spawnIdx === 'number' && isFinite(spawnIdx))
+      ? Math.abs(Math.floor(spawnIdx)) % n
+      : 0;
+    const s = spawns[idx] || { x: 0, z: 42 };
     const y = this.world.groundAt(s.x, s.z, 3);
     const yaw = Math.atan2(-(0 - s.x), -(0 - s.z)); // face the arena centre
     this.player.resetSpawn(s.x, y + .05, s.z, yaw);
@@ -8029,7 +8071,7 @@ const Game = {
     this.player.armor = 0; this.player.helmet = false;
     this.player.alive = true;
     this.player.money = Math.min(16000, this.player.money + 1400);
-    this.spawnPlayerLocal(Math.floor(Math.random() * Math.max(1, MAP.playerSpawns.length)));
+    this.spawnPlayerLocal(this.rosterSpawnIndex());
     for (const rp of this.remotePlayers) { rp.alive = true; rp.health = this.matchHP; rp.maxHealth = this.matchHP; }
     this.broadcastRespawn();
     this.beginBuyPhase(25, 'РАУНД ' + (this.roundNo + 1));

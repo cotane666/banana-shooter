@@ -787,6 +787,11 @@ const Game = {
   bindUI() {
     bindClick('btnOffline', () => this.startOffline());
     bindClick('btnHorde', () => this.startOffline(true));
+    bindClick('btnCreditsClose', () => this.closeCredits());
+    // clicking the backdrop (not the text or a button) also closes the credits
+    if (UI.el.credits) UI.el.credits.addEventListener('click', e => {
+      if (e.target === UI.el.credits || e.target.classList.contains('credits-scroll')) this.closeCredits();
+    });
     bindClick('btnRange', () => this.startRange());
     bindClick('btnMatch', () => { this._prevScreen = 'menu'; UI.refreshChips(); UI.show('controls'); });
     bindClick('btnAndroid', () => UI.show('android'));
@@ -947,6 +952,10 @@ const Game = {
   },
 
   onKeyDown(code, e) {
+    if (this._creditsOpen) {
+      if (code === 'Space' || code === 'Enter' || code === 'Escape' || code === 'NumpadEnter') this.closeCredits();
+      return;
+    }
     if (this.mode === CS.MODE.MENU) return;
     // While the buy menu is open it owns the keyboard (B / Enter / Esc close it,
     // 1-9 buy the numbered item, Tab is a no-op).
@@ -1046,6 +1055,11 @@ const Game = {
     this._restartPending = false;
     this.offlineDead = false;
     this.offlineDeadT = 0;
+    this._campaignWon = false;
+    this._campaignDone = false;
+    this._offeredRestart = false;
+    this._restartPending = false;
+    this._creditsOpen = false;
     this.freePlay = false;
     this.ensureMap(Store.data.map);
     this.matchHP = Store.data.maxHP || 100;
@@ -1537,6 +1551,7 @@ const Game = {
       this.mode = CS.MODE.MENU;
       clearWorld();
       this.offline = null; this.online = null;
+      this._creditsOpen = false;
       UI.hideOverlays();
       UI.lowHP(false);
       UI.renderMenuStats();
@@ -2183,15 +2198,48 @@ const Game = {
     // stop the wave flow: no break timer, no wave 101
     const o = this.offline;
     if (o) { o.campaignWon = true; o.betweenWaves = false; o.toSpawn = 0; }
-    UI.center('ИГРА ПРОЙДЕНА!', 'Пройдено раз: ' + Store.data.clears + ' · Enter — сыграть снова', 600);
+    UI.center('ИГРА ПРОЙДЕНА!', 'Пройдено раз: ' + Store.data.clears, 3.0);
     UI.toast('ПОБЕДА! Очков прохождения: ' + Store.data.clears, '#c24bff');
     Audio3D_SFX.roundEnd(true);
     UI.renderMenuStats();
+    this.showCredits();
     this.roundState = 'end';
     this.roundT = 0;
     this.offlineDead = true;      // reuse the restart/victory screen
     this.offlineDeadT = 0;
     this._campaignWon = true;
+  },
+
+  /* Roll the credits: a scrollable panel with the cast, stats, and a hint to
+     close. Shown the moment the final boss dies. */
+  showCredits() {
+    const cr = UI.el.credits;
+    if (!cr) return;
+    if (UI.el.crPlayer) UI.el.crPlayer.textContent = (Store.data.name || 'Игрок').slice(0, 14);
+    if (UI.el.crStats) {
+      const p = this.player;
+      UI.el.crStats.innerHTML =
+        'ПРОХОЖДЕНИЙ: <b>' + (Store.data.clears || 0) + '</b><br>' +
+        'СЧЁТ ЗА ЗАБЕГ: <b>' + Math.round(p.score) + '</b><br>' +
+        'ЗОМБИ УБИТО: <b>' + p.zombieKills + '</b><br>' +
+        'РЕЖИМ: <b>' + (this.hordeMode ? 'ОРДА ×10' : 'ОБЫЧНЫЙ') + '</b>';
+    }
+    this._creditsOpen = true;
+    // stop the pointer lock so the scroll and the close button work
+    if (!IS_TOUCH) Input.releaseLock();
+    Input.enabled = false;
+    UI.show('credits');
+    const sc = cr.querySelector('.credits-scroll');
+    if (sc) sc.scrollTop = 0;
+    Audio3D_SFX.ambientStart();
+  },
+
+  closeCredits() {
+    if (!this._creditsOpen) return;
+    this._creditsOpen = false;
+    UI.show('hud');
+    Input.enabled = true;
+    if (!IS_TOUCH) setTimeout(() => { if (this.running) Input.requestLock(); }, 80);
     this.restartOfflineOffer();
   },
 
@@ -3618,7 +3666,7 @@ const Game = {
       if (this._panelT <= 0) { this._panelT = .2; this.updateRangePanel(); }
     }
     this.updateBossBar();
-    if (this._restartPending && (Input.keys['Enter'] || Input.keys['NumpadEnter'])) {
+    if (this._restartPending && !this._creditsOpen && (Input.keys['Enter'] || Input.keys['NumpadEnter'])) {
       const wasHorde = this.hordeMode;
       this._restartPending = false; this._offeredRestart = false; this.offlineDead = false; this.offlineDeadT = 0;
       this.startOffline(wasHorde);

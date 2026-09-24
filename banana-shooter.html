@@ -6298,12 +6298,27 @@ const Net = {
   /* ---------- messaging ----------
      The host relays any message it receives from a client to every other
      client, so all players see each other in a star topology. `from` and `to`
-     survive the relay untouched. */
+     survive the relay untouched.
+
+     Delivery is isolated per connection: one congested or dying channel must
+     never stop the message reaching the others. (A single throw used to break
+     the whole loop, so the remaining players silently stopped receiving
+     anything.)
+     */
+  _sendOne(rec, msg) {
+    if (!rec || !rec.open) return false;
+    try { rec.conn.send(msg); rec.fails = 0; return true; }
+    catch (e) {
+      rec.fails = (rec.fails || 0) + 1;
+      if (rec.fails > 6) rec.open = false;   // treat a dead channel as closed
+      return false;
+    }
+  },
   send(msg) {
     if (this.role === CS.NETROLE.HOST) {
       if (!this.conns.length) return false;
       let ok = false;
-      try { this.conns.forEach(c => { if (c.open) { c.conn.send(msg); ok = true; } }); } catch (e) { }
+      for (const c of this.conns) { if (this._sendOne(c, msg)) ok = true; }
       return ok;
     }
     if (!this.conn || !this.conn.open) return false;
@@ -6312,16 +6327,14 @@ const Net = {
   /* host-only: forward to every client except `exceptRec` */
   relay(msg, exceptRec) {
     if (this.role !== CS.NETROLE.HOST) return;
-    try {
-      this.conns.forEach(c => {
-        if (c.open && c !== exceptRec) c.conn.send(msg);
-      });
-    } catch (e) { }
+    for (const c of this.conns) {
+      if (c === exceptRec) continue;
+      this._sendOne(c, msg);
+    }
   },
   /* host-only: send to exactly one connection record */
   sendTo(rec, msg) {
-    if (!rec || !rec.open) return false;
-    try { rec.conn.send(msg); return true; } catch (e) { return false; }
+    return this._sendOne(rec, msg);
   },
 
   _handle(m, rec) {

@@ -1041,6 +1041,11 @@ const Game = {
     this.stopToMenu(true);
     this.mode = CS.MODE.OFFLINE;
     this._campaignDone = false;
+    this._campaignWon = false;
+    this._offeredRestart = false;
+    this._restartPending = false;
+    this.offlineDead = false;
+    this.offlineDeadT = 0;
     this.freePlay = false;
     this.ensureMap(Store.data.map);
     this.matchHP = Store.data.maxHP || 100;
@@ -1049,7 +1054,8 @@ const Game = {
     this.hordeMode = (horde === true) || (horde !== false && Store.data.horde === 1);
     this.offline = {
       wave: 0, toSpawn: 0, spawnedThisWave: 0, totalThisWave: 0,
-      betweenWaves: false, breakT: 0, alive: 0, kills: 0, startTime: U.now()
+      betweenWaves: false, breakT: 0, alive: 0, kills: 0, startTime: U.now(),
+      campaignWon: false, bossPending: 0, bossType: null
     };
     this.remotePlayers = []; this.remote = null;
     this.player = new Player({ id: 'p1', name: 'Вы', isLocal: true, team: 'ct' });
@@ -2096,6 +2102,7 @@ const Game = {
   updateOffline(dt) {
     const o = this.offline;
     if (!o) return;
+    if (o.campaignWon) return;              // the run is over until the player restarts
     if (o.betweenWaves) {
       o.breakT -= dt;
       if (o.breakT <= 0) {
@@ -2173,14 +2180,19 @@ const Game = {
     Store.data.clears = (Store.data.clears || 0) + 1;
     Store.save();
     this.player.score += 50000;
-    UI.center('ИГРА ПРОЙДЕНА!', 'Волна 100 · +1 очко прохождения', 30);
-    UI.toast('ПОБЕДА! Получено очко прохождения', '#c24bff');
+    // stop the wave flow: no break timer, no wave 101
+    const o = this.offline;
+    if (o) { o.campaignWon = true; o.betweenWaves = false; o.toSpawn = 0; }
+    UI.center('ИГРА ПРОЙДЕНА!', 'Пройдено раз: ' + Store.data.clears + ' · Enter — сыграть снова', 600);
+    UI.toast('ПОБЕДА! Очков прохождения: ' + Store.data.clears, '#c24bff');
     Audio3D_SFX.roundEnd(true);
     UI.renderMenuStats();
     this.roundState = 'end';
-    this.roundT = 12;
-    this.offlineDead = true;      // reuse the restart offer screen
+    this.roundT = 0;
+    this.offlineDead = true;      // reuse the restart/victory screen
     this.offlineDeadT = 0;
+    this._campaignWon = true;
+    this.restartOfflineOffer();
   },
 
   /* ============================================================
@@ -3398,7 +3410,11 @@ const Game = {
   restartOfflineOffer() {
     if (this._offeredRestart) return;
     this._offeredRestart = true;
-    UI.center('ВЫ ПОГИБЛИ', 'Enter — начать заново · Tab — статистика', 600);
+    if (this._campaignWon) {
+      UI.center('ИГРА ПРОЙДЕНА!', 'Пройдено раз: ' + (Store.data.clears || 0) + ' · Enter — сыграть снова', 600);
+    } else {
+      UI.center('ВЫ ПОГИБЛИ', 'Enter — начать заново · Tab — статистика', 600);
+    }
     this._restartPending = true;
   },
 

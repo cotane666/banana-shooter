@@ -54,7 +54,7 @@ const CFG = {
   droneDmg: 175,        // blast damage at the centre
   droneHp: 60,          // damage the drone absorbs before it is shot down
   droneTurn: 2.1,       // camera-relative steer rate (rad/s per unit of input)
-  droneNoise: 34,       // how far the drone's motor carries (m) — loud on purpose
+  droneNoise: 70,       // how far the drone's motor carries (m) — loud on purpose
   rocketSoundRange: 220, // how far a rocket explosion is heard from
 
   /* ---- ОРДА ×10: ten times as many zombies, but far weaker ---- */

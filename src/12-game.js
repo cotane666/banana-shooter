@@ -422,6 +422,12 @@ class RemotePlayer {
     this.money = 800;
     this.crouching = false;
     this.height = CFG.playerHeight;
+    /* Death animation: when `alive` flips false the model topples over instead
+       of popping out of existence. */
+    this.deathT = 0;
+    this.deathActive = false;
+    this.deathDir = 1;
+    this.dead = false;         // set by a `died` message; cleared on respawn
     this.mesh = buildSoldierMesh(this.team);
     this.mesh.userData.parts = this.mesh.userData.parts;
     this.plate = makeNameplate(this.name);
@@ -533,7 +539,7 @@ class RemotePlayer {
       this.renderPos.z = a.z + vz * ahead;
       this.renderYaw = a.yw;
       this.pitch = a.pt || 0;
-      this.alive = a.alive;
+      this.alive = this.dead ? false : a.alive;   // a `died` message is authoritative
       this.crouching = !!a.cr;
       this.height = this.crouching ? CFG.crouchHeight : CFG.playerHeight;
       this.moveSpeed = Math.hypot(vx, vz) * 1000;   // m/s
@@ -554,7 +560,9 @@ class RemotePlayer {
   }
   applySnap(s) {
     this.renderPos.x = s.x; this.renderPos.y = s.y; this.renderPos.z = s.z;
-    this.renderYaw = s.yw; this.pitch = s.pt || 0; this.alive = s.alive; this.crouching = !!s.cr;
+    this.renderYaw = s.yw; this.pitch = s.pt || 0;
+    this.alive = this.dead ? false : s.alive;   // a `died` message is authoritative
+    this.crouching = !!s.cr;
     this.height = this.crouching ? CFG.crouchHeight : CFG.playerHeight;
     this.moveSpeed = 0;
   }
@@ -565,8 +573,34 @@ class RemotePlayer {
     this.yaw = this.renderYaw;
     this.mesh.position.set(this.pos.x, this.pos.y, this.pos.z);
     this.mesh.rotation.y = this.yaw;
-    this.mesh.visible = this.alive;
-    if (!this.alive) { this._wasFlashing = false; return; }
+
+    /* ---- death: topple the model instead of hiding it ---- */
+    if (!this.alive) {
+      if (!this.deathActive) {
+        this.deathActive = true;
+        this.deathT = 0;
+        this.deathDir = Math.random() < .5 ? -1 : 1;
+        this.mesh.visible = true;
+        this.mesh.rotation.order = 'YXZ';
+      }
+      this.deathT += dt;
+      const k = U.clamp(this.deathT / .55, 0, 1);
+      const fall = Math.sin(k * Math.PI * .5);
+      this.mesh.rotation.x = -fall * Math.PI * .5;     // pitch face-down
+      this.mesh.rotation.z = fall * .28 * this.deathDir;
+      this.mesh.position.y = this.pos.y + fall * .10;
+      this.mesh.visible = this.deathT < 8;             // the corpse fades later
+      this._wasFlashing = false;
+      return;
+    }
+
+    // revived: stand the model back up
+    if (this.deathActive) {
+      this.deathActive = false;
+      this.deathT = 0;
+      this.mesh.rotation.x = 0; this.mesh.rotation.z = 0;
+      this.mesh.visible = true;
+    }
 
     const p = this.mesh.userData.parts;
     const spd = U.clamp((this.moveSpeed || 0) / CFG.runSpeed, 0, 1);   // 0..1
@@ -2054,7 +2088,7 @@ const Game = {
     // a bought drone is recharged every round in online play
     if (this.mode === CS.MODE.ONLINE && this.player.droneOwned) this.player.drone = 1;
     this.spawnPlayerLocal(this.rosterSpawnIndex());
-    for (const rp of this.remotePlayers) { rp.alive = true; rp.health = this.matchHP; rp.maxHealth = this.matchHP; }
+    for (const rp of this.remotePlayers) { rp.alive = true; rp.dead = false; rp.health = this.matchHP; rp.maxHealth = this.matchHP; }
     this.broadcastRespawn();
     this.beginBuyPhase(25, 'РАУНД ' + (this.roundNo + 1));
   },
@@ -3140,6 +3174,7 @@ const Game = {
     const rp = this.remoteById(d.from);
     if (!rp) return;
     rp.alive = false;
+    rp.dead = true;               // stick until an explicit respawn
     // Credit is only given when the victim named us as the killer. In a 2-player
     // room there is only one possible killer, so an untagged death still counts.
     const myId = Net.selfId();
@@ -3215,12 +3250,16 @@ const Game = {
     const list = (r.from && rp) ? [rp] : this.remotePlayers.slice();
     for (const x of list) {
       x.alive = true;
+      x.dead = false;
       x.health = r.hp || this.matchHP;
       x.maxHealth = r.hp || this.matchHP;
       x.applySnap({ x: r.x, y: r.y, z: r.z, yw: r.yaw, pt: 0, alive: 1, cr: 0 });
       x.buf.length = 0;
       x.mesh.visible = true;
       x.mesh.scale.y = 1;
+      // stand the model back up after a previous death
+      x.deathActive = false; x.deathT = 0;
+      x.mesh.rotation.x = 0; x.mesh.rotation.z = 0;
     }
   },
 
@@ -3300,7 +3339,7 @@ const Game = {
     for (const rp of this.remotePlayers) this.clearRemoteDrone(rp);
     // a bought drone is recharged every round in online play
     if (this.player.droneOwned) this.player.drone = 1;
-    for (const rp of this.remotePlayers) { rp.alive = true; rp.health = this.matchHP; rp.maxHealth = this.matchHP; }
+    for (const rp of this.remotePlayers) { rp.alive = true; rp.dead = false; rp.health = this.matchHP; rp.maxHealth = this.matchHP; }
     this.spawnPlayerLocal(Math.floor(Math.random() * Math.max(1, MAP.playerSpawns.length)));
     this.beginBuyPhaseClient(25, undefined, this.matchHP);
   },
@@ -3548,7 +3587,11 @@ const Game = {
 
     const eyeH = p.crouching ? CFG.eyeHeightCrouch : CFG.eyeHeight;
     const dead = !p.alive;
-    const curEye = dead ? .42 : eyeH;
+    // on death the view sinks to the floor, as if the body dropped
+    if (dead) p._deadT = (p._deadT || 0) + dt;
+    else p._deadT = 0;
+    const fallK = dead ? U.clamp((p._deadT || 0) / .6, 0, 1) : 0;
+    const curEye = dead ? U.lerp(eyeH, .40, Math.sin(fallK * Math.PI * .5)) : eyeH;
     // bob & sway
     const hspeed = Math.hypot(p.vel.x, p.vel.z);
     const spd = U.clamp(hspeed / CFG.runSpeed, 0, 1);

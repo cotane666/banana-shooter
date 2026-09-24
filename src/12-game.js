@@ -1984,8 +1984,12 @@ const Game = {
     }
     const wallHits = this.world.raycastAll(dr.pos, dir, segLen + .12);
 
-    if (hitZ && hitZ.t <= segLen + .5) { dr.hp -= 40; if (this.effects) this.effects.impact({ x: dr.pos.x, y: dr.pos.y, z: dr.pos.z }, dir, 'metal'); }
-    if (hitP && hitP.t <= segLen + .5) dr.hp -= 40;
+    // any contact destroys the drone, so it is easy to bring down
+    if (hitZ && hitZ.t <= segLen + .5) {
+      dr.hp -= 999;
+      if (this.effects) this.effects.impact({ x: dr.pos.x, y: dr.pos.y, z: dr.pos.z }, dir, 'metal');
+    }
+    if (hitP && hitP.t <= segLen + .5) dr.hp -= 999;
     if (dr.hp <= 0) { this.detonateDrone(true); return; }
 
     if (wallHits.length && wallHits[0].t <= segLen + .12) { this.detonateDrone(false); return; }
@@ -2801,28 +2805,37 @@ const Game = {
   /* ray vs any enemy drone in the air (they are small, so a box is enough) */
   rayRemoteDroneAny(origin, dir, maxDist) {
     let best = null;
+    const r = CFG.droneHitRadius || .32;
     for (const rp of this.remotePlayers) {
       if (!rp.droneMesh) continue;
       const p = rp.droneMesh.position;
-      const b = AABB(p.x - .32, p.y - .14, p.z - .32, p.x + .32, p.y + .14, p.z + .32);
+      const b = AABB(p.x - r, p.y - r * .7, p.z - r, p.x + r, p.y + r * .7, p.z + r);
       const h = rayBox(origin, dir, b, maxDist);
       if (h && (!best || h.t < best.t)) { best = { t: h.t, rp: rp, point: { x: origin.x + dir.x * h.t, y: origin.y + dir.y * h.t, z: origin.z + dir.z * h.t } }; }
     }
     return best;
   },
 
-  /* a shot landed on an enemy drone: it only takes a couple of rounds */
+  /* A shot landed on an enemy drone. The drone is authoritative on its OWNER's
+     machine, so we cannot simply delete it here: that left the owner still
+     flying (and still dealing damage). Instead we hide it locally for instant
+     feedback and tell the owner to destroy it, which then broadcasts the blast. */
   hitRemoteDrone(rp, point) {
     if (!rp || !rp.droneMesh) return;
-    rp.droneHp = (rp.droneHp === undefined ? CFG.droneHp : rp.droneHp) - 45;
     if (this.effects) this.effects.impact(point, { x: 0, y: 1, z: 0 }, 'metal');
     Audio3D_SFX.hit(point.x, point.y, point.z, false);
-    if (rp.droneHp <= 0) {
-      if (this.effects) this.effects.explosion(rp.droneMesh.position.x, rp.droneMesh.position.y, rp.droneMesh.position.z, CFG.droneBlast * .6);
-      Audio3D_SFX.explosionAt(rp.droneMesh.position.x, rp.droneMesh.position.y, rp.droneMesh.position.z);
-      UI.feed('Дрон <b>' + U.esc(rp.name) + '</b> сбит');
-      this.clearRemoteDrone(rp);
-    }
+    UI.hitmark(false);
+    this._hitmarkT = U.now();
+    const dr = rp.droneMesh.position;
+    Net.send({
+      t: 'drone', st: 'down', from: Net.selfId(),
+      to: rp.peerId,
+      x: +dr.x.toFixed(2), y: +dr.y.toFixed(2), z: +dr.z.toFixed(2)
+    });
+    // the owner will broadcast `boom`; hide our copy right away so it never
+    // keeps flying while that round-trip happens
+    UI.feed('Дрон <b>' + U.esc(rp.name) + '</b> сбит');
+    this.clearRemoteDrone(rp);
   },
 
   /* kept for compatibility: raycast against the first remote */
@@ -3209,6 +3222,18 @@ const Game = {
 
   onRemoteDrone(d) {
     if (this.mode !== CS.MODE.ONLINE) return;
+    /* Someone shot OUR drone down. `to` names the drone's owner (us). The drone
+       lives on this machine, so this is where it is actually destroyed — and
+       where the blast is broadcast to the room. Without this the owner kept
+       flying and dealing damage while the shooter saw it explode. */
+    if (d.st === 'down') {
+      if (d.to && d.to !== Net.selfId()) return;   // aimed at another player's drone
+      if (this.drone) {
+        if (d.x !== undefined) { this.drone.pos.x = d.x; this.drone.pos.y = d.y; this.drone.pos.z = d.z; }
+        this.detonateDrone(true);
+      }
+      return;
+    }
     const rp = this.remoteById(d.from);
     if (!rp) return;
     if (d.st === 'launch') {

@@ -360,8 +360,8 @@ const UI = {
         if (g.drone) {
           owned = !!player.drone;
           cant = !free && player.money < g.price;
-          stats = [['РАДИУС', CFG.droneBlast + 'м'], ['УРОН', CFG.droneDmg], ['HP', CFG.droneHp]];
-          desc = 'Управляемый · враг может сбить · перезаряд каждый раунд';
+          stats = [['РАДИУС', CFG.droneBlast + 'м'], ['УРОН', CFG.droneDmg], ['СБИТЬ', '1 попадание']];
+          desc = 'Управляемый · перезаряд каждый раунд';
         } else if (g.medkit) {
           const n = player.medkits || 0;
           owned = false;

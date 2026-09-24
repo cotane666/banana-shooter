@@ -52,7 +52,8 @@ const CFG = {
   droneLife: 26,        // seconds before the drone runs out of fuel
   droneBlast: 4.6,      // blast radius (m)
   droneDmg: 175,        // blast damage at the centre
-  droneHp: 60,          // damage the drone absorbs before it is shot down
+  droneHp: 40,          // damage the drone absorbs before it is shot down (1 hit)
+  droneHitRadius: 0.55, // hitbox half-size while airborne (big on purpose)
   droneTurn: 2.1,       // camera-relative steer rate (rad/s per unit of input)
   droneNoise: 70,       // how far the drone's motor carries (m) — loud on purpose
   rocketSoundRange: 220, // how far a rocket explosion is heard from

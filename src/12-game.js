@@ -1721,7 +1721,7 @@ const Game = {
       if (!free) this.player.money -= g.price;
       if (g.ammo) this.refillAmmo();
       else if (g.medkit) this.player.medkits = (this.player.medkits || 0) + 1;
-      else if (g.drone) this.player.drone = (this.player.drone || 0) + 1;
+      else if (g.drone) { this.player.drone = (this.player.drone || 0) + 1; this.player.droneOwned = true; }
       Audio3D_SFX.buy();
       const extra = g.medkit ? ' (' + this.player.medkits + ' в запасе)' : g.drone ? ' (' + this.player.drone + ' в запасе)' : '';
       UI.toast('Куплено: ' + g.name + extra, '#57d16a');
@@ -1994,6 +1994,11 @@ const Game = {
     this.player.armor = 0; this.player.helmet = false;
     this.player.alive = true;
     this.player.money = Math.min(16000, this.player.money + 1400);
+    // a drone still in the air belongs to the previous round
+    if (this.drone) this.detonateDrone(false);
+    for (const rp of this.remotePlayers) this.clearRemoteDrone(rp);
+    // a bought drone is recharged every round in online play
+    if (this.mode === CS.MODE.ONLINE && this.player.droneOwned) this.player.drone = 1;
     this.spawnPlayerLocal(this.rosterSpawnIndex());
     for (const rp of this.remotePlayers) { rp.alive = true; rp.health = this.matchHP; rp.maxHealth = this.matchHP; }
     this.broadcastRespawn();
@@ -3088,6 +3093,11 @@ const Game = {
     this.player.armor = 0; this.player.helmet = false;
     this.player.alive = true;
     this.player.money = Math.min(16000, this.player.money + 1400);
+    // a drone still in the air belongs to the previous round
+    if (this.drone) this.detonateDrone(false);
+    for (const rp of this.remotePlayers) this.clearRemoteDrone(rp);
+    // a bought drone is recharged every round in online play
+    if (this.player.droneOwned) this.player.drone = 1;
     for (const rp of this.remotePlayers) { rp.alive = true; rp.health = this.matchHP; rp.maxHealth = this.matchHP; }
     this.spawnPlayerLocal(Math.floor(Math.random() * Math.max(1, MAP.playerSpawns.length)));
     this.beginBuyPhaseClient(25, undefined, this.matchHP);

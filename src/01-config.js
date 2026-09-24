@@ -50,7 +50,7 @@ const CFG = {
   droneBoost: 1.7,      // speed multiplier while boosting (Shift)
   droneLife: 26,        // seconds before the drone runs out of fuel
   droneBlast: 4.6,      // blast radius (m)
-  droneDmg: 130,        // blast damage at the centre
+  droneDmg: 175,        // blast damage at the centre
   droneHp: 60,          // damage the drone absorbs before it is shot down
   droneTurn: 2.1,       // camera-relative steer rate (rad/s per unit of input)
 

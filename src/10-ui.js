@@ -340,7 +340,7 @@ const UI = {
           owned = !!player.drone;
           cant = !free && player.money < g.price;
           stats = [['РАДИУС', CFG.droneBlast + 'м'], ['УРОН', CFG.droneDmg], ['HP', CFG.droneHp]];
-          desc = 'Управляемый · враг может сбить';
+          desc = 'Управляемый · враг может сбить · перезаряд каждый раунд';
         } else if (g.medkit) {
           owned = false;
           cant = !free && player.money < g.price;

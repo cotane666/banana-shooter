@@ -911,7 +911,7 @@ const CFG = {
   droneBoost: 1.7,      // speed multiplier while boosting (Shift)
   droneLife: 26,        // seconds before the drone runs out of fuel
   droneBlast: 4.6,      // blast radius (m)
-  droneDmg: 130,        // blast damage at the centre
+  droneDmg: 175,        // blast damage at the centre
   droneHp: 60,          // damage the drone absorbs before it is shot down
   droneTurn: 2.1,       // camera-relative steer rate (rad/s per unit of input)
 
@@ -3661,7 +3661,8 @@ class Player {
 
     // ---- gear: consumables ----
     this.medkits = 0;         // аптечки in reserve, used with H / touch button
-    this.drone = 0;           // kamikaze drones in reserve, launched with F
+    this.drone = 0;           // kamikaze drones ready to launch, with F
+    this.droneOwned = false;  // has bought the drone: it recharges every online round
 
     // ---- inventory ----
     this.inv = { 1: null, 2: null, 3: { id: 'knife', mag: Infinity, reserve: 0 } };
@@ -5920,7 +5921,7 @@ const UI = {
           owned = !!player.drone;
           cant = !free && player.money < g.price;
           stats = [['РАДИУС', CFG.droneBlast + 'м'], ['УРОН', CFG.droneDmg], ['HP', CFG.droneHp]];
-          desc = 'Управляемый · враг может сбить';
+          desc = 'Управляемый · враг может сбить · перезаряд каждый раунд';
         } else if (g.medkit) {
           owned = false;
           cant = !free && player.money < g.price;
@@ -8458,7 +8459,7 @@ const Game = {
       if (!free) this.player.money -= g.price;
       if (g.ammo) this.refillAmmo();
       else if (g.medkit) this.player.medkits = (this.player.medkits || 0) + 1;
-      else if (g.drone) this.player.drone = (this.player.drone || 0) + 1;
+      else if (g.drone) { this.player.drone = (this.player.drone || 0) + 1; this.player.droneOwned = true; }
       Audio3D_SFX.buy();
       const extra = g.medkit ? ' (' + this.player.medkits + ' в запасе)' : g.drone ? ' (' + this.player.drone + ' в запасе)' : '';
       UI.toast('Куплено: ' + g.name + extra, '#57d16a');
@@ -8731,6 +8732,11 @@ const Game = {
     this.player.armor = 0; this.player.helmet = false;
     this.player.alive = true;
     this.player.money = Math.min(16000, this.player.money + 1400);
+    // a drone still in the air belongs to the previous round
+    if (this.drone) this.detonateDrone(false);
+    for (const rp of this.remotePlayers) this.clearRemoteDrone(rp);
+    // a bought drone is recharged every round in online play
+    if (this.mode === CS.MODE.ONLINE && this.player.droneOwned) this.player.drone = 1;
     this.spawnPlayerLocal(this.rosterSpawnIndex());
     for (const rp of this.remotePlayers) { rp.alive = true; rp.health = this.matchHP; rp.maxHealth = this.matchHP; }
     this.broadcastRespawn();
@@ -9825,6 +9831,11 @@ const Game = {
     this.player.armor = 0; this.player.helmet = false;
     this.player.alive = true;
     this.player.money = Math.min(16000, this.player.money + 1400);
+    // a drone still in the air belongs to the previous round
+    if (this.drone) this.detonateDrone(false);
+    for (const rp of this.remotePlayers) this.clearRemoteDrone(rp);
+    // a bought drone is recharged every round in online play
+    if (this.player.droneOwned) this.player.drone = 1;
     for (const rp of this.remotePlayers) { rp.alive = true; rp.health = this.matchHP; rp.maxHealth = this.matchHP; }
     this.spawnPlayerLocal(Math.floor(Math.random() * Math.max(1, MAP.playerSpawns.length)));
     this.beginBuyPhaseClient(25, undefined, this.matchHP);

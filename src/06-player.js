@@ -620,7 +620,8 @@ class Player {
 
     // ---- gear: consumables ----
     this.medkits = 0;         // аптечки in reserve, used with H / touch button
-    this.drone = 0;           // kamikaze drones in reserve, launched with F
+    this.drone = 0;           // kamikaze drones ready to launch, with F
+    this.droneOwned = false;  // has bought the drone: it recharges every online round
 
     // ---- inventory ----
     this.inv = { 1: null, 2: null, 3: { id: 'knife', mag: Infinity, reserve: 0 } };

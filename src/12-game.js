@@ -912,7 +912,8 @@ const Game = {
     Net.on('peerjoined', p => this.onPeerJoined(p));
     Net.on('peerleft', p => this.onPeerLeft(p));
     Net.on('roster', r => this.onRoster(r));
-    Net.on('full', () => { this.setLobbyStatus('Комната заполнена (максимум ' + MATCH.maxPlayers + ' игроков)', true); UI.toast('Комната заполнена', '#e33a2e'); });
+    Net.on('full', () => { this.setLobbyStatus('Комната заполнена (максимум ' + MATCH.maxPlayers + ' игроков)', true); UI.toast('Комната заполнена', '#e33a2e'); if (UI.current === 'connect') { UI.el.connStatus.textContent = 'Комната заполнена'; setTimeout(() => { if (!Net.connected) UI.show('lobby'); }, 1600); } });
+    Net.on('reject', r => { this.setLobbyStatus((r && r.reason) || 'Комната отклонила подключение', true); UI.toast((r && r.reason) || 'Комната отклонила подключение', '#e33a2e'); if (UI.current === 'connect') { UI.el.connStatus.textContent = (r && r.reason) || 'Комната отклонила подключение'; setTimeout(() => { if (!Net.connected) UI.show('lobby'); }, 1600); } });
     Net.on('connected', () => this.onNetConnected());
     Net.on('disconnected', () => this.onNetDisconnected());
     Net.on('state', s => this.onRemoteState(s));
@@ -2479,6 +2480,7 @@ const Game = {
     const name = (UI.el.inName.value || 'Игрок').slice(0, 14);
     if (!name) { this.setLobbyStatus('Введите ник', true); return; }
     Store.data.name = name; Store.save();
+    this._hostSettled = false;
     UI.el.hostRow.classList.remove('hidden');
     UI.el.joinRow.classList.add('hidden');
     UI.el.roomCode.textContent = '·····';
@@ -2486,20 +2488,27 @@ const Game = {
     Net.host(name,
       () => {
         // the code can change if the first id was taken; refresh the display
+        this._hostSettled = true;
         this.showRoomCode();
       },
       err => {
         // If the signalling server cannot be reached the room cannot exist,
         // so never present an invalid code as if it were real.
+        this._hostSettled = true;
         UI.el.roomCode.textContent = 'ОШИБКА';
+        // The room does not exist, so stop pretending it is waiting for players.
+        if (UI.el.waiting) UI.el.waiting.classList.add('hidden');
         this.setLobbyStatus(err + ' Код комнаты не создан — проверьте интернет и попробуйте снова.', true);
       }
     );
-    // Net.host() assigns the code synchronously, so show it right away instead
-    // of leaving the placeholder dots until the network round-trip completes.
+    // Net.host assigns the code synchronously; show it right away (with the
+    // spinner hidden) until the server confirms the room really exists.
     this.showRoomCode();
   },
 
+  /* The code is shown as soon as it is generated, but until the signalling
+     server confirms it the room does not exist yet — a guest typing it early
+     gets "комната не найдена". Say so instead of "Ждём второго игрока…". */
   showRoomCode() {
     const el = UI.el.roomCode;
     if (!el) return;
@@ -2507,10 +2516,21 @@ const Game = {
     el.textContent = Net.code;
     el.style.letterSpacing = '12px';
     el.style.fontSize = '38px';
-    this.setLobbyStatus('Комната создана. Ждём второго игрока…');
-    setTimeout(() => { if (el.textContent === Net.code) UI.toast('Код комнаты: ' + Net.code); }, 400);
+    if (this._hostSettled && Net.peerId) {
+      // the room really exists: it is now meaningful to say we are waiting
+      if (UI.el.waiting) UI.el.waiting.classList.remove('hidden');
+      this.setLobbyStatus('Комната создана. Ждём второго игрока…');
+      setTimeout(() => { if (el.textContent === Net.code) UI.toast('Код комнаты: ' + Net.code); }, 400);
+    } else {
+      // code is shown, but until the server confirms it the room does not exist
+      if (UI.el.waiting) UI.el.waiting.classList.add('hidden');
+      this.setLobbyStatus('Создаём комнату…');
+    }
   },
 
+  /* Joining shows the "ПОДКЛЮЧЕНИЕ" overlay while we probe servers and dial the
+     host. A refusal (room full / in a match) carries a clearer reason than the
+     generic dial error, so prefer it in both places the message is shown. */
   doJoin() {
     const name = (UI.el.inName.value || 'Игрок').slice(0, 14);
     const code = (UI.el.inCode.value || '').toUpperCase().trim();
@@ -2521,8 +2541,10 @@ const Game = {
     UI.el.connTitle.textContent = 'ПОДКЛЮЧЕНИЕ';
     UI.el.connStatus.textContent = 'Ищем комнату ' + code + '…';
     Net.join(code, name, err => {
-      this.setLobbyStatus(err, true);
-      UI.el.connStatus.textContent = err;
+      const msg = (Net && Net._rejected) ? Net._rejected : err;
+      this.setLobbyStatus(msg, true);
+      // only overwrite a refusal message the player may already be reading
+      if (!(Net && Net._rejected)) UI.el.connStatus.textContent = err;
       setTimeout(() => { if (!Net.connected) UI.show('lobby'); }, 1600);
     });
   },

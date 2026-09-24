@@ -18,7 +18,8 @@ const UI = {
       'connect', 'connTitle', 'connStatus', 'joinRow', 'hostRow', 'joinWait', 'roomCode', 'waiting', 'waitingTxt',
       'inName', 'inCode', 'peerList', 'peerListJoin',
       'btnCopy', 'dmgDirs', 'android', 'ios',
-      'mapChips', 'playerChips', 'hpChips', 'lobbyMaps', 'lobbyPlayers', 'lobbyHp'];
+      'mapChips', 'playerChips', 'hpChips', 'hordeChips', 'lobbyMaps', 'lobbyPlayers', 'lobbyHp',
+      'medkitTag', 'droneTag'];
     ids.forEach(i => this.el[i] = $(i));
     this.buildBuyCats();
     this.buildChips();
@@ -104,12 +105,27 @@ const UI = {
         wrap.appendChild(b);
       });
     };
+    const fillHorde = (wrap) => {
+      if (!wrap) return;
+      wrap.innerHTML = '';
+      [{ n: 0, b: 'ОБЫЧНЫЙ', i: 'стандартные волны' }, { n: 1, b: 'ОРДА ×10', i: 'зомби в 10× больше, но хилые' }].forEach(o => {
+        const b = document.createElement('button');
+        b.dataset.horde = o.n;
+        b.innerHTML = '<b>' + o.b + '</b><i>' + o.i + '</i>';
+        b.addEventListener('click', () => {
+          Store.data.horde = o.n; Store.save(); this.refreshChips();
+          Audio3D_SFX.uiClick();
+        });
+        wrap.appendChild(b);
+      });
+    };
     fillMaps(this.el.mapChips, pickMap);
     fillMaps(this.el.lobbyMaps, pickMap);
     fillPlayers(this.el.playerChips, false);
     fillPlayers(this.el.lobbyPlayers, true);
     fillHp(this.el.hpChips);
     fillHp(this.el.lobbyHp);
+    fillHorde(this.el.hordeChips);
     this.refreshChips();
   },
 
@@ -122,6 +138,7 @@ const UI = {
     mark(this.el.mapChips, 'map', S.map); mark(this.el.lobbyMaps, 'map', S.map);
     mark(this.el.playerChips, 'n', S.players); mark(this.el.lobbyPlayers, 'n', S.players);
     mark(this.el.hpChips, 'hp', S.maxHP); mark(this.el.lobbyHp, 'hp', S.maxHP);
+    mark(this.el.hordeChips, 'horde', S.horde);
   },
 
   /* connected peers, shown in the lobby so the host can see who is in */
@@ -224,6 +241,19 @@ const UI = {
     e.killCount.textContent = mode === 'online' ? p.kills : p.zombieKills;
     e.scoreVal.textContent = mode === 'online' ? p.score : p.score;
 
+    // gear line: medkits + drone readiness
+    if (e.medkitTag) {
+      const n = p.medkits || 0;
+      e.medkitTag.textContent = 'АПТЕЧКА ×' + n;
+      e.medkitTag.classList.toggle('hidden', n <= 0);
+      e.medkitTag.classList.toggle('usable', n > 0 && p.health < maxHP && p.alive);
+    }
+    if (e.droneTag) {
+      const ready = !!p.drone;
+      e.droneTag.classList.toggle('hidden', !ready);
+      e.droneTag.classList.toggle('usable', ready);
+    }
+
     if (extra) {
       if (extra.timer !== undefined) {
         e.roundTimer.textContent = U.time(extra.timer);
@@ -302,11 +332,32 @@ const UI = {
     if (this.buyCat === 'gear') {
       Object.keys(GEAR).forEach(gid => {
         const g = GEAR[gid];
-        const owned = (gid === 'kevlar' && player.armor >= 100 && !player.helmet) || (gid === 'kevlarHelmet' && player.armor >= 100 && player.helmet);
-        mkCard(gid, g.name, g.helmet ? 'Броня + защита головы' : 'Защита корпуса', g.price,
-          [['AP', '100'], ['ШЛЕМ', g.helmet ? 'ДА' : 'НЕТ']],
-          owned, player.money < g.price,
-          () => Bus.emit('buyGear', gid));
+        /* Consumables are never "owned": ammo can always be refilled and a
+           medkit/drone can be bought again after being used. */
+        let owned, cant, stats, desc;
+        const onClick = () => Bus.emit('buyGear', gid);
+        if (g.drone) {
+          owned = !!player.drone;
+          cant = !free && player.money < g.price;
+          stats = [['РАДИУС', CFG.droneBlast + 'м'], ['УРОН', CFG.droneDmg], ['HP', CFG.droneHp]];
+          desc = 'Управляемый · враг может сбить';
+        } else if (g.medkit) {
+          owned = false;
+          cant = !free && player.money < g.price;
+          stats = [['ЛЕЧИТ', '+' + CFG.medkitHeal + ' HP'], ['В ЗАПАСЕ', player.medkits || 0], ['КЛАВИША', 'H']];
+          desc = 'Применить в бою (или кнопка на телефоне)';
+        } else if (g.ammo) {
+          owned = false;
+          cant = !free && player.money < g.price;
+          stats = [['ЭФФЕКТ', '100%'], ['ВСЕ СТВОЛЫ', 'ДА']];
+          desc = g.desc;
+        } else {
+          owned = (gid === 'kevlar' && player.armor >= 100 && !player.helmet) || (gid === 'kevlarHelmet' && player.armor >= 100 && player.helmet);
+          cant = player.money < g.price;
+          stats = [['AP', '100'], ['ШЛЕМ', g.helmet ? 'ДА' : 'НЕТ']];
+          desc = g.helmet ? 'Броня + защита головы' : 'Защита корпуса';
+        }
+        mkCard(gid, g.name, desc, g.price, stats, owned, cant, onClick);
       });
     } else {
       const defs = Object.keys(WEAPONS).filter(k => WEAPONS[k].cat === this.buyCat && WEAPONS[k].price > 0);
@@ -331,6 +382,8 @@ const UI = {
     if (p.inv[1]) a.push(WEAPONS[p.inv[1].id].name);
     let s = 'В руках: ' + (a.length ? a.join(' + ') : 'нож');
     if (p.armor > 0) s += ' · броня ' + Math.round(p.armor) + (p.helmet ? '+шлем' : '');
+    if (p.medkits > 0) s += ' · аптечек: ' + p.medkits;
+    if (p.drone) s += ' · дрон';
     return s;
   },
 

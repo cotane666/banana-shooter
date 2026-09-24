@@ -160,6 +160,11 @@ kbd{background:#0c0f12;border:1px solid var(--line);border-bottom:2px solid #333
 .ammo b{font-size:46px}
 .ammo span{font-size:20px;color:rgba(255,255,255,.55)}
 .wname{font-size:12px;letter-spacing:3px;color:var(--or);margin-top:2px;text-shadow:0 2px 6px #000}
+.gearline{margin-top:5px;display:flex;gap:7px;flex-wrap:wrap}
+.geartag{font-size:10.5px;font-weight:700;letter-spacing:1px;padding:2px 7px;border-radius:3px;
+  background:rgba(0,0,0,.5);border:1px solid var(--line);color:#77838f}
+.geartag.usable{color:#12161a;background:var(--green);border-color:var(--green)}
+#droneTag.usable{background:var(--blue);border-color:var(--blue)}
 
 .hud-tr{position:absolute;right:22px;top:18px;text-align:right}
 .money{font-size:26px;font-weight:900;color:var(--green);text-shadow:0 2px 10px #000;letter-spacing:1px}
@@ -404,6 +409,8 @@ html.touch #rangePanel{display:none !important}
 #tSwap{left:calc(50% - 30px);top:calc(10px + env(safe-area-inset-top,0px))}
 #tMenu{left:calc(50% + 32px);top:calc(10px + env(safe-area-inset-top,0px))}
 #tBuy{left:18px;bottom:104px;width:72px;height:48px;border-radius:12px;font-size:11.5px}
+#tHeal{right:16px;bottom:242px}
+#tDrone{right:88px;bottom:242px}
 /* ЗАЛЕЗТЬ sits in the top-right corner, clear of both thumbs. The HUD's
    money/kills column is nudged left so the two never overlap. */
 #tClimb{right:12px;top:calc(10px + env(safe-area-inset-top,0px));
@@ -480,6 +487,8 @@ html.touch .fld input{padding:10px;font-size:15px}
   .tbtn.small{width:52px;height:52px;font-size:9.5px}
   #tAim{right:16px;bottom:96px}
   #tAuto{right:16px;bottom:154px}
+  #tHeal{right:16px;bottom:212px}
+  #tDrone{right:80px;bottom:212px}
   #tJump{right:18px;bottom:20px}
   #tCrouch{right:80px;bottom:24px}
   #tReload{left:calc(50% - 84px);top:calc(6px + env(safe-area-inset-top,0px))}
@@ -509,6 +518,8 @@ html.touch .fld input{padding:10px;font-size:15px}
   .tbtn.small{width:56px;height:56px}
   #tAim{right:14px;bottom:110px}
   #tAuto{right:14px;bottom:176px}
+  #tHeal{right:14px;bottom:242px}
+  #tDrone{right:82px;bottom:242px}
   #tJump{right:14px;bottom:28px}
   #tCrouch{right:82px;bottom:32px}
   #tReload{left:calc(50% - 92px);top:calc(10px + env(safe-area-inset-top,0px))}

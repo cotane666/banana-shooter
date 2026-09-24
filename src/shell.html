@@ -35,6 +35,7 @@
 
     <div class="menu-btns">
       <button class="mbtn primary" id="btnOffline"><b>ОФФЛАЙН</b><i>Волны зомби — зарабатывай счёт</i></button>
+      <button class="mbtn" id="btnHorde"><b>ОРДА ×10</b><i>В 10 раз больше зомби, но они хилые</i></button>
       <button class="mbtn" id="btnRange"><b>ПОЛИГОН</b><i>Всё оружие бесплатно · манекены и урон в секунду</i></button>
       <button class="mbtn" id="btnOnline"><b>ОНЛАЙН</b><i>Бой против друзей: 2–4 игрока, выбор карты</i></button>
       <button class="mbtn" id="btnMatch"><b>ПАРАМЕТРЫ МАТЧА</b><i>Карта · число игроков · здоровье</i></button>
@@ -62,6 +63,8 @@
       <div class="krow"><kbd>Space</kbd><span>Прыжок</span></div>
       <div class="krow"><kbd>E</kbd><span>Залезть на объект</span></div>
       <div class="krow"><kbd>R</kbd><span>Перезарядка</span></div>
+      <div class="krow"><kbd>H</kbd><span>Аптечка (+50 HP)</span></div>
+      <div class="krow"><kbd>F</kbd><span>Дрон-камикадзе</span></div>
       <div class="krow"><kbd>1 2 3</kbd><span>Пистолет / Основное / Нож</span></div>
       <div class="krow"><kbd>G</kbd><span>Сбросить оружие</span></div>
       <div class="krow"><kbd>B</kbd><span>Магазин (в фазе закупки)</span></div>
@@ -91,6 +94,9 @@
     </div>
     <div class="fld">Здоровье игрока
       <div class="chips" id="hpChips"></div>
+    </div>
+    <div class="fld">Режим оффлайн
+      <div class="chips" id="hordeChips"></div>
     </div>
     <div class="btnrow">
       <button class="mbtn small" id="btnReset">Сбросить прогресс</button>
@@ -211,6 +217,10 @@
   <div class="hud-bl">
     <div class="ammo"><b id="ammoMag">30</b><span id="ammoRes">/ 90</span></div>
     <div class="wname" id="weaponName">AK-47</div>
+    <div class="gearline">
+      <span id="medkitTag" class="geartag hidden">АПТЕЧКА ×2</span>
+      <span id="droneTag" class="geartag hidden">ДРОН</span>
+    </div>
   </div>
 
   <div class="hud-tr">

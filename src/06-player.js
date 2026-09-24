@@ -533,6 +533,48 @@ function buildBananaProjectile() {
   return g;
 }
 
+/* A small kamikaze drone: a flat body with four arms, spinning rotors, a camera
+   pod and a red warhead light on the nose. Points along -Z like the weapons. */
+let _droneGeo = null;
+function buildDroneModel() {
+  const g = new THREE.Group();
+  const bodyMat = gunMat(0x2f353b);
+  const accentMat = new THREE.MeshLambertMaterial({ color: 0xe33a2e, emissive: 0x3a0d08 });
+  const darkMat = gunMat(0x1b1f23);
+
+  // fuselage
+  const body = new THREE.Mesh(new THREE.BoxGeometry(.30, .11, .40), bodyMat);
+  g.add(body);
+  const nose = new THREE.Mesh(new THREE.BoxGeometry(.20, .09, .11), accentMat);
+  nose.position.z = -.25;
+  g.add(nose);
+  // camera pod underneath
+  const cam = new THREE.Mesh(new THREE.SphereGeometry(.055, 8, 6), darkMat);
+  cam.position.set(0, -.08, -.12);
+  g.add(cam);
+
+  // arms + rotors
+  const rotorMat = new THREE.MeshLambertMaterial({ color: 0x8b939d, emissive: 0x0a0b0d });
+  const rotors = [];
+  const ARMS = [[-.24, -.16], [.24, -.16], [-.24, .16], [.24, .16]];
+  for (const a of ARMS) {
+    const arm = new THREE.Mesh(new THREE.BoxGeometry(.06, .035, .26), darkMat);
+    arm.position.set(a[0] * .7, 0, a[1]);
+    arm.rotation.y = Math.atan2(a[0], a[1]);
+    g.add(arm);
+    const hub = new THREE.Mesh(new THREE.CylinderGeometry(.022, .022, .05, 8), darkMat);
+    hub.position.set(a[0], .03, a[1]);
+    g.add(hub);
+    // a flat disc reads as a spinning rotor at distance
+    const blade = new THREE.Mesh(new THREE.BoxGeometry(.30, .010, .032), rotorMat);
+    blade.position.set(a[0], .06, a[1]);
+    g.add(blade);
+    rotors.push(blade);
+  }
+  g.userData.rotors = rotors;
+  return g;
+}
+
 /* ============================================================
    PLAYER
    ============================================================ */
@@ -575,6 +617,10 @@ class Player {
     this.bulletsHit = 0;
     this.headshots = 0;
     this.damageDealt = 0;
+
+    // ---- gear: consumables ----
+    this.medkits = 0;         // аптечки in reserve, used with H / touch button
+    this.drone = 0;           // kamikaze drones in reserve, launched with F
 
     // ---- inventory ----
     this.inv = { 1: null, 2: null, 3: { id: 'knife', mag: Infinity, reserve: 0 } };

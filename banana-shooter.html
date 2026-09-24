@@ -175,6 +175,11 @@ kbd{background:#0c0f12;border:1px solid var(--line);border-bottom:2px solid #333
 .ammo b{font-size:46px}
 .ammo span{font-size:20px;color:rgba(255,255,255,.55)}
 .wname{font-size:12px;letter-spacing:3px;color:var(--or);margin-top:2px;text-shadow:0 2px 6px #000}
+.gearline{margin-top:5px;display:flex;gap:7px;flex-wrap:wrap}
+.geartag{font-size:10.5px;font-weight:700;letter-spacing:1px;padding:2px 7px;border-radius:3px;
+  background:rgba(0,0,0,.5);border:1px solid var(--line);color:#77838f}
+.geartag.usable{color:#12161a;background:var(--green);border-color:var(--green)}
+#droneTag.usable{background:var(--blue);border-color:var(--blue)}
 
 .hud-tr{position:absolute;right:22px;top:18px;text-align:right}
 .money{font-size:26px;font-weight:900;color:var(--green);text-shadow:0 2px 10px #000;letter-spacing:1px}
@@ -419,6 +424,8 @@ html.touch #rangePanel{display:none !important}
 #tSwap{left:calc(50% - 30px);top:calc(10px + env(safe-area-inset-top,0px))}
 #tMenu{left:calc(50% + 32px);top:calc(10px + env(safe-area-inset-top,0px))}
 #tBuy{left:18px;bottom:104px;width:72px;height:48px;border-radius:12px;font-size:11.5px}
+#tHeal{right:16px;bottom:242px}
+#tDrone{right:88px;bottom:242px}
 /* ЗАЛЕЗТЬ sits in the top-right corner, clear of both thumbs. The HUD's
    money/kills column is nudged left so the two never overlap. */
 #tClimb{right:12px;top:calc(10px + env(safe-area-inset-top,0px));
@@ -495,6 +502,8 @@ html.touch .fld input{padding:10px;font-size:15px}
   .tbtn.small{width:52px;height:52px;font-size:9.5px}
   #tAim{right:16px;bottom:96px}
   #tAuto{right:16px;bottom:154px}
+  #tHeal{right:16px;bottom:212px}
+  #tDrone{right:80px;bottom:212px}
   #tJump{right:18px;bottom:20px}
   #tCrouch{right:80px;bottom:24px}
   #tReload{left:calc(50% - 84px);top:calc(6px + env(safe-area-inset-top,0px))}
@@ -524,6 +533,8 @@ html.touch .fld input{padding:10px;font-size:15px}
   .tbtn.small{width:56px;height:56px}
   #tAim{right:14px;bottom:110px}
   #tAuto{right:14px;bottom:176px}
+  #tHeal{right:14px;bottom:242px}
+  #tDrone{right:82px;bottom:242px}
   #tJump{right:14px;bottom:28px}
   #tCrouch{right:82px;bottom:32px}
   #tReload{left:calc(50% - 92px);top:calc(10px + env(safe-area-inset-top,0px))}
@@ -555,6 +566,7 @@ html.touch .fld input{padding:10px;font-size:15px}
 
     <div class="menu-btns">
       <button class="mbtn primary" id="btnOffline"><b>ОФФЛАЙН</b><i>Волны зомби — зарабатывай счёт</i></button>
+      <button class="mbtn" id="btnHorde"><b>ОРДА ×10</b><i>В 10 раз больше зомби, но они хилые</i></button>
       <button class="mbtn" id="btnRange"><b>ПОЛИГОН</b><i>Всё оружие бесплатно · манекены и урон в секунду</i></button>
       <button class="mbtn" id="btnOnline"><b>ОНЛАЙН</b><i>Бой против друзей: 2–4 игрока, выбор карты</i></button>
       <button class="mbtn" id="btnMatch"><b>ПАРАМЕТРЫ МАТЧА</b><i>Карта · число игроков · здоровье</i></button>
@@ -582,6 +594,8 @@ html.touch .fld input{padding:10px;font-size:15px}
       <div class="krow"><kbd>Space</kbd><span>Прыжок</span></div>
       <div class="krow"><kbd>E</kbd><span>Залезть на объект</span></div>
       <div class="krow"><kbd>R</kbd><span>Перезарядка</span></div>
+      <div class="krow"><kbd>H</kbd><span>Аптечка (+50 HP)</span></div>
+      <div class="krow"><kbd>F</kbd><span>Дрон-камикадзе</span></div>
       <div class="krow"><kbd>1 2 3</kbd><span>Пистолет / Основное / Нож</span></div>
       <div class="krow"><kbd>G</kbd><span>Сбросить оружие</span></div>
       <div class="krow"><kbd>B</kbd><span>Магазин (в фазе закупки)</span></div>
@@ -611,6 +625,9 @@ html.touch .fld input{padding:10px;font-size:15px}
     </div>
     <div class="fld">Здоровье игрока
       <div class="chips" id="hpChips"></div>
+    </div>
+    <div class="fld">Режим оффлайн
+      <div class="chips" id="hordeChips"></div>
     </div>
     <div class="btnrow">
       <button class="mbtn small" id="btnReset">Сбросить прогресс</button>
@@ -731,6 +748,10 @@ html.touch .fld input{padding:10px;font-size:15px}
   <div class="hud-bl">
     <div class="ammo"><b id="ammoMag">30</b><span id="ammoRes">/ 90</span></div>
     <div class="wname" id="weaponName">AK-47</div>
+    <div class="gearline">
+      <span id="medkitTag" class="geartag hidden">АПТЕЧКА ×2</span>
+      <span id="droneTag" class="geartag hidden">ДРОН</span>
+    </div>
   </div>
 
   <div class="hud-tr">
@@ -882,7 +903,23 @@ const CFG = {
   netTickHz: 22,        // snapshot rate
   netSendLocalHz: 34,   // local player state rate
   netInterpMs: 120,     // render the remote player this far behind the newest snapshot
-  netMaxExtrapMs: 160   // keep extrapolating through a packet gap for at most this long
+  netMaxExtrapMs: 160,  // keep extrapolating through a packet gap for at most this long
+
+  /* ---- extras: ammo/medkit crate & kamikaze drone ---- */
+  medkitHeal: 50,       // HP restored per medkit, used instantly in battle
+  droneSpeed: 15,       // m/s cruise for the guided drone
+  droneBoost: 1.7,      // speed multiplier while boosting (Shift)
+  droneLife: 26,        // seconds before the drone runs out of fuel
+  droneBlast: 4.6,      // blast radius (m)
+  droneDmg: 130,        // blast damage at the centre
+  droneHp: 60,          // damage the drone absorbs before it is shot down
+  droneTurn: 2.1,       // camera-relative steer rate (rad/s per unit of input)
+
+  /* ---- ОРДА ×10: ten times as many zombies, but far weaker ---- */
+  hordeCountMul: 10,    // wave size multiplier
+  hordeHpMul: 0.18,     // zombie health multiplier (weak, so the mass stays fair)
+  hordeMaxAlive: 110,   // the usual alive cap would smother a 10× wave
+  hordeSpawnInterval: 0.20  // spawn far faster so the field actually fills
 };
 
 /* ---------------- match settings (chosen in the lobby / settings) ----------------
@@ -987,7 +1024,12 @@ const WEAPONS = {
 
 const GEAR = {
   kevlar:       { name: 'БРОНЯ (KEVLAR)', price: 650,  ap: 100, helmet: false },
-  kevlarHelmet: { name: 'БРОНЯ + ШЛЕМ',   price: 1000, ap: 100, helmet: true }
+  kevlarHelmet: { name: 'БРОНЯ + ШЛЕМ',   price: 1000, ap: 100, helmet: true },
+  /* Consumables: bought once, kept for the rest of the match (and across
+     rounds/offline waves). `ammo` is a refill, so it never shows as КУПЛЕНО. */
+  ammo:         { name: 'ПАТРОНЫ',        price: 1500, ammo: true, desc: 'Полный запас ко всем стволам' },
+  medkit:       { name: 'АПТЕЧКА',        price: 600,  medkit: true, desc: 'H или кнопка — +50 HP в бою' },
+  drone:        { name: 'ДРОН-КАМИКАДЗЕ', price: 10000, drone: true, desc: 'Управляемый · враг может сбить' }
 };
 
 const BUY_CATS = [
@@ -1038,7 +1080,7 @@ function makeRng(seed) {
 const Store = {
   key: 'cs3d.save.v1',
   data: { sens: 2.2, fov: 80, vol: 60, quality: 1, touchSens: 1.5, name: '', best: 0, bestWave: 0, killsTotal: 0, matches: 0, wins: 0, signalSrv: 0, aimBest: 0, aimAutoFire: 1,
-          map: 'arena', players: 2, maxHP: 100, aimAssist: 1 },
+          map: 'arena', players: 2, maxHP: 100, aimAssist: 1, horde: 0 },
   load() {
     try { const r = localStorage.getItem(this.key); if (r) Object.assign(this.data, JSON.parse(r)); } catch (e) { }
     return this.data;
@@ -2935,6 +2977,11 @@ const Audio3D_SFX = {
   pickup() { this.tone(880, .06, 'triangle', .1); setTimeout(() => this.tone(1320, .09, 'triangle', .1), 55); },
   buy() { this.tone(660, .05, 'square', .09); setTimeout(() => this.tone(990, .09, 'square', .09), 60); },
   deny() { this.tone(200, .16, 'square', .12, undefined, undefined, undefined, 120); },
+  /* rising whine when the drone launches, then a low motor hum */
+  droneLaunch() {
+    this.tone(300, .18, 'sawtooth', .1, undefined, undefined, undefined, 900);
+    setTimeout(() => this.tone(520, .3, 'sawtooth', .07, undefined, undefined, undefined, 640), 180);
+  },
   growl(x, y, z, kind) {
     if (!this.ctx || this.muted) return;
     const sp = this._spatial(x, y, z, 4, 55);
@@ -3527,6 +3574,48 @@ function buildBananaProjectile() {
   return g;
 }
 
+/* A small kamikaze drone: a flat body with four arms, spinning rotors, a camera
+   pod and a red warhead light on the nose. Points along -Z like the weapons. */
+let _droneGeo = null;
+function buildDroneModel() {
+  const g = new THREE.Group();
+  const bodyMat = gunMat(0x2f353b);
+  const accentMat = new THREE.MeshLambertMaterial({ color: 0xe33a2e, emissive: 0x3a0d08 });
+  const darkMat = gunMat(0x1b1f23);
+
+  // fuselage
+  const body = new THREE.Mesh(new THREE.BoxGeometry(.30, .11, .40), bodyMat);
+  g.add(body);
+  const nose = new THREE.Mesh(new THREE.BoxGeometry(.20, .09, .11), accentMat);
+  nose.position.z = -.25;
+  g.add(nose);
+  // camera pod underneath
+  const cam = new THREE.Mesh(new THREE.SphereGeometry(.055, 8, 6), darkMat);
+  cam.position.set(0, -.08, -.12);
+  g.add(cam);
+
+  // arms + rotors
+  const rotorMat = new THREE.MeshLambertMaterial({ color: 0x8b939d, emissive: 0x0a0b0d });
+  const rotors = [];
+  const ARMS = [[-.24, -.16], [.24, -.16], [-.24, .16], [.24, .16]];
+  for (const a of ARMS) {
+    const arm = new THREE.Mesh(new THREE.BoxGeometry(.06, .035, .26), darkMat);
+    arm.position.set(a[0] * .7, 0, a[1]);
+    arm.rotation.y = Math.atan2(a[0], a[1]);
+    g.add(arm);
+    const hub = new THREE.Mesh(new THREE.CylinderGeometry(.022, .022, .05, 8), darkMat);
+    hub.position.set(a[0], .03, a[1]);
+    g.add(hub);
+    // a flat disc reads as a spinning rotor at distance
+    const blade = new THREE.Mesh(new THREE.BoxGeometry(.30, .010, .032), rotorMat);
+    blade.position.set(a[0], .06, a[1]);
+    g.add(blade);
+    rotors.push(blade);
+  }
+  g.userData.rotors = rotors;
+  return g;
+}
+
 /* ============================================================
    PLAYER
    ============================================================ */
@@ -3569,6 +3658,10 @@ class Player {
     this.bulletsHit = 0;
     this.headshots = 0;
     this.damageDealt = 0;
+
+    // ---- gear: consumables ----
+    this.medkits = 0;         // аптечки in reserve, used with H / touch button
+    this.drone = 0;           // kamikaze drones in reserve, launched with F
 
     // ---- inventory ----
     this.inv = { 1: null, 2: null, 3: { id: 'knife', mag: Infinity, reserve: 0 } };
@@ -4928,6 +5021,8 @@ const TouchUI = {
       '<button id="tCrouch" class="tbtn small">ПРИСЕСТЬ</button>' +
       '<button id="tReload" class="tbtn small">ПЕРЕЗАРЯДКА</button>' +
       '<button id="tSwap" class="tbtn small">СМЕНА</button>' +
+      '<button id="tHeal" class="tbtn small accent">АПТЕЧКА</button>' +
+      '<button id="tDrone" class="tbtn small accent">ДРОН</button>' +
       '<button id="tClimb" class="tbtn small accent">ЗАЛЕЗТЬ</button>' +
       '<button id="tBuy" class="tbtn small accent">МАГАЗИН</button>' +
       '<button id="tMenu" class="tbtn small">ПАУЗА</button>' +
@@ -4944,6 +5039,8 @@ const TouchUI = {
       crouch: document.getElementById('tCrouch'),
       reload: document.getElementById('tReload'),
       swap: document.getElementById('tSwap'),
+      heal: document.getElementById('tHeal'),
+      drone: document.getElementById('tDrone'),
       climb: document.getElementById('tClimb'),
       buy: document.getElementById('tBuy'),
       menu: document.getElementById('tMenu'),
@@ -4984,6 +5081,8 @@ const TouchUI = {
     E.reload.addEventListener('touchstart', e => { swallow(e); this.reloadQueued = true; E.reload.classList.add('down'); setTimeout(() => E.reload.classList.remove('down'), 130); }, { passive: false });
     E.swap.addEventListener('touchstart', e => { swallow(e); this.switchQueued = 1; E.swap.classList.add('down'); setTimeout(() => E.swap.classList.remove('down'), 130); }, { passive: false });
     E.climb.addEventListener('touchstart', e => { swallow(e); this.climbQueued = true; E.climb.classList.add('down'); setTimeout(() => E.climb.classList.remove('down'), 160); }, { passive: false });
+    E.heal.addEventListener('touchstart', e => { swallow(e); Bus.emit('touchUseMedkit'); E.heal.classList.add('down'); setTimeout(() => E.heal.classList.remove('down'), 160); }, { passive: false });
+    E.drone.addEventListener('touchstart', e => { swallow(e); Bus.emit('touchUseDrone'); E.drone.classList.add('down'); setTimeout(() => E.drone.classList.remove('down'), 160); }, { passive: false });
     E.buy.addEventListener('touchstart', e => { swallow(e); Bus.emit('touchBuy'); E.buy.classList.add('down'); setTimeout(() => E.buy.classList.remove('down'), 130); }, { passive: false });
     E.menu.addEventListener('touchstart', e => { swallow(e); Bus.emit('touchPause'); E.menu.classList.add('down'); setTimeout(() => E.menu.classList.remove('down'), 130); }, { passive: false });
     // double-tap the stick area toggles auto-run
@@ -5101,6 +5200,10 @@ const TouchUI = {
     this._els.reload.style.opacity = blocked ? '.35' : '1';
     this._els.swap.style.opacity = blocked ? '.35' : '1';
     if (this._els.climb) this._els.climb.style.opacity = blocked ? '.35' : '1';
+    // heal/drone are always visible but dim until the player actually owns them
+    const pp = (typeof Game !== 'undefined') ? Game.player : null;
+    if (this._els.heal) this._els.heal.style.opacity = (blocked || !pp || !(pp.medkits > 0)) ? '.35' : '1';
+    if (this._els.drone) this._els.drone.style.opacity = (blocked || !pp || !pp.drone) ? '.35' : '1';
     this._els.menu.style.opacity = blocked ? '.35' : '1';
     // the control hint is only useful at the very start of a match
     if (this._els.hint) {
@@ -5495,7 +5598,8 @@ const UI = {
       'connect', 'connTitle', 'connStatus', 'joinRow', 'hostRow', 'joinWait', 'roomCode', 'waiting', 'waitingTxt',
       'inName', 'inCode', 'peerList', 'peerListJoin',
       'btnCopy', 'dmgDirs', 'android', 'ios',
-      'mapChips', 'playerChips', 'hpChips', 'lobbyMaps', 'lobbyPlayers', 'lobbyHp'];
+      'mapChips', 'playerChips', 'hpChips', 'hordeChips', 'lobbyMaps', 'lobbyPlayers', 'lobbyHp',
+      'medkitTag', 'droneTag'];
     ids.forEach(i => this.el[i] = $(i));
     this.buildBuyCats();
     this.buildChips();
@@ -5581,12 +5685,27 @@ const UI = {
         wrap.appendChild(b);
       });
     };
+    const fillHorde = (wrap) => {
+      if (!wrap) return;
+      wrap.innerHTML = '';
+      [{ n: 0, b: 'ОБЫЧНЫЙ', i: 'стандартные волны' }, { n: 1, b: 'ОРДА ×10', i: 'зомби в 10× больше, но хилые' }].forEach(o => {
+        const b = document.createElement('button');
+        b.dataset.horde = o.n;
+        b.innerHTML = '<b>' + o.b + '</b><i>' + o.i + '</i>';
+        b.addEventListener('click', () => {
+          Store.data.horde = o.n; Store.save(); this.refreshChips();
+          Audio3D_SFX.uiClick();
+        });
+        wrap.appendChild(b);
+      });
+    };
     fillMaps(this.el.mapChips, pickMap);
     fillMaps(this.el.lobbyMaps, pickMap);
     fillPlayers(this.el.playerChips, false);
     fillPlayers(this.el.lobbyPlayers, true);
     fillHp(this.el.hpChips);
     fillHp(this.el.lobbyHp);
+    fillHorde(this.el.hordeChips);
     this.refreshChips();
   },
 
@@ -5599,6 +5718,7 @@ const UI = {
     mark(this.el.mapChips, 'map', S.map); mark(this.el.lobbyMaps, 'map', S.map);
     mark(this.el.playerChips, 'n', S.players); mark(this.el.lobbyPlayers, 'n', S.players);
     mark(this.el.hpChips, 'hp', S.maxHP); mark(this.el.lobbyHp, 'hp', S.maxHP);
+    mark(this.el.hordeChips, 'horde', S.horde);
   },
 
   /* connected peers, shown in the lobby so the host can see who is in */
@@ -5701,6 +5821,19 @@ const UI = {
     e.killCount.textContent = mode === 'online' ? p.kills : p.zombieKills;
     e.scoreVal.textContent = mode === 'online' ? p.score : p.score;
 
+    // gear line: medkits + drone readiness
+    if (e.medkitTag) {
+      const n = p.medkits || 0;
+      e.medkitTag.textContent = 'АПТЕЧКА ×' + n;
+      e.medkitTag.classList.toggle('hidden', n <= 0);
+      e.medkitTag.classList.toggle('usable', n > 0 && p.health < maxHP && p.alive);
+    }
+    if (e.droneTag) {
+      const ready = !!p.drone;
+      e.droneTag.classList.toggle('hidden', !ready);
+      e.droneTag.classList.toggle('usable', ready);
+    }
+
     if (extra) {
       if (extra.timer !== undefined) {
         e.roundTimer.textContent = U.time(extra.timer);
@@ -5779,11 +5912,32 @@ const UI = {
     if (this.buyCat === 'gear') {
       Object.keys(GEAR).forEach(gid => {
         const g = GEAR[gid];
-        const owned = (gid === 'kevlar' && player.armor >= 100 && !player.helmet) || (gid === 'kevlarHelmet' && player.armor >= 100 && player.helmet);
-        mkCard(gid, g.name, g.helmet ? 'Броня + защита головы' : 'Защита корпуса', g.price,
-          [['AP', '100'], ['ШЛЕМ', g.helmet ? 'ДА' : 'НЕТ']],
-          owned, player.money < g.price,
-          () => Bus.emit('buyGear', gid));
+        /* Consumables are never "owned": ammo can always be refilled and a
+           medkit/drone can be bought again after being used. */
+        let owned, cant, stats, desc;
+        const onClick = () => Bus.emit('buyGear', gid);
+        if (g.drone) {
+          owned = !!player.drone;
+          cant = !free && player.money < g.price;
+          stats = [['РАДИУС', CFG.droneBlast + 'м'], ['УРОН', CFG.droneDmg], ['HP', CFG.droneHp]];
+          desc = 'Управляемый · враг может сбить';
+        } else if (g.medkit) {
+          owned = false;
+          cant = !free && player.money < g.price;
+          stats = [['ЛЕЧИТ', '+' + CFG.medkitHeal + ' HP'], ['В ЗАПАСЕ', player.medkits || 0], ['КЛАВИША', 'H']];
+          desc = 'Применить в бою (или кнопка на телефоне)';
+        } else if (g.ammo) {
+          owned = false;
+          cant = !free && player.money < g.price;
+          stats = [['ЭФФЕКТ', '100%'], ['ВСЕ СТВОЛЫ', 'ДА']];
+          desc = g.desc;
+        } else {
+          owned = (gid === 'kevlar' && player.armor >= 100 && !player.helmet) || (gid === 'kevlarHelmet' && player.armor >= 100 && player.helmet);
+          cant = player.money < g.price;
+          stats = [['AP', '100'], ['ШЛЕМ', g.helmet ? 'ДА' : 'НЕТ']];
+          desc = g.helmet ? 'Броня + защита головы' : 'Защита корпуса';
+        }
+        mkCard(gid, g.name, desc, g.price, stats, owned, cant, onClick);
       });
     } else {
       const defs = Object.keys(WEAPONS).filter(k => WEAPONS[k].cat === this.buyCat && WEAPONS[k].price > 0);
@@ -5808,6 +5962,8 @@ const UI = {
     if (p.inv[1]) a.push(WEAPONS[p.inv[1].id].name);
     let s = 'В руках: ' + (a.length ? a.join(' + ') : 'нож');
     if (p.armor > 0) s += ' · броня ' + Math.round(p.armor) + (p.helmet ? '+шлем' : '');
+    if (p.medkits > 0) s += ' · аптечек: ' + p.medkits;
+    if (p.drone) s += ' · дрон';
     return s;
   },
 
@@ -6517,7 +6673,7 @@ const Net = {
       }
       /* relayed game messages: `from` names the sender so receivers can route */
       case 'state': case 'shot': case 'hit': case 'died': case 'respawn':
-      case 'score': case 'chat':
+      case 'score': case 'chat': case 'drone':
         if (this.role === CS.NETROLE.HOST) this.relay(m, rec);
         this.emit(m.t, m);
         break;
@@ -7237,6 +7393,8 @@ const Game = {
   _projT: 0,
   _enemyCheck: 0, _enemyFound: false,
   _aimFireHold: 0,
+  drone: null,                 // active guided drone {mesh, pos, vel, hp, ...}
+  hordeMode: false,            // ОРДА ×10 offline mode
 
   /* ============================================================
      INIT
@@ -7365,6 +7523,7 @@ const Game = {
      ============================================================ */
   bindUI() {
     bindClick('btnOffline', () => this.startOffline());
+    bindClick('btnHorde', () => this.startOffline(true));
     bindClick('btnRange', () => this.startRange());
     bindClick('btnMatch', () => { this._prevScreen = 'menu'; UI.refreshChips(); UI.show('controls'); });
     bindClick('btnAndroid', () => UI.show('android'));
@@ -7485,6 +7644,8 @@ const Game = {
       Audio3D_SFX.uiClick();
     });
     Bus.on('zombieAttack', (z, dmg) => this.playerHurt(dmg, z));    Bus.on('zombieDied', (z, hs) => this.onZombieDied(z, hs));
+    Bus.on('touchUseMedkit', () => this.useMedkit());
+    Bus.on('touchUseDrone', () => { if (this.drone) this.detonateDrone(false); else this.launchDrone(); });
     Bus.on('zombieHit', (z, part, dmg, dir) => this.onZombieHit(z, part, dmg, dir));
     Bus.on('zombieGrowl', z => Audio3D_SFX.growl(z.pos.x, z.pos.y + 1.4, z.pos.z, z.type));
 
@@ -7503,6 +7664,7 @@ const Game = {
     Net.on('died', d => this.onRemoteDied(d));
     Net.on('respawn', r => this.onRemoteRespawn(r));
     Net.on('round', r => this.onRoundMsg(r));
+    Net.on('drone', d => this.onRemoteDrone(d));
     Net.on('score', s => this.onScoreMsg(s));
   },
 
@@ -7559,6 +7721,8 @@ const Game = {
         else { UI.toast('Магазин доступен только в фазе закупки'); Audio3D_SFX.deny(); }
         break;
       case 'KeyR': if (!this.paused) this.player.reload(); break;
+      case 'KeyH': if (!this.paused) this.useMedkit(); break;
+      case 'KeyF': if (!this.paused) { if (this.drone) this.detonateDrone(false); else this.launchDrone(); } break;
       // dedicated climb: E vaults onto whatever the player is facing
       case 'KeyE': if (!this.paused && this.player) this.player.climbQueued = true; break;
       case 'Digit1': if (!this.paused) this.switchSlot(1); break;
@@ -7610,11 +7774,14 @@ const Game = {
   /* ============================================================
      MODE START / STOP
      ============================================================ */
-  startOffline() {
+  startOffline(horde) {
     this.stopToMenu(true);
     this.mode = CS.MODE.OFFLINE;
     this.ensureMap(Store.data.map);
     this.matchHP = Store.data.maxHP || 100;
+    // ОРДА ×10: force the mass mode from the menu button, otherwise honour the
+    // choice made in the settings panel.
+    this.hordeMode = (horde === true) || (horde !== false && Store.data.horde === 1);
     this.offline = {
       wave: 0, toSpawn: 0, spawnedThisWave: 0, totalThisWave: 0,
       betweenWaves: false, breakT: 0, alive: 0, kills: 0, startTime: U.now()
@@ -7635,8 +7802,9 @@ const Game = {
     this.effects.clear();
 
     this.spawnPlayerLocal(0);
-    this.beginBuyPhase(30, 'ВОЛНА 1');
+    this.beginBuyPhase(30, this.hordeMode ? 'ОРДА — ВОЛНА 1' : 'ВОЛНА 1');
     this.enterGame();
+    if (this.hordeMode) UI.toast('ОРДА ×10: зомби в 10 раз больше, но хилые', '#e33a2e');
     UI.toast('Карта: ' + this.mapName() + ' · магазин: B', '#ff9d21');
   },
 
@@ -8076,8 +8244,10 @@ const Game = {
       this.clearProjectiles();
       this.clearDummies();
       this.clearTargets();
+      this.clearDrone();
       if (this.horde) { this.horde.clear(); this.horde = null; }
       for (const rp of this.remotePlayers || []) {
+        this.clearRemoteDrone(rp);
         this.scene.remove(rp.mesh);
         rp.mesh.traverse(o => { if (o.geometry) o.geometry.dispose(); });
       }
@@ -8279,8 +8449,25 @@ const Game = {
     const g = GEAR[id];
     if (!g) return;
     if (this.roundState !== 'buy' && this.mode !== CS.MODE.RANGE) { Audio3D_SFX.deny(); return; }
-    if (this.player.armor >= 100 && (!g.helmet || this.player.helmet)) { Audio3D_SFX.deny(); UI.toast('Уже куплено'); return; }
     const free = this.mode === CS.MODE.RANGE;
+
+    /* Consumables: ammo refill, medkit, kamikaze drone. They are not "owned",
+       so they can be bought again (ammo any number of times). */
+    if (g.ammo || g.medkit || g.drone) {
+      if (!free && this.player.money < g.price) { Audio3D_SFX.deny(); UI.toast('Не хватает денег'); return; }
+      if (!free) this.player.money -= g.price;
+      if (g.ammo) this.refillAmmo();
+      else if (g.medkit) this.player.medkits = (this.player.medkits || 0) + 1;
+      else if (g.drone) this.player.drone = (this.player.drone || 0) + 1;
+      Audio3D_SFX.buy();
+      const extra = g.medkit ? ' (' + this.player.medkits + ' в запасе)' : g.drone ? ' (' + this.player.drone + ' в запасе)' : '';
+      UI.toast('Куплено: ' + g.name + extra, '#57d16a');
+      UI.renderBuy(this.player, this.buyTimer);
+      if (this.mode === CS.MODE.ONLINE) this.broadcastScore();
+      return;
+    }
+
+    if (this.player.armor >= 100 && (!g.helmet || this.player.helmet)) { Audio3D_SFX.deny(); UI.toast('Уже куплено'); return; }
     if (!free && this.player.money < g.price) { Audio3D_SFX.deny(); UI.toast('Не хватает денег'); return; }
     if (!free) this.player.money -= g.price;
     this.player.armor = g.ap;
@@ -8289,6 +8476,180 @@ const Game = {
     UI.toast('Куплено: ' + g.name, '#57d16a');
     UI.renderBuy(this.player, this.buyTimer);
     if (this.mode === CS.MODE.ONLINE) this.broadcastScore();
+  },
+
+  /* Патроны: top every owned weapon back up to its full stock */
+  refillAmmo() {
+    const p = this.player;
+    for (const s of [1, 2, 3]) {
+      const w = p.inv[s];
+      if (!w || w.id === 'knife') continue;
+      const def = WEAPONS[w.id];
+      if (!def || def.mag === Infinity) continue;
+      w.mag = def.mag;
+      w.reserve = def.reserve;
+    }
+    Audio3D_SFX.reloadStep(3);
+  },
+
+  /* Аптечка: instant heal, usable at any time during a live round/battle */
+  useMedkit() {
+    const p = this.player;
+    if (!p || !p.alive) return false;
+    if (this.mode === CS.MODE.MENU || this.paused) return false;
+    if (!(p.medkits > 0)) { UI.toast('Аптечек нет — купите в магазине (B)', '#f5d33c'); Audio3D_SFX.deny(); return false; }
+    const maxHP = this.matchHP || CFG.maxHP;
+    if (p.health >= maxHP) { UI.toast('Здоровье полное', '#f5d33c'); Audio3D_SFX.deny(); return false; }
+    p.medkits--;
+    p.health = Math.min(maxHP, p.health + CFG.medkitHeal);
+    Audio3D_SFX.pickup();
+    UI.feed('<span class="z">✚ Аптечка +' + CFG.medkitHeal + ' HP</span>');
+    UI.toast('+' + CFG.medkitHeal + ' HP', '#57d16a');
+    if (this.mode === CS.MODE.ONLINE) this.broadcastScore();
+    return true;
+  },
+
+  /* ============================================================
+     KAMIKAZE DRONE (управляемый)
+     A guided flying bomb. While it is airborne the player steers it with the
+     normal movement + look input; any zombie or enemy that lands a hit destroys
+     it. The player is tucked at the launch point ("inside" the drone) and is put
+     back there once the drone is gone.
+     ============================================================ */
+  launchDrone() {
+    const p = this.player;
+    if (!p || !p.alive) return false;
+    if (this.drone) return false;                            // already flying
+    if (!(p.drone > 0)) { UI.toast('Дрона нет — купите в магазине (B)', '#f5d33c'); Audio3D_SFX.deny(); return false; }
+    p.drone--;
+    const eye = this.eyePos();
+    const d = this.cameraDir();
+    const start = { x: eye.x + d.x * .8, y: eye.y + .15, z: eye.z + d.z * .8 };
+    const mesh = buildDroneModel();
+    mesh.position.set(start.x, start.y, start.z);
+    this.scene.add(mesh);
+    this.drone = {
+      mesh: mesh,
+      pos: { x: start.x, y: start.y, z: start.z },
+      vel: { x: d.x * CFG.droneSpeed, y: 0, z: d.z * CFG.droneSpeed },
+      yaw: p.yaw, pitch: 0,
+      hp: CFG.droneHp,
+      life: CFG.droneLife,
+      rotor: 0,
+      ownerReturn: { x: p.pos.x, y: p.pos.y, z: p.pos.z },
+      ownerSlot: p.slot
+    };
+    Audio3D_SFX.droneLaunch();
+    UI.center('ДРОН ЗАПУЩЕН', 'Мышь/WASD — управление · ПКМ — медленнее · F — взрыв', 2.4);
+    UI.toast('Дрон в воздухе · F — подорвать', '#4aa3ff');
+    if (this.mode === CS.MODE.ONLINE) {
+      Net.send({ t: 'drone', st: 'launch', from: Net.selfId(), x: start.x, y: start.y, z: start.z, yw: p.yaw });
+    }
+    return true;
+  },
+
+  /* blow up (or, when `shotDown`, let a hit do it) */
+  detonateDrone(shotDown) {
+    const dr = this.drone;
+    if (!dr) return;
+    dr.mesh.traverse(o => { if (o.geometry) o.geometry.dispose(); });
+    if (dr.mesh.parent) dr.mesh.parent.remove(dr.mesh);
+    const center = { x: dr.pos.x, y: dr.pos.y, z: dr.pos.z };
+    this.explodeDrone(center);
+    this.drone = null;
+    // put the player back where they launched from
+    const p = this.player;
+    const r = dr.ownerReturn;
+    p.pos.x = r.x; p.pos.y = r.y; p.pos.z = r.z;
+    p.vel.x = p.vel.y = p.vel.z = 0;
+    p.slot = dr.ownerSlot;
+    UI.toast(shotDown ? 'Дрон сбит' : 'Дрон подорван', shotDown ? '#e33a2e' : '#57d16a');
+    if (this.mode === CS.MODE.ONLINE) {
+      Net.send({ t: 'drone', st: 'boom', from: Net.selfId(), x: center.x, y: center.y, z: center.z });
+    }
+  },
+
+  explodeDrone(center) {
+    const R = CFG.droneBlast, dmg = CFG.droneDmg;
+    if (this.effects) this.effects.explosion(center.x, center.y, center.z, R);
+    Audio3D_SFX.explosionAt(center.x, center.y, center.z);
+    if (this.horde) {
+      for (const z of this.horde.list) {
+        if (!z.alive || z.dying) continue;
+        const d = Math.hypot(z.pos.x - center.x, (z.pos.y + 1) - center.y, z.pos.z - center.z);
+        if (d > R) continue;
+        const dealt = dmg * (1 - d / R);
+        z.takeDamage(dealt, 'body', { x: 0, y: 0, z: 0 });
+        this.player.damageDealt += dealt;
+      }
+    }
+    if (this.mode === CS.MODE.ONLINE) {
+      for (const rp of this.remotePlayers) {
+        if (!rp.alive) continue;
+        const d = Math.hypot(rp.pos.x - center.x, (rp.pos.y + 1) - center.y, rp.pos.z - center.z);
+        if (d <= R) this.sendPvpHit(dmg * (1 - d / R), 'body', false, rp);
+      }
+    }
+  },
+
+  updateDrone(dt) {
+    const dr = this.drone;
+    if (!dr) return;
+    const p = this.player;
+    dr.life -= dt;
+    if (dr.life <= 0) { this.detonateDrone(false); return; }
+
+    /* Steer: look input aims the drone, movement keys push it. It always flies
+       forward along its facing, so it handles like a little plane. */
+    const m = Input.lookDelta();
+    dr.yaw -= m.dx * 1.35;
+    dr.pitch -= m.dy * 1.35;
+    dr.pitch = U.clamp(dr.pitch, -1.2, 1.2);
+    const mv = Input.moveVector();
+    const boost = (mv.run ? CFG.droneBoost : 1) * (Input.aimDown() ? .45 : 1);
+    const speed = CFG.droneSpeed * boost;
+    const cp = Math.cos(dr.pitch);
+    const fwd = { x: -Math.sin(dr.yaw) * cp, y: Math.sin(dr.pitch), z: -Math.cos(dr.yaw) * cp };
+    const right = { x: Math.cos(dr.yaw), z: -Math.sin(dr.yaw) };
+    const vx = fwd.x * speed + right.x * mv.r * speed * .55;
+    const vy = fwd.y * speed + mv.f * speed * .35;   // stick forward dives, back climbs
+    const vz = fwd.z * speed + right.z * mv.r * speed * .55;
+    // ease toward the commanded velocity so it banks instead of snapping
+    dr.vel.x = U.lerp(dr.vel.x, vx, 1 - Math.pow(.002, dt));
+    dr.vel.y = U.lerp(dr.vel.y, vy, 1 - Math.pow(.002, dt));
+    dr.vel.z = U.lerp(dr.vel.z, vz, 1 - Math.pow(.002, dt));
+
+    const nx = dr.pos.x + dr.vel.x * dt, ny = dr.pos.y + dr.vel.y * dt, nz = dr.pos.z + dr.vel.z * dt;
+    const segLen = Math.hypot(nx - dr.pos.x, ny - dr.pos.y, nz - dr.pos.z);
+    const dir = segLen > 1e-6 ? { x: (nx - dr.pos.x) / segLen, y: (ny - dr.pos.y) / segLen, z: (nz - dr.pos.z) / segLen } : { x: 0, y: -1, z: 0 };
+
+    // ---- does anything shoot it down? zombies and enemy players both can ----
+    let hitZ = null;
+    if (this.horde) hitZ = this.horde.raycast(dr.pos, dir, segLen + .5);
+    let hitP = null;
+    if (this.mode === CS.MODE.ONLINE) {
+      const h = this.rayRemoteAny(dr.pos, dir, segLen + .5);
+      if (h && (!hitZ || h.t < hitZ.t)) hitP = h;
+    }
+    const wallHits = this.world.raycastAll(dr.pos, dir, segLen + .12);
+
+    if (hitZ && hitZ.t <= segLen + .5) { dr.hp -= 40; if (this.effects) this.effects.impact({ x: dr.pos.x, y: dr.pos.y, z: dr.pos.z }, dir, 'metal'); }
+    if (hitP && hitP.t <= segLen + .5) dr.hp -= 40;
+    if (dr.hp <= 0) { this.detonateDrone(true); return; }
+
+    if (wallHits.length && wallHits[0].t <= segLen + .12) { this.detonateDrone(false); return; }
+    if (ny < -2) { this.detonateDrone(false); return; }
+
+    dr.pos.x = nx; dr.pos.y = ny; dr.pos.z = nz;
+    dr.mesh.position.set(dr.pos.x, dr.pos.y, dr.pos.z);
+    dr.mesh.rotation.set(dr.pitch, dr.yaw, U.clamp(-dr.vel.x * .02 + dr.vel.z * .02, -.5, .5));
+    dr.rotor += dt * 34;
+    const rotors = dr.mesh.userData.rotors || [];
+    for (const r of rotors) r.rotation.y = dr.rotor;
+
+    // keep the player tucked at the launch point while "inside" the drone
+    p.pos.x = dr.ownerReturn.x; p.pos.z = dr.ownerReturn.z; p.pos.y = dr.ownerReturn.y;
+    p.vel.x = p.vel.y = p.vel.z = 0;
   },
 
   updateBuyPhase(dt) {
@@ -8382,14 +8743,15 @@ const Game = {
   startWave() {
     const o = this.offline;
     o.wave++;
-    const count = Math.round(CFG.zombieStartCount + (o.wave - 1) * 2.4);
+    let count = Math.round(CFG.zombieStartCount + (o.wave - 1) * 2.4);
+    if (this.hordeMode) count *= CFG.hordeCountMul;
     o.totalThisWave = count;
     o.spawnedThisWave = 0;
     o.toSpawn = count;
     o.betweenWaves = false;
     o.waveStart = U.now();
-    UI.center('ВОЛНА ' + o.wave, count + ' противников', 2.0);
-    UI.toast('Волна ' + o.wave + ' — ' + count + ' зомби', '#e33a2e');
+    UI.center((this.hordeMode ? 'ОРДА ' : 'ВОЛНА ') + o.wave, count + ' противников', 2.0);
+    UI.toast((this.hordeMode ? 'Орда ' : 'Волна ') + o.wave + ' — ' + count + ' зомби', '#e33a2e');
     Audio3D_SFX.waveStart();
     Bus.emit('waveStart', o.wave);
   },
@@ -8427,16 +8789,21 @@ const Game = {
     // spawn queue
     if (o.toSpawn > 0) {
       o.spawnAcc = (o.spawnAcc || 0) + dt;
-      const interval = Math.max(.34, CFG.zombieSpawnInterval - o.wave * .045);
+      const waveSpd = this.hordeMode ? CFG.hordeSpawnInterval : CFG.zombieSpawnInterval;
+      const interval = Math.max(.10, waveSpd - o.wave * (this.hordeMode ? .006 : .045));
+      const maxAlive = this.hordeMode ? CFG.hordeMaxAlive : CFG.zombieMaxAlive;
       let guard = 0;
-      while (o.spawnAcc >= interval && o.toSpawn > 0 && guard++ < 6) {
+      const burst = this.hordeMode ? 8 : 6;
+      while (o.spawnAcc >= interval && o.toSpawn > 0 && guard++ < burst) {
         o.spawnAcc -= interval;
         // count dying bodies too: they still cost CPU and occupy space
-        if (this.horde.activeCount >= CFG.zombieMaxAlive) break;
+        if (this.horde.activeCount >= maxAlive) break;
         const t = this.pickZombieType(o.wave);
         const scale = 1 + (o.wave - 1) * .085;
         const z = this.horde.spawnRandom(t, this.player.pos.x, this.player.pos.z, 26);
-        z.maxHealth *= scale; z.health = z.maxHealth; z.dmg *= (1 + (o.wave - 1) * .05);
+        z.maxHealth *= scale * (this.hordeMode ? CFG.hordeHpMul : 1);
+        z.health = z.maxHealth;
+        z.dmg *= (1 + (o.wave - 1) * .05);
         o.toSpawn--; o.spawnedThisWave++;
       }
     } else if (this.horde.aliveCount === 0) {
@@ -8784,6 +9151,14 @@ const Game = {
     this.projectiles.length = 0;
   },
 
+  clearDrone() {
+    if (!this.drone) return;
+    const dr = this.drone;
+    dr.mesh.traverse(o => { if (o.geometry) o.geometry.dispose(); });
+    if (dr.mesh.parent) dr.mesh.parent.remove(dr.mesh);
+    this.drone = null;
+  },
+
   spreadDirection(base, spread, wide) {    if (spread <= 0.00001) return { x: base.x, y: base.y, z: base.z };
     // build an orthonormal basis around the aim direction
     const up = Math.abs(base.y) > .95 ? { x: 1, y: 0, z: 0 } : { x: 0, y: 1, z: 0 };
@@ -8839,12 +9214,23 @@ const Game = {
 
     // the opponents (everyone else in the room)
     let pvpHit = null;
+    let droneHit = null;
     if (this.mode === CS.MODE.ONLINE) {
+      const dHit = this.rayRemoteDroneAny(origin, dir, maxDist);
+      if (dHit) droneHit = dHit;
       pvpHit = this.rayRemoteAny(origin, dir, maxDist);
       // resolve below if it is closer than the wall and any zombie
       if (pvpHit && (zHit ? pvpHit.t < zHit.t || !zHit : true) && pvpHit.t <= stopT) {
         // ok
       } else pvpHit = null;
+    }
+
+    // an enemy drone in the air can be shot down
+    if (droneHit && droneHit.t <= stopT && (!zHit || droneHit.t < zHit.t) && (!pvpHit || droneHit.t < pvpHit.t)) {
+      p.bulletsHit++;
+      this.hitRemoteDrone(droneHit.rp, droneHit.point);
+      this.effects.tracer(muzzleWorld, droneHit.point, 1, true);
+      return;
     }
 
     if (pvpHit && pvpHit.t <= stopT && (!zHit || pvpHit.t < zHit.t)) {
@@ -8929,6 +9315,33 @@ const Game = {
     return best;
   },
 
+  /* ray vs any enemy drone in the air (they are small, so a box is enough) */
+  rayRemoteDroneAny(origin, dir, maxDist) {
+    let best = null;
+    for (const rp of this.remotePlayers) {
+      if (!rp.droneMesh) continue;
+      const p = rp.droneMesh.position;
+      const b = AABB(p.x - .32, p.y - .14, p.z - .32, p.x + .32, p.y + .14, p.z + .32);
+      const h = rayBox(origin, dir, b, maxDist);
+      if (h && (!best || h.t < best.t)) { best = { t: h.t, rp: rp, point: { x: origin.x + dir.x * h.t, y: origin.y + dir.y * h.t, z: origin.z + dir.z * h.t } }; }
+    }
+    return best;
+  },
+
+  /* a shot landed on an enemy drone: it only takes a couple of rounds */
+  hitRemoteDrone(rp, point) {
+    if (!rp || !rp.droneMesh) return;
+    rp.droneHp = (rp.droneHp === undefined ? CFG.droneHp : rp.droneHp) - 45;
+    if (this.effects) this.effects.impact(point, { x: 0, y: 1, z: 0 }, 'metal');
+    Audio3D_SFX.hit(point.x, point.y, point.z, false);
+    if (rp.droneHp <= 0) {
+      if (this.effects) this.effects.explosion(rp.droneMesh.position.x, rp.droneMesh.position.y, rp.droneMesh.position.z, CFG.droneBlast * .6);
+      Audio3D_SFX.explosionAt(rp.droneMesh.position.x, rp.droneMesh.position.y, rp.droneMesh.position.z);
+      UI.feed('Дрон <b>' + U.esc(rp.name) + '</b> сбит');
+      this.clearRemoteDrone(rp);
+    }
+  },
+
   /* kept for compatibility: raycast against the first remote */
   rayRemotePlayer(origin, dir, maxDist) {
     return this.remote ? this.rayRemotePlayerFor(this.remote, origin, dir, maxDist) : null;
@@ -9000,6 +9413,8 @@ const Game = {
     p.alive = false;
     p.deaths++;
     Audio3D_SFX.roundEnd(false);
+    // a drone still in the air is lost with its pilot
+    if (this.drone) this.detonateDrone(false);
     if (this.mode === CS.MODE.OFFLINE) {
       const o = this.offline;
       if (p.score > Store.data.best) { Store.data.best = p.score; Store.save(); }
@@ -9291,9 +9706,42 @@ const Game = {
     if (Net.role === CS.NETROLE.HOST) this.checkRoundEnd();
   },
 
+  /* A remote player's drone: show it flying for everyone else, and let it be
+     shot down. Position updates arrive as short-lived visuals; the owner is
+     authoritative for the flight, this side just mirrors it. */
+  onRemoteDrone(d) {
+    if (this.mode !== CS.MODE.ONLINE) return;
+    const rp = this.remoteById(d.from);
+    if (!rp) return;
+    if (d.st === 'launch') {
+      this.clearRemoteDrone(rp);
+      const mesh = buildDroneModel();
+      mesh.position.set(d.x, d.y, d.z);
+      this.scene.add(mesh);
+      rp.droneMesh = mesh;
+      rp.droneLife = CFG.droneLife;
+      Audio3D_SFX.droneLaunch();
+      UI.toast(U.esc(rp.name) + ' запустил дрон', '#4aa3ff');
+    } else if (d.st === 'pos') {
+      if (!rp.droneMesh) return;
+      rp.droneMesh.position.set(d.x, d.y, d.z);
+      if (d.yw !== undefined) rp.droneMesh.rotation.y = d.yw;
+      rp.droneLife = CFG.droneLife;
+    } else if (d.st === 'boom') {
+      if (this.effects) this.effects.explosion(d.x, d.y, d.z, CFG.droneBlast);
+      Audio3D_SFX.explosionAt(d.x, d.y, d.z);
+      this.clearRemoteDrone(rp);
+    }
+  },
+
+  clearRemoteDrone(rp) {
+    if (!rp || !rp.droneMesh) return;
+    rp.droneMesh.traverse(o => { if (o.geometry) o.geometry.dispose(); });
+    if (rp.droneMesh.parent) rp.droneMesh.parent.remove(rp.droneMesh);
+    rp.droneMesh = null;
+  },
+
   onRemoteRespawn(r) {
-    // a respawn applies to the player named in `from`; when untagged (older
-    // peer) fall back to moving everyone so the round still restarts
     const rp = this.remoteById(r.from);
     const list = (r.from && rp) ? [rp] : this.remotePlayers.slice();
     for (const x of list) {
@@ -9429,6 +9877,28 @@ const Game = {
 
     const p = this.player;
     if (!p) return;
+
+    /* ---- guided drone: while it flies, the player steers it and the normal
+       movement/physics loop is suspended for the body ---- */
+    if (this.drone) {
+      this.updateDrone(dt);
+      if (this.mode === CS.MODE.ONLINE) {
+        this._droneNetT = (this._droneNetT || 0) - dt;
+        if (this._droneNetT <= 0 && this.drone) {
+          this._droneNetT = 1 / 18;
+          const dr = this.drone;
+          Net.send({ t: 'drone', st: 'pos', from: Net.selfId(), x: +dr.pos.x.toFixed(2), y: +dr.pos.y.toFixed(2), z: +dr.pos.z.toFixed(2), yw: +dr.yaw.toFixed(2) });
+        }
+      }
+      if (this.effects) this.effects.update(dt);
+      this.updateProjectiles(dt);
+      if (this.mode === CS.MODE.ONLINE) Net.tick(dt);
+      this.cameraUpdate(dt);
+      this.renderFrame(dt);
+      this.updateHUD(dt);
+      if (IS_TOUCH) TouchUI.update();
+      return;
+    }
 
     // ---- input → player ----
     const mv = Input.moveVector();
@@ -9569,6 +10039,34 @@ const Game = {
 
   cameraUpdate(dt) {
     const p = this.player;
+
+    /* While the drone is airborne the camera follows it from behind, so the
+       player sees where they are flying. */
+    if (this.drone) {
+      const dr = this.drone;
+      const camDist = 3.4, camUp = 1.25;
+      const yaw = dr.yaw, pitch = dr.pitch;
+      const back = { x: Math.sin(yaw) * Math.cos(pitch), y: -Math.sin(pitch), z: Math.cos(yaw) * Math.cos(pitch) };
+      this.camera.position.set(
+        dr.pos.x + back.x * camDist,
+        dr.pos.y + back.y * camDist + camUp,
+        dr.pos.z + back.z * camDist
+      );
+      this.camera.rotation.order = 'YXZ';
+      this.camera.rotation.y = yaw;
+      this.camera.rotation.x = pitch - 0.18;
+      this.camera.rotation.z = 0;
+      if (Math.abs(this.camera.fov - this.baseFov) > .01) { this.camera.fov = this.baseFov; this.camera.updateProjectionMatrix(); }
+      UI.setCrosshairSpread(0);
+      UI.crosshairState(false, false);
+      UI.scope(false);
+      const fx = -Math.sin(yaw), fz = -Math.cos(yaw);
+      Audio3D_SFX.setListener(dr.pos.x, dr.pos.y, dr.pos.z, fx, fz);
+      const drEl = UI.el.droneTag;
+      if (drEl) { drEl.textContent = 'ДРОН ' + Math.max(0, Math.ceil(dr.life)) + 'с'; drEl.classList.remove('hidden'); drEl.classList.add('usable'); }
+      return;
+    }
+
     const eyeH = p.crouching ? CFG.eyeHeightCrouch : CFG.eyeHeight;
     const dead = !p.alive;
     const curEye = dead ? .42 : eyeH;
@@ -9677,7 +10175,8 @@ const Game = {
     this.renderer.clear();
     this.renderer.render(this.scene, this.camera);
     // first-person weapon on top, in its own scene → never clips through walls
-    if (this.running && this.mode !== CS.MODE.MENU && this.player && this.player.alive && this.vmScene.children.length) {
+    // (hidden while the player is flying the drone)
+    if (this.running && this.mode !== CS.MODE.MENU && !this.drone && this.player && this.player.alive && this.vmScene.children.length) {
       this.renderer.clearDepth();
       this.renderer.render(this.vmScene, this.vmCamera);
     }
@@ -9688,9 +10187,13 @@ const Game = {
     if (!p) return;
     this._uiT -= dt;
     let timer = this.roundT, objective = '';
-    if (this.mode === CS.MODE.OFFLINE && this.offline) {
+    if (this.drone) {
+      timer = this.drone.life;
+      objective = 'ДРОН · HP ' + Math.max(0, Math.round(this.drone.hp)) + ' · F — взрыв';
+    } else if (this.mode === CS.MODE.OFFLINE && this.offline) {
       const o = this.offline;
-      if (this.roundState === 'live' && !o.betweenWaves) objective = 'ВОЛНА ' + o.wave + ' · осталось ' + (o.toSpawn + this.horde.aliveCount);
+      const waveWord = this.hordeMode ? 'ОРДА ' : 'ВОЛНА ';
+      if (this.roundState === 'live' && !o.betweenWaves) objective = waveWord + o.wave + ' · осталось ' + (o.toSpawn + this.horde.aliveCount);
       else if (o.betweenWaves) { objective = 'ПЕРЕДЫШКА · волна ' + (o.wave + 1); timer = o.breakT; }
       else objective = 'ЗАКУПКА · волна ' + (o.wave + 1);
     } else if (this.mode === CS.MODE.ONLINE) {
@@ -9727,8 +10230,9 @@ const Game = {
       if (this._panelT <= 0) { this._panelT = .2; this.updateRangePanel(); }
     }
     if (this._restartPending && (Input.keys['Enter'] || Input.keys['NumpadEnter'])) {
+      const wasHorde = this.hordeMode;
       this._restartPending = false; this._offeredRestart = false; this.offlineDead = false; this.offlineDeadT = 0;
-      this.startOffline();
+      this.startOffline(wasHorde);
     }
   }
 };
@@ -9748,6 +10252,7 @@ window.Game = Game;
 window.buildWeaponModel = buildWeaponModel;
 window.PAL = PAL;
 window.buildBananaProjectile = buildBananaProjectile;
+window.buildDroneModel = buildDroneModel;
 
 /* ---------------- PWA: install prompt + service worker ---------------- */
 function registerServiceWorker() {

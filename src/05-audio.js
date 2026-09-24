@@ -275,6 +275,11 @@ const Audio3D_SFX = {
   pickup() { this.tone(880, .06, 'triangle', .1); setTimeout(() => this.tone(1320, .09, 'triangle', .1), 55); },
   buy() { this.tone(660, .05, 'square', .09); setTimeout(() => this.tone(990, .09, 'square', .09), 60); },
   deny() { this.tone(200, .16, 'square', .12, undefined, undefined, undefined, 120); },
+  /* rising whine when the drone launches, then a low motor hum */
+  droneLaunch() {
+    this.tone(300, .18, 'sawtooth', .1, undefined, undefined, undefined, 900);
+    setTimeout(() => this.tone(520, .3, 'sawtooth', .07, undefined, undefined, undefined, 640), 180);
+  },
   growl(x, y, z, kind) {
     if (!this.ctx || this.muted) return;
     const sp = this._spatial(x, y, z, 4, 55);

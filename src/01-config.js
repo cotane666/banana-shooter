@@ -42,7 +42,23 @@ const CFG = {
   netTickHz: 22,        // snapshot rate
   netSendLocalHz: 34,   // local player state rate
   netInterpMs: 120,     // render the remote player this far behind the newest snapshot
-  netMaxExtrapMs: 160   // keep extrapolating through a packet gap for at most this long
+  netMaxExtrapMs: 160,  // keep extrapolating through a packet gap for at most this long
+
+  /* ---- extras: ammo/medkit crate & kamikaze drone ---- */
+  medkitHeal: 50,       // HP restored per medkit, used instantly in battle
+  droneSpeed: 15,       // m/s cruise for the guided drone
+  droneBoost: 1.7,      // speed multiplier while boosting (Shift)
+  droneLife: 26,        // seconds before the drone runs out of fuel
+  droneBlast: 4.6,      // blast radius (m)
+  droneDmg: 130,        // blast damage at the centre
+  droneHp: 60,          // damage the drone absorbs before it is shot down
+  droneTurn: 2.1,       // camera-relative steer rate (rad/s per unit of input)
+
+  /* ---- ОРДА ×10: ten times as many zombies, but far weaker ---- */
+  hordeCountMul: 10,    // wave size multiplier
+  hordeHpMul: 0.18,     // zombie health multiplier (weak, so the mass stays fair)
+  hordeMaxAlive: 110,   // the usual alive cap would smother a 10× wave
+  hordeSpawnInterval: 0.20  // spawn far faster so the field actually fills
 };
 
 /* ---------------- match settings (chosen in the lobby / settings) ----------------
@@ -147,7 +163,12 @@ const WEAPONS = {
 
 const GEAR = {
   kevlar:       { name: 'БРОНЯ (KEVLAR)', price: 650,  ap: 100, helmet: false },
-  kevlarHelmet: { name: 'БРОНЯ + ШЛЕМ',   price: 1000, ap: 100, helmet: true }
+  kevlarHelmet: { name: 'БРОНЯ + ШЛЕМ',   price: 1000, ap: 100, helmet: true },
+  /* Consumables: bought once, kept for the rest of the match (and across
+     rounds/offline waves). `ammo` is a refill, so it never shows as КУПЛЕНО. */
+  ammo:         { name: 'ПАТРОНЫ',        price: 1500, ammo: true, desc: 'Полный запас ко всем стволам' },
+  medkit:       { name: 'АПТЕЧКА',        price: 600,  medkit: true, desc: 'H или кнопка — +50 HP в бою' },
+  drone:        { name: 'ДРОН-КАМИКАДЗЕ', price: 10000, drone: true, desc: 'Управляемый · враг может сбить' }
 };
 
 const BUY_CATS = [
@@ -198,7 +219,7 @@ function makeRng(seed) {
 const Store = {
   key: 'cs3d.save.v1',
   data: { sens: 2.2, fov: 80, vol: 60, quality: 1, touchSens: 1.5, name: '', best: 0, bestWave: 0, killsTotal: 0, matches: 0, wins: 0, signalSrv: 0, aimBest: 0, aimAutoFire: 1,
-          map: 'arena', players: 2, maxHP: 100, aimAssist: 1 },
+          map: 'arena', players: 2, maxHP: 100, aimAssist: 1, horde: 0 },
   load() {
     try { const r = localStorage.getItem(this.key); if (r) Object.assign(this.data, JSON.parse(r)); } catch (e) { }
     return this.data;

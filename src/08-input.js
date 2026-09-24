@@ -248,6 +248,8 @@ const TouchUI = {
       '<button id="tCrouch" class="tbtn small">ПРИСЕСТЬ</button>' +
       '<button id="tReload" class="tbtn small">ПЕРЕЗАРЯДКА</button>' +
       '<button id="tSwap" class="tbtn small">СМЕНА</button>' +
+      '<button id="tHeal" class="tbtn small accent">АПТЕЧКА</button>' +
+      '<button id="tDrone" class="tbtn small accent">ДРОН</button>' +
       '<button id="tClimb" class="tbtn small accent">ЗАЛЕЗТЬ</button>' +
       '<button id="tBuy" class="tbtn small accent">МАГАЗИН</button>' +
       '<button id="tMenu" class="tbtn small">ПАУЗА</button>' +
@@ -264,6 +266,8 @@ const TouchUI = {
       crouch: document.getElementById('tCrouch'),
       reload: document.getElementById('tReload'),
       swap: document.getElementById('tSwap'),
+      heal: document.getElementById('tHeal'),
+      drone: document.getElementById('tDrone'),
       climb: document.getElementById('tClimb'),
       buy: document.getElementById('tBuy'),
       menu: document.getElementById('tMenu'),
@@ -304,6 +308,8 @@ const TouchUI = {
     E.reload.addEventListener('touchstart', e => { swallow(e); this.reloadQueued = true; E.reload.classList.add('down'); setTimeout(() => E.reload.classList.remove('down'), 130); }, { passive: false });
     E.swap.addEventListener('touchstart', e => { swallow(e); this.switchQueued = 1; E.swap.classList.add('down'); setTimeout(() => E.swap.classList.remove('down'), 130); }, { passive: false });
     E.climb.addEventListener('touchstart', e => { swallow(e); this.climbQueued = true; E.climb.classList.add('down'); setTimeout(() => E.climb.classList.remove('down'), 160); }, { passive: false });
+    E.heal.addEventListener('touchstart', e => { swallow(e); Bus.emit('touchUseMedkit'); E.heal.classList.add('down'); setTimeout(() => E.heal.classList.remove('down'), 160); }, { passive: false });
+    E.drone.addEventListener('touchstart', e => { swallow(e); Bus.emit('touchUseDrone'); E.drone.classList.add('down'); setTimeout(() => E.drone.classList.remove('down'), 160); }, { passive: false });
     E.buy.addEventListener('touchstart', e => { swallow(e); Bus.emit('touchBuy'); E.buy.classList.add('down'); setTimeout(() => E.buy.classList.remove('down'), 130); }, { passive: false });
     E.menu.addEventListener('touchstart', e => { swallow(e); Bus.emit('touchPause'); E.menu.classList.add('down'); setTimeout(() => E.menu.classList.remove('down'), 130); }, { passive: false });
     // double-tap the stick area toggles auto-run
@@ -421,6 +427,10 @@ const TouchUI = {
     this._els.reload.style.opacity = blocked ? '.35' : '1';
     this._els.swap.style.opacity = blocked ? '.35' : '1';
     if (this._els.climb) this._els.climb.style.opacity = blocked ? '.35' : '1';
+    // heal/drone are always visible but dim until the player actually owns them
+    const pp = (typeof Game !== 'undefined') ? Game.player : null;
+    if (this._els.heal) this._els.heal.style.opacity = (blocked || !pp || !(pp.medkits > 0)) ? '.35' : '1';
+    if (this._els.drone) this._els.drone.style.opacity = (blocked || !pp || !pp.drone) ? '.35' : '1';
     this._els.menu.style.opacity = blocked ? '.35' : '1';
     // the control hint is only useful at the very start of a match
     if (this._els.hint) {

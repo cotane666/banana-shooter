@@ -2,44 +2,124 @@
    12 — GAME: renderer, modes, combat, round flow, main loop
    ============================================================ */
 
-/* ---------------- soldier avatar for online play ---------------- */
+/* ---------------- soldier avatar for online play ----------------
+   A more detailed fighter than the original stack of boxes: tapered chest with a
+   plate carrier, shoulder pads, belt pouches, a backpack, a proper helmet with
+   brim and goggles, jointed arms and legs with boots and gloves.
+   The bone names stay the same (torso/head/armL/armR/legL/legR) because the
+   animation code drives those pivots directly. */
 function buildSoldierMesh(team) {
   const main = team === 'ct' ? 0x3f6ea8 : 0xa8623f;
+  const dark = team === 'ct' ? 0x2c4d76 : 0x7a452c;   // shaded variant of the team colour
   const bodyMat = new THREE.MeshLambertMaterial({ color: main });
+  const bodyMat2 = new THREE.MeshLambertMaterial({ color: dark });
   const vestMat = new THREE.MeshLambertMaterial({ color: 0x2a2f36 });
+  const vestMat2 = new THREE.MeshLambertMaterial({ color: 0x3a424c });
   const skinMat = new THREE.MeshLambertMaterial({ color: 0xd8a878 });
   const headMat = new THREE.MeshLambertMaterial({ color: 0x33383f });
+  const gloveMat = new THREE.MeshLambertMaterial({ color: 0x22262b });
+  const bootMat = new THREE.MeshLambertMaterial({ color: 0x1b1f23 });
+  const strapMat = new THREE.MeshLambertMaterial({ color: 0x14171a });
+  const metalMat = new THREE.MeshLambertMaterial({ color: 0x8b939d });
+
   const g = new THREE.Group();
-  const mk = (w, h, d, mat, px, py, pz) => {
-    const p = new THREE.Group(); p.position.set(px, py, pz);
+
+  const box = (w, h, d, mat, x, y, z, rot) => {
     const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
-    m.position.y = -h / 2; m.castShadow = true; m.receiveShadow = true;
-    p.add(m); return p;
+    m.position.set(x || 0, y || 0, z || 0);
+    if (rot) { m.rotation.x = rot.x || 0; m.rotation.y = rot.y || 0; m.rotation.z = rot.z || 0; }
+    m.castShadow = true; m.receiveShadow = true;
+    return m;
   };
+  const cyl = (r1, r2, h, seg, mat, x, y, z, rot) => {
+    const m = new THREE.Mesh(new THREE.CylinderGeometry(r1, r2, h, seg || 8), mat);
+    m.position.set(x || 0, y || 0, z || 0);
+    if (rot) { m.rotation.x = rot.x || 0; m.rotation.y = rot.y || 0; m.rotation.z = rot.z || 0; }
+    m.castShadow = true; m.receiveShadow = true;
+    return m;
+  };
+  /* a limb pivot: the limb hangs from the pivot along -Y, so the existing
+     animation (rotation.x on the pivot) swings it naturally */
+  const limb = (px, py, pz) => {
+    const p = new THREE.Group(); p.position.set(px, py, pz);
+    return p;
+  };
+
   const parts = {};
+
+  /* ---------------- torso ---------------- */
   const torso = new THREE.Group(); torso.position.y = 1.06;
-  const chest = new THREE.Mesh(new THREE.BoxGeometry(.56, .64, .32), bodyMat); chest.position.y = .16;
-  chest.castShadow = true; torso.add(chest);
-  const vest = new THREE.Mesh(new THREE.BoxGeometry(.62, .42, .38), vestMat); vest.position.y = .22;
-  torso.add(vest);
-  const pelvis = new THREE.Mesh(new THREE.BoxGeometry(.46, .34, .30), vestMat); pelvis.position.y = -.28;
-  torso.add(pelvis);
+  torso.add(box(.50, .40, .28, bodyMat, 0, .24, 0));              // upper chest
+  torso.add(box(.54, .26, .30, bodyMat2, 0, -.01, 0));            // lower ribs
+  torso.add(box(.58, .40, .34, vestMat, 0, .22, 0));              // plate carrier
+  torso.add(box(.16, .26, .06, vestMat2, 0, .24, -.19));          // front plate detail
+  torso.add(box(.10, .10, .04, strapMat, -.15, .30, -.20));       // pouch
+  torso.add(box(.10, .10, .04, strapMat, .15, .30, -.20));        // pouch
+  torso.add(box(.46, .10, .32, strapMat, 0, .00, 0));             // belt
+  torso.add(box(.12, .09, .10, vestMat2, -.13, -.02, -.17));      // belt pouch
+  torso.add(box(.12, .09, .10, vestMat2, .13, -.02, -.17));       // belt pouch
+  torso.add(box(.44, .30, .28, vestMat, 0, -.26, 0));             // pelvis
+  torso.add(box(.32, .30, .16, vestMat2, 0, .20, .22));           // backpack
+  torso.add(box(.36, .06, .18, strapMat, 0, .34, .20));           // pack lid
+  // shoulder pads
+  torso.add(box(.18, .13, .26, vestMat2, -.30, .38, 0));
+  torso.add(box(.18, .13, .26, vestMat2, .30, .38, 0));
   g.add(torso); parts.torso = torso;
 
+  /* ---------------- head ---------------- */
   const head = new THREE.Group(); head.position.y = 1.56;
-  const skull = new THREE.Mesh(new THREE.BoxGeometry(.28, .32, .28), skinMat); head.add(skull);
-  const helm = new THREE.Mesh(new THREE.BoxGeometry(.33, .20, .33), headMat); helm.position.y = .12; head.add(helm);
-  const visor = new THREE.Mesh(new THREE.BoxGeometry(.24, .07, .03), new THREE.MeshBasicMaterial({ color: 0x224466 }));
-  visor.position.set(0, .03, -.15); head.add(visor);
+  head.add(cyl(.075, .075, .12, 8, skinMat, 0, -.20, 0));         // neck
+  head.add(box(.26, .30, .26, skinMat, 0, 0, 0));                 // head
+  head.add(box(.28, .10, .27, headMat, 0, -.09, 0));              // balaclava / jaw wrap
+  head.add(box(.30, .18, .31, headMat, 0, .12, 0));               // helmet shell
+  head.add(box(.33, .05, .34, headMat, 0, .045, 0));              // helmet rim
+  head.add(box(.10, .04, .10, headMat, 0, .055, -.19));           // brim
+  head.add(box(.22, .07, .03, new THREE.MeshBasicMaterial({ color: 0x1b2a3a }), 0, .035, -.155)); // goggles
+  head.add(box(.05, .03, .06, metalMat, -.14, .12, -.05));        // side mount
   g.add(head); parts.head = head;
 
-  parts.armL = mk(.15, .70, .15, bodyMat, -.36, 1.40, 0);
-  parts.armR = mk(.15, .70, .15, bodyMat, .36, 1.40, 0);
-  parts.legL = mk(.19, .86, .19, vestMat, -.15, .88, 0);
-  parts.legR = mk(.19, .86, .19, vestMat, .15, .88, 0);
-  g.add(parts.armL); g.add(parts.armR); g.add(parts.legL); g.add(parts.legR);
+  /* ---------------- arms (pivot at the shoulder) ---------------- */
+  const arm = (side) => {
+    const p = limb(side * .33, 1.40, 0);
+    p.add(box(.15, .30, .16, bodyMat, 0, -.15, 0));               // upper arm
+    p.add(box(.14, .16, .15, bodyMat2, 0, -.32, 0));              // elbow
+    p.add(box(.13, .30, .14, bodyMat, 0, -.47, 0));               // forearm
+    p.add(box(.14, .12, .15, gloveMat, 0, -.64, -.01));           // glove
+    return p;
+  };
+  parts.armL = arm(-1);
+  parts.armR = arm(1);
+  g.add(parts.armL); g.add(parts.armR);
+
+  /* ---------------- legs (pivot at the hip) ---------------- */
+  const leg = (side) => {
+    const p = limb(side * .14, .88, 0);
+    p.add(box(.20, .34, .21, vestMat2, 0, -.17, 0));              // thigh
+    p.add(box(.18, .14, .19, bootMat, 0, -.36, 0));               // knee pad
+    p.add(box(.18, .32, .19, bodyMat2, 0, -.52, 0));              // shin
+    p.add(box(.20, .12, .26, bootMat, 0, -.70, -.03));            // boot
+    return p;
+  };
+  parts.legL = leg(-1);
+  parts.legR = leg(1);
+  g.add(parts.legL); g.add(parts.legR);
+
   g.userData.parts = parts;
   return g;
+}
+
+/* ---------------- held weapon for a remote player ----------------
+   The same weapon models the player sees in first person, cloned and cached by
+   weapon id. Clones share geometry and materials, so building one per player is
+   cheap; they are only rebuilt when that player actually changes weapon. */
+const _soldierGunCache = {};
+function buildSoldierWeapon(id) {
+  if (!_soldierGunCache[id]) {
+    const g = buildWeaponModel(id);
+    g.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = false; } });
+    _soldierGunCache[id] = g;
+  }
+  return _soldierGunCache[id].clone(true);
 }
 
 function makeNameplate(text) {
@@ -351,12 +431,43 @@ class RemotePlayer {
     this.renderPos = { x: 0, y: 0, z: 0 };
     this.renderYaw = 0;
     this.playT = undefined;
-    this.weaponGroup = null;
     this.walkPhase = 0;
     this.lastPacket = 0;
     this.slot = 2;
     this.hitFlash = 0;
     this.seen = false;              // has sent at least one state packet
+
+    /* Weapon held in the right hand. It is re-built only when the slot changes,
+       so the models are swapped on weapon change instead of every frame. */
+    this.weaponGroup = null;
+    this._weaponSlot = -1;
+    this._weaponId = null;
+    this.heldGroups = [];           // ids sent by the peer, once they are known
+  }
+
+  /* Attach (or swap) the weapon model in the right hand for this slot.
+     `id` comes from the peer's state packet; `heldGroups` lists the weapon ids
+     we have actually been told about, so we never invent a weapon. */
+  setWeapon(id) {
+    if (id === this._weaponId && this.weaponGroup) return;
+    this._weaponId = id || null;
+    const armR = this.mesh.userData.parts.armR;
+    if (this.weaponGroup) {
+      armR.remove(this.weaponGroup);
+      this.weaponGroup.traverse(o => { if (o.geometry) { /* cached geo, do not dispose */ } });
+      this.weaponGroup = null;
+    }
+    if (!id || !WEAPONS[id] || id === 'knife') return;
+    const w = buildSoldierWeapon(id);
+    // The arm is raised forward with rotation.x = +1.30, which turns its local
+    // -Z axis to point up. Rotating the weapon by -90° cancels that, so the
+    // barrel ends up roughly horizontal and pointing ahead of the soldier
+    // (measured: muzzle ~1.0 m up and 1.25 m in front, a natural rifle hold).
+    w.position.set(.02, -.60, .02);
+    w.rotation.set(-Math.PI / 2, 0, 0);
+    w.scale.setScalar(.95);
+    armR.add(w);
+    this.weaponGroup = w;
   }
   /* Snapshots are stamped with the LOCAL ARRIVAL time. That is monotonic by
      construction, so the interpolation search can never be confused by a moving
@@ -471,12 +582,14 @@ class RemotePlayer {
     p.legL.rotation.x = Math.sin(ph) * amp * spd;
     p.legR.rotation.x = -Math.sin(ph) * amp * spd;
 
-    // arms: the right hand holds the weapon, so it swings less; the left pumps
+    // arms: the right hand holds the weapon, so it swings less; the left pumps.
+    // A POSITIVE rotation.x raises the arm forward (toward -Z, the way the
+    // soldier faces); a negative one would swing it behind the back.
     const armAmp = (running ? .55 : .35) * spd;
-    p.armR.rotation.x = -1.30 + Math.sin(ph) * armAmp * .45;
-    p.armL.rotation.x = -0.95 - Math.sin(ph) * armAmp;
-    p.armR.rotation.z = 0.06;
-    p.armL.rotation.z = -0.10;
+    p.armR.rotation.x = 1.30 - Math.sin(ph) * armAmp * .45;
+    p.armL.rotation.x = 1.05 + Math.sin(ph) * armAmp;
+    p.armR.rotation.z = -0.06;
+    p.armL.rotation.z = 0.10;
 
     // torso/head: lean into a run, always look where the player is aiming
     p.torso.rotation.x = this.pitch * .35 + spd * .10;
@@ -491,6 +604,13 @@ class RemotePlayer {
 
     // crouch
     this.mesh.scale.y = this.crouching ? .72 : 1;
+
+    // minigun barrel spin, mirrored from the peer's spin-up value
+    const barrels = this.weaponGroup && this.weaponGroup.getObjectByName && this.weaponGroup.getObjectByName('barrels');
+    if (barrels && this.spinT > 0.01) {
+      this._barrelPhase = (this._barrelPhase || 0) + (6 + this.spinT * this.spinT * 78) * this.spinT * dt;
+      barrels.rotation.z = this._barrelPhase;
+    }
 
     // hit flash
     this.hitFlash = Math.max(0, this.hitFlash - dt * 4);
@@ -2475,6 +2595,7 @@ const Game = {
   broadcastState() {
     if (this.mode !== CS.MODE.ONLINE || !Net.connected) return;
     const p = this.player;
+    const wpn = p.weapon;
     Net.send({
       t: 'state', rt: U.now(),
       from: Net.selfId(),
@@ -2482,6 +2603,9 @@ const Game = {
       yw: +p.yaw.toFixed(3), pt: +p.pitch.toFixed(3),
       alive: p.alive ? 1 : 0, cr: p.crouching ? 1 : 0,
       hp: Math.round(p.health), ar: Math.round(p.armor), sl: p.slot,
+      wi: wpn ? wpn.id : null,                 // held weapon, so the model can show it
+      mg: wpn && wpn.mag !== Infinity ? wpn.mag : null,
+      sp: +(p.spinT || 0).toFixed(2),           // minigun spin-up, for the barrels
       k: p.kills, d: p.deaths, sc: p.score
     });
   },
@@ -2507,6 +2631,9 @@ const Game = {
     if (s.k !== undefined) { rp.kills = s.k; rp.deaths = s.d; rp.score = s.sc; }
     if (s.hp !== undefined) rp.health = s.hp;
     rp.slot = s.sl;
+    // show the weapon the peer is actually holding (including the minigun spin)
+    rp.setWeapon(s.wi);
+    rp.spinT = (s.sp !== undefined) ? s.sp : 0;
   },
 
   onRemoteShot(s) {

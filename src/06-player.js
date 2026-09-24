@@ -353,14 +353,20 @@ function buildWeaponModel(id) {
     case 'minigun': {
       add(B(.090, .110, .34, PAL.gun, 0, 0, -.16));                   // motor housing
       add(B(.100, .120, .14, PAL.black, 0, 0, .01));                  // gearbox
-      // six barrels arranged around the axis
+      // The barrel cluster is its own group so the barrels can visibly spin up
+      // before firing (and coast down after). Everything that turns rides in
+      // here: six barrels, their clamps and the muzzle ring.
+      const barrels = new THREE.Group();
       for (let i = 0; i < 6; i++) {
         const a = (i / 6) * Math.PI * 2;
-        add(CYL(.014, .62, PAL.steel, Math.cos(a) * .052, Math.sin(a) * .052, -.62, 6));
+        const b = CYL(.014, .62, PAL.steel, Math.cos(a) * .052, Math.sin(a) * .052, -.62, 6);
+        barrels.add(b);
       }
-      add(CYL(.060, .07, PAL.black, 0, 0, -.30, 12));                 // barrel clamp front
-      add(CYL(.058, .06, PAL.black, 0, 0, -.52, 12));                 // barrel clamp rear
-      add(CYL(.056, .05, PAL.gun, 0, 0, -.94, 12));                   // muzzle ring
+      barrels.add(CYL(.060, .07, PAL.black, 0, 0, -.30, 12));          // barrel clamp front
+      barrels.add(CYL(.058, .06, PAL.black, 0, 0, -.52, 12));          // barrel clamp rear
+      barrels.add(CYL(.056, .05, PAL.gun, 0, 0, -.94, 12));            // muzzle ring
+      barrels.name = 'barrels';                                        // found by name (clone-safe)
+      g.add(barrels);
       add(B(.150, .170, .170, PAL.oliv, 0, -.165, -.02));             // ammo drum
       add(CYL(.085, .10, PAL.oliv, 0, -.165, .085, 14));              // drum body
       add(B(.034, .120, .11, PAL.black, 0, -.070, -.14));             // feed chute
@@ -586,6 +592,7 @@ class Player {
     this.zoom = 0;            // 0..1 scope blend
     this.isAiming = false;
     this.spinT = 0;           // minigun spin-up (0..1)
+    this.spinPhase = 0;       // accumulated barrel-cluster rotation (radians)
     this._spinSnd = false;
     this.climbing = false;    // mid-vault onto a ledge
     this.climbT = 0;
@@ -954,6 +961,14 @@ class Player {
     return res;
   }
 
+  /* Turn the minigun's barrel cluster to match the current spin phase. Safe to
+     call for any weapon: models without barrels simply do nothing. */
+  applyBarrelSpin() {
+    if (!this.vmInner) return;
+    const barrels = this.vmInner.getObjectByName('barrels');
+    if (barrels) barrels.rotation.z = this.spinPhase || 0;
+  }
+
   /* ---------- per-frame weapon logic ---------- */
   tickWeapon(dt, game) {
     const w = this.weapon; if (!w) return;
@@ -1006,6 +1021,11 @@ class Player {
         this._spinSnd = true;
       }
       if (this.spinT <= .05) this._spinSnd = false;
+      // Visible spin: the barrel cluster turns steadily while winding up, then
+      // very fast once it is up to speed. The rotation keeps its own phase so
+      // stopping and restarting does not snap the barrels to a new angle.
+      this.spinPhase = (this.spinPhase || 0) + (6 + this.spinT * this.spinT * 78) * this.spinT * dt;
+      this.applyBarrelSpin();
     } else {
       this.spinT = 0;
     }

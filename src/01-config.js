@@ -46,6 +46,7 @@ const CFG = {
 
   /* ---- extras: ammo/medkit crate & kamikaze drone ---- */
   medkitHeal: 50,       // HP restored per medkit, used instantly in battle
+  medkitMax: 5,         // how many medkits can be carried at once
   droneSpeed: 15,       // m/s cruise for the guided drone
   droneBoost: 1.7,      // speed multiplier while boosting (Shift)
   droneLife: 26,        // seconds before the drone runs out of fuel
@@ -53,6 +54,8 @@ const CFG = {
   droneDmg: 175,        // blast damage at the centre
   droneHp: 60,          // damage the drone absorbs before it is shot down
   droneTurn: 2.1,       // camera-relative steer rate (rad/s per unit of input)
+  droneNoise: 34,       // how far the drone's motor carries (m) — loud on purpose
+  rocketSoundRange: 220, // how far a rocket explosion is heard from
 
   /* ---- ОРДА ×10: ten times as many zombies, but far weaker ---- */
   hordeCountMul: 10,    // wave size multiplier

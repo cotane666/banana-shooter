@@ -280,6 +280,41 @@ const Audio3D_SFX = {
     this.tone(300, .18, 'sawtooth', .1, undefined, undefined, undefined, 900);
     setTimeout(() => this.tone(520, .3, 'sawtooth', .07, undefined, undefined, undefined, 640), 180);
   },
+  /* the drone is deliberately LOUD: a droning motor that carries a long way, so
+     the opponent can hear it coming and hunt it down. Called repeatedly while
+     the drone is airborne. */
+  droneLoop(x, y, z) {
+    if (!this.ctx || this.muted) return;
+    const sp = this._spatial(x, y, z, 4, CFG.droneNoise);
+    if (sp.gain <= .006) return;
+    const t = this.ctx.currentTime;
+    const pan = this.ctx.createStereoPanner ? this.ctx.createStereoPanner() : null;
+    const out = this.ctx.createGain(); out.gain.value = sp.gain * 1.15;
+    if (pan) { pan.pan.value = sp.pan; out.connect(pan); pan.connect(this.master); } else out.connect(this.master);
+    // two detuned saws → a rough propeller drone
+    [86, 129].forEach((f, i) => {
+      const o = this.ctx.createOscillator();
+      o.type = 'sawtooth';
+      o.frequency.setValueAtTime(f, t);
+      o.frequency.linearRampToValueAtTime(f * 1.06, t + .18);
+      const g = this.ctx.createGain();
+      g.gain.setValueAtTime(.001, t);
+      g.gain.linearRampToValueAtTime(.10 / (i + 1), t + .03);
+      g.gain.linearRampToValueAtTime(.001, t + .2);
+      const lp = this.ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 900;
+      o.connect(lp); lp.connect(g); g.connect(out);
+      o.start(t); o.stop(t + .22);
+    });
+    // a little airy noise on top
+    const src = this.ctx.createBufferSource();
+    src.buffer = this.noiseBuf; src.playbackRate.value = .9;
+    const bp = this.ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 1400; bp.Q.value = .7;
+    const ng = this.ctx.createGain();
+    ng.gain.setValueAtTime(.001, t); ng.gain.linearRampToValueAtTime(.05, t + .04);
+    ng.gain.linearRampToValueAtTime(.001, t + .2);
+    src.connect(bp); bp.connect(ng); ng.connect(out);
+    src.start(t); src.stop(t + .22);
+  },
   growl(x, y, z, kind) {
     if (!this.ctx || this.muted) return;
     const sp = this._spatial(x, y, z, 4, 55);

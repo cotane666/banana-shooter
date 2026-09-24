@@ -933,6 +933,7 @@ const Game = {
     Net.on('respawn', r => this.onRemoteRespawn(r));
     Net.on('round', r => this.onRoundMsg(r));
     Net.on('drone', d => this.onRemoteDrone(d));
+    Net.on('boom', b => this.onRemoteBoom(b));
     Net.on('score', s => this.onScoreMsg(s));
   },
 
@@ -1751,9 +1752,15 @@ const Game = {
        so they can be bought again (ammo any number of times). */
     if (g.ammo || g.medkit || g.drone) {
       if (!free && this.player.money < g.price) { Audio3D_SFX.deny(); UI.toast('Не хватает денег'); return; }
+      // the field kit is limited: refuse once the backpack is full
+      if (g.medkit && (this.player.medkits || 0) >= CFG.medkitMax) {
+        Audio3D_SFX.deny();
+        UI.toast('Аптечек максимум: ' + CFG.medkitMax);
+        return;
+      }
       if (!free) this.player.money -= g.price;
       if (g.ammo) this.refillAmmo();
-      else if (g.medkit) this.player.medkits = (this.player.medkits || 0) + 1;
+      else if (g.medkit) this.player.medkits = Math.min(CFG.medkitMax, (this.player.medkits || 0) + 1);
       else if (g.drone) { this.player.drone = (this.player.drone || 0) + 1; this.player.droneOwned = true; }
       Audio3D_SFX.buy();
       const extra = g.medkit ? ' (' + this.player.medkits + ' в запасе)' : g.drone ? ' (' + this.player.drone + ' в запасе)' : '';
@@ -1816,6 +1823,12 @@ const Game = {
     const p = this.player;
     if (!p || !p.alive) return false;
     if (this.drone) return false;                            // already flying
+    // the drone is a live-round tool: launching it during the buy phase was a bug
+    if (this.roundState === 'buy' && this.mode !== CS.MODE.RANGE) {
+      UI.toast('Дрон доступен только в бою', '#f5d33c');
+      Audio3D_SFX.deny();
+      return false;
+    }
     if (!(p.drone > 0)) { UI.toast('Дрона нет — купите в магазине (B)', '#f5d33c'); Audio3D_SFX.deny(); return false; }
     p.drone--;
     const eye = this.eyePos();
@@ -1894,6 +1907,14 @@ const Game = {
     const p = this.player;
     dr.life -= dt;
     if (dr.life <= 0) { this.detonateDrone(false); return; }
+
+    /* The motor is loud on purpose: it plays periodically so the opponent can
+       hear roughly where the drone is and try to shoot it down. */
+    dr.noiseT = (dr.noiseT || 0) - dt;
+    if (dr.noiseT <= 0) {
+      dr.noiseT = .2;
+      Audio3D_SFX.droneLoop(dr.pos.x, dr.pos.y, dr.pos.z);
+    }
 
     /* Steer: look input aims the drone, movement keys push it. It always flies
        forward along its facing, so it handles like a little plane. */
@@ -2522,6 +2543,10 @@ const Game = {
     this.effects.explosion(center.x, center.y, center.z, R);
     Audio3D_SFX.explosionAt(center.x, center.y, center.z);
     UI.hitmark(false);
+    // tell the room so everyone sees and hears the rocket, not just the shooter
+    if (this.mode === CS.MODE.ONLINE) {
+      Net.send({ t: 'boom', from: Net.selfId(), x: +center.x.toFixed(2), y: +center.y.toFixed(2), z: +center.z.toFixed(2), r: R });
+    }
     // zombies
     if (this.horde) {
       for (const z of this.horde.list) {
@@ -3138,6 +3163,15 @@ const Game = {
   /* A remote player's drone: show it flying for everyone else, and let it be
      shot down. Position updates arrive as short-lived visuals; the owner is
      authoritative for the flight, this side just mirrors it. */
+  onRemoteBoom(b) {
+    if (this.mode !== CS.MODE.ONLINE) return;
+    // an enemy rocket detonated somewhere on the map — show the same blast the
+    // shooter saw, so a rocket is never a private event
+    const R = b.r || 6;
+    if (this.effects) this.effects.explosion(b.x, b.y, b.z, R);
+    Audio3D_SFX.explosionAt(b.x, b.y, b.z);
+  },
+
   onRemoteDrone(d) {
     if (this.mode !== CS.MODE.ONLINE) return;
     const rp = this.remoteById(d.from);
@@ -3156,6 +3190,12 @@ const Game = {
       rp.droneMesh.position.set(d.x, d.y, d.z);
       if (d.yw !== undefined) rp.droneMesh.rotation.y = d.yw;
       rp.droneLife = CFG.droneLife;
+      // an enemy drone is just as loud on our side (throttled to ~5/s)
+      const now = U.now();
+      if (!rp.droneNoiseAt || now - rp.droneNoiseAt > 190) {
+        rp.droneNoiseAt = now;
+        Audio3D_SFX.droneLoop(d.x, d.y, d.z);
+      }
     } else if (d.st === 'boom') {
       if (this.effects) this.effects.explosion(d.x, d.y, d.z, CFG.droneBlast);
       Audio3D_SFX.explosionAt(d.x, d.y, d.z);

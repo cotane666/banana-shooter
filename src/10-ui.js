@@ -346,7 +346,7 @@ const UI = {
         '<div class="wd">' + U.esc(desc) + '</div>' +
         '<div class="wst">' + stats.map(s => '<span>' + s[0] + ' <i>' + s[1] + '</i></span>').join('') + '</div>' +
         (owned ? '<div class="pr">КУПЛЕНО</div>' : '<div class="pr">$' + price + '</div>');
-      d.addEventListener('click', () => { if (!cant && !owned) onClick(); else if (!owned) { Audio3D_SFX.deny(); UI.toast('Недостаточно денег'); } });
+      d.addEventListener('click', () => { if (!cant && !owned) onClick(); else if (!owned) { Audio3D_SFX.deny(); if (id === 'medkit') UI.toast('Аптечек максимум: ' + CFG.medkitMax); else UI.toast('Недостаточно денег'); } });
       wrap.appendChild(d);
     };
 
@@ -363,10 +363,12 @@ const UI = {
           stats = [['РАДИУС', CFG.droneBlast + 'м'], ['УРОН', CFG.droneDmg], ['HP', CFG.droneHp]];
           desc = 'Управляемый · враг может сбить · перезаряд каждый раунд';
         } else if (g.medkit) {
+          const n = player.medkits || 0;
           owned = false;
-          cant = !free && player.money < g.price;
-          stats = [['ЛЕЧИТ', '+' + CFG.medkitHeal + ' HP'], ['В ЗАПАСЕ', player.medkits || 0], ['КЛАВИША', 'H']];
-          desc = 'Применить в бою (или кнопка на телефоне)';
+          const full = n >= CFG.medkitMax;
+          cant = (!free && player.money < g.price) || full;
+          stats = [['ЛЕЧИТ', '+' + CFG.medkitHeal + ' HP'], ['В ЗАПАСЕ', n + '/' + CFG.medkitMax], ['КЛАВИША', 'H']];
+          desc = full ? 'Максимум аптечек' : 'Применить в бою (или кнопка на телефоне)';
         } else if (g.ammo) {
           owned = false;
           cant = !free && player.money < g.price;
@@ -461,6 +463,22 @@ const UI = {
         ctx.beginPath(); ctx.arc(tx(rp.pos.x), tz(rp.pos.z), 4, 0, 7); ctx.fill();
       });
     }
+    // drones: the local one and every enemy drone in the air (a loud, visible
+    // threat — that is the point of the kamikaze drone)
+    const pulse = .5 + .5 * Math.sin(Date.now() / 160);
+    const drawDrone = (x, z, enemy) => {
+      ctx.save();
+      ctx.strokeStyle = enemy ? 'rgba(255,80,80,.95)' : 'rgba(90,200,255,.95)';
+      ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(tx(x), tz(z), 6 + pulse * 3, 0, 7); ctx.stroke();
+      ctx.fillStyle = enemy ? '#ff4a4a' : '#4aa3ff';
+      ctx.beginPath(); ctx.arc(tx(x), tz(z), 2.6, 0, 7); ctx.fill();
+      ctx.restore();
+    };
+    if (game.drone) drawDrone(game.drone.pos.x, game.drone.pos.z, false);
+    if (game.remotePlayers) game.remotePlayers.forEach(rp => {
+      if (rp.droneMesh) drawDrone(rp.droneMesh.position.x, rp.droneMesh.position.z, true);
+    });
     // training dummies (test range)
     if (game.dummies) {
       ctx.fillStyle = '#ffb347';

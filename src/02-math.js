@@ -104,8 +104,7 @@ class CollisionWorld {
 
   /* All box hits along a ray, sorted front-to-back, each with entry t and exit t2.
      Used for bullet penetration through thin cover. */
-  raycastAll(origin, dir, maxDist, ignoreTags) {
-    const cands = this._rayCandidates(origin, dir, maxDist);
+  raycastAll(origin, dir, maxDist, ignoreTags) {    const cands = this._rayCandidates(origin, dir, maxDist);
     const hits = [];
     for (let i = 0; i < cands.length; i++) {
       const b = cands[i];

@@ -1295,8 +1295,7 @@ class CollisionWorld {
 
   /* All box hits along a ray, sorted front-to-back, each with entry t and exit t2.
      Used for bullet penetration through thin cover. */
-  raycastAll(origin, dir, maxDist, ignoreTags) {
-    const cands = this._rayCandidates(origin, dir, maxDist);
+  raycastAll(origin, dir, maxDist, ignoreTags) {    const cands = this._rayCandidates(origin, dir, maxDist);
     const hits = [];
     for (let i = 0; i < cands.length; i++) {
       const b = cands[i];
@@ -9481,7 +9480,11 @@ const Game = {
     }
 
     // ---- bullets: walk through penetrable cover, stop at walls ----
-    const wallHits = this.world.raycastAll(origin, dir, maxDist, ['ground']);
+    // The floor is included here (and pulled out below): bullets used to skip
+    // the ground entirely, so shots into the floor left no impact or bullet hole.
+    const allHits = this.world.raycastAll(origin, dir, maxDist);
+    const wallHits = allHits.filter(h => h.box.tag !== 'ground');
+    const groundHit = allHits.find(h => h.box.tag === 'ground') || null;
     const zHit = this.horde ? this.horde.raycast(origin, dir, maxDist) : null;
     let dmgMul = 1;
     let stopT = maxDist;
@@ -9496,6 +9499,11 @@ const Game = {
       if (penetrable) { dmgMul *= CFG.wallbangLoss; continue; }
       stopT = h.t; stopNormal = h.normal; stopPoint = h.point;
       break;
+    }
+
+    // a shot into the floor stops there and leaves a hole
+    if (groundHit && groundHit.t < stopT && (!zHit || groundHit.t < zHit.t)) {
+      stopT = groundHit.t; stopNormal = groundHit.normal; stopPoint = groundHit.point;
     }
 
     // the opponents (everyone else in the room)
@@ -9951,7 +9959,8 @@ const Game = {
     const from = { x: s.ox, y: s.oy, z: s.oz };
     const dir = { x: s.dx, y: s.dy, z: s.dz };
     const maxDist = def.range || 100;
-    const wallHits = this.world.raycastAll(from, dir, maxDist, ['ground']);
+    // include the floor so remote shots also leave holes on the ground
+    const wallHits = this.world.raycastAll(from, dir, maxDist);
     let endT = maxDist, p = null, n = null;
     for (const h of wallHits) { endT = h.t; p = h.point; n = h.normal; break; }
     const end = p || { x: from.x + dir.x * endT, y: from.y + dir.y * endT, z: from.z + dir.z * endT };

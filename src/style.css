@@ -69,6 +69,7 @@ canvas{display:block}
 .menu-stats{display:flex;gap:24px;justify-content:center;margin-top:26px;flex-wrap:wrap}
 .menu-stats div{font-size:12px;color:var(--dim);letter-spacing:1px}
 .menu-stats b{display:block;font-size:22px;color:var(--or);font-weight:800}
+.menu-stats .clearstat b{color:#c24bff;text-shadow:0 0 18px rgba(194,75,255,.5)}
 .menu-foot{font-size:11px;color:#4d565f;margin-top:26px;letter-spacing:1.2px;line-height:1.9}
 
 /* On phones the main menu is taller than the screen (six mode buttons plus
@@ -234,6 +235,17 @@ html.touch #reloadTag{top:calc(50% + 27px);font-size:11px;letter-spacing:2px}
   transition:opacity .32s;pointer-events:none}
 #centerMsg.on{opacity:1}
 #centerMsg small{display:block;font-size:14px;letter-spacing:3px;color:var(--or);margin-top:8px;font-weight:600}
+
+/* ---------- boss health bar ---------- */
+#bossBar{position:absolute;left:50%;top:64px;transform:translateX(-50%);width:min(70vw,560px);text-align:center;z-index:22}
+#bossBar .boss-name{font-size:13px;font-weight:800;letter-spacing:4px;color:#e2a6ff;
+  text-shadow:0 2px 10px #000,0 0 16px rgba(194,75,255,.6);margin-bottom:4px}
+#bossBar .boss-track{height:12px;background:rgba(0,0,0,.6);border:1px solid rgba(194,75,255,.5);
+  border-radius:3px;overflow:hidden}
+#bossBar .boss-track i{display:block;height:100%;width:100%;transform-origin:left;
+  background:linear-gradient(90deg,#7b2fbf,#e05bff);transition:transform .16s ease}
+html.touch #bossBar{top:calc(60px + env(safe-area-inset-top,0px));width:78vw}
+html.touch #bossBar .boss-name{font-size:11px;letter-spacing:2px}
 #dmgFlash{position:absolute;inset:0;background:radial-gradient(ellipse at center,transparent 35%,rgba(190,20,10,.62));
   opacity:0;transition:opacity .3s}
 #lowhp{position:absolute;inset:0;background:radial-gradient(ellipse at center,transparent 42%,rgba(150,0,0,.42));

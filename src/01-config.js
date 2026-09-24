@@ -58,7 +58,11 @@ const CFG = {
   hordeCountMul: 10,    // wave size multiplier
   hordeHpMul: 0.18,     // zombie health multiplier (weak, so the mass stays fair)
   hordeMaxAlive: 110,   // the usual alive cap would smother a 10× wave
-  hordeSpawnInterval: 0.20  // spawn far faster so the field actually fills
+  hordeSpawnInterval: 0.20,  // spawn far faster so the field actually fills
+
+  /* ---- BOSS WAVES ---- */
+  bossWaves: [15, 30, 50, 100],  // waves that summon a boss
+  bossHpMul: 1            // global boss health multiplier (tuned per boss type)
 };
 
 /* ---------------- match settings (chosen in the lobby / settings) ----------------
@@ -190,7 +194,13 @@ const ZOMBIES = {
   tank:   { name: 'Толстяк',      hp: 340,  speed: 1.15, dmg: 27, score: 260, money: 110, scale: 1.38, color: 0x4d6b3f, atkRange: 1.9 },
   crawler:{ name: 'Ползун',       hp: 55,   speed: 3.10, dmg: 9,  score: 130, money: 60, scale: 0.80, color: 0x7a5a52, atkRange: 1.4 },
   brute:  { name: 'Громила',      hp: 620,  speed: 1.55, dmg: 36, score: 480, money: 190, scale: 1.62, color: 0x3f5236, atkRange: 2.1 },
-  spitter:{ name: 'Плевун',       hp: 90,   speed: 2.10, dmg: 18, score: 220, money: 90, scale: 1.0,  color: 0x6f7d2e, atkRange: 1.6 }
+  spitter:{ name: 'Плевун',       hp: 90,   speed: 2.10, dmg: 18, score: 220, money: 90, scale: 1.0,  color: 0x6f7d2e, atkRange: 1.6 },
+
+  /* ---- BOSSES (spawned on dedicated boss waves) ---- */
+  bossWarden: { name: 'СТРАЖ',        hp: 3200,  speed: 1.35, dmg: 42, score: 4000,  money: 3000, scale: 2.35, color: 0x7d3b2e, atkRange: 2.6, boss: true },
+  bossBrute:  { name: 'ЖНЕЦ',         hp: 6800,  speed: 1.55, dmg: 55, score: 8000,  money: 5000, scale: 2.75, color: 0x5a2b6b, atkRange: 2.9, boss: true },
+  bossTitan:  { name: 'ТИТАН',        hp: 14000, speed: 1.15, dmg: 70, score: 16000, money: 8000, scale: 3.25, color: 0x6b2b2b, atkRange: 3.2, boss: true },
+  bossFinal:  { name: 'ПОЖИРАТЕЛЬ',   hp: 42000, speed: 1.05, dmg: 95, score: 50000, money: 16000, scale: 4.10, color: 0x2e1b4d, atkRange: 3.6, boss: true, final: true }
 };
 
 /* ---------------- utils ---------------- */
@@ -219,7 +229,7 @@ function makeRng(seed) {
 const Store = {
   key: 'cs3d.save.v1',
   data: { sens: 2.2, fov: 80, vol: 60, quality: 1, touchSens: 1.5, name: '', best: 0, bestWave: 0, killsTotal: 0, matches: 0, wins: 0, signalSrv: 0, aimBest: 0, aimAutoFire: 1,
-          map: 'arena', players: 2, maxHP: 100, aimAssist: 1, horde: 0 },
+          map: 'arena', players: 2, maxHP: 100, aimAssist: 1, horde: 0, clears: 0, freeplay: 0 },
   load() {
     try { const r = localStorage.getItem(this.key); if (r) Object.assign(this.data, JSON.parse(r)); } catch (e) { }
     return this.data;

@@ -123,6 +123,9 @@
       <div class="fld">Здоровье игрока
         <div class="chips" id="lobbyHp"></div>
       </div>
+      <div class="fld">Экономика
+        <div class="chips" id="lobbyFree"></div>
+      </div>
       <div class="btnrow">
         <button class="mbtn primary" id="btnHost"><b>СОЗДАТЬ ИГРУ</b><i>Вы хост · получите код</i></button>
         <button class="mbtn" id="btnJoin"><b>ПОДКЛЮЧИТЬСЯ</b><i>Введите код друга</i></button>
@@ -238,6 +241,10 @@
   <canvas id="minimap" width="180" height="180"></canvas>
   <div id="feed"></div>
   <div id="centerMsg"></div>
+  <div id="bossBar" class="hidden">
+    <div class="boss-name" id="bossName">БОСС</div>
+    <div class="boss-track"><i id="bossFill"></i></div>
+  </div>
   <div id="autoFireTag" class="hidden">АВТО</div>
   <div id="rangePanel" class="hidden">
     <div class="rp-title" id="rpTitle">ПОЛИГОН · МАНЕКЕНЫ</div>

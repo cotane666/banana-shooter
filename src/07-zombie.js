@@ -86,6 +86,26 @@ function buildZombieMesh(type) {
   } else if (type === 'spitter') {
     chest.scale.set(.9, 1.15, .9);
     head.scale.set(1.25, 1.25, 1.25);
+  } else if (ZOMBIES[type] && ZOMBIES[type].boss) {
+    /* Bosses: bulkier frame, spiked shoulders and a burning core so they read
+       as a threat even from across the arena. */
+    chest.scale.set(1.6, 1.15, 1.5);
+    pelvis.scale.set(1.4, 1.05, 1.3);
+    armL.scale.set(1.7, 1.15, 1.7); armR.scale.set(1.7, 1.15, 1.7);
+    legL.scale.set(1.5, 1.05, 1.5); legR.scale.set(1.5, 1.05, 1.5);
+    skull.scale.set(1.3, 1.1, 1.3);
+    // shoulder spikes
+    [-1, 1].forEach(sgn => {
+      const spike = new THREE.Mesh(new THREE.ConeGeometry(.09, .34, 6), clothMat);
+      spike.position.set(sgn * .40, 1.60, 0);
+      spike.rotation.z = sgn * -.5;
+      g.add(spike);
+    });
+    // glowing core in the chest
+    const coreMat = new THREE.MeshBasicMaterial({ color: ZOMBIES[type].final ? 0xc24bff : 0xff5a2a });
+    const core = new THREE.Mesh(new THREE.SphereGeometry(.15, 8, 6), coreMat);
+    core.position.set(0, 1.12, -.20);
+    torso.add(core);
   }
 
   g.userData.parts = parts;

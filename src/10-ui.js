@@ -14,11 +14,12 @@ const UI = {
       'hud', 'crosshair', 'hitmark', 'scope', 'reloadTag', 'hpFill', 'hpVal', 'apFill', 'apVal', 'ammoMag', 'ammoRes',
       'weaponName', 'money', 'roundTimer', 'objective', 'netInfo', 'killCount', 'scoreVal', 'minimap',
       'feed', 'centerMsg', 'dmgFlash', 'lowhp', 'buy', 'buyMoney', 'buyTimer', 'buyCats', 'buyGrid',
+      'bossBar', 'bossName', 'bossFill',
       'buyHint', 'buyOwned', 'btnBuySkip', 'btnBuyClose', 'scoreboard', 'sbTitle', 'sbTable', 'pause', 'toast', 'fps', 'clickToPlay',
       'connect', 'connTitle', 'connStatus', 'joinRow', 'hostRow', 'joinWait', 'roomCode', 'waiting', 'waitingTxt',
       'inName', 'inCode', 'peerList', 'peerListJoin',
       'btnCopy', 'dmgDirs', 'android', 'ios',
-      'mapChips', 'playerChips', 'hpChips', 'hordeChips', 'lobbyMaps', 'lobbyPlayers', 'lobbyHp',
+      'mapChips', 'playerChips', 'hpChips', 'hordeChips', 'lobbyMaps', 'lobbyPlayers', 'lobbyHp', 'lobbyFree',
       'medkitTag', 'droneTag'];
     ids.forEach(i => this.el[i] = $(i));
     this.buildBuyCats();
@@ -105,6 +106,23 @@ const UI = {
         wrap.appendChild(b);
       });
     };
+    const fillFree = (wrap) => {
+      if (!wrap) return;
+      wrap.innerHTML = '';
+      [{ n: 0, b: 'ОБЫЧНАЯ', i: 'деньги и закупка' }, { n: 1, b: 'ВСЁ БЕСПЛАТНО', i: 'без экономики' }].forEach(o => {
+        const b = document.createElement('button');
+        b.dataset.free = o.n;
+        b.innerHTML = '<b>' + o.b + '</b><i>' + o.i + '</i>';
+        b.addEventListener('click', () => {
+          Store.data.freeplay = o.n; Store.save(); this.refreshChips();
+          if (typeof Net !== 'undefined' && Net.role === CS.NETROLE.HOST && Net.connected) {
+            Net.send({ t: 'round', st: 'settings', players: Store.data.players, hp: Store.data.maxHP, map: Store.data.map, free: Store.data.freeplay });
+          }
+          Audio3D_SFX.uiClick();
+        });
+        wrap.appendChild(b);
+      });
+    };
     const fillHorde = (wrap) => {
       if (!wrap) return;
       wrap.innerHTML = '';
@@ -126,6 +144,7 @@ const UI = {
     fillHp(this.el.hpChips);
     fillHp(this.el.lobbyHp);
     fillHorde(this.el.hordeChips);
+    fillFree(this.el.lobbyFree);
     this.refreshChips();
   },
 
@@ -139,6 +158,7 @@ const UI = {
     mark(this.el.playerChips, 'n', S.players); mark(this.el.lobbyPlayers, 'n', S.players);
     mark(this.el.hpChips, 'hp', S.maxHP); mark(this.el.lobbyHp, 'hp', S.maxHP);
     mark(this.el.hordeChips, 'horde', S.horde);
+    mark(this.el.lobbyFree, 'free', S.freeplay);
   },
 
   /* connected peers, shown in the lobby so the host can see who is in */
@@ -309,9 +329,10 @@ const UI = {
     // defensive: some callers (category buttons) may not pass a player
     if (!player && typeof Game !== 'undefined' && Game.player) player = Game.player;
     if (!player) return;
-    const free = typeof Game !== 'undefined' && Game.mode === CS.MODE.RANGE;
+    const free = (typeof Game !== 'undefined') && Game.isFreeShop && Game.isFreeShop();
+    const endless = typeof Game !== 'undefined' && Game.mode === CS.MODE.RANGE;
     this.el.buyMoney.textContent = free ? 'БЕСПЛАТНО' : U.money(player.money);
-    this.el.buyTimer.textContent = free ? '∞' : Math.max(0, Math.ceil(secondsLeft));
+    this.el.buyTimer.textContent = endless ? '∞' : Math.max(0, Math.ceil(secondsLeft));
     Array.from(this.el.buyCats.children).forEach(b => b.classList.toggle('on', b.dataset.cat === this.buyCat));
 
     wrap.innerHTML = '';
@@ -369,7 +390,7 @@ const UI = {
         const stats = [['УРОН', w.dmg], ['ТЕМП', rpm]];
         if (w.mag !== Infinity) stats.push(['МАГ', w.mag]);
         if (w.pellets) stats.push(['ДРОБЬ', w.pellets]);
-        mkCard(id, w.name, w.cat.toUpperCase(), w.price, stats, owned, player.money < w.price,
+        mkCard(id, w.name, w.cat.toUpperCase(), w.price, stats, owned, !free && player.money < w.price,
           () => Bus.emit('buy', id));
       });
     }
@@ -518,7 +539,9 @@ const UI = {
   },
 
   renderMenuStats() {
+    const clears = Store.data.clears || 0;
     this.el.menuStats.innerHTML =
+      '<div class="clearstat"><b>' + clears + '</b>ПРОХОЖДЕНИЙ</div>' +
       '<div><b>' + Store.data.best + '</b>РЕКОРД</div>' +
       '<div><b>' + Store.data.bestWave + '</b>ЛУЧШАЯ ВОЛНА</div>' +
       '<div><b>' + Store.data.killsTotal + '</b>ЗОМБИ УБИТО</div>' +

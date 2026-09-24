@@ -816,7 +816,7 @@ const Game = {
     bindClick('btnLeave', () => this.stopToMenu());
     bindClick('btnReset', () => {
       if (confirm('Сбросить весь прогресс и настройки?')) {
-        Store.data = { sens: 2.2, fov: 80, vol: 60, quality: 1, touchSens: 1.5, name: '', best: 0, bestWave: 0, killsTotal: 0, matches: 0, wins: 0, signalSrv: 0, aimBest: 0, aimAutoFire: 1, map: 'arena', players: 2, maxHP: 100, aimAssist: 1 };
+        Store.data = { sens: 2.2, fov: 80, vol: 60, quality: 1, touchSens: 1.5, name: '', best: 0, bestWave: 0, killsTotal: 0, matches: 0, wins: 0, signalSrv: 0, aimBest: 0, aimAutoFire: 1, map: 'arena', players: 2, maxHP: 100, aimAssist: 1, horde: 0, clears: 0, freeplay: 0 };
         Store.save();
         UI.refreshChips(); UI.renderMenuStats(); UI.toast('Прогресс сброшен');
       }
@@ -1040,6 +1040,8 @@ const Game = {
   startOffline(horde) {
     this.stopToMenu(true);
     this.mode = CS.MODE.OFFLINE;
+    this._campaignDone = false;
+    this.freePlay = false;
     this.ensureMap(Store.data.map);
     this.matchHP = Store.data.maxHP || 100;
     // ОРДА ×10: force the mass mode from the menu button, otherwise honour the
@@ -1095,6 +1097,7 @@ const Game = {
   startRange() {
     this.stopToMenu(true);
     this.mode = CS.MODE.RANGE;
+    this.freePlay = false;
     this.ensureMap(Store.data.map);
     this.offline = null;
     this.online = null;
@@ -1358,6 +1361,8 @@ const Game = {
     const mapId = opts.map || Store.data.map;
     this.ensureMap(mapId);
     this.matchHP = opts.hp || (Store.data.maxHP || 100);
+    // "ВСЁ БЕСПЛАТНО" online: the host decides, clients are told by the round msg
+    this.freePlay = (opts.free !== undefined) ? !!opts.free : (this.online.role === CS.NETROLE.HOST ? Store.data.freeplay === 1 : !!this.freePlay);
     if (this.online.role === CS.NETROLE.HOST) { Store.data.map = mapId; Store.data.maxHP = this.matchHP; Store.save(); }
 
     this.remotePlayers = []; this.remote = null;
@@ -1689,12 +1694,19 @@ const Game = {
     if (IS_TOUCH) TouchUI.update();
   },
 
+  /* Is the shop free right now? The range is always free; an online match can
+     be started with "ВСЁ БЕСПЛАТНО" (set in the lobby and synced by the host). */
+  isFreeShop() {
+    if (this.mode === CS.MODE.RANGE) return true;
+    return !!(this.freePlay && this.mode === CS.MODE.ONLINE);
+  },
+
   tryBuy(id) {
     const w = WEAPONS[id];
     if (!w) return;
     if (this.roundState !== 'buy' && this.mode !== CS.MODE.RANGE) { Audio3D_SFX.deny(); UI.toast('Магазин закрыт'); return; }
     if (this.player.has(id)) { Audio3D_SFX.deny(); UI.toast('Уже куплено'); return; }
-    const free = this.mode === CS.MODE.RANGE;
+    const free = this.isFreeShop();
     if (!free && this.player.money < w.price) { Audio3D_SFX.deny(); UI.toast('Не хватает денег'); return; }
     if (!free) this.player.money -= w.price;
     this.player.give(id);
@@ -1712,7 +1724,7 @@ const Game = {
     const g = GEAR[id];
     if (!g) return;
     if (this.roundState !== 'buy' && this.mode !== CS.MODE.RANGE) { Audio3D_SFX.deny(); return; }
-    const free = this.mode === CS.MODE.RANGE;
+    const free = this.isFreeShop();
 
     /* Consumables: ammo refill, medkit, kamikaze drone. They are not "owned",
        so they can be bought again (ammo any number of times). */
@@ -2011,17 +2023,57 @@ const Game = {
   startWave() {
     const o = this.offline;
     o.wave++;
+    o.bosses = 0;
+    o.bossPending = 0;
     let count = Math.round(CFG.zombieStartCount + (o.wave - 1) * 2.4);
     if (this.hordeMode) count *= CFG.hordeCountMul;
+
+    /* ---- BOSS WAVE ----
+       At 15 / 30 / 50 / 100 a boss joins the wave. ОРДА ×10 summons five of them
+       at once instead of one, each with a much smaller health pool so the fight
+       stays winnable with the reduced damage window. */
+    const bossType = this.bossForWave(o.wave);
+    if (bossType) {
+      o.bossType = bossType;
+      o.bossPending = this.hordeMode ? 5 : 1;
+      // on a boss wave the regular horde is thinned so the boss is the fight
+      count = Math.round(count * (this.hordeMode ? .45 : .4));
+      UI.center(ZOMBIES[bossType].name, o.bossPending > 1 ? o.bossPending + ' босса!' : 'БОСС', 3.0);
+      UI.toast('БОСС: ' + ZOMBIES[bossType].name + (o.bossPending > 1 ? ' ×' + o.bossPending : ''), '#c24bff');
+      Audio3D_SFX.waveStart();
+    } else {
+      o.bossType = null;
+      UI.center((this.hordeMode ? 'ОРДА ' : 'ВОЛНА ') + o.wave, count + ' противников', 2.0);
+      UI.toast((this.hordeMode ? 'Орда ' : 'Волна ') + o.wave + ' — ' + count + ' зомби', '#e33a2e');
+      Audio3D_SFX.waveStart();
+    }
+
     o.totalThisWave = count;
     o.spawnedThisWave = 0;
     o.toSpawn = count;
     o.betweenWaves = false;
     o.waveStart = U.now();
-    UI.center((this.hordeMode ? 'ОРДА ' : 'ВОЛНА ') + o.wave, count + ' противников', 2.0);
-    UI.toast((this.hordeMode ? 'Орда ' : 'Волна ') + o.wave + ' — ' + count + ' зомби', '#e33a2e');
-    Audio3D_SFX.waveStart();
     Bus.emit('waveStart', o.wave);
+  },
+
+  /* which boss (if any) belongs to this wave */
+  bossForWave(wave) {
+    if (wave === 100) return 'bossFinal';
+    if (wave === 50) return 'bossTitan';
+    if (wave === 30) return 'bossBrute';
+    if (wave === 15) return 'bossWarden';
+    return null;
+  },
+
+  /* spawn one boss at a ring position around the player */
+  spawnBoss(type) {
+    const s = MAP.zombieSpawns && MAP.zombieSpawns.length ? U.pick(MAP.zombieSpawns) : { x: 0, z: 0 };
+    const b = this.horde.spawn(type, s.x, s.z);
+    // ОРДА ×10: five bosses, but each is far squishier
+    if (this.hordeMode) b.maxHealth *= .30;
+    b.health = b.maxHealth;
+    b.isBoss = true;
+    return b;
   },
 
   waveTypesFor(wave) {
@@ -2054,6 +2106,18 @@ const Game = {
     }
     if (this.roundState !== 'live') return;
 
+    // bosses queue in front of the regular horde
+    if (o.bossPending > 0) {
+      o.bossAcc = (o.bossAcc || 0) + dt;
+      if (o.bossAcc >= (this.hordeMode ? .5 : .9)) {
+        o.bossAcc = 0;
+        this.spawnBoss(o.bossType);
+        o.bossPending--;
+        Audio3D_SFX.growl(this.player.pos.x, this.player.pos.y, this.player.pos.z, 'brute');
+      }
+      return;
+    }
+
     // spawn queue
     if (o.toSpawn > 0) {
       o.spawnAcc = (o.spawnAcc || 0) + dt;
@@ -2083,7 +2147,12 @@ const Game = {
       o.betweenWaves = true;
       o.breakT = 7;
       Audio3D_SFX.roundEnd(true);
-      UI.center('ВОЛНА ' + o.wave + ' ЗАЧИЩЕНА', 'Бонус $' + bonus + ' · Передышка 7с', 3.0);
+      /* clearing wave 100 means the campaign is finished */
+      if (o.wave >= 100) {
+        this.onCampaignComplete();
+      } else {
+        UI.center('ВОЛНА ' + o.wave + ' ЗАЧИЩЕНА', 'Бонус $' + bonus + ' · Передышка 7с', 3.0);
+      }
       Bus.emit('waveCleared', o.wave);
       const recScore = Math.max(Store.data.best, this.player.score);
       const recWave = Math.max(Store.data.bestWave, o.wave);
@@ -2094,6 +2163,24 @@ const Game = {
       // partial heal
       this.player.health = Math.min(CFG.maxHP, this.player.health + 22);
     }
+  },
+
+  /* The final boss is down: award a completion point (shown in the main menu)
+     and stop the run. */
+  onCampaignComplete() {
+    if (this._campaignDone) return;
+    this._campaignDone = true;
+    Store.data.clears = (Store.data.clears || 0) + 1;
+    Store.save();
+    this.player.score += 50000;
+    UI.center('ИГРА ПРОЙДЕНА!', 'Волна 100 · +1 очко прохождения', 30);
+    UI.toast('ПОБЕДА! Получено очко прохождения', '#c24bff');
+    Audio3D_SFX.roundEnd(true);
+    UI.renderMenuStats();
+    this.roundState = 'end';
+    this.roundT = 12;
+    this.offlineDead = true;      // reuse the restart offer screen
+    this.offlineDeadT = 0;
   },
 
   /* ============================================================
@@ -2830,7 +2917,11 @@ const Game = {
     }
     this.startOnline(Net.role);
     // as host, tell everyone already here about the new player
-    if (Net.role === CS.NETROLE.HOST) Net.send({ t: 'roster', roster: Net.peers });
+    if (Net.role === CS.NETROLE.HOST) {
+      Net.send({ t: 'roster', roster: Net.peers });
+      // and make sure everyone agrees on the economy for this room
+      Net.send({ t: 'round', st: 'settings', players: Store.data.players, hp: this.matchHP, map: MAP.id, free: this.freePlay ? 1 : 0 });
+    }
   },
 
   onNetConnected() {
@@ -3040,6 +3131,7 @@ const Game = {
       if (r.hp) { this.matchHP = r.hp; this.player.maxHealth = r.hp; }
       if (r.map && r.map !== MAP.id && (this.roundState === 'buy' || this.roundState === 'idle')) this.ensureMap(r.map);
       if (r.players) { this.online.players = r.players; this.refreshSkipUI(); }
+      if (r.free !== undefined) this.freePlay = !!r.free;
       UI.renderPeerList();
       return;
     }
@@ -3466,7 +3558,14 @@ const Game = {
     } else if (this.mode === CS.MODE.OFFLINE && this.offline) {
       const o = this.offline;
       const waveWord = this.hordeMode ? 'ОРДА ' : 'ВОЛНА ';
-      if (this.roundState === 'live' && !o.betweenWaves) objective = waveWord + o.wave + ' · осталось ' + (o.toSpawn + this.horde.aliveCount);
+      if (this.roundState === 'live' && !o.betweenWaves) {
+        if (o.bossPending > 0) objective = waveWord + o.wave + ' · БОСС x' + o.bossPending + ' приближается';
+        else {
+          const boss = this.horde.list.filter(z => z.alive && !z.dying && z.isBoss)[0];
+          objective = boss ? 'БОСС: ' + boss.def.name + ' · ' + Math.max(0, Math.round(boss.health)) + ' HP'
+                           : waveWord + o.wave + ' · осталось ' + (o.toSpawn + this.horde.aliveCount);
+        }
+      }
       else if (o.betweenWaves) { objective = 'ПЕРЕДЫШКА · волна ' + (o.wave + 1); timer = o.breakT; }
       else objective = 'ЗАКУПКА · волна ' + (o.wave + 1);
     } else if (this.mode === CS.MODE.ONLINE) {
@@ -3502,11 +3601,28 @@ const Game = {
       this._panelT = (this._panelT || 0) - dt;
       if (this._panelT <= 0) { this._panelT = .2; this.updateRangePanel(); }
     }
+    this.updateBossBar();
     if (this._restartPending && (Input.keys['Enter'] || Input.keys['NumpadEnter'])) {
       const wasHorde = this.hordeMode;
       this._restartPending = false; this._offeredRestart = false; this.offlineDead = false; this.offlineDeadT = 0;
       this.startOffline(wasHorde);
     }
+  },
+
+  /* Show the health of the nearest living boss in the offline mode. */
+  updateBossBar() {
+    const el = UI.el.bossBar;
+    if (!el) return;
+    let boss = null;
+    if (this.mode === CS.MODE.OFFLINE && this.horde) {
+      for (const z of this.horde.list) {
+        if (z.alive && !z.dying && z.isBoss) { if (!boss || z.health > boss.health) boss = z; }
+      }
+    }
+    if (!boss) { el.classList.add('hidden'); return; }
+    el.classList.remove('hidden');
+    UI.el.bossName.textContent = boss.def.name + ' · ' + Math.max(0, Math.round(boss.health)) + ' / ' + Math.round(boss.maxHealth);
+    UI.el.bossFill.style.transform = 'scaleX(' + U.clamp(boss.health / boss.maxHealth, 0, 1) + ')';
   }
 };
 

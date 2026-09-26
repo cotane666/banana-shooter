@@ -2784,6 +2784,7 @@ const Game = {
       return false;                 // no shot fired
     }
     const def = p.def;
+    if (def.shield) return false;          // the shield is held, it does not fire
     if (w.mag !== Infinity) w.mag--;
     p.fireCd = 60 / def.rpm;
     p.bulletsFired++;
@@ -2861,17 +2862,20 @@ const Game = {
     const p = this.player;
     const spread = p.aimSpread();
     const d = this.spreadDirection(dir, spread, false);
-    const isRocket = def.projectile === 'rocket';
-    const mesh = isRocket ? buildRocketProjectile() : buildBananaProjectile();
+    const kind = def.projectile;
+    const isRocket = kind === 'rocket';
+    const isGuided = kind === 'guided';
+    const mesh = isGuided ? buildGuidedMissile() : (isRocket ? buildRocketProjectile() : buildBananaProjectile());
     mesh.position.set(origin.x, origin.y, origin.z);
-    if (!isRocket) mesh.rotation.x = Math.PI / 2;   // bananas lie along the flight path
+    if (!isRocket && !isGuided) mesh.rotation.x = Math.PI / 2;   // bananas lie along the flight path
     this.scene.add(mesh);
     const speed = def.projSpeed || 30;
     this.projectiles.push({
       mesh: mesh,
-      kind: def.projectile,
+      kind: kind,
+      pid: 'pr' + (this._projSeq = (this._projSeq || 0) + 1),
       alive: true,
-      life: isRocket ? 8 : 6,
+      life: (isRocket || isGuided) ? 8 : 6,
       prev: { x: origin.x, y: origin.y, z: origin.z },
       pos: { x: origin.x, y: origin.y, z: origin.z },
       vel: { x: d.x * speed, y: d.y * speed, z: d.z * speed },
@@ -2883,8 +2887,11 @@ const Game = {
       explosionColor: def.explosionColor || null,
       noSelfDamage: !!def.noSelfDamage, // e.g. the atomic RPG never hurts its owner
       nuke: !!def.nuke,                 // spawn the mushroom + tornado FX
+      guided: isGuided,                 // the player steers this rocket
       ownerIsLocal: true
     });
+    // while a guided missile is in the air the player steers it, like the drone
+    if (isGuided) this._guidedMissile = true;
     if (this.projectiles.length > 40) {
       const old = this.projectiles.shift();
       if (old.mesh.parent) old.mesh.parent.remove(old.mesh);
@@ -2898,6 +2905,27 @@ const Game = {
       const pr = this.projectiles[i];
       pr.life -= dt;
       pr.prev.x = pr.pos.x; pr.prev.y = pr.pos.y; pr.prev.z = pr.pos.z;
+
+      /* ---- guided missile: the shooter steers it with look + movement ---- */
+      if (pr.guided && pr.ownerIsLocal && this.player && this.player.alive) {
+        const m = this._frameLook || { dx: 0, dy: 0 };
+        const speed = Math.hypot(pr.vel.x, pr.vel.y, pr.vel.z) || (pr.baseSpeed || 40);
+        if (!pr.baseSpeed) pr.baseSpeed = speed;
+        let yaw = Math.atan2(-pr.vel.x, -pr.vel.z);
+        let pitch = Math.asin(U.clamp(pr.vel.y / speed, -1, 1));
+        yaw -= m.dx * 1.6;
+        pitch -= m.dy * 1.6;
+        const mv = Input.moveVector();
+        pitch += mv.f * dt * 2.2;                       // stick forward dives / back climbs
+        pitch = U.clamp(pitch, -1.05, 1.05);
+        const cp = Math.cos(pitch);
+        const spd = speed * (mv.run ? 1.6 : (Input.aimDown() ? .6 : 1));
+        pr.vel.x = -Math.sin(yaw) * cp * spd;
+        pr.vel.y = Math.sin(pitch) * spd;
+        pr.vel.z = -Math.cos(yaw) * cp * spd;
+        pr.grav = 0;                                     // no drop while guided
+      }
+
       pr.vel.y -= pr.grav * dt;
       const nx = pr.pos.x + pr.vel.x * dt, ny = pr.pos.y + pr.vel.y * dt, nz = pr.pos.z + pr.vel.z * dt;
 
@@ -2931,7 +2959,7 @@ const Game = {
           const hs = hitP.part === 'head';
           const limb = hitP.part === 'legs';
           const mul = hs ? pr.headMul : limb ? CFG.limbMultiplier : 1;
-          this.sendPvpHit(pr.dmg * mul, hitP.part, hs, hitP.rp);
+          this.sendPvpHit(pr.dmg * mul, hitP.part, hs, hitP.rp, pr.kind, pr.pid);
           impactPoint = hitP.point;
         } else {
           const killed = hitZ.zombie.takeDamage(pr.dmg, hitZ.part, dir);
@@ -2964,8 +2992,8 @@ const Game = {
 
       pr.pos.x = nx; pr.pos.y = ny; pr.pos.z = nz;
       pr.mesh.position.set(pr.pos.x, pr.pos.y, pr.pos.z);
-      if (pr.kind === 'rocket') {
-        // rockets point straight along their flight path
+      if (pr.kind === 'rocket' || pr.kind === 'guided') {
+        // rockets/missiles point straight along their flight path
         const vl = Math.hypot(pr.vel.x, pr.vel.y, pr.vel.z) || 1;
         pr.mesh.lookAt(pr.pos.x + pr.vel.x / vl, pr.pos.y + pr.vel.y / vl, pr.pos.z + pr.vel.z / vl);
       } else {
@@ -3013,7 +3041,8 @@ const Game = {
         const d = Math.hypot(rp.pos.x - center.x, (rp.pos.y + 1) - center.y, rp.pos.z - center.z);
         if (d <= R) {
           const k = 1 - d / R;
-          this.sendPvpHit(dmg * k, 'body', false, rp);
+          // a rocket/banana blast is a projectile effect, so a shield can reflect it
+          this.sendPvpHit(dmg * k, 'body', false, rp, pr && pr.kind ? pr.kind : undefined);
         }
       }
     }
@@ -3317,21 +3346,63 @@ const Game = {
     return best;
   },
 
+  /* ============================================================
+     ENERGY SHIELD
+     A held item that fills the primary slot instead of a gun. While it is the
+     active weapon the field is up: it blocks incoming projectiles (rockets,
+     bananas, guided missiles) and reflects them back at the shooter. Bullets
+     pass through, so it is not a full immunity. Integrity drains as it absorbs
+     and recharges on equip.
+     ============================================================ */
+  updateShield(dt) {
+    const p = this.player;
+    if (!p) return;
+    const isShield = p.slot === 2 && p.inv[2] && p.inv[2].id === 'shield';
+    p.shieldActive = !!isShield && p.alive;
+    if (p.shieldActive) {
+      if (!p.shieldHp || p.shieldHp <= 0) p.shieldHp = WEAPONS.shield.shieldHp;
+      // pulse the visible energy plate
+      const f = p.vmInner && p.vmInner.getObjectByName ? p.vmInner.getObjectByName('shieldField') : null;
+      if (f && f.material) f.material.opacity = .22 + .10 * (0.5 + 0.5 * Math.sin(U.now() / 140));
+    }
+  },
+
+  /* Called when a projectile is about to hit US online: if the shield is up it
+     is reflected; returns true when the hit was blocked. */
+  tryReflectProjectile(pr, fromPeerId) {
+    const p = this.player;
+    if (!p || !p.shieldActive) return false;
+    // only reflect incoming projectiles (never our own)
+    if (pr.ownerIsLocal) return false;
+    // drain integrity a little per block
+    p.shieldHp = Math.max(0, (p.shieldHp || WEAPONS.shield.shieldHp) - 40);
+    // tell the world it was blocked
+    UI.hitmark(false);
+    this._hitmarkT = U.now();
+    this.effects.laser({ x: pr.pos.x, y: pr.pos.y, z: pr.pos.z },
+      { x: p.pos.x, y: p.pos.y + 1.2, z: p.pos.z });
+    Audio3D_SFX.pickup();
+    UI.feed('<span class="z">🛡 Щит отразил снаряд</span>');
+    return true;
+  },
+
   /* Report a hit to the shooter's victim. In the star network only the victim
-     may apply it, so every hit carries the target's peer id. */
-  sendPvpHit(dmg, part, headshot, rp) {
+     may apply it, so every hit carries the target's peer id. `kind` marks a
+     projectile hit (rocket/banana/guided) so a shield can reflect it. */
+  sendPvpHit(dmg, part, headshot, rp, kind, pid) {
     UI.hitmark(false);
     this._hitmarkT = U.now();
     const target = rp || this.remote;
     Net.send({
       t: 'hit', dmg: Math.round(dmg), part, hs: headshot ? 1 : 0, at: U.now(),
       to: target ? target.peerId : undefined,
-      from: Net.selfId()
+      from: Net.selfId(),
+      pr: kind || undefined,
+      pid: pid !== undefined ? pid : undefined
     });
   },
 
-  playerHurt(dmg, source) {
-    const p = this.player;
+  playerHurt(dmg, source) {    const p = this.player;
     if (!p.alive || this.mode !== CS.MODE.OFFLINE) return;
     this.applyDamageToSelf(dmg, source ? { x: source.pos.x, y: source.pos.y, z: source.pos.z } : null);
   },
@@ -3727,7 +3798,33 @@ const Game = {
     if (!me) return;
     const src = this.remoteById(h.from);
     this._lastHitBy = h.from;                // remembered so we can name our killer
+    /* The energy shield reflects incoming PROJECTILES back at the shooter: we
+       apply no damage here and instead tell the shooter their own shot hit them. */
+    if (h.pr && !h.reflect && this.player.shieldActive) {
+      this.reflectProjectile(h);
+      return;
+    }
     this.applyDamageToSelf(h.dmg, src ? { x: src.pos.x, y: src.pos.y + 1.2, z: src.pos.z } : null);
+  },
+
+  /* Our shield caught an incoming projectile: bounce the damage to its sender. */
+  reflectProjectile(h) {
+    const p = this.player;
+    p.shieldHp = Math.max(0, (p.shieldHp || WEAPONS.shield.shieldHp) - 50);
+    UI.hitmark(false); this._hitmarkT = U.now();
+    Audio3D_SFX.pickup();
+    UI.feed('<span class="z">Щит отразил снаряд</span>');
+    UI.toast('Щит отразил снаряд!', '#4aa3ff');
+    // send the reflected damage straight back to the shooter
+    Net.send({
+      t: 'hit', dmg: Math.round(h.dmg), part: 'body', hs: 0, at: U.now(),
+      to: h.from, from: Net.selfId(), reflect: 1
+    });
+    if (p.shieldHp <= 0) {
+      p.shieldHp = 0;
+      UI.center('ЩИТ ПЕРЕГРУЖЕН', 'Отражение больше не работает', 2.0);
+      Audio3D_SFX.deny();
+    }
   },
 
   onRemoteDied(d) {
@@ -4049,6 +4146,9 @@ const Game = {
     // ---- input → player ----
     const mv = Input.moveVector();
     const m = Input.lookDelta();
+    // cache this frame's look delta so a guided missile can steer with the same
+    // mouse movement the player just used (lookDelta is consumed on read)
+    this._frameLook = { dx: m.dx, dy: m.dy };
     // Block on any UI overlay. The buy menu has DOM inputs, so mouse-delta
     // accumulation is cleared on unlock (see Input.onLockChange / toggleBuy)
     // to avoid a view snap when the crosshair returns.
@@ -4141,6 +4241,7 @@ const Game = {
     // ---- physics ----
     p.update(dt, this.world, pin);
     p.tickWeapon(dt, this);
+    this.updateShield(dt);
 
     // ---- round flow ----
     this.updateBuyPhase(dt);

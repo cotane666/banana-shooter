@@ -224,6 +224,17 @@ const WEAPONS = {
          auto: true, spread: .030, moveSpread: .020, recoil: .35, falloff: .85, range: 140, headMul: 2.3,
          sound: 'rifle', spinUp: .35 },
 
+  /* ---------------- guided missile launcher (player steers the rocket) ---------------- */
+  rocketgun: { name: 'РАКЕТНИЦА', cat: 'heavy', slot: 2, price: 14000, dmg: 220, rpm: 30, mag: 1, reserve: 8,
+         auto: false, spread: .004, moveSpread: .060, recoil: 6.0, falloff: .99, range: 240, headMul: 1.2,
+         sound: 'awp', projectile: 'guided', projSpeed: 40, projGravity: 0,
+         splash: 7.0, splashDmg: 200, explosionColor: [0xff7a3a, 0x1a0d05] },
+
+  /* ---------------- energy shield: blocks incoming projectiles, reflects them ---------------- */
+  shield: { name: 'ЭНЕРГОЩИТ', cat: 'heavy', slot: 2, price: 8000, dmg: 0, rpm: 60, mag: Infinity, reserve: 0,
+         auto: true, spread: 0, moveSpread: 0, recoil: 0, falloff: 1, range: 0, headMul: 1, sound: 'laser',
+         shield: true, shieldHp: 250 },
+
   /* ---------------- the legendary banana launcher ---------------- */
   /* Rapid-fire version: the banana is now a full-auto blaster. Damage per fruit
      is unchanged (55) — only the delivery is much faster. Recoil per shot was

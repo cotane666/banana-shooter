@@ -489,6 +489,46 @@ function buildWeaponModel(id) {
       break;
     }
 
+    /* ---------------- РАКЕТНИЦА: guided-missile launcher ---------------- */
+    case 'rocketgun': {
+      const BODY = 0x39424d, TRIM = 0x59657a, HOT = 0xff8a3a, GLOW = 0xffb060;
+      add(B(.110, .120, .52, BODY, 0, 0, -.22));                    // boxy launcher body
+      add(CYL(.060, .68, TRIM, 0, .040, -.44, 12));                 // launch tube
+      add(CYL(.074, .10, PAL.black, 0, .040, -.80, 12));            // muzzle ring
+      add(CYL(.066, .07, HOT, 0, .040, -.86, 12));                  // glowing muzzle
+      add(B(.060, .050, .16, PAL.black, 0, .040, -.72));            // tube clamp
+      // targeting pod on top (the guided sight)
+      add(B(.056, .060, .20, PAL.black, 0, .098, -.20));
+      add(CYL(.020, .08, GLOW, 0, .098, -.32, 8));                  // lens glow
+      // grips + shoulder rest
+      add(B(.048, .130, .062, PAL.poly, 0, -.082, -.10, .14));      // pistol grip
+      add(B(.044, .115, .058, PAL.poly, 0, -.078, -.40, -.05));     // foregrip
+      add(B(.058, .070, .16, BODY, 0, -.010, .16));                 // shoulder stock
+      add(B(.052, .058, .05, PAL.black, 0, -.010, .255));
+      break;
+    }
+
+    /* ---------------- ЭНЕРГОЩИТ: flat emitter plate on an arm ---------------- */
+    case 'shield': {
+      const ARM = 0x2b3340, TRIM = 0x4aa3ff, FIELD = 0x9fd8ff;
+      add(B(.050, .140, .050, ARM, 0, -.090, .02, .16));            // grip/arm
+      add(B(.036, .060, .12, ARM, 0, -.020, -.06));                 // forearm mount
+      // the emitter frame (an open ring that "holds" the energy field)
+      add(CYL(.34, .03, TRIM, 0, .12, -.30, 20));                   // emitter ring (edge-on)
+      add(B(.020, .020, .020, TRIM, 0, .12, -.30));                 // hub
+      // a translucent energy plate — the visible field the player carries
+      const field = new THREE.Mesh(new THREE.CircleGeometry(.42, 24),
+        new THREE.MeshBasicMaterial({ color: FIELD, transparent: true, opacity: .30, side: THREE.DoubleSide, depthWrite: false }));
+      field.rotation.y = Math.PI / 2;                               // face outward (±X)
+      field.position.set(0, .12, -.30);
+      field.renderOrder = 4;
+      field.name = 'shieldField';
+      g.add(field);
+      g.userData.field = field;
+      break;
+    }
+
+
     /* ---------------- БАНАН: the banana launcher ---------------- */
     case 'banana': {
       const YELLOW = 0xf2c93b, YELLOW2 = 0xd9a92a, BROWN = 0x7a5a24, GREEN = 0x6f8f3a;
@@ -568,6 +608,7 @@ const MUZZLE_Z = {
   negev: -0.86,
   minigun: -0.98, rpg: -1.20,
   laser: -0.98, atomicRpg: -1.06, yhs: -1.16,
+  rocketgun: -0.94, shield: -0.30,
   banana: -0.92
 };
 
@@ -591,6 +632,36 @@ function buildRocketProjectile() {
     const a = (i / 4) * Math.PI * 2;
     const fin = new THREE.Mesh(new THREE.BoxGeometry(.010, .075, .10), gunMat(0x2b2f34));
     fin.position.set(Math.cos(a) * .045, Math.sin(a) * .045, .16);
+    fin.rotation.z = a;
+    g.add(fin);
+  }
+  return g;
+}
+
+/* A guided missile: slimmer body, a bright seeker eye and a glowing exhaust */
+function buildGuidedMissile() {
+  const g = new THREE.Group();
+  const body = new THREE.Mesh(new THREE.CylinderGeometry(.036, .036, .40, 10), gunMat(0x3a4149));
+  body.rotation.x = Math.PI / 2;
+  g.add(body);
+  const nose = new THREE.Mesh(new THREE.ConeGeometry(.048, .16, 10), gunMat(0x20252b));
+  nose.rotation.x = -Math.PI / 2;
+  nose.position.z = -.28;
+  g.add(nose);
+  // glowing seeker eye in the nose
+  const eye = new THREE.Mesh(new THREE.SphereGeometry(.022, 8, 6), new THREE.MeshBasicMaterial({ color: 0xff8a3a }));
+  eye.position.z = -.34;
+  g.add(eye);
+  // exhaust plume
+  const flame = new THREE.Mesh(new THREE.ConeGeometry(.045, .22, 8),
+    new THREE.MeshBasicMaterial({ color: 0xffb060, transparent: true, opacity: .8, blending: THREE.AdditiveBlending, depthWrite: false }));
+  flame.rotation.x = Math.PI / 2;
+  flame.position.z = .30;
+  g.add(flame);
+  for (let i = 0; i < 4; i++) {
+    const a = (i / 4) * Math.PI * 2 + Math.PI / 4;
+    const fin = new THREE.Mesh(new THREE.BoxGeometry(.010, .070, .09), gunMat(0x20252b));
+    fin.position.set(Math.cos(a) * .042, Math.sin(a) * .042, .18);
     fin.rotation.z = a;
     g.add(fin);
   }
@@ -771,6 +842,9 @@ class Player {
     this.medkitUnlimited = false;  // the medkit-box upgrade removed the carry cap
     this.drone = 0;           // kamikaze drones ready to launch, with F
     this.droneOwned = false;  // has bought the drone: it recharges every online round
+    // energy shield: only active while it is the held weapon
+    this.shieldHp = 0;        // field integrity (recharged on equip)
+    this.shieldActive = false;
 
     // ---- inventory ----
     this.inv = { 1: null, 2: null, 3: { id: 'knife', mag: Infinity, reserve: 0 } };

@@ -22,7 +22,7 @@ const UI = {
       'matchEnd', 'meTitle', 'meWinner', 'meScore', 'meDetail', 'btnMatchAgain', 'btnMatchMenu',
       'mapChips', 'playerChips', 'hpChips', 'hordeChips', 'lobbyMaps', 'lobbyPlayers', 'lobbyHp', 'lobbyFree', 'lobbyRounds',
       'offCountChips', 'offHpChips', 'offFreeChips', 'custom', 'lobbyShop', 'lobbyShopItems',
-      'medkitTag', 'droneTag'];
+      'medkitTag', 'droneTag', 'shieldTag'];
     ids.forEach(i => this.el[i] = $(i));
     this.buildBuyCats();
     this.buildChips();
@@ -359,6 +359,13 @@ const UI = {
       const ready = !!p.drone;
       e.droneTag.classList.toggle('hidden', !ready);
       e.droneTag.classList.toggle('usable', ready);
+    }
+    // energy shield integrity, shown while the shield is the held weapon
+    if (e.shieldTag) {
+      const on = !!p.shieldActive;
+      e.shieldTag.classList.toggle('hidden', !on);
+      e.shieldTag.classList.toggle('usable', on);
+      if (on) e.shieldTag.textContent = 'ЩИТ ' + Math.max(0, Math.round(p.shieldHp || 0));
     }
 
     if (extra) {

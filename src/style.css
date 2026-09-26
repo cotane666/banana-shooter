@@ -183,6 +183,7 @@ kbd{background:#0c0f12;border:1px solid var(--line);border-bottom:2px solid #333
   background:rgba(0,0,0,.5);border:1px solid var(--line);color:#77838f}
 .geartag.usable{color:#12161a;background:var(--green);border-color:var(--green)}
 #droneTag.usable{background:var(--blue);border-color:var(--blue)}
+#shieldTag.usable{background:var(--blue);border-color:var(--blue)}
 
 .hud-tr{position:absolute;right:22px;top:18px;text-align:right}
 .money{font-size:26px;font-weight:900;color:var(--green);text-shadow:0 2px 10px #000;letter-spacing:1px}

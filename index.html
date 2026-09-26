@@ -3896,10 +3896,10 @@ class Player {
     this.reloadT = 0; this.fireCd = 0; this.zoom = 0; this.deployT = .3;
     this.crouching = false; this.height = CFG.playerHeight;
     this.triggerDown = false;
-    for (const s of [1, 2, 3]) {
-      const w = this.inv[s];
-      if (w && w.id !== 'knife') { w.mag = WEAPONS[w.id].mag; w.reserve = WEAPONS[w.id].reserve; }
-    }
+    // NOTE: ammo is deliberately NOT refilled here. Respawning happens at the
+    // start of every online round, and topping up every magazine made the
+    // "ПАТРОНЫ" buy option pointless. Ammo carries over between rounds; only a
+    // fresh match (or buying ammo) refills it.
   }
 
   /* total ammo for HUD */

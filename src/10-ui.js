@@ -384,16 +384,17 @@ const UI = {
           desc = 'Управляемый · перезаряд каждый раунд';
         } else if (g.medkitBox) {
           const n = player.medkits || 0;
-          owned = false;
-          cant = !free && player.money < g.price;
-          stats = [['ЛЕЧИТ', '+' + CFG.medkitHeal + ' HP'], ['В ЗАПАСЕ', n], ['БЕЗ ЛИМИТА', 'ДА']];
-          desc = 'Покупается сколько угодно раз';
+          owned = !!player.medkitUnlimited;
+          cant = (!free && player.money < g.price) || owned;
+          stats = player.medkitUnlimited ? [['ЛИМИТ', 'СНЯТ']] : [['ЛИМИТ', 'СНЯТЬ'], ['ЦЕНА', '$' + g.price]];
+          desc = player.medkitUnlimited ? 'Лимит аптечек уже снят' : 'Убирает лимит на аптечки навсегда';
         } else if (g.medkit) {
           const n = player.medkits || 0;
+          const unlimited = !!player.medkitUnlimited;
           owned = false;
-          const full = n >= CFG.medkitMax;
+          const full = !unlimited && n >= CFG.medkitMax;
           cant = (!free && player.money < g.price) || full;
-          stats = [['ЛЕЧИТ', '+' + CFG.medkitHeal + ' HP'], ['В ЗАПАСЕ', n + '/' + CFG.medkitMax], ['КЛАВИША', 'H']];
+          stats = [['ЛЕЧИТ', '+' + CFG.medkitHeal + ' HP'], ['В ЗАПАСЕ', unlimited ? n : (n + '/' + CFG.medkitMax)], ['КЛАВИША', 'H']];
           desc = full ? 'Лимит — купите ЯЩИК АПТЕЧЕК' : 'Применить в бою (или кнопка на телефоне)';
         } else if (g.ammo) {
           owned = false;

@@ -78,6 +78,37 @@ class Effects {
     this.tracers.push({ mesh: m, life: .055, max: .055 });
   }
 
+  /* ---------- laser beam: a bright green core with a soft outer glow ---------- */
+  laser(from, to) {
+    const dx = to.x - from.x, dy = to.y - from.y, dz = to.z - from.z;
+    const len = Math.sqrt(dx * dx + dy * dy + dz * dz);
+    if (len < .05) return;
+    const mid = { x: (from.x + to.x) / 2, y: (from.y + to.y) / 2, z: (from.z + to.z) / 2 };
+    // two nested beams (thin bright core + wide translucent halo)
+    const layers = [
+      { r: .012, opacity: 1, additive: true, life: .12 },
+      { r: .05, opacity: .55, additive: true, life: .18 }
+    ];
+    for (const L of layers) {
+      let m = (this.laserPool || (this.laserPool = [])).pop();
+      if (!m) m = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 1, 8), new THREE.MeshBasicMaterial({ color: 0x39ff6a }));
+      m.material = this._tintMat(0x39ff6a, L.additive);
+      m.material.opacity = L.opacity;
+      m.position.set(mid.x, mid.y, mid.z);
+      m.scale.set(L.r, len, L.r);
+      m.lookAt(to.x, to.y, to.z);
+      m.rotateX(Math.PI / 2);              // cylinder axis → along the beam
+      m.visible = true;
+      m.renderOrder = 3;
+      this.scene.add(m);
+      (this.lasers || (this.lasers = [])).push({ mesh: m, life: L.life, max: L.life });
+    }
+    // a green flash at the muzzle and at the impact point
+    this.particle(from.x, from.y, from.z, 0, 0, 0, .30, 'spark', .14);
+    const hit = this.particle(to.x, to.y, to.z, 0, 0, 0, .34, 'spark', .18);
+    if (hit) hit.material = this._tintMat(0x39ff6a, true);
+  }
+
   /* ---------- particles ---------- */
   particle(x, y, z, vx, vy, vz, size, type, life) {
     if (this.particles.length > this.maxParticles) return null;
@@ -223,6 +254,20 @@ class Effects {
         t.mesh.material.opacity = (t.life / t.max) * .9;
       }
     }
+    // laser beams
+    if (this.lasers) {
+      for (let i = this.lasers.length - 1; i >= 0; i--) {
+        const L = this.lasers[i];
+        L.life -= dt;
+        if (L.life <= 0) {
+          if (L.mesh.parent) L.mesh.parent.remove(L.mesh);
+          this.laserPool.push(L.mesh);
+          this.lasers.splice(i, 1);
+        } else {
+          L.mesh.material.opacity = (L.life / L.max);
+        }
+      }
+    }
     // particles
     for (let i = this.particles.length - 1; i >= 0; i--) {
       const p = this.particles[i];
@@ -276,6 +321,7 @@ class Effects {
   clear() {
     this.tracers.forEach(t => { if (t.mesh.parent) t.mesh.parent.remove(t.mesh); this.tracerPool.push(t.mesh); });
     this.tracers.length = 0;
+    if (this.lasers) { this.lasers.forEach(L => { if (L.mesh.parent) L.mesh.parent.remove(L.mesh); }); this.lasers.length = 0; }
     this.particles.forEach(p => { if (!p.light && p.mesh.parent) p.mesh.parent.remove(p.mesh); if (!p.light) this.particlePool.push(p.mesh); else if (p.mesh.parent) p.mesh.parent.remove(p.mesh); });
     this.particles.length = 0;
     this.decals.forEach(d => this.scene.remove(d));

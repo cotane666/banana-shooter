@@ -280,6 +280,27 @@ const Audio3D_SFX = {
     this.tone(120, .18, 'triangle', .12, x, y, z, 70);
     setTimeout(() => this.tone(1500, .08, 'sine', .09, x, y, z, 1900), 90);
   },
+  /* a laser zap: a bright descending sweep with a little resonance */
+  laser(x, y, z) {
+    if (!this.ctx || this.muted) return;
+    const sp = this._spatial(x, y, z, 3, 180);
+    if (sp.gain <= .002) return;
+    const t = this.ctx.currentTime;
+    const pan = this.ctx.createStereoPanner ? this.ctx.createStereoPanner() : null;
+    const out = this.ctx.createGain(); out.gain.value = sp.gain * .9;
+    if (pan) { pan.pan.value = sp.pan; out.connect(pan); pan.connect(this.master); } else out.connect(this.master);
+    const o = this.ctx.createOscillator();
+    o.type = 'sawtooth';
+    o.frequency.setValueAtTime(2600, t);
+    o.frequency.exponentialRampToValueAtTime(320, t + .16);
+    const g = this.ctx.createGain();
+    g.gain.setValueAtTime(.14, t);
+    g.gain.exponentialRampToValueAtTime(.001, t + .18);
+    const lp = this.ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 3200;
+    o.connect(lp); lp.connect(g); g.connect(out);
+    o.start(t); o.stop(t + .2);
+  },
+
   /* rising whine when the drone launches, then a low motor hum */
   droneLaunch() {
     this.tone(300, .18, 'sawtooth', .1, undefined, undefined, undefined, 900);

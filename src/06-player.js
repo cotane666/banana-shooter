@@ -749,6 +749,7 @@ class Player {
 
     // ---- gear: consumables ----
     this.medkits = 0;         // аптечки in reserve, used with H / touch button
+    this.medkitUnlimited = false;  // the medkit-box upgrade removed the carry cap
     this.drone = 0;           // kamikaze drones ready to launch, with F
     this.droneOwned = false;  // has bought the drone: it recharges every online round
 

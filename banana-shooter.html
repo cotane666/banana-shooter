@@ -1162,7 +1162,7 @@ const WEAPONS = {
   atomicRpg: { name: 'АТОМНОЕ РПГ СВОБОДЫ', cat: 'heavy', slot: 2, price: 20000, dmg: 1300, rpm: 34, mag: 1, reserve: 20,
          auto: false, spread: .006, moveSpread: .070, recoil: 7.3, falloff: .99, range: 260, headMul: 1.2,
          sound: 'awp', projectile: 'rocket', projSpeed: 52, projGravity: 3,
-         splash: 42.0, splashDmg: 1200, explosionColor: [0x39ff5a, 0x0a1a0a] },
+         splash: 42.0, splashDmg: 1200, explosionColor: [0x39ff5a, 0x0a1a0a], noSelfDamage: true },
 
   /* ---------------- Y.H.S: absurdly strong, absurdly fast MG ---------------- */
   yhs: { name: 'Y.H.S', cat: 'lmg', slot: 2, price: 20000, dmg: 180, rpm: 5750, mag: 2000, reserve: 0,
@@ -1186,7 +1186,7 @@ const GEAR = {
      rounds/offline waves). `ammo` is a refill, so it never shows as КУПЛЕНО. */
   ammo:         { name: 'ПАТРОНЫ',        price: 1500, ammo: true, desc: 'Полный запас ко всем стволам' },
   medkit:       { name: 'АПТЕЧКА',        price: 600,  medkit: true, desc: 'H или кнопка — +50 HP в бою' },
-  medkitBox:    { name: 'ЯЩИК АПТЕЧЕК',   price: 10000, medkitBox: true, desc: 'Без лимита · аптечек +1 каждая покупка' },
+  medkitBox:    { name: 'ЯЩИК АПТЕЧЕК',   price: 10000, medkitBox: true, desc: 'Навсегда снимает лимит на аптечки' },
   drone:        { name: 'ДРОН-КАМИКАДЗЕ', price: 10000, drone: true, desc: 'Управляемый · враг может сбить' }
 };
 
@@ -3167,6 +3167,27 @@ const Audio3D_SFX = {
     this.tone(120, .18, 'triangle', .12, x, y, z, 70);
     setTimeout(() => this.tone(1500, .08, 'sine', .09, x, y, z, 1900), 90);
   },
+  /* a laser zap: a bright descending sweep with a little resonance */
+  laser(x, y, z) {
+    if (!this.ctx || this.muted) return;
+    const sp = this._spatial(x, y, z, 3, 180);
+    if (sp.gain <= .002) return;
+    const t = this.ctx.currentTime;
+    const pan = this.ctx.createStereoPanner ? this.ctx.createStereoPanner() : null;
+    const out = this.ctx.createGain(); out.gain.value = sp.gain * .9;
+    if (pan) { pan.pan.value = sp.pan; out.connect(pan); pan.connect(this.master); } else out.connect(this.master);
+    const o = this.ctx.createOscillator();
+    o.type = 'sawtooth';
+    o.frequency.setValueAtTime(2600, t);
+    o.frequency.exponentialRampToValueAtTime(320, t + .16);
+    const g = this.ctx.createGain();
+    g.gain.setValueAtTime(.14, t);
+    g.gain.exponentialRampToValueAtTime(.001, t + .18);
+    const lp = this.ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 3200;
+    o.connect(lp); lp.connect(g); g.connect(out);
+    o.start(t); o.stop(t + .2);
+  },
+
   /* rising whine when the drone launches, then a low motor hum */
   droneLaunch() {
     this.tone(300, .18, 'sawtooth', .1, undefined, undefined, undefined, 900);
@@ -4015,6 +4036,7 @@ class Player {
 
     // ---- gear: consumables ----
     this.medkits = 0;         // аптечки in reserve, used with H / touch button
+    this.medkitUnlimited = false;  // the medkit-box upgrade removed the carry cap
     this.drone = 0;           // kamikaze drones ready to launch, with F
     this.droneOwned = false;  // has bought the drone: it recharges every online round
 
@@ -5754,6 +5776,37 @@ class Effects {
     this.tracers.push({ mesh: m, life: .055, max: .055 });
   }
 
+  /* ---------- laser beam: a bright green core with a soft outer glow ---------- */
+  laser(from, to) {
+    const dx = to.x - from.x, dy = to.y - from.y, dz = to.z - from.z;
+    const len = Math.sqrt(dx * dx + dy * dy + dz * dz);
+    if (len < .05) return;
+    const mid = { x: (from.x + to.x) / 2, y: (from.y + to.y) / 2, z: (from.z + to.z) / 2 };
+    // two nested beams (thin bright core + wide translucent halo)
+    const layers = [
+      { r: .012, opacity: 1, additive: true, life: .12 },
+      { r: .05, opacity: .55, additive: true, life: .18 }
+    ];
+    for (const L of layers) {
+      let m = (this.laserPool || (this.laserPool = [])).pop();
+      if (!m) m = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 1, 8), new THREE.MeshBasicMaterial({ color: 0x39ff6a }));
+      m.material = this._tintMat(0x39ff6a, L.additive);
+      m.material.opacity = L.opacity;
+      m.position.set(mid.x, mid.y, mid.z);
+      m.scale.set(L.r, len, L.r);
+      m.lookAt(to.x, to.y, to.z);
+      m.rotateX(Math.PI / 2);              // cylinder axis → along the beam
+      m.visible = true;
+      m.renderOrder = 3;
+      this.scene.add(m);
+      (this.lasers || (this.lasers = [])).push({ mesh: m, life: L.life, max: L.life });
+    }
+    // a green flash at the muzzle and at the impact point
+    this.particle(from.x, from.y, from.z, 0, 0, 0, .30, 'spark', .14);
+    const hit = this.particle(to.x, to.y, to.z, 0, 0, 0, .34, 'spark', .18);
+    if (hit) hit.material = this._tintMat(0x39ff6a, true);
+  }
+
   /* ---------- particles ---------- */
   particle(x, y, z, vx, vy, vz, size, type, life) {
     if (this.particles.length > this.maxParticles) return null;
@@ -5899,6 +5952,20 @@ class Effects {
         t.mesh.material.opacity = (t.life / t.max) * .9;
       }
     }
+    // laser beams
+    if (this.lasers) {
+      for (let i = this.lasers.length - 1; i >= 0; i--) {
+        const L = this.lasers[i];
+        L.life -= dt;
+        if (L.life <= 0) {
+          if (L.mesh.parent) L.mesh.parent.remove(L.mesh);
+          this.laserPool.push(L.mesh);
+          this.lasers.splice(i, 1);
+        } else {
+          L.mesh.material.opacity = (L.life / L.max);
+        }
+      }
+    }
     // particles
     for (let i = this.particles.length - 1; i >= 0; i--) {
       const p = this.particles[i];
@@ -5952,6 +6019,7 @@ class Effects {
   clear() {
     this.tracers.forEach(t => { if (t.mesh.parent) t.mesh.parent.remove(t.mesh); this.tracerPool.push(t.mesh); });
     this.tracers.length = 0;
+    if (this.lasers) { this.lasers.forEach(L => { if (L.mesh.parent) L.mesh.parent.remove(L.mesh); }); this.lasers.length = 0; }
     this.particles.forEach(p => { if (!p.light && p.mesh.parent) p.mesh.parent.remove(p.mesh); if (!p.light) this.particlePool.push(p.mesh); else if (p.mesh.parent) p.mesh.parent.remove(p.mesh); });
     this.particles.length = 0;
     this.decals.forEach(d => this.scene.remove(d));
@@ -6349,16 +6417,17 @@ const UI = {
           desc = 'Управляемый · перезаряд каждый раунд';
         } else if (g.medkitBox) {
           const n = player.medkits || 0;
-          owned = false;
-          cant = !free && player.money < g.price;
-          stats = [['ЛЕЧИТ', '+' + CFG.medkitHeal + ' HP'], ['В ЗАПАСЕ', n], ['БЕЗ ЛИМИТА', 'ДА']];
-          desc = 'Покупается сколько угодно раз';
+          owned = !!player.medkitUnlimited;
+          cant = (!free && player.money < g.price) || owned;
+          stats = player.medkitUnlimited ? [['ЛИМИТ', 'СНЯТ']] : [['ЛИМИТ', 'СНЯТЬ'], ['ЦЕНА', '$' + g.price]];
+          desc = player.medkitUnlimited ? 'Лимит аптечек уже снят' : 'Убирает лимит на аптечки навсегда';
         } else if (g.medkit) {
           const n = player.medkits || 0;
+          const unlimited = !!player.medkitUnlimited;
           owned = false;
-          const full = n >= CFG.medkitMax;
+          const full = !unlimited && n >= CFG.medkitMax;
           cant = (!free && player.money < g.price) || full;
-          stats = [['ЛЕЧИТ', '+' + CFG.medkitHeal + ' HP'], ['В ЗАПАСЕ', n + '/' + CFG.medkitMax], ['КЛАВИША', 'H']];
+          stats = [['ЛЕЧИТ', '+' + CFG.medkitHeal + ' HP'], ['В ЗАПАСЕ', unlimited ? n : (n + '/' + CFG.medkitMax)], ['КЛАВИША', 'H']];
           desc = full ? 'Лимит — купите ЯЩИК АПТЕЧЕК' : 'Применить в бою (или кнопка на телефоне)';
         } else if (g.ammo) {
           owned = false;
@@ -9035,23 +9104,26 @@ const Game = {
     if (this.roundState !== 'buy' && this.mode !== CS.MODE.RANGE) { Audio3D_SFX.deny(); return; }
     const free = this.isFreeShop();
 
-    /* Consumables: ammo refill, medkits, kamikaze drone. They are not "owned",
-       so they can be bought again (ammo and the medkit box any number of times). */
+    /* Consumables: ammo refill, kamikaze drone, and the medkit upgrade. */
     if (g.ammo || g.medkit || g.medkitBox || g.drone) {
       if (!free && this.player.money < g.price) { Audio3D_SFX.deny(); UI.toast('Не хватает денег'); return; }
-      // the CHEAP field kit is limited: refuse once the backpack is full
-      if (g.medkit && (this.player.medkits || 0) >= CFG.medkitMax) {
+      // the field kit is limited unless the medkit-box upgrade was bought
+      if (g.medkit && !this.player.medkitUnlimited && (this.player.medkits || 0) >= CFG.medkitMax) {
         Audio3D_SFX.deny();
         UI.toast('Аптечек максимум: ' + CFG.medkitMax + ' — купите ЯЩИК АПТЕЧЕК');
         return;
       }
+      // the box is a one-off upgrade: it simply removes the medkit cap
+      if (g.medkitBox && this.player.medkitUnlimited) { Audio3D_SFX.deny(); UI.toast('Уже куплено'); return; }
       if (!free) this.player.money -= g.price;
       if (g.ammo) this.refillAmmo();
-      else if (g.medkit) this.player.medkits = Math.min(CFG.medkitMax, (this.player.medkits || 0) + 1);
-      else if (g.medkitBox) this.player.medkits = (this.player.medkits || 0) + 1;   // no cap
+      else if (g.medkit) this.player.medkits = (this.player.medkits || 0) + 1;
+      else if (g.medkitBox) { this.player.medkitUnlimited = true; }
       else if (g.drone) { this.player.drone = (this.player.drone || 0) + 1; this.player.droneOwned = true; }
       Audio3D_SFX.buy();
-      const extra = (g.medkit || g.medkitBox) ? ' (' + this.player.medkits + ' в запасе)' : g.drone ? ' (' + this.player.drone + ' в запасе)' : '';
+      const extra = g.medkitBox ? ' — лимит аптечек снят'
+        : g.medkit ? ' (' + this.player.medkits + ' в запасе)'
+          : g.drone ? ' (' + this.player.drone + ' в запасе)' : '';
       UI.toast('Куплено: ' + g.name + extra, '#57d16a');
       UI.renderBuy(this.player, this.buyTimer);
       if (this.mode === CS.MODE.ONLINE) this.broadcastScore();
@@ -10028,6 +10100,7 @@ const Game = {
       splash: def.splash || 0,          // blast radius (m); 0 = no splash
       splashDmg: def.splashDmg || 0,
       explosionColor: def.explosionColor || null,
+      noSelfDamage: !!def.noSelfDamage, // e.g. the atomic RPG never hurts its owner
       ownerIsLocal: true
     });
     if (this.projectiles.length > 40) {
@@ -10162,12 +10235,15 @@ const Game = {
         }
       }
     }
-    // splash back on the shooter, so point-blank rockets hurt
-    const p = this.player;
-    const ds = Math.hypot(p.pos.x - center.x, (p.pos.y + 1) - center.y, p.pos.z - center.z);
-    if (ds <= R * .8) {
-      const k = 1 - ds / (R * .8);
-      this.applyDamageToSelf(dmg * k * .45, center);
+    // splash back on the shooter, so point-blank rockets hurt. The atomic RPG
+    // is exempt: it must never damage the player who fired it.
+    if (!pr.noSelfDamage) {
+      const p = this.player;
+      const ds = Math.hypot(p.pos.x - center.x, (p.pos.y + 1) - center.y, p.pos.z - center.z);
+      if (ds <= R * .8) {
+        const k = 1 - ds / (R * .8);
+        this.applyDamageToSelf(dmg * k * .45, center);
+      }
     }
   },
 
@@ -10262,8 +10338,9 @@ const Game = {
         this.effects.impact(wallHits[0].point, wallHits[0].normal, 'metal');
       }
       p.bulletsHit++;
-      this.effects.tracer(muzzleWorld, beamEnd, 1.6, true);
-      Audio3D_SFX.hit(muzzleWorld.x, muzzleWorld.y, muzzleWorld.z, false);
+      // a proper laser beam (bright green core + glow) from muzzle to impact
+      this.effects.laser(muzzleWorld, beamEnd);
+      Audio3D_SFX.laser(muzzleWorld.x, muzzleWorld.y, muzzleWorld.z);
       UI.hitmark(false);
       this._hitmarkT = U.now();
       return;

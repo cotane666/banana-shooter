@@ -6863,7 +6863,7 @@ const Net = {
       }
       /* relayed game messages: `from` names the sender so receivers can route */
       case 'state': case 'shot': case 'hit': case 'died': case 'respawn':
-      case 'score': case 'chat': case 'drone': case 'boom':
+      case 'score': case 'chat': case 'drone': case 'boom': case 'splat':
         if (this.role === CS.NETROLE.HOST) this.relay(m, rec);
         this.emit(m.t, m);
         break;
@@ -7614,6 +7614,7 @@ const Game = {
   _lastShotFx: 0,
   _fpsAcc: 0, _fpsFrames: 0,
   projectiles: [],
+  remoteProjectiles: [],       // cosmetic copies of other players' rockets/bananas
   _projT: 0,
   _enemyCheck: 0, _enemyFound: false,
   _aimFireHold: 0,
@@ -7895,6 +7896,7 @@ const Game = {
     Net.on('round', r => this.onRoundMsg(r));
     Net.on('drone', d => this.onRemoteDrone(d));
     Net.on('boom', b => this.onRemoteBoom(b));
+    Net.on('splat', s => this.onRemoteSplat(s));
     Net.on('score', s => this.onScoreMsg(s));
   },
 
@@ -9350,13 +9352,19 @@ const Game = {
       }
       if (this.effects) this.effects.muzzleSmoke(muzzleWorld.x, muzzleWorld.y, muzzleWorld.z, baseDir);
       if (this.mode === CS.MODE.ONLINE) {
-        Net.send({ t: 'shot', wid: w.id, ox: origin.x, oy: origin.y, oz: origin.z, dx: baseDir.x, dy: baseDir.y, dz: baseDir.z, sp: spread });
+        // `pr` tells the peer to fly a visible projectile instead of a tracer
+        Net.send({ t: 'shot', wid: w.id, pr: def.projectile, ox: origin.x, oy: origin.y, oz: origin.z,
+                   dx: baseDir.x, dy: baseDir.y, dz: baseDir.z, sp: spread });
       }
       return true;
     }
 
+    /* Collect the ACTUAL spread directions so the peer can draw tracers that
+       follow the real bullets instead of one straight beam along the aim line. */
+    const pelletDirs = [];
     for (let i = 0; i < pellets; i++) {
       const dir = this.spreadDirection(baseDir, spread, pellets > 1);
+      pelletDirs.push(dir);
       this.traceShot(origin, dir, def, isMelee, muzzleWorld);
     }
 
@@ -9370,9 +9378,13 @@ const Game = {
       p.flashT = .05;
       Audio3D_SFX.shot(def.sound || 'rifle');
       if (this.effects) this.effects.muzzleSmoke(muzzleWorld.x, muzzleWorld.y, muzzleWorld.z, baseDir);
-      // third-person shot broadcast
+      // third-person shot broadcast: send every pellet's real direction so
+      // shotguns (buckshot) and machine guns draw many true tracers, not one beam
       if (this.mode === CS.MODE.ONLINE) {
-        Net.send({ t: 'shot', wid: w.id, ox: origin.x, oy: origin.y, oz: origin.z, dx: baseDir.x, dy: baseDir.y, dz: baseDir.z, sp: spread });
+        Net.send({
+          t: 'shot', wid: w.id, dirs: pelletDirs, ox: origin.x, oy: origin.y, oz: origin.z,
+          dx: baseDir.x, dy: baseDir.y, dz: baseDir.z, sp: spread
+        });
       }
     } else {
       Audio3D_SFX.shot('knife');
@@ -9476,6 +9488,10 @@ const Game = {
           this.effects.bananaSplat(impactPoint.x, impactPoint.y, impactPoint.z);
           Audio3D_SFX.bananaSplat(impactPoint.x, impactPoint.y, impactPoint.z);
           UI.hitmark(false);
+          // peers need to see where the banana landed, not just hear it
+          if (this.mode === CS.MODE.ONLINE) {
+            Net.send({ t: 'splat', from: Net.selfId(), x: +impactPoint.x.toFixed(2), y: +impactPoint.y.toFixed(2), z: +impactPoint.z.toFixed(2) });
+          }
         }
         this.removeProjectile(i);
         continue;
@@ -9554,6 +9570,7 @@ const Game = {
   clearProjectiles() {
     for (const pr of this.projectiles) { if (pr.mesh.parent) pr.mesh.parent.remove(pr.mesh); }
     this.projectiles.length = 0;
+    this.clearRemoteProjectiles();
   },
 
   clearDrone() {
@@ -10086,16 +10103,100 @@ const Game = {
     if (!rp) return;
     const def = WEAPONS[s.wid] || WEAPONS.ak47;
     const from = { x: s.ox, y: s.oy, z: s.oz };
-    const dir = { x: s.dx, y: s.dy, z: s.dz };
+    const baseDir = { x: s.dx, y: s.dy, z: s.dz };
+    const muzzle = { x: rp.pos.x, y: rp.pos.y + 1.35, z: rp.pos.z };
+
+    /* A launcher round (RPG rocket / banana) is a physical object, so fly a
+       visible copy here too. The owner resolves the damage and broadcasts the
+       explosion/splat; this side only has to look right. */
+    if (s.pr) {
+      this.spawnRemoteProjectile(def, from, baseDir, s.sp, s.from);
+      Audio3D_SFX.shot(def.sound || 'rifle', muzzle.x, muzzle.y, muzzle.z);
+      if (s.pr === 'rocket') Audio3D_SFX.rocketShot(from.x, from.y, from.z);
+      else Audio3D_SFX.bananaShot(from.x, from.y, from.z);
+      return;
+    }
+
+    /* Bullets: draw a tracer for every pellet that was actually fired, so a
+       shotgun shows a spread of buckshot and a machine gun a stream of rounds —
+       not a single beam along the aim line. */
     const maxDist = def.range || 100;
-    // include the floor so remote shots also leave holes on the ground
-    const wallHits = this.world.raycastAll(from, dir, maxDist);
-    let endT = maxDist, p = null, n = null;
-    for (const h of wallHits) { endT = h.t; p = h.point; n = h.normal; break; }
-    const end = p || { x: from.x + dir.x * endT, y: from.y + dir.y * endT, z: from.z + dir.z * endT };
-    this.effects.tracer({ x: rp.pos.x, y: rp.pos.y + 1.35, z: rp.pos.z }, end, 1.4, true);
-    if (p) this.effects.impact(p, n, 'concrete');
-    Audio3D_SFX.shot(def.sound || 'rifle', rp.pos.x, rp.pos.y + 1.4, rp.pos.z);
+    const dirs = (s.dirs && s.dirs.length) ? s.dirs
+      : [this.spreadDirection(baseDir, s.sp || 0, false)];
+    for (const dir of dirs) {
+      const wallHits = this.world.raycastAll(from, dir, maxDist);
+      let endT = maxDist, p = null, n = null;
+      for (const h of wallHits) { endT = h.t; p = h.point; n = h.normal; break; }
+      const end = p || { x: from.x + dir.x * endT, y: from.y + dir.y * endT, z: from.z + dir.z * endT };
+      this.effects.tracer(muzzle, end, 1.4, true);
+      if (p) this.effects.impact(p, n, 'concrete');
+    }
+    Audio3D_SFX.shot(def.sound || 'rifle', muzzle.x, muzzle.y, muzzle.z);
+  },
+
+  /* A purely cosmetic projectile for a shot fired by someone else. It follows
+     the same physics as a local one but never deals damage: the shooter owns
+     that, and reports the result with a `boom`/`splat` message. */
+  spawnRemoteProjectile(def, origin, dir, spread, ownerId) {
+    const d = this.spreadDirection(dir, spread || 0, false);
+    const isRocket = def.projectile === 'rocket';
+    const mesh = isRocket ? buildRocketProjectile() : buildBananaProjectile();
+    mesh.position.set(origin.x, origin.y, origin.z);
+    if (!isRocket) mesh.rotation.x = Math.PI / 2;
+    this.scene.add(mesh);
+    const speed = def.projSpeed || 30;
+    this.remoteProjectiles.push({
+      mesh: mesh,
+      kind: def.projectile,
+      ownerId: ownerId,
+      life: isRocket ? 8 : 6,
+      pos: { x: origin.x, y: origin.y, z: origin.z },
+      vel: { x: d.x * speed, y: d.y * speed, z: d.z * speed },
+      grav: def.projGravity || 12
+    });
+    if (this.remoteProjectiles.length > 40) {
+      const old = this.remoteProjectiles.shift();
+      if (old.mesh.parent) old.mesh.parent.remove(old.mesh);
+    }
+  },
+
+  updateRemoteProjectiles(dt) {
+    if (!this.remoteProjectiles || !this.remoteProjectiles.length) return;
+    for (let i = this.remoteProjectiles.length - 1; i >= 0; i--) {
+      const pr = this.remoteProjectiles[i];
+      pr.life -= dt;
+      pr.vel.y -= pr.grav * dt;
+      const nx = pr.pos.x + pr.vel.x * dt, ny = pr.pos.y + pr.vel.y * dt, nz = pr.pos.z + pr.vel.z * dt;
+      const segLen = Math.hypot(nx - pr.pos.x, ny - pr.pos.y, nz - pr.pos.z);
+      const dir = segLen > 1e-6 ? { x: (nx - pr.pos.x) / segLen, y: (ny - pr.pos.y) / segLen, z: (nz - pr.pos.z) / segLen } : { x: 0, y: -1, z: 0 };
+      const wallHits = this.world.raycastAll(pr.pos, dir, segLen + 0.1);
+      if (wallHits.length && wallHits[0].t <= segLen + 0.1) {
+        // the shooter's own `boom`/`splat` message draws the real result
+        if (pr.kind !== 'rocket') {
+          this.effects.bananaSplat(wallHits[0].point.x, wallHits[0].point.y, wallHits[0].point.z);
+        }
+        this.removeRemoteProjectile(i);
+        continue;
+      }
+      pr.pos.x = nx; pr.pos.y = ny; pr.pos.z = nz;
+      pr.mesh.position.set(pr.pos.x, pr.pos.y, pr.pos.z);
+      const vl = Math.hypot(pr.vel.x, pr.vel.y, pr.vel.z) || 1;
+      pr.mesh.lookAt(pr.pos.x + pr.vel.x / vl, pr.pos.y + pr.vel.y / vl, pr.pos.z + pr.vel.z / vl);
+      if (pr.kind !== 'rocket') { pr.mesh.rotateZ(Math.PI / 2); pr.mesh.rotateY(Math.sin(performance.now() * .02) * .4); }
+      if (pr.life <= 0 || pr.pos.y < -3) this.removeRemoteProjectile(i);
+    }
+  },
+
+  removeRemoteProjectile(i) {
+    const pr = this.remoteProjectiles[i];
+    if (pr && pr.mesh.parent) pr.mesh.parent.remove(pr.mesh);
+    this.remoteProjectiles.splice(i, 1);
+  },
+
+  clearRemoteProjectiles() {
+    if (!this.remoteProjectiles) return;
+    for (const pr of this.remoteProjectiles) { if (pr.mesh.parent) pr.mesh.parent.remove(pr.mesh); }
+    this.remoteProjectiles.length = 0;
   },
 
   onRemoteHit(h) {
@@ -10145,6 +10246,24 @@ const Game = {
     const R = b.r || 6;
     if (this.effects) this.effects.explosion(b.x, b.y, b.z, R);
     Audio3D_SFX.explosionAt(b.x, b.y, b.z);
+    // drop the cosmetic copy so it does not fly on and detonate again
+    this.removeRemoteProjectileNear(b.x, b.y, b.z);
+  },
+
+  onRemoteSplat(s) {
+    if (this.mode !== CS.MODE.ONLINE) return;
+    if (this.effects) this.effects.bananaSplat(s.x, s.y, s.z);
+    Audio3D_SFX.bananaSplat(s.x, s.y, s.z);
+    this.removeRemoteProjectileNear(s.x, s.y, s.z);
+  },
+
+  /* remove any cosmetic remote projectile close to the given point */
+  removeRemoteProjectileNear(x, y, z) {
+    if (!this.remoteProjectiles) return;
+    for (let i = this.remoteProjectiles.length - 1; i >= 0; i--) {
+      const pr = this.remoteProjectiles[i];
+      if (Math.hypot(pr.pos.x - x, pr.pos.y - y, pr.pos.z - z) < 3) this.removeRemoteProjectile(i);
+    }
   },
 
   onRemoteDrone(d) {
@@ -10358,7 +10477,7 @@ const Game = {
       }
       if (this.effects) this.effects.update(dt);
       this.updateProjectiles(dt);
-      if (this.mode === CS.MODE.ONLINE) Net.tick(dt);
+      if (this.mode === CS.MODE.ONLINE) { this.updateRemoteProjectiles(dt); Net.tick(dt); }
       this.cameraUpdate(dt);
       this.renderFrame(dt);
       this.updateHUD(dt);
@@ -10474,6 +10593,7 @@ const Game = {
 
     // ---- flying bananas ----
     this.updateProjectiles(dt);
+    if (this.mode === CS.MODE.ONLINE) this.updateRemoteProjectiles(dt);
 
     // ---- networking ----
     if (this.mode === CS.MODE.ONLINE) {

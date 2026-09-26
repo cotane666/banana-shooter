@@ -556,7 +556,7 @@ const Net = {
       }
       /* relayed game messages: `from` names the sender so receivers can route */
       case 'state': case 'shot': case 'hit': case 'died': case 'respawn':
-      case 'score': case 'chat': case 'drone': case 'boom':
+      case 'score': case 'chat': case 'drone': case 'boom': case 'splat':
         if (this.role === CS.NETROLE.HOST) this.relay(m, rec);
         this.emit(m.t, m);
         break;

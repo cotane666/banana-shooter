@@ -644,6 +644,9 @@ class RemotePlayer {
     if (barrels && this.spinT > 0.01) {
       this._barrelPhase = (this._barrelPhase || 0) + (6 + this.spinT * this.spinT * 78) * this.spinT * dt;
       barrels.rotation.z = this._barrelPhase;
+      // the Y.H.S outer ring counter-rotates so it is clearly animated
+      const outer = this.weaponGroup.getObjectByName('barrels2');
+      if (outer) outer.rotation.z = -this._barrelPhase * .65;
     }
 
     // hit flash

@@ -459,6 +459,25 @@ function buildWeaponModel(id) {
       barrels.add(CYL(.066, .06, HOT, 0, 0, -1.10, 12));             // hot muzzle ring
       barrels.name = 'barrels';
       g.add(barrels);
+
+      /* Three extra heavy barrels on an OUTER ring. They ride in their own group
+         so they can counter-rotate for a livelier look (animated in both the
+         first-person view and on remote players). */
+      const outer = new THREE.Group();
+      const OUTER_R = .112;
+      for (let i = 0; i < 3; i++) {
+        const a = (i / 3) * Math.PI * 2 + Math.PI / 6;
+        const ox = Math.cos(a) * OUTER_R, oy = Math.sin(a) * OUTER_R;
+        outer.add(CYL(.026, .96, TRIM, ox, oy, -.80, 8));            // thick barrel
+        outer.add(CYL(.034, .09, PAL.black, ox, oy, -.36, 8));       // rear collar
+        outer.add(CYL(.030, .08, HOT, ox, oy, -1.22, 8));            // glowing muzzle tip
+      }
+      // a brace ring that visibly ties the three outer barrels together
+      outer.add(CYL(.120, .07, PAL.black, 0, 0, -.64, 16));
+      outer.add(CYL(.118, .06, TRIM, 0, 0, -1.02, 16));
+      outer.name = 'barrels2';
+      g.add(outer);
+
       add(B(.180, .220, .220, PAL.oliv, 0, -.205, -.02));           // giant ammo drum
       add(CYL(.105, .12, PAL.oliv, 0, -.205, .11, 16));
       add(B(.046, .140, .12, PAL.black, 0, -.085, -.18));           // feed chute
@@ -1129,11 +1148,15 @@ class Player {
   }
 
   /* Turn the minigun's barrel cluster to match the current spin phase. Safe to
-     call for any weapon: models without barrels simply do nothing. */
+     call for any weapon: models without barrels simply do nothing. The Y.H.S
+     has a second, outer barrel ring that counter-rotates for extra motion. */
   applyBarrelSpin() {
     if (!this.vmInner) return;
+    const ph = this.spinPhase || 0;
     const barrels = this.vmInner.getObjectByName('barrels');
-    if (barrels) barrels.rotation.z = this.spinPhase || 0;
+    if (barrels) barrels.rotation.z = ph;
+    const outer = this.vmInner.getObjectByName('barrels2');
+    if (outer) outer.rotation.z = -ph * .65;
   }
 
   /* ---------- per-frame weapon logic ---------- */

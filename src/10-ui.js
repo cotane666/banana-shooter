@@ -382,21 +382,32 @@ const UI = {
           cant = !free && player.money < g.price;
           stats = [['РАДИУС', CFG.droneBlast + 'м'], ['УРОН', CFG.droneDmg], ['СБИТЬ', '1 попадание']];
           desc = 'Управляемый · перезаряд каждый раунд';
+        } else if (g.medkitBox) {
+          const n = player.medkits || 0;
+          owned = false;
+          cant = !free && player.money < g.price;
+          stats = [['ЛЕЧИТ', '+' + CFG.medkitHeal + ' HP'], ['В ЗАПАСЕ', n], ['БЕЗ ЛИМИТА', 'ДА']];
+          desc = 'Покупается сколько угодно раз';
         } else if (g.medkit) {
           const n = player.medkits || 0;
           owned = false;
           const full = n >= CFG.medkitMax;
           cant = (!free && player.money < g.price) || full;
           stats = [['ЛЕЧИТ', '+' + CFG.medkitHeal + ' HP'], ['В ЗАПАСЕ', n + '/' + CFG.medkitMax], ['КЛАВИША', 'H']];
-          desc = full ? 'Максимум аптечек' : 'Применить в бою (или кнопка на телефоне)';
+          desc = full ? 'Лимит — купите ЯЩИК АПТЕЧЕК' : 'Применить в бою (или кнопка на телефоне)';
         } else if (g.ammo) {
           owned = false;
           cant = !free && player.money < g.price;
           stats = [['ЭФФЕКТ', '100%'], ['ВСЕ СТВОЛЫ', 'ДА']];
           desc = g.desc;
+        } else if (g.heavy) {
+          owned = !!player.heavyArmor && player.armor >= g.ap;
+          cant = !free && player.money < g.price;
+          stats = [['AP', g.ap], ['ПОГЛОЩ.', '75%'], ['ШЛЕМ', 'ДА']];
+          desc = g.desc;
         } else {
           owned = (gid === 'kevlar' && player.armor >= 100 && !player.helmet) || (gid === 'kevlarHelmet' && player.armor >= 100 && player.helmet);
-          cant = player.money < g.price;
+          cant = !free && player.money < g.price;
           stats = [['AP', '100'], ['ШЛЕМ', g.helmet ? 'ДА' : 'НЕТ']];
           desc = g.helmet ? 'Броня + защита головы' : 'Защита корпуса';
         }
@@ -412,6 +423,8 @@ const UI = {
         const stats = [['УРОН', w.dmg], ['ТЕМП', rpm]];
         if (w.mag !== Infinity) stats.push(['МАГ', w.mag]);
         if (w.pellets) stats.push(['ДРОБЬ', w.pellets]);
+        if (w.pierce) stats.push(['ПРОБИВ', 'НАСКВОЗЬ']);
+        if (w.splash) stats.push(['РАДИУС', w.splash + 'м']);
         mkCard(id, w.name, w.cat.toUpperCase(), w.price, stats, owned, !free && player.money < w.price,
           () => Bus.emit('buy', id));
       });
@@ -481,6 +494,24 @@ const UI = {
         if (!rp.alive) return;
         ctx.fillStyle = '#ff4a4a';
         ctx.beginPath(); ctx.arc(tx(rp.pos.x), tz(rp.pos.z), 4, 0, 7); ctx.fill();
+      });
+    }
+    // field medkits (offline): a green health marker
+    if (game.medboxes && game.medboxes.length) {
+      const pulse3 = .5 + .5 * Math.sin(Date.now() / 220);
+      game.medboxes.forEach(m => {
+        const px = tx(m.x), pz = tz(m.z);
+        ctx.save();
+        ctx.strokeStyle = 'rgba(87,255,122,.95)';
+        ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.arc(px, pz, 5.5 + pulse3 * 2.5, 0, 7); ctx.stroke();
+        ctx.fillStyle = '#57ff7a';
+        ctx.beginPath(); ctx.arc(px, pz, 2.6, 0, 7); ctx.fill();
+        ctx.fillStyle = '#12161a';
+        ctx.font = 'bold 7px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText('+', px, pz + 2.6);
+        ctx.restore();
       });
     }
     // ammo crates (offline): a golden marker with a small "!" so it stands out

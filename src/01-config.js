@@ -46,7 +46,12 @@ const CFG = {
 
   /* ---- extras: ammo/medkit crate & kamikaze drone ---- */
   medkitHeal: 50,       // HP restored per medkit, used instantly in battle
-  medkitMax: 5,         // how many medkits can be carried at once
+  medkitMax: 5,         // how many medkits can be carried at once (normal kit)
+  medkitHealFrac: 0.5,  // a field medkit restores this share of max health
+  medkitFieldInterval: 20,  // seconds between field medkit drops (offline)
+  medkitFieldMax: 2,        // at most this many field medkits on the map
+  medkitFieldLife: 90,      // a field medkit vanishes after this long
+  moneyCap: 65000,      // most money a player can hold (prices go up to 20000)
   droneSpeed: 15,       // m/s cruise for the guided drone
   droneBoost: 1.7,      // speed multiplier while boosting (Shift)
   droneLife: 26,        // seconds before the drone runs out of fuel
@@ -173,6 +178,22 @@ const WEAPONS = {
          sound: 'awp', projectile: 'rocket', projSpeed: 48, projGravity: 3,
          splash: 6.0, splashDmg: 120 },
 
+  /* ---------------- futuristic: laser rifle (pierces everything) ---------------- */
+  laser: { name: 'ЛАЗЕРНАЯ ВИНТОВКА', cat: 'rifle', slot: 2, price: 16500, dmg: 150, rpm: 240, mag: 30, reserve: 120,
+           auto: true, spread: .004, moveSpread: .030, recoil: 1.4, falloff: .98, range: 220, headMul: 1.8,
+           sound: 'laser', pierce: true },
+
+  /* ---------------- heavy: atomic "freedom" RPG ---------------- */
+  atomicRpg: { name: 'АТОМНОЕ РПГ СВОБОДЫ', cat: 'heavy', slot: 2, price: 20000, dmg: 1300, rpm: 34, mag: 1, reserve: 20,
+         auto: false, spread: .006, moveSpread: .070, recoil: 7.3, falloff: .99, range: 260, headMul: 1.2,
+         sound: 'awp', projectile: 'rocket', projSpeed: 52, projGravity: 3,
+         splash: 42.0, splashDmg: 1200, explosionColor: [0x39ff5a, 0x0a1a0a] },
+
+  /* ---------------- Y.H.S: absurdly strong, absurdly fast MG ---------------- */
+  yhs: { name: 'Y.H.S', cat: 'lmg', slot: 2, price: 20000, dmg: 180, rpm: 5750, mag: 2000, reserve: 0,
+         auto: true, spread: .030, moveSpread: .020, recoil: .35, falloff: .85, range: 140, headMul: 2.3,
+         sound: 'rifle', spinUp: .35 },
+
   /* ---------------- the legendary banana launcher ---------------- */
   /* Rapid-fire version: the banana is now a full-auto blaster. Damage per fruit
      is unchanged (55) — only the delivery is much faster. Recoil per shot was
@@ -185,10 +206,12 @@ const WEAPONS = {
 const GEAR = {
   kevlar:       { name: 'БРОНЯ (KEVLAR)', price: 650,  ap: 100, helmet: false },
   kevlarHelmet: { name: 'БРОНЯ + ШЛЕМ',   price: 1000, ap: 100, helmet: true },
+  heavyArmor:   { name: 'УКРЕПЛЁННАЯ БРОНЯ', price: 2000, ap: 200, helmet: true, heavy: true, desc: 'AP 200 · поглощает больше урона' },
   /* Consumables: bought once, kept for the rest of the match (and across
      rounds/offline waves). `ammo` is a refill, so it never shows as КУПЛЕНО. */
   ammo:         { name: 'ПАТРОНЫ',        price: 1500, ammo: true, desc: 'Полный запас ко всем стволам' },
   medkit:       { name: 'АПТЕЧКА',        price: 600,  medkit: true, desc: 'H или кнопка — +50 HP в бою' },
+  medkitBox:    { name: 'ЯЩИК АПТЕЧЕК',   price: 10000, medkitBox: true, desc: 'Без лимита · аптечек +1 каждая покупка' },
   drone:        { name: 'ДРОН-КАМИКАДЗЕ', price: 10000, drone: true, desc: 'Управляемый · враг может сбить' }
 };
 

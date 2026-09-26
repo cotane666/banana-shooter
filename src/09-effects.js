@@ -80,7 +80,7 @@ class Effects {
 
   /* ---------- particles ---------- */
   particle(x, y, z, vx, vy, vz, size, type, life) {
-    if (this.particles.length > this.maxParticles) return;
+    if (this.particles.length > this.maxParticles) return null;
     let m = this.particlePool.pop();
     const mat = type === 'blood' ? this.bloodMat : type === 'smoke' ? this.smokeMat
       : type === 'banana' ? this.bananaMat : this.sparkMat;
@@ -91,6 +91,7 @@ class Effects {
     m.visible = true;
     if (m.parent !== this.scene) this.scene.add(m);
     this.particles.push({ mesh: m, vx, vy, vz, life: life, max: life, grav: type === 'smoke' ? -1.5 : 16, type });
+    return m;
   }
 
   /* comedic banana explosion: yellow chunks + a green peel fleck */
@@ -164,17 +165,36 @@ class Effects {
     m.userData.ttl = kind === 'blood' ? 22 : 16;
   }
 
-  /* ---------- explosion / grenade-ish ---------- */
-  explosion(x, y, z, radius) {
+  /* cached tinted materials for coloured explosions (avoid per-blast leaks) */
+  _tintMat(color, additive) {
+    this._tintCache = this._tintCache || {};
+    const key = color + (additive ? 'a' : 's');
+    if (!this._tintCache[key]) {
+      this._tintCache[key] = new THREE.MeshBasicMaterial({
+        color: color, transparent: true, depthWrite: false,
+        opacity: additive ? 1 : .55,
+        blending: additive ? THREE.AdditiveBlending : THREE.NormalBlending
+      });
+    }
+    return this._tintCache[key];
+  }
+
+  /* ---------- explosion / grenade-ish ----------
+     `tint` optionally recolours the blast (e.g. the atomic RPG's green/black). */
+  explosion(x, y, z, radius, tint) {
+    const sparkMat = tint ? this._tintMat(tint[0], true) : null;
+    const smokeMat = tint ? this._tintMat(tint[1], false) : null;
     for (let i = 0; i < 30; i++) {
       const a = U.rand(0, 6.28), e = U.rand(-.3, 1);
-      this.particle(x, y, z, Math.cos(a) * U.rand(2, 12), e * U.rand(3, 12), Math.sin(a) * U.rand(2, 12),
+      const p = this.particle(x, y, z, Math.cos(a) * U.rand(2, 12), e * U.rand(3, 12), Math.sin(a) * U.rand(2, 12),
         U.rand(.15, .5), 'spark', U.rand(.3, .8));
+      if (sparkMat && p) p.material = sparkMat;
     }
     for (let i = 0; i < 16; i++) {
-      this.particle(x, y, z, U.rand(-3, 3), U.rand(1, 5), U.rand(-3, 3), U.rand(.3, .8), 'smoke', U.rand(.8, 1.8));
+      const p = this.particle(x, y, z, U.rand(-3, 3), U.rand(1, 5), U.rand(-3, 3), U.rand(.3, .8), 'smoke', U.rand(.8, 1.8));
+      if (smokeMat && p) p.material = smokeMat;
     }
-    const light = new THREE.PointLight(0xffaa44, 60, radius * 3, 2);
+    const light = new THREE.PointLight(tint ? tint[0] : 0xffaa44, 60, radius * 3, 2);
     light.position.set(x, y, z);
     this.scene.add(light);
     this.particles.push({ mesh: light, light: true, life: .22, max: .22, vx: 0, vy: 0, vz: 0, grav: 0 });

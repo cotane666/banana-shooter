@@ -400,6 +400,76 @@ function buildWeaponModel(id) {
       break;
     }
 
+    /* ---------------- ЛАЗЕРНАЯ ВИНТОВКА: sleek energy rifle ---------------- */
+    case 'laser': {
+      const GLOW = 0x39ff5a, GLOW2 = 0x1b9b3a, BODY = 0x2b3340, TRIM = 0x50596b;
+      add(B(.070, .090, .50, BODY, 0, 0, -.22));                    // long receiver
+      add(B(.052, .058, .30, TRIM, 0, .005, -.50));                 // upper rail shroud
+      add(CYL(.024, .42, PAL.steel, 0, .020, -.72, 10));            // emitter barrel
+      add(CYL(.030, .05, GLOW, 0, .020, -.93, 10));                 // glowing emitter
+      add(B(.040, .048, .10, PAL.black, 0, .020, -.90));            // muzzle shroud
+      // energy core in the receiver
+      add(B(.034, .030, .16, GLOW, 0, .050, -.30));
+      add(B(.030, .026, .10, GLOW2, 0, .050, -.16));
+      // magazine cell
+      add(B(.044, .120, .070, PAL.poly, 0, -.098, -.26, .10));
+      add(B(.040, .030, .062, GLOW2, 0, -.152, -.27, .10));
+      // grip + stock
+      add(B(.046, .115, .058, PAL.poly, 0, -.086, -.03, .18));
+      add(B(.052, .078, .20, BODY, 0, -.006, .12));
+      add(B(.046, .070, .05, PAL.black, 0, -.006, .225));
+      // scope
+      add(B(.028, .030, .12, PAL.black, 0, .062, -.20));
+      add(CYL(.016, .10, TRIM, 0, .062, -.20, 8));
+      add(B(.020, .012, .012, GLOW, 0, .092, -.52));
+      break;
+    }
+
+    /* ---------------- АТОМНОЕ РПГ СВОБОДЫ: bulky green launcher ---------------- */
+    case 'atomicRpg': {
+      const GREEN = 0x2f7d3a, GREEN2 = 0x1c4f24, DARK = 0x14181c, GLOW = 0x39ff5a;
+      add(CYL(.058, .86, GREEN, 0, .030, -.30, 12));                // fat launch tube
+      add(CYL(.070, .16, GREEN2, 0, .030, -.72, 12));               // muzzle bell
+      add(CYL(.066, .12, GREEN2, 0, .030, .14, 12));                // rear bell
+      add(CYL(.062, .06, GLOW, 0, .030, -.80, 12));                 // glowing muzzle ring
+      // warhead poking out front
+      add(CYL(.040, .16, PAL.black, 0, .030, -.90, 10));
+      add(B(.050, .050, .05, GLOW, 0, .030, -.99));
+      // grips and sight
+      add(B(.046, .120, .060, DARK, 0, -.078, -.14, .12));          // pistol grip
+      add(B(.040, .110, .055, DARK, 0, -.075, -.44, -.05));         // foregrip
+      add(B(.028, .070, .12, DARK, 0, .098, -.20));                 // optic
+      add(B(.026, .026, .05, GLOW, 0, .135, -.24));
+      add(B(.030, .030, .10, GREEN2, 0, .105, -.50));               // front sight block
+      break;
+    }
+
+    /* ---------------- Y.H.S: huge multi-barrel super gun ---------------- */
+    case 'yhs': {
+      const BODY = 0x3a2f4a, TRIM = 0x5a4a72, HOT = 0xff9d21;
+      add(B(.110, .130, .40, BODY, 0, 0, -.20));                    // massive housing
+      add(B(.120, .140, .16, PAL.black, 0, 0, .01));                 // gearbox
+      const barrels = new THREE.Group();
+      for (let i = 0; i < 8; i++) {
+        const a = (i / 8) * Math.PI * 2;
+        barrels.add(CYL(.016, .74, PAL.steel, Math.cos(a) * .062, Math.sin(a) * .062, -.72, 6));
+      }
+      barrels.add(CYL(.072, .08, PAL.black, 0, 0, -.34, 12));
+      barrels.add(CYL(.070, .07, TRIM, 0, 0, -.62, 12));
+      barrels.add(CYL(.066, .06, HOT, 0, 0, -1.10, 12));             // hot muzzle ring
+      barrels.name = 'barrels';
+      g.add(barrels);
+      add(B(.180, .220, .220, PAL.oliv, 0, -.205, -.02));           // giant ammo drum
+      add(CYL(.105, .12, PAL.oliv, 0, -.205, .11, 16));
+      add(B(.046, .140, .12, PAL.black, 0, -.085, -.18));           // feed chute
+      add(B(.032, .040, .34, PAL.black, 0, .092, -.18));            // top rail
+      add(B(.040, .052, .06, PAL.steel, 0, .098, -.02));
+      add(CYL(.022, .05, TRIM, 0, .098, -.44, 8));
+      add(B(.050, .120, .28, PAL.poly, 0, -.025, .18));             // rear grip
+      add(B(.030, .080, .10, PAL.black, 0, -.085, -.56));           // foregrip
+      break;
+    }
+
     /* ---------------- БАНАН: the banana launcher ---------------- */
     case 'banana': {
       const YELLOW = 0xf2c93b, YELLOW2 = 0xd9a92a, BROWN = 0x7a5a24, GREEN = 0x6f8f3a;
@@ -478,6 +548,7 @@ const MUZZLE_Z = {
   awp: -1.04, scout: -0.82,
   negev: -0.86,
   minigun: -0.98, rpg: -1.20,
+  laser: -0.98, atomicRpg: -1.06, yhs: -1.16,
   banana: -0.92
 };
 
@@ -608,6 +679,30 @@ function buildAmmoCrate() {
   return g;
 }
 
+/* A field medkit: a white/red medical case with a glowing green cross, sitting
+   on the ground. Used for the "50% health" pickups. */
+function buildMedBox() {
+  const g = new THREE.Group();
+  const white = new THREE.MeshLambertMaterial({ color: 0xe8ecef, emissive: 0x141618 });
+  const red = new THREE.MeshLambertMaterial({ color: 0xc4342a, emissive: 0x1a0806 });
+  const cross = new THREE.MeshBasicMaterial({ color: 0x57ff7a });
+
+  const box = (w, h, d, mat, x, y, z) => {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
+    m.position.set(x, y, z);
+    m.castShadow = true; m.receiveShadow = true;
+    return m;
+  };
+  g.add(box(.68, .44, .48, white, 0, .22, 0));          // case
+  g.add(box(.72, .07, .52, red, 0, .45, 0));             // red lid band
+  g.add(box(.22, .10, .10, red, 0, .50, 0));             // handle
+  // glowing cross on the front face
+  g.add(box(.08, .26, .03, cross, 0, .22, .25));
+  g.add(box(.26, .08, .03, cross, 0, .22, .25));
+  g.userData.glow = g.children[g.children.length - 1];
+  return g;
+}
+
 /* ============================================================
    PLAYER
    ============================================================ */
@@ -640,6 +735,7 @@ class Player {
     this.health = CFG.maxHP;
     this.armor = 0;
     this.helmet = false;
+    this.heavyArmor = false;   // reinforced armour soaks a larger share of damage
     this.alive = true;
     this.money = 800;
     this.kills = 0;

@@ -695,6 +695,8 @@ const Game = {
   hordeMode: false,            // ОРДА ×10 offline mode
   crates: [],                  // offline ammo crates: {mesh, x, y, z, life, t}
   _crateT: 0,                  // countdown to the next crate
+  medboxes: [],                // offline field medkits (50% HP): {mesh,x,y,z,life,t}
+  _medboxT: 0,                 // countdown to the next field medkit
 
   /* ============================================================
      INIT
@@ -1114,6 +1116,8 @@ const Game = {
     // reset offline ammo crates for the new run
     this.clearCrates();
     this._crateT = CFG.crateInterval;
+    this.clearMedboxes();
+    this._medboxT = CFG.medkitFieldInterval;
     this.remotePlayers = []; this.remote = null;
     this.player = new Player({ id: 'p1', name: 'Вы', isLocal: true, team: 'ct' });
     this.player.money = 800;
@@ -1581,6 +1585,7 @@ const Game = {
       this.clearTargets();
       this.clearDrone();
       this.clearCrates();
+      this.clearMedboxes();
       if (this.horde) { this.horde.clear(); this.horde = null; }
       for (const rp of this.remotePlayers || []) {
         this.clearRemoteDrone(rp);
@@ -1795,32 +1800,50 @@ const Game = {
     if (this.roundState !== 'buy' && this.mode !== CS.MODE.RANGE) { Audio3D_SFX.deny(); return; }
     const free = this.isFreeShop();
 
-    /* Consumables: ammo refill, medkit, kamikaze drone. They are not "owned",
-       so they can be bought again (ammo any number of times). */
-    if (g.ammo || g.medkit || g.drone) {
+    /* Consumables: ammo refill, medkits, kamikaze drone. They are not "owned",
+       so they can be bought again (ammo and the medkit box any number of times). */
+    if (g.ammo || g.medkit || g.medkitBox || g.drone) {
       if (!free && this.player.money < g.price) { Audio3D_SFX.deny(); UI.toast('Не хватает денег'); return; }
-      // the field kit is limited: refuse once the backpack is full
+      // the CHEAP field kit is limited: refuse once the backpack is full
       if (g.medkit && (this.player.medkits || 0) >= CFG.medkitMax) {
         Audio3D_SFX.deny();
-        UI.toast('Аптечек максимум: ' + CFG.medkitMax);
+        UI.toast('Аптечек максимум: ' + CFG.medkitMax + ' — купите ЯЩИК АПТЕЧЕК');
         return;
       }
       if (!free) this.player.money -= g.price;
       if (g.ammo) this.refillAmmo();
       else if (g.medkit) this.player.medkits = Math.min(CFG.medkitMax, (this.player.medkits || 0) + 1);
+      else if (g.medkitBox) this.player.medkits = (this.player.medkits || 0) + 1;   // no cap
       else if (g.drone) { this.player.drone = (this.player.drone || 0) + 1; this.player.droneOwned = true; }
       Audio3D_SFX.buy();
-      const extra = g.medkit ? ' (' + this.player.medkits + ' в запасе)' : g.drone ? ' (' + this.player.drone + ' в запасе)' : '';
+      const extra = (g.medkit || g.medkitBox) ? ' (' + this.player.medkits + ' в запасе)' : g.drone ? ' (' + this.player.drone + ' в запасе)' : '';
       UI.toast('Куплено: ' + g.name + extra, '#57d16a');
       UI.renderBuy(this.player, this.buyTimer);
       if (this.mode === CS.MODE.ONLINE) this.broadcastScore();
       return;
     }
 
-    if (this.player.armor >= 100 && (!g.helmet || this.player.helmet)) { Audio3D_SFX.deny(); UI.toast('Уже куплено'); return; }
+    /* Armour: the heavy suit has more AP and soaks more, so it can be bought
+       even when normal armour was already owned. */
+    if (g.heavy) {
+      if (this.player.heavyArmor && this.player.armor >= g.ap) { Audio3D_SFX.deny(); UI.toast('Уже куплено'); return; }
+      if (!free && this.player.money < g.price) { Audio3D_SFX.deny(); UI.toast('Не хватает денег'); return; }
+      if (!free) this.player.money -= g.price;
+      this.player.armor = g.ap;
+      this.player.helmet = true;
+      this.player.heavyArmor = true;
+      Audio3D_SFX.buy();
+      UI.toast('Куплено: ' + g.name + ' · AP ' + g.ap, '#57d16a');
+      UI.renderBuy(this.player, this.buyTimer);
+      if (this.mode === CS.MODE.ONLINE) this.broadcastScore();
+      return;
+    }
+
+    if (this.player.armor >= 100 && (!g.helmet || this.player.helmet) && !this.player.heavyArmor) { Audio3D_SFX.deny(); UI.toast('Уже куплено'); return; }
     if (!free && this.player.money < g.price) { Audio3D_SFX.deny(); UI.toast('Не хватает денег'); return; }
     if (!free) this.player.money -= g.price;
     this.player.armor = g.ap;
+    this.player.heavyArmor = false;      // the basic suits do not grant the bonus
     if (g.helmet) this.player.helmet = true;
     Audio3D_SFX.buy();
     UI.toast('Куплено: ' + g.name, '#57d16a');
@@ -2197,7 +2220,7 @@ const Game = {
     this.player.health = this.matchHP;
     this.player.armor = 0; this.player.helmet = false;
     this.player.alive = true;
-    this.player.money = Math.min(16000, this.player.money + 1400);
+    this.player.money = Math.min(CFG.moneyCap, this.player.money + 1400);
     // a drone still in the air belongs to the previous round
     if (this.drone) this.detonateDrone(false);
     for (const rp of this.remotePlayers) this.clearRemoteDrone(rp);
@@ -2318,15 +2341,29 @@ const Game = {
         this.removeCrate(i);
       }
     }
+
+    /* ---- field medkits: the same drop, but rarer, capped and healing ---- */
+    this._medboxT -= dt;
+    if (this._medboxT <= 0) {
+      this._medboxT = CFG.medkitFieldInterval;
+      if (this.medboxes.length < CFG.medkitFieldMax) this.spawnMedbox();
+    }
+    for (let i = this.medboxes.length - 1; i >= 0; i--) {
+      const m = this.medboxes[i];
+      m.t += dt; m.life -= dt;
+      m.mesh.rotation.y += dt * 1.0;
+      m.mesh.position.y = m.y + .20 + Math.sin(m.t * 2.0) * .07;
+      const d = Math.hypot(p.pos.x - m.x, p.pos.z - m.z);
+      if (d <= CFG.cratePickupDist) this.collectMedbox(m, i);
+      else if (m.life <= 0) this.removeMedbox(i);
+    }
   },
 
-  /* pick a walkable spot away from walls and drop a crate there */
-  spawnCrate() {
-    if (this.crates.length >= CFG.crateMax) return;      // hard cap, belt and braces
+  /* a walkable, free spot on the map (shared by crates and medkits) */
+  findDropSpot() {
     const nav = MAP.nav;
     const p = this.player;
-    let spot = null;
-    for (let tries = 0; tries < 24 && !spot; tries++) {
+    for (let tries = 0; tries < 24; tries++) {
       const x = U.rand(-MAP.size / 2 + 6, MAP.size / 2 - 6);
       const z = U.rand(-MAP.size / 2 + 6, MAP.size / 2 - 6);
       if (nav && nav.ok) {
@@ -2336,10 +2373,55 @@ const Game = {
       const gy = this.world.groundAt(x, z, 3);
       if (gy === null) continue;
       if (this.world.overlaps(x, gy + .3, z, .8, 1.2)) continue;   // not inside geometry
-      // do not drop right on top of the player
-      if (p && Math.hypot(p.pos.x - x, p.pos.z - z) < 6) continue;
-      spot = { x, y: gy, z };
+      if (p && Math.hypot(p.pos.x - x, p.pos.z - z) < 6) continue; // not on the player
+      return { x, y: gy, z };
     }
+    return null;
+  },
+
+  /* field medkit: restores half the player's max health on pickup */
+  spawnMedbox() {
+    if (this.medboxes.length >= CFG.medkitFieldMax) return;
+    const spot = this.findDropSpot();
+    if (!spot) return;
+    const mesh = buildMedBox();
+    mesh.position.set(spot.x, spot.y + .20, spot.z);
+    this.scene.add(mesh);
+    this.medboxes.push({ mesh: mesh, x: spot.x, y: spot.y, z: spot.z, t: 0, life: CFG.medkitFieldLife });
+    Audio3D_SFX.crateDrop(spot.x, spot.y, spot.z);
+    UI.toast('Аптечка на карте (+50% HP)', '#57ff7a');
+  },
+
+  collectMedbox(m, i) {
+    const p = this.player;
+    const maxHP = this.matchHP || p.maxHealth || CFG.maxHP;
+    const heal = Math.max(1, Math.round(maxHP * CFG.medkitHealFrac));
+    p.health = Math.min(maxHP, p.health + heal);
+    UI.center('АПТЕЧКА +50%', '+' + heal + ' HP', 1.6);
+    UI.toast('Подобрана аптечка: +' + heal + ' HP', '#57d16a');
+    UI.feed('<span class="z">✚ Аптечка +50% HP</span>');
+    Audio3D_SFX.pickup();
+    this.removeMedbox(i);
+    if (this.mode === CS.MODE.ONLINE) this.broadcastScore();
+  },
+
+  removeMedbox(i) {
+    const m = this.medboxes[i];
+    if (m && m.mesh.parent) m.mesh.parent.remove(m.mesh);
+    if (m && m.mesh.traverse) m.mesh.traverse(o => { if (o.geometry) o.geometry.dispose(); });
+    this.medboxes.splice(i, 1);
+  },
+
+  clearMedboxes() {
+    if (!this.medboxes) return;
+    for (const m of this.medboxes) { if (m.mesh.parent) m.mesh.parent.remove(m.mesh); }
+    this.medboxes.length = 0;
+  },
+
+  /* pick a walkable spot away from walls and drop a crate there */
+  spawnCrate() {
+    if (this.crates.length >= CFG.crateMax) return;      // hard cap, belt and braces
+    const spot = this.findDropSpot();
     if (!spot) return;                                   // no free spot this tick
     const mesh = buildAmmoCrate();
     mesh.position.set(spot.x, spot.y + .18, spot.z);
@@ -2706,6 +2788,7 @@ const Game = {
       headMul: def.headMul || 1.6,
       splash: def.splash || 0,          // blast radius (m); 0 = no splash
       splashDmg: def.splashDmg || 0,
+      explosionColor: def.explosionColor || null,
       ownerIsLocal: true
     });
     if (this.projectiles.length > 40) {
@@ -2809,12 +2892,12 @@ const Game = {
   /* radial blast damage for rockets: falls off linearly to the edge */
   explode(center, pr) {
     const R = pr.splash, dmg = pr.splashDmg || pr.dmg;
-    this.effects.explosion(center.x, center.y, center.z, R);
+    this.effects.explosion(center.x, center.y, center.z, R, pr.explosionColor);
     Audio3D_SFX.explosionAt(center.x, center.y, center.z);
     UI.hitmark(false);
     // tell the room so everyone sees and hears the rocket, not just the shooter
     if (this.mode === CS.MODE.ONLINE) {
-      Net.send({ t: 'boom', from: Net.selfId(), x: +center.x.toFixed(2), y: +center.y.toFixed(2), z: +center.z.toFixed(2), r: R });
+      Net.send({ t: 'boom', from: Net.selfId(), x: +center.x.toFixed(2), y: +center.y.toFixed(2), z: +center.z.toFixed(2), r: R, c: pr.explosionColor || undefined });
     }
     // zombies
     if (this.horde) {
@@ -2901,6 +2984,49 @@ const Game = {
         this.effects.impact(wallHit.point, wallHit.normal, 'concrete');
       }
       if (this.mode === CS.MODE.ONLINE) this.traceRemotePlayer(origin, dir, Math.min(def.range, maxDist), def, dir);
+      return;
+    }
+
+    // ---- LASER: pierces EVERYTHING (zombies, players, cover) along the ray ----
+    if (def.pierce) {
+      const maxP = def.range || 200;
+      // every zombie the beam passes through
+      if (this.horde) {
+        for (const z of this.horde.list) {
+          if (!z.alive || z.dying) continue;
+          const h = rayZombie(origin, dir, z, maxP);
+          if (!h) continue;
+          const hs = h.part === 'head';
+          const dmg = def.dmg * (hs ? (def.headMul || 1) : h.part === 'legs' ? CFG.limbMultiplier : 1);
+          z.takeDamage(dmg, h.part, dir);
+          p.damageDealt += dmg;
+        }
+      }
+      // every opponent in the room
+      if (this.mode === CS.MODE.ONLINE) {
+        for (const rp of this.remotePlayers) {
+          if (!rp.alive) continue;
+          const h = this.rayRemotePlayerFor(rp, origin, dir, maxP);
+          if (!h) continue;
+          const hs = h.part === 'head';
+          const dmg = def.dmg * (hs ? (def.headMul || CFG.headshotMultiplier) : h.part === 'legs' ? CFG.limbMultiplier : 1);
+          this.sendPvpHit(dmg, h.part, hs, rp);
+        }
+        const dHit = this.rayRemoteDroneAny(origin, dir, maxP);
+        if (dHit) this.hitRemoteDrone(dHit.rp, dHit.point);
+      }
+      // the beam stops only on solid walls/floor, and scorches where it lands
+      const wallHits = this.world.raycastAll(origin, dir, maxP);
+      let beamEnd = end;
+      if (wallHits.length) {
+        beamEnd = wallHits[0].point;
+        this.effects.impact(wallHits[0].point, wallHits[0].normal, 'metal');
+      }
+      p.bulletsHit++;
+      this.effects.tracer(muzzleWorld, beamEnd, 1.6, true);
+      Audio3D_SFX.hit(muzzleWorld.x, muzzleWorld.y, muzzleWorld.z, false);
+      UI.hitmark(false);
+      this._hitmarkT = U.now();
       return;
     }
 
@@ -3117,7 +3243,9 @@ const Game = {
     if (!p.alive) return;
     let actual = dmg;
     if (p.armor > 0) {
-      const absorbed = Math.min(p.armor, actual * .5);
+      // reinforced armour soaks a larger share of the hit (and has more AP)
+      const absorbFrac = p.heavyArmor ? .75 : .5;
+      const absorbed = Math.min(p.armor, actual * absorbFrac);
       p.armor -= absorbed;
       actual -= absorbed;
       if (p.armor < 0) p.armor = 0;
@@ -3172,7 +3300,7 @@ const Game = {
     p.zombieKills++;
     p.kills++;
     const def = z.def;
-    p.money = Math.min(16000, p.money + def.money);
+    p.money = Math.min(CFG.moneyCap, p.money + def.money);
     p.score += def.score * (headshot ? 1.5 : 1) | 0;
     if (headshot) p.headshots++;
     Audio3D_SFX.kill();
@@ -3532,7 +3660,7 @@ const Game = {
     // an enemy rocket detonated somewhere on the map — show the same blast the
     // shooter saw, so a rocket is never a private event
     const R = b.r || 6;
-    if (this.effects) this.effects.explosion(b.x, b.y, b.z, R);
+    if (this.effects) this.effects.explosion(b.x, b.y, b.z, R, b.c || null);
     Audio3D_SFX.explosionAt(b.x, b.y, b.z);
     // drop the cosmetic copy so it does not fly on and detonate again
     this.removeRemoteProjectileNear(b.x, b.y, b.z);
@@ -3713,7 +3841,7 @@ const Game = {
     this.player.health = this.matchHP;
     this.player.armor = 0; this.player.helmet = false;
     this.player.alive = true;
-    this.player.money = Math.min(16000, this.player.money + 1400);
+    this.player.money = Math.min(CFG.moneyCap, this.player.money + 1400);
     // a drone still in the air belongs to the previous round
     if (this.drone) this.detonateDrone(false);
     for (const rp of this.remotePlayers) this.clearRemoteDrone(rp);

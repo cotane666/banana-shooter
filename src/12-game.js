@@ -823,6 +823,8 @@ const Game = {
     bindClick('btnOffline', () => this.startOffline());
     bindClick('btnHorde', () => this.startOffline(true));
     bindClick('btnCreditsClose', () => this.closeCredits());
+    bindClick('btnMatchAgain', () => this.rematchOnline());
+    bindClick('btnMatchMenu', () => this.backToMenuFromMatch());
     // clicking the backdrop (not the text or a button) also closes the credits
     if (UI.el.credits) UI.el.credits.addEventListener('click', e => {
       if (e.target === UI.el.credits || e.target.classList.contains('credits-scroll')) this.closeCredits();
@@ -2072,7 +2074,13 @@ const Game = {
         UI.center(txt, this.online.scoreMe + ' : ' + this.online.scoreThem + (reason ? ' · ' + reason : ''), 2.6);
         Audio3D_SFX.roundEnd(won);
         const finished = this.online.played >= this.online.rounds;
-        Net.send({ t: 'round', st: 'end', win: won ? 'host' : winnerIsMe === false ? 'client' : 'draw', no: this.roundNo, over: finished ? 1 : 0 });
+        // on the final round, tell the room who actually won the match
+        let winnerName;
+        if (finished) {
+          const me = this.online.roundWins.me, them = this.online.roundWins.them;
+          winnerName = me === them ? 'НИЧЬЯ' : (me > them ? this.player.name : this.matchTopRivalName());
+        }
+        Net.send({ t: 'round', st: 'end', win: won ? 'host' : winnerIsMe === false ? 'client' : 'draw', no: this.roundNo, over: finished ? 1 : 0, winner: winnerName });
         if (finished) this.endMatch();
         else setTimeout(() => { if (this.roundState === 'end' && this.mode === CS.MODE.ONLINE) this.nextRound(); }, 4200);
       }
@@ -2080,11 +2088,12 @@ const Game = {
     }
   },
 
-  /* The configured number of rounds has been played: announce the winner and
-     stop the round loop. The player can return to the menu or start again. */
+  /* The configured number of rounds has been played: show the match result with
+     the winner's name and let the player go back to the menu or start again. */
   endMatch() {
     if (this.mode !== CS.MODE.ONLINE) return;
     const o = this.online;
+    if (o.matchOver && this._matchOverPending) return;   // already shown
     o.matchOver = true;
     const me = o.roundWins.me, them = o.roundWins.them;
     const won = me > them, draw = me === them;
@@ -2092,11 +2101,81 @@ const Game = {
     if (won) Store.data.wins++;
     Store.save();
     UI.renderMenuStats();
-    const title = draw ? 'НИЧЬЯ В МАТЧЕ' : won ? 'МАТЧ ВЫИГРАН' : 'МАТЧ ПРОИГРАН';
-    UI.center(title, 'ВСЕГО БОЁВ: ' + o.played + ' · СЧЁТ ' + me + ' : ' + them + ' · Enter — в меню', 600);
-    UI.toast(title + ' · ' + me + ' : ' + them, won ? '#57d16a' : draw ? '#f5d33c' : '#e33a2e');
-    Audio3D_SFX.roundEnd(won);
+
+    /* Work out who actually won the match. In a two-player room it is simply
+       us or the opponent; with 3–4 players the host is the authority and sends
+       the winner's name, which we show verbatim. */
+    let winnerName;
+    if (draw) winnerName = 'НИЧЬЯ';
+    else if (Net.role === CS.NETROLE.HOST) winnerName = won ? this.player.name : this.matchTopRivalName(won);
+    else winnerName = won ? this.player.name : (this.online.winnerName || this.matchTopRivalName(won));
+
+    this.showMatchEnd(winnerName, me, them, draw);
     this._matchOverPending = true;
+  },
+
+  /* name of the remote player who scored the most rounds (fallback: any rival) */
+  matchTopRivalName() {
+    if (this.online && this.online.winnerName) return this.online.winnerName;
+    const names = (this.remotePlayers || []).map(r => r.name).filter(Boolean);
+    return names.length ? names[0] : 'Соперник';
+  },
+
+  /* Fill and show the match-end screen. */
+  showMatchEnd(winnerName, me, them, draw) {
+    const title = draw ? 'НИЧЬЯ В МАТЧЕ' : (me > them ? 'ВЫ ПОБЕДИЛИ' : 'ВЫ ПРОИГРАЛИ');
+    if (UI.el.meTitle) UI.el.meTitle.textContent = 'МАТЧ ЗАВЕРШЁН';
+    if (UI.el.meWinner) {
+      UI.el.meWinner.textContent = winnerName;
+      UI.el.meWinner.style.color = draw ? '#f5d33c' : (me > them ? '#57d16a' : '#ff6b5b');
+    }
+    if (UI.el.meScore) UI.el.meScore.textContent = me + ' : ' + them;
+    if (UI.el.meDetail) {
+      UI.el.meDetail.textContent = 'Боёв сыграно: ' + this.online.played + ' из ' + this.online.rounds +
+        (draw ? ' · победитель не определён' : '');
+    }
+    if (!IS_TOUCH) Input.releaseLock();
+    Input.enabled = false;
+    this.player.triggerDown = false;
+    UI.show('matchEnd');
+    Audio3D_SFX.roundEnd(me > them);
+  },
+
+  /* "ЗАНОВО": start a fresh match with the same room and settings. */
+  rematchOnline() {
+    if (this.mode !== CS.MODE.ONLINE) return;
+    if (Net.role === CS.NETROLE.HOST) {
+      // the host resets the score and starts round 1 for everybody
+      this.player.kills = 0; this.player.deaths = 0; this.player.score = 0;
+      for (const rp of this.remotePlayers) { rp.kills = 0; rp.deaths = 0; rp.score = 0; }
+      Net.send({ t: 'round', st: 'rematch', no: 0, hp: Store.data.maxHP, free: this.freePlay ? 1 : 0, rounds: MATCH.clampRounds(Store.data.rounds), map: MAP.id });
+      this.beginRematch();
+    } else {
+      // a client asks the host to run it again
+      Net.send({ t: 'round', st: 'rematchask', from: Net.selfId() });
+      UI.toast('Запрос на новый матч отправлен хосту', '#4aa3ff');
+    }
+  },
+
+  /* Shared reset used when a rematch actually starts (host path). */
+  beginRematch(rounds) {
+    this._matchOverPending = false;
+    this.online.roundWins = { me: 0, them: 0 };
+    this.online.scoreMe = 0; this.online.scoreThem = 0;
+    this.online.played = 0;
+    this.online.matchOver = false;
+    this.online.winnerName = null;
+    this.online.rounds = MATCH.clampRounds(rounds !== undefined ? rounds : this.online.rounds);
+    this.roundNo = 0;                     // beginBuyPhase bumps it back to 1
+    UI.show('hud');
+    if (Net.role === CS.NETROLE.HOST) this.doNewRound();
+    else { this.roundNo = 1; this.beginBuyPhaseClient(25, 1, this.matchHP, MAP.id); }
+    if (!IS_TOUCH) setTimeout(() => { if (this.running) Input.requestLock(); }, 80);
+  },
+
+  backToMenuFromMatch() {
+    this._matchOverPending = false;
+    this.stopToMenu();
   },
 
   nextRound() {
@@ -3452,7 +3531,13 @@ const Game = {
       if (r.players) { this.online.players = r.players; this.refreshSkipUI(); }
       if (r.free !== undefined) this.freePlay = !!r.free;
       if (r.rounds !== undefined) this.online.rounds = MATCH.clampRounds(r.rounds);
+      if (r.winner) this.online.winnerName = r.winner;
       UI.renderPeerList();
+      return;
+    }
+    // a client asked for a rematch; only the host acts on it
+    if (r.st === 'rematchask') {
+      if (Net.role === CS.NETROLE.HOST && this._matchOverPending) this.rematchOnline();
       return;
     }
     if (Net.role !== CS.NETROLE.CLIENT) return;
@@ -3466,7 +3551,7 @@ const Game = {
         UI.center('В БОЙ!', this.onlinePlayerCount() > 2 ? 'Выживает сильнейший' : 'Уничтожьте соперника', 1.4);
         break;
       case 'end':
-        this.endRoundClient(r.win, r.no, r.over);
+        this.endRoundClient(r.win, r.no, r.over, r.winner);
         break;
       case 'newround':
         this.doNewRoundClient(r.hp);
@@ -3474,6 +3559,13 @@ const Game = {
       case 'rounds':
         // the host changed the number of rounds between rounds
         if (r.rounds) { this.online.rounds = MATCH.clampRounds(r.rounds); if (this.online.played >= this.online.rounds) this.endMatch(); }
+        break;
+      case 'rematch':
+        // the host restarted the match: reset the score and start round 1
+        if (r.hp) { this.matchHP = r.hp; this.player.maxHealth = r.hp; }
+        if (r.free !== undefined) this.freePlay = !!r.free;
+        if (r.map && r.map !== MAP.id) this.ensureMap(r.map);
+        this.beginRematch(r.rounds);
         break;
     }
   },
@@ -3489,7 +3581,7 @@ const Game = {
     UI.center('ЗАКУПКА', 'B — магазин', 1.8);
   },
 
-  endRoundClient(win, roundNo, over) {
+  endRoundClient(win, roundNo, over, winner) {
     if (this.roundState === 'end') return;
     this.roundState = 'end'; this.roundT = 4.2;
     // 'host' wins the last-man-standing duel; anything else is our side
@@ -3498,6 +3590,7 @@ const Game = {
     this.online.played++;
     this.online.scoreMe = this.online.roundWins.me;
     this.online.scoreThem = this.online.roundWins.them;
+    if (winner) this.online.winnerName = winner;
     const txt = win === 'host' ? 'РАУНД ПРОИГРАН' : win === 'client' ? 'РАУНД ВЫИГРАН' : 'НИЧЬЯ';
     UI.center(txt, this.online.scoreMe + ' : ' + this.online.scoreThem, 2.6);
     Audio3D_SFX.roundEnd(win !== 'host');

@@ -826,6 +826,7 @@ const Game = {
   bindUI() {
     bindClick('btnOffline', () => this.startOffline());
     bindClick('btnHorde', () => this.startOffline(true));
+    bindClick('btnFreeHorde', () => this.startOffline(true, true));
     bindClick('btnCreditsClose', () => this.closeCredits());
     bindClick('btnMatchAgain', () => this.rematchOnline());
     bindClick('btnMatchMenu', () => this.backToMenuFromMatch());
@@ -1088,7 +1089,7 @@ const Game = {
   /* ============================================================
      MODE START / STOP
      ============================================================ */
-  startOffline(horde) {
+  startOffline(horde, free) {
     this.stopToMenu(true);
     this.mode = CS.MODE.OFFLINE;
     this._campaignDone = false;
@@ -1097,12 +1098,10 @@ const Game = {
     this._restartPending = false;
     this.offlineDead = false;
     this.offlineDeadT = 0;
-    this._campaignWon = false;
-    this._campaignDone = false;
-    this._offeredRestart = false;
-    this._restartPending = false;
     this._creditsOpen = false;
-    this.freePlay = false;
+    // free mode: only the "БЕСПЛАТНАЯ ОРДА" button (or a restart of it) turns it on
+    this.freePlay = free === true;
+    this._freeHorde = this.freePlay;
     this.ensureMap(Store.data.map);
     this.matchHP = Store.data.maxHP || 100;
     // ОРДА ×10: force the mass mode from the menu button, otherwise honour the
@@ -1134,9 +1133,10 @@ const Game = {
     this.effects.clear();
 
     this.spawnPlayerLocal(0);
-    this.beginBuyPhase(30, this.hordeMode ? 'ОРДА — ВОЛНА 1' : 'ВОЛНА 1');
+    this.beginBuyPhase(30, this.hordeMode ? (this.freePlay ? 'БЕСПЛАТНАЯ ОРДА — ВОЛНА 1' : 'ОРДА — ВОЛНА 1') : 'ВОЛНА 1');
     this.enterGame();
-    if (this.hordeMode) UI.toast('ОРДА ×10: зомби в 10 раз больше, но хилые', '#e33a2e');
+    if (this.freePlay && this.hordeMode) UI.toast('БЕСПЛАТНАЯ ОРДА: всё оружие бесплатно', '#57d16a');
+    else if (this.hordeMode) UI.toast('ОРДА ×10: зомби в 10 раз больше, но хилые', '#e33a2e');
     UI.toast('Карта: ' + this.mapName() + ' · магазин: B', '#ff9d21');
   },
 
@@ -1768,10 +1768,12 @@ const Game = {
     if (IS_TOUCH) TouchUI.update();
   },
 
-  /* Is the shop free right now? The range is always free; an online match can
-     be started with "ВСЁ БЕСПЛАТНО" (set in the lobby and synced by the host). */
+  /* Is the shop free right now? The range is always free; online can be started
+     with "ВСЁ БЕСПЛАТНО" (set in the lobby and synced by the host); the offline
+     "БЕСПЛАТНАЯ ОРДА" mode also runs with a free shop. */
   isFreeShop() {
     if (this.mode === CS.MODE.RANGE) return true;
+    if (this.mode === CS.MODE.OFFLINE) return !!this.freePlay;
     return !!(this.freePlay && this.mode === CS.MODE.ONLINE);
   },
 
@@ -2284,8 +2286,9 @@ const Game = {
   spawnBoss(type) {
     const s = MAP.zombieSpawns && MAP.zombieSpawns.length ? U.pick(MAP.zombieSpawns) : { x: 0, z: 0 };
     const b = this.horde.spawn(type, s.x, s.z);
-    // ОРДА ×10: five bosses, but each is far squishier
-    if (this.hordeMode) b.maxHealth *= .30;
+    // ОРДА ×10: five bosses, but each is far squishier. БЕСПЛАТНАЯ ОРДА keeps
+    // the normal boss health (there is no ammo/armour handicap there).
+    if (this.hordeMode && !this.freePlay) b.maxHealth *= .30;
     b.health = b.maxHealth;
     b.isBoss = true;
     return b;
@@ -2510,7 +2513,10 @@ const Game = {
         const t = this.pickZombieType(o.wave);
         const scale = 1 + (o.wave - 1) * .085;
         const z = this.horde.spawnRandom(t, this.player.pos.x, this.player.pos.z, 26);
-        z.maxHealth *= scale * (this.hordeMode ? CFG.hordeHpMul : 1);
+        /* ОРДА ×10 keeps the weakened zombies; БЕСПЛАТНАЯ ОРДА uses the normal
+           offline health (full-strength zombies) since the shop is free. */
+        const hpMul = (this.hordeMode && !this.freePlay) ? CFG.hordeHpMul : 1;
+        z.maxHealth *= scale * hpMul;
         z.health = z.maxHealth;
         z.dmg *= (1 + (o.wave - 1) * .05);
         o.toSpawn--; o.spawnedThisWave++;
@@ -4296,8 +4302,9 @@ const Game = {
     this.updateBossBar();
     if (this._restartPending && !this._creditsOpen && (Input.keys['Enter'] || Input.keys['NumpadEnter'])) {
       const wasHorde = this.hordeMode;
+      const wasFree = this._freeHorde;
       this._restartPending = false; this._offeredRestart = false; this.offlineDead = false; this.offlineDeadT = 0;
-      this.startOffline(wasHorde);
+      this.startOffline(wasHorde, wasFree);
     }
     // after the final online round, Enter returns to the menu
     if (this._matchOverPending && (Input.keys['Enter'] || Input.keys['NumpadEnter'])) {

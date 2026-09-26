@@ -575,6 +575,39 @@ function buildDroneModel() {
   return g;
 }
 
+/* An ammo crate: a wooden supply chest with metal bands, a lid and a glowing
+   yellow padlock so it reads as a pickup from a distance. Built around the
+   origin, sitting on the ground (y = 0 is the floor). */
+function buildAmmoCrate() {
+  const g = new THREE.Group();
+  const wood = new THREE.MeshLambertMaterial({ color: 0x8a5a2b, emissive: 0x140c04 });
+  const woodDark = new THREE.MeshLambertMaterial({ color: 0x5f3d1c, emissive: 0x0e0803 });
+  const metal = new THREE.MeshLambertMaterial({ color: 0x6f7681, emissive: 0x0a0b0d });
+  const glow = new THREE.MeshBasicMaterial({ color: 0xffd24a });
+
+  const box = (w, h, d, mat, x, y, z) => {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
+    m.position.set(x, y, z);
+    m.castShadow = true; m.receiveShadow = true;
+    return m;
+  };
+
+  // body + lid
+  g.add(box(.90, .40, .60, wood, 0, .20, 0));
+  g.add(box(.94, .10, .64, woodDark, 0, .45, 0));
+  // metal bands and corner posts
+  g.add(box(.96, .06, .10, metal, 0, .20, -.26));
+  g.add(box(.96, .06, .10, metal, 0, .20, .26));
+  g.add(box(.08, .52, .62, metal, -.44, .26, 0));
+  g.add(box(.08, .52, .62, metal, .44, .26, 0));
+  // glowing padlock on the front
+  const lock = new THREE.Mesh(new THREE.BoxGeometry(.12, .16, .06), glow);
+  lock.position.set(0, .28, .33);
+  g.add(lock);
+  g.userData.glow = lock;
+  return g;
+}
+
 /* ============================================================
    PLAYER
    ============================================================ */

@@ -483,6 +483,24 @@ const UI = {
         ctx.beginPath(); ctx.arc(tx(rp.pos.x), tz(rp.pos.z), 4, 0, 7); ctx.fill();
       });
     }
+    // ammo crates (offline): a golden marker with a small "!" so it stands out
+    if (game.crates && game.crates.length) {
+      const pulse2 = .5 + .5 * Math.sin(Date.now() / 200);
+      game.crates.forEach(c => {
+        const px = tx(c.x), pz = tz(c.z);
+        ctx.save();
+        ctx.strokeStyle = 'rgba(255,210,74,.95)';
+        ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.arc(px, pz, 5.5 + pulse2 * 2.5, 0, 7); ctx.stroke();
+        ctx.fillStyle = '#ffd24a';
+        ctx.beginPath(); ctx.arc(px, pz, 2.6, 0, 7); ctx.fill();
+        ctx.fillStyle = '#12161a';
+        ctx.font = 'bold 7px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText('!', px, pz + 2.6);
+        ctx.restore();
+      });
+    }
     // drones: the local one and every enemy drone in the air (a loud, visible
     // threat — that is the point of the kamikaze drone)
     const pulse = .5 + .5 * Math.sin(Date.now() / 160);

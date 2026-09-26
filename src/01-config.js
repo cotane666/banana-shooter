@@ -64,6 +64,12 @@ const CFG = {
   hordeMaxAlive: 110,   // the usual alive cap would smother a 10× wave
   hordeSpawnInterval: 0.20,  // spawn far faster so the field actually fills
 
+  /* ---- ammo crate (offline): a supply chest that tops up reserves ---- */
+  crateInterval: 10,    // seconds between spawns
+  crateAmmoFrac: 0.25,  // fraction of the FULL stock restored per crate
+  cratePickupDist: 2.2, // how close the player must get to collect it
+  crateLife: 60,        // a crate vanishes if it is not collected in time
+
   /* ---- BOSS WAVES ---- */
   bossWaves: [15, 30, 50, 100],  // waves that summon a boss
   bossHpMul: 1            // global boss health multiplier (tuned per boss type)

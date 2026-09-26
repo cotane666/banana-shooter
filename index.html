@@ -1039,6 +1039,12 @@ const CFG = {
   hordeMaxAlive: 110,   // the usual alive cap would smother a 10× wave
   hordeSpawnInterval: 0.20,  // spawn far faster so the field actually fills
 
+  /* ---- ammo crate (offline): a supply chest that tops up reserves ---- */
+  crateInterval: 10,    // seconds between spawns
+  crateAmmoFrac: 0.25,  // fraction of the FULL stock restored per crate
+  cratePickupDist: 2.2, // how close the player must get to collect it
+  crateLife: 60,        // a crate vanishes if it is not collected in time
+
   /* ---- BOSS WAVES ---- */
   bossWaves: [15, 30, 50, 100],  // waves that summon a boss
   bossHpMul: 1            // global boss health multiplier (tuned per boss type)
@@ -3110,6 +3116,11 @@ const Audio3D_SFX = {
   pickup() { this.tone(880, .06, 'triangle', .1); setTimeout(() => this.tone(1320, .09, 'triangle', .1), 55); },
   buy() { this.tone(660, .05, 'square', .09); setTimeout(() => this.tone(990, .09, 'square', .09), 60); },
   deny() { this.tone(200, .16, 'square', .12, undefined, undefined, undefined, 120); },
+  /* a crate lands: a soft thud plus a bright "ready" ping */
+  crateDrop(x, y, z) {
+    this.tone(120, .18, 'triangle', .12, x, y, z, 70);
+    setTimeout(() => this.tone(1500, .08, 'sine', .09, x, y, z, 1900), 90);
+  },
   /* rising whine when the drone launches, then a low motor hum */
   droneLaunch() {
     this.tone(300, .18, 'sawtooth', .1, undefined, undefined, undefined, 900);
@@ -3781,6 +3792,39 @@ function buildDroneModel() {
     rotors.push(blade);
   }
   g.userData.rotors = rotors;
+  return g;
+}
+
+/* An ammo crate: a wooden supply chest with metal bands, a lid and a glowing
+   yellow padlock so it reads as a pickup from a distance. Built around the
+   origin, sitting on the ground (y = 0 is the floor). */
+function buildAmmoCrate() {
+  const g = new THREE.Group();
+  const wood = new THREE.MeshLambertMaterial({ color: 0x8a5a2b, emissive: 0x140c04 });
+  const woodDark = new THREE.MeshLambertMaterial({ color: 0x5f3d1c, emissive: 0x0e0803 });
+  const metal = new THREE.MeshLambertMaterial({ color: 0x6f7681, emissive: 0x0a0b0d });
+  const glow = new THREE.MeshBasicMaterial({ color: 0xffd24a });
+
+  const box = (w, h, d, mat, x, y, z) => {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
+    m.position.set(x, y, z);
+    m.castShadow = true; m.receiveShadow = true;
+    return m;
+  };
+
+  // body + lid
+  g.add(box(.90, .40, .60, wood, 0, .20, 0));
+  g.add(box(.94, .10, .64, woodDark, 0, .45, 0));
+  // metal bands and corner posts
+  g.add(box(.96, .06, .10, metal, 0, .20, -.26));
+  g.add(box(.96, .06, .10, metal, 0, .20, .26));
+  g.add(box(.08, .52, .62, metal, -.44, .26, 0));
+  g.add(box(.08, .52, .62, metal, .44, .26, 0));
+  // glowing padlock on the front
+  const lock = new THREE.Mesh(new THREE.BoxGeometry(.12, .16, .06), glow);
+  lock.position.set(0, .28, .33);
+  g.add(lock);
+  g.userData.glow = lock;
   return g;
 }
 
@@ -6252,6 +6296,24 @@ const UI = {
         ctx.beginPath(); ctx.arc(tx(rp.pos.x), tz(rp.pos.z), 4, 0, 7); ctx.fill();
       });
     }
+    // ammo crates (offline): a golden marker with a small "!" so it stands out
+    if (game.crates && game.crates.length) {
+      const pulse2 = .5 + .5 * Math.sin(Date.now() / 200);
+      game.crates.forEach(c => {
+        const px = tx(c.x), pz = tz(c.z);
+        ctx.save();
+        ctx.strokeStyle = 'rgba(255,210,74,.95)';
+        ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.arc(px, pz, 5.5 + pulse2 * 2.5, 0, 7); ctx.stroke();
+        ctx.fillStyle = '#ffd24a';
+        ctx.beginPath(); ctx.arc(px, pz, 2.6, 0, 7); ctx.fill();
+        ctx.fillStyle = '#12161a';
+        ctx.font = 'bold 7px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText('!', px, pz + 2.6);
+        ctx.restore();
+      });
+    }
     // drones: the local one and every enemy drone in the air (a loud, visible
     // threat — that is the point of the kamikaze drone)
     const pulse = .5 + .5 * Math.sin(Date.now() / 160);
@@ -7680,6 +7742,8 @@ const Game = {
   _aimFireHold: 0,
   drone: null,                 // active guided drone {mesh, pos, vel, hp, ...}
   hordeMode: false,            // ОРДА ×10 offline mode
+  crates: [],                  // offline ammo crates: {mesh, x, y, z, life, t}
+  _crateT: 0,                  // countdown to the next crate
 
   /* ============================================================
      INIT
@@ -8097,6 +8161,9 @@ const Game = {
       betweenWaves: false, breakT: 0, alive: 0, kills: 0, startTime: U.now(),
       campaignWon: false, bossPending: 0, bossType: null
     };
+    // reset offline ammo crates for the new run
+    this.clearCrates();
+    this._crateT = CFG.crateInterval;
     this.remotePlayers = []; this.remote = null;
     this.player = new Player({ id: 'p1', name: 'Вы', isLocal: true, team: 'ct' });
     this.player.money = 800;
@@ -8563,6 +8630,7 @@ const Game = {
       this.clearDummies();
       this.clearTargets();
       this.clearDrone();
+      this.clearCrates();
       if (this.horde) { this.horde.clear(); this.horde = null; }
       for (const rp of this.remotePlayers || []) {
         this.clearRemoteDrone(rp);
@@ -9265,6 +9333,106 @@ const Game = {
     let r = Math.random() * total;
     for (const p of pool) { r -= p.w; if (r <= 0) return p.t; }
     return 'walker';
+  },
+
+  /* ============================================================
+     AMMO CRATES (offline)
+     Every `CFG.crateInterval` seconds a supply crate drops somewhere on the
+     walkable map. Walking into it tops up part of every weapon's ammo. The
+     crate has NO collision (it is only a mesh), so it never blocks movement.
+     ============================================================ */
+  updateCrates(dt) {
+    const p = this.player;
+    if (!p) return;
+
+    // countdown to the next drop
+    this._crateT -= dt;
+    if (this._crateT <= 0) {
+      this._crateT = CFG.crateInterval;
+      this.spawnCrate();
+    }
+
+    // collect / retire crates
+    for (let i = this.crates.length - 1; i >= 0; i--) {
+      const c = this.crates[i];
+      c.t += dt;
+      c.life -= dt;
+      // gentle bob + spin so it is easy to spot
+      c.mesh.rotation.y += dt * 1.1;
+      c.mesh.position.y = c.y + .18 + Math.sin(c.t * 2.2) * .06;
+      const d = Math.hypot(p.pos.x - c.x, p.pos.z - c.z);
+      if (d <= CFG.cratePickupDist) {
+        this.collectCrate(c, i);
+      } else if (c.life <= 0) {
+        this.removeCrate(i);
+      }
+    }
+  },
+
+  /* pick a walkable spot away from walls and drop a crate there */
+  spawnCrate() {
+    const nav = MAP.nav;
+    const p = this.player;
+    let spot = null;
+    for (let tries = 0; tries < 24 && !spot; tries++) {
+      const x = U.rand(-MAP.size / 2 + 6, MAP.size / 2 - 6);
+      const z = U.rand(-MAP.size / 2 + 6, MAP.size / 2 - 6);
+      if (nav && nav.ok) {
+        const cell = nav.nearest(x, z);
+        if (cell < 0 || !nav.ok(cell)) continue;      // must be walkable
+      }
+      const gy = this.world.groundAt(x, z, 3);
+      if (gy === null) continue;
+      if (this.world.overlaps(x, gy + .3, z, .8, 1.2)) continue;   // not inside geometry
+      // do not drop right on top of the player
+      if (p && Math.hypot(p.pos.x - x, p.pos.z - z) < 6) continue;
+      spot = { x, y: gy, z };
+    }
+    if (!spot) return;                                   // no free spot this tick
+    const mesh = buildAmmoCrate();
+    mesh.position.set(spot.x, spot.y + .18, spot.z);
+    this.scene.add(mesh);
+    this.crates.push({ mesh: mesh, x: spot.x, y: spot.y, z: spot.z, t: 0, life: CFG.crateLife });
+    Audio3D_SFX.crateDrop(spot.x, spot.y, spot.z);
+    UI.toast('Сундук с патронами на карте', '#ffd24a');
+  },
+
+  collectCrate(c, i) {
+    // restore part of the FULL stock for every owned weapon
+    const frac = CFG.crateAmmoFrac;
+    const p = this.player;
+    let gave = false;
+    for (const s of [1, 2, 3]) {
+      const w = p.inv[s];
+      if (!w || w.id === 'knife') continue;
+      const def = WEAPONS[w.id];
+      if (!def || def.mag === Infinity) continue;
+      const addReserve = Math.max(1, Math.round((def.reserve || 0) * frac));
+      const addMag = def.mag <= 12 ? 3 : 8;              // a small top-up in the magazine too
+      const before = w.reserve;
+      w.reserve = Math.min(def.reserve, w.reserve + addReserve);
+      w.mag = Math.min(def.mag, (w.mag || 0) + addMag);
+      if (w.reserve !== before) gave = true;
+    }
+    UI.center('ПАТРОНЫ +25%', '+запас ко всем стволам', 1.6);
+    UI.toast('Сундук собран: патроны пополнены', '#57d16a');
+    UI.feed('<span class="z">▣ Сундук · патроны +25%</span>');
+    Audio3D_SFX.pickup();
+    this.removeCrate(i);
+    return gave;
+  },
+
+  removeCrate(i) {
+    const c = this.crates[i];
+    if (c && c.mesh.parent) c.mesh.parent.remove(c.mesh);
+    if (c && c.mesh.traverse) c.mesh.traverse(o => { if (o.geometry) o.geometry.dispose(); });
+    this.crates.splice(i, 1);
+  },
+
+  clearCrates() {
+    if (!this.crates) return;
+    for (const c of this.crates) { if (c.mesh.parent) c.mesh.parent.remove(c.mesh); }
+    this.crates.length = 0;
   },
 
   updateOffline(dt) {
@@ -10778,7 +10946,7 @@ const Game = {
 
     // ---- round flow ----
     this.updateBuyPhase(dt);
-    if (this.mode === CS.MODE.OFFLINE) this.updateOffline(dt);
+    if (this.mode === CS.MODE.OFFLINE) { this.updateOffline(dt); this.updateCrates(dt); }
 
     // ---- AI ----
     if (this.horde) this.horde.update(dt, p);

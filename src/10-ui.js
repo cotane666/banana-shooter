@@ -601,7 +601,8 @@ const UI = {
       '<div><b>' + Store.data.best + '</b>РЕКОРД</div>' +
       '<div><b>' + Store.data.bestWave + '</b>ЛУЧШАЯ ВОЛНА</div>' +
       '<div><b>' + Store.data.killsTotal + '</b>ЗОМБИ УБИТО</div>' +
-      '<div><b>' + Store.data.wins + '/' + Store.data.matches + '</b>ПОБЕД В ОНЛАЙН</div>';
+      '<div><b>' + Store.data.wins + '/' + Store.data.matches + '</b>ПОБЕД В ОНЛАЙН</div>' +
+      '<div><b>' + U.duration(Store.data.playTime) + '</b>ВРЕМЯ В ИГРЕ</div>';
   }
 };
 

@@ -860,7 +860,7 @@ const Game = {
     bindClick('btnLeave', () => this.stopToMenu());
     bindClick('btnReset', () => {
       if (confirm('Сбросить весь прогресс и настройки?')) {
-        Store.data = { sens: 2.2, fov: 80, vol: 60, quality: 1, touchSens: 1.5, name: '', best: 0, bestWave: 0, killsTotal: 0, matches: 0, wins: 0, signalSrv: 0, aimBest: 0, aimAutoFire: 1, map: 'arena', players: 2, maxHP: 100, aimAssist: 1, horde: 0, clears: 0, freeplay: 0, rounds: 3 };
+        Store.data = { sens: 2.2, fov: 80, vol: 60, quality: 1, touchSens: 1.5, name: '', best: 0, bestWave: 0, killsTotal: 0, matches: 0, wins: 0, signalSrv: 0, aimBest: 0, aimAutoFire: 1, map: 'arena', players: 2, maxHP: 100, aimAssist: 1, horde: 0, clears: 0, freeplay: 0, rounds: 3, playTime: 0 };
         Store.save();
         UI.refreshChips(); UI.renderMenuStats(); UI.toast('Прогресс сброшен');
       }
@@ -3757,6 +3757,16 @@ const Game = {
   /* One simulation + render step. Split out from loop() so it can be driven
      deterministically (tests / replays / catch-up). */
   step(dt) {
+    // total time played (counted only while the tab is visible, so leaving the
+    // game open in a background tab does not inflate the counter)
+    let vis = true;
+    try { vis = !(typeof document !== 'undefined' && document.hidden); } catch (e) { vis = true; }
+    if (vis && dt > 0) {
+      Store.data.playTime = (Store.data.playTime || 0) + dt;
+      this._timeSaveT = (this._timeSaveT || 0) + dt;
+      if (this._timeSaveT >= 15) { this._timeSaveT = 0; try { Store.save(); } catch (e) { } }
+    }
+
     // fps counter
     this._fpsAcc += dt; this._fpsFrames++;
     if (this._fpsAcc > .5) {
@@ -4263,6 +4273,11 @@ window.addEventListener('DOMContentLoaded', () => {
     initTouch();
     initInstall();
     registerServiceWorker();
+    // flush the play-time counter when the page is hidden or closed
+    const flushTime = () => { try { Store.save(); } catch (e) { } };
+    window.addEventListener('pagehide', flushTime);
+    window.addEventListener('beforeunload', flushTime);
+    document.addEventListener('visibilitychange', flushTime);
     if (IS_TOUCH) {
       // keep the address bar from eating the screen on mobile browsers
       const meta = document.querySelector('meta[name=viewport]');

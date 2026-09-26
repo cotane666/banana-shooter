@@ -233,6 +233,17 @@ const U = {
   now: () => performance.now(),
   money: n => '$' + Math.round(n).toLocaleString('ru-RU'),
   time: s => { s = Math.max(0, Math.ceil(s)); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); },
+  /* a human-readable duration for the "time played" counter: 45с, 12м, 3ч 20м, 2д 4ч */
+  duration: s => {
+    s = Math.max(0, Math.floor(s || 0));
+    if (s < 60) return s + 'с';
+    const m = Math.floor(s / 60);
+    if (m < 60) return m + 'м';
+    const h = Math.floor(m / 60);
+    if (h < 24) return h + 'ч ' + (m % 60) + 'м';
+    const d = Math.floor(h / 24);
+    return d + 'д ' + (h % 24) + 'ч';
+  },
   esc: s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
 };
 
@@ -246,7 +257,7 @@ function makeRng(seed) {
 const Store = {
   key: 'cs3d.save.v1',
   data: { sens: 2.2, fov: 80, vol: 60, quality: 1, touchSens: 1.5, name: '', best: 0, bestWave: 0, killsTotal: 0, matches: 0, wins: 0, signalSrv: 0, aimBest: 0, aimAutoFire: 1,
-          map: 'arena', players: 2, maxHP: 100, aimAssist: 1, horde: 0, clears: 0, freeplay: 0, rounds: 3 },
+          map: 'arena', players: 2, maxHP: 100, aimAssist: 1, horde: 0, clears: 0, freeplay: 0, rounds: 3, playTime: 0 },
   load() {
     try { const r = localStorage.getItem(this.key); if (r) Object.assign(this.data, JSON.parse(r)); } catch (e) { }
     return this.data;

@@ -856,7 +856,7 @@ const Game = {
     bindClick('btnLeave', () => this.stopToMenu());
     bindClick('btnReset', () => {
       if (confirm('Сбросить весь прогресс и настройки?')) {
-        Store.data = { sens: 2.2, fov: 80, vol: 60, quality: 1, touchSens: 1.5, name: '', best: 0, bestWave: 0, killsTotal: 0, matches: 0, wins: 0, signalSrv: 0, aimBest: 0, aimAutoFire: 1, map: 'arena', players: 2, maxHP: 100, aimAssist: 1, horde: 0, clears: 0, freeplay: 0 };
+        Store.data = { sens: 2.2, fov: 80, vol: 60, quality: 1, touchSens: 1.5, name: '', best: 0, bestWave: 0, killsTotal: 0, matches: 0, wins: 0, signalSrv: 0, aimBest: 0, aimAutoFire: 1, map: 'arena', players: 2, maxHP: 100, aimAssist: 1, horde: 0, clears: 0, freeplay: 0, rounds: 3 };
         Store.save();
         UI.refreshChips(); UI.renderMenuStats(); UI.toast('Прогресс сброшен');
       }
@@ -1412,11 +1412,15 @@ const Game = {
       role, roundWins: { me: 0, them: 0 }, opponentLeft: false,
       scoreMe: 0, scoreThem: 0, skipVoteMe: 0, votes: {},
       voteNeeded: 2, roster: Net.peers.slice(),
-      players: Math.max(2, Net.peerCount ? Net.peerCount() : 2), alive: 1
+      players: Math.max(2, Net.peerCount ? Net.peerCount() : 2), alive: 1,
+      // how many rounds this match lasts and how many have been played
+      rounds: MATCH.clampRounds(opts.rounds !== undefined ? opts.rounds : Store.data.rounds),
+      played: 0, matchOver: false
     };
     // settings come from the host (or from the local choice when not networked)
     const mapId = opts.map || Store.data.map;
     this.ensureMap(mapId);
+    this._matchOverPending = false;
     this.matchHP = opts.hp || (Store.data.maxHP || 100);
     // "ВСЁ БЕСПЛАТНО" online: the host decides, clients are told by the round msg
     this.freePlay = (opts.free !== undefined) ? !!opts.free : (this.online.role === CS.NETROLE.HOST ? Store.data.freeplay === 1 : !!this.freePlay);
@@ -2062,15 +2066,37 @@ const Game = {
         else if (winnerIsMe === false) this.online.roundWins.them++;
         this.online.scoreMe = this.online.roundWins.me;
         this.online.scoreThem = this.online.roundWins.them;
+        this.online.played++;
         const won = winnerIsMe === true;
         const txt = won ? 'РАУНД ВЫИГРАН' : winnerIsMe === false ? 'РАУНД ПРОИГРАН' : 'НИЧЬЯ';
         UI.center(txt, this.online.scoreMe + ' : ' + this.online.scoreThem + (reason ? ' · ' + reason : ''), 2.6);
         Audio3D_SFX.roundEnd(won);
-        Net.send({ t: 'round', st: 'end', win: won ? 'host' : winnerIsMe === false ? 'client' : 'draw', no: this.roundNo });
-        setTimeout(() => { if (this.roundState === 'end' && this.mode === CS.MODE.ONLINE) this.nextRound(); }, 4200);
+        const finished = this.online.played >= this.online.rounds;
+        Net.send({ t: 'round', st: 'end', win: won ? 'host' : winnerIsMe === false ? 'client' : 'draw', no: this.roundNo, over: finished ? 1 : 0 });
+        if (finished) this.endMatch();
+        else setTimeout(() => { if (this.roundState === 'end' && this.mode === CS.MODE.ONLINE) this.nextRound(); }, 4200);
       }
       // clients react to the host's 'round:end' message instead
     }
+  },
+
+  /* The configured number of rounds has been played: announce the winner and
+     stop the round loop. The player can return to the menu or start again. */
+  endMatch() {
+    if (this.mode !== CS.MODE.ONLINE) return;
+    const o = this.online;
+    o.matchOver = true;
+    const me = o.roundWins.me, them = o.roundWins.them;
+    const won = me > them, draw = me === them;
+    Store.data.matches++;
+    if (won) Store.data.wins++;
+    Store.save();
+    UI.renderMenuStats();
+    const title = draw ? 'НИЧЬЯ В МАТЧЕ' : won ? 'МАТЧ ВЫИГРАН' : 'МАТЧ ПРОИГРАН';
+    UI.center(title, 'ВСЕГО БОЁВ: ' + o.played + ' · СЧЁТ ' + me + ' : ' + them + ' · Enter — в меню', 600);
+    UI.toast(title + ' · ' + me + ' : ' + them, won ? '#57d16a' : draw ? '#f5d33c' : '#e33a2e');
+    Audio3D_SFX.roundEnd(won);
+    this._matchOverPending = true;
   },
 
   nextRound() {
@@ -3078,7 +3104,7 @@ const Game = {
     if (Net.role === CS.NETROLE.HOST) {
       Net.send({ t: 'roster', roster: Net.peers });
       // and make sure everyone agrees on the economy for this room
-      Net.send({ t: 'round', st: 'settings', players: Store.data.players, hp: this.matchHP, map: MAP.id, free: this.freePlay ? 1 : 0 });
+      Net.send({ t: 'round', st: 'settings', players: Store.data.players, hp: this.matchHP, map: MAP.id, free: this.freePlay ? 1 : 0, rounds: this.online ? this.online.rounds : MATCH.clampRounds(Store.data.rounds) });
     }
   },
 
@@ -3425,6 +3451,7 @@ const Game = {
       if (r.map && r.map !== MAP.id && (this.roundState === 'buy' || this.roundState === 'idle')) this.ensureMap(r.map);
       if (r.players) { this.online.players = r.players; this.refreshSkipUI(); }
       if (r.free !== undefined) this.freePlay = !!r.free;
+      if (r.rounds !== undefined) this.online.rounds = MATCH.clampRounds(r.rounds);
       UI.renderPeerList();
       return;
     }
@@ -3439,10 +3466,14 @@ const Game = {
         UI.center('В БОЙ!', this.onlinePlayerCount() > 2 ? 'Выживает сильнейший' : 'Уничтожьте соперника', 1.4);
         break;
       case 'end':
-        this.endRoundClient(r.win, r.no);
+        this.endRoundClient(r.win, r.no, r.over);
         break;
       case 'newround':
         this.doNewRoundClient(r.hp);
+        break;
+      case 'rounds':
+        // the host changed the number of rounds between rounds
+        if (r.rounds) { this.online.rounds = MATCH.clampRounds(r.rounds); if (this.online.played >= this.online.rounds) this.endMatch(); }
         break;
     }
   },
@@ -3458,17 +3489,19 @@ const Game = {
     UI.center('ЗАКУПКА', 'B — магазин', 1.8);
   },
 
-  endRoundClient(win, roundNo) {
+  endRoundClient(win, roundNo, over) {
     if (this.roundState === 'end') return;
     this.roundState = 'end'; this.roundT = 4.2;
     // 'host' wins the last-man-standing duel; anything else is our side
     if (win === 'host') this.online.roundWins.them++;
     else if (win === 'client') this.online.roundWins.me++;
+    this.online.played++;
     this.online.scoreMe = this.online.roundWins.me;
     this.online.scoreThem = this.online.roundWins.them;
     const txt = win === 'host' ? 'РАУНД ПРОИГРАН' : win === 'client' ? 'РАУНД ВЫИГРАН' : 'НИЧЬЯ';
     UI.center(txt, this.online.scoreMe + ' : ' + this.online.scoreThem, 2.6);
     Audio3D_SFX.roundEnd(win !== 'host');
+    if (over) this.endMatch();
   },
 
   doNewRoundClient(hp) {
@@ -3881,9 +3914,16 @@ const Game = {
       else objective = 'ЗАКУПКА · волна ' + (o.wave + 1);
     } else if (this.mode === CS.MODE.ONLINE) {
       const alive = (p.alive ? 1 : 0) + this.remotePlayers.filter(r => r.alive).length;
-      objective = this.roundState === 'buy' ? 'ЗАКУПКА' :
-        this.roundState === 'live' ? 'РАУНД ' + this.roundNo + ' · ' + alive + '/' + this.onlinePlayerCount() + ' живых' :
-        'КОНЕЦ РАУНДА';
+      const total = this.online ? this.online.rounds : 1;
+      const label = 'РАУНД ' + Math.min(this.roundNo, total) + '/' + total;
+      if (this.online && this.online.matchOver) {
+        objective = 'МАТЧ ОКОНЧЕН · СЧЁТ ' + this.online.roundWins.me + ':' + this.online.roundWins.them + ' · Enter — в меню';
+        timer = 0;
+      } else {
+        objective = this.roundState === 'buy' ? 'ЗАКУПКА · ' + label :
+          this.roundState === 'live' ? label + ' · ' + alive + '/' + this.onlinePlayerCount() + ' живых' :
+          'КОНЕЦ РАУНДА';
+      }
     } else if (this.mode === CS.MODE.RANGE) {
       timer = 0;
       if (this.aim) {
@@ -3917,6 +3957,11 @@ const Game = {
       const wasHorde = this.hordeMode;
       this._restartPending = false; this._offeredRestart = false; this.offlineDead = false; this.offlineDeadT = 0;
       this.startOffline(wasHorde);
+    }
+    // after the final online round, Enter returns to the menu
+    if (this._matchOverPending && (Input.keys['Enter'] || Input.keys['NumpadEnter'])) {
+      this._matchOverPending = false;
+      this.stopToMenu();
     }
   },
 

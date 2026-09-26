@@ -19,7 +19,7 @@ const UI = {
       'connect', 'connTitle', 'connStatus', 'joinRow', 'hostRow', 'joinWait', 'roomCode', 'waiting', 'waitingTxt',
       'inName', 'inCode', 'peerList', 'peerListJoin',
       'btnCopy', 'dmgDirs', 'android', 'ios', 'credits', 'crPlayer', 'crStats',
-      'mapChips', 'playerChips', 'hpChips', 'hordeChips', 'lobbyMaps', 'lobbyPlayers', 'lobbyHp', 'lobbyFree',
+      'mapChips', 'playerChips', 'hpChips', 'hordeChips', 'lobbyMaps', 'lobbyPlayers', 'lobbyHp', 'lobbyFree', 'lobbyRounds',
       'medkitTag', 'droneTag'];
     ids.forEach(i => this.el[i] = $(i));
     this.buildBuyCats();
@@ -123,6 +123,23 @@ const UI = {
         wrap.appendChild(b);
       });
     };
+    const fillRounds = (wrap) => {
+      if (!wrap) return;
+      wrap.innerHTML = '';
+      MATCH.roundOptions.forEach(n => {
+        const b = document.createElement('button');
+        b.dataset.rounds = n;
+        b.innerHTML = '<b>' + n + '</b><i>' + (n === 1 ? 'бой' : 'боёв') + '</i>';
+        b.addEventListener('click', () => {
+          Store.data.rounds = n; Store.save(); this.refreshChips();
+          if (typeof Net !== 'undefined' && Net.role === CS.NETROLE.HOST && Net.connected) {
+            Net.send({ t: 'round', st: 'settings', players: Store.data.players, hp: Store.data.maxHP, map: Store.data.map, free: Store.data.freeplay, rounds: Store.data.rounds });
+          }
+          Audio3D_SFX.uiClick();
+        });
+        wrap.appendChild(b);
+      });
+    };
     const fillHorde = (wrap) => {
       if (!wrap) return;
       wrap.innerHTML = '';
@@ -145,6 +162,7 @@ const UI = {
     fillHp(this.el.lobbyHp);
     fillHorde(this.el.hordeChips);
     fillFree(this.el.lobbyFree);
+    fillRounds(this.el.lobbyRounds);
     this.refreshChips();
   },
 
@@ -159,6 +177,7 @@ const UI = {
     mark(this.el.hpChips, 'hp', S.maxHP); mark(this.el.lobbyHp, 'hp', S.maxHP);
     mark(this.el.hordeChips, 'horde', S.horde);
     mark(this.el.lobbyFree, 'free', S.freeplay);
+    mark(this.el.lobbyRounds, 'rounds', MATCH.clampRounds(S.rounds));
   },
 
   /* connected peers, shown in the lobby so the host can see who is in */

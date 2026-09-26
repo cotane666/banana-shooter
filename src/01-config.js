@@ -76,6 +76,7 @@ const MATCH = window.MATCH = {
   maps: [],                 // filled from MAPS once 04-map.js has loaded
   playerCounts: [1, 2, 3, 4],
   hpOptions: [50, 75, 100, 125, 150, 200],
+  roundOptions: [1, 3, 5, 7],
   maxPlayers: 4,
   minPlayers: 2,
 
@@ -87,6 +88,11 @@ const MATCH = window.MATCH = {
     n = Math.round(n || 2);
     const lo = online ? 2 : 1;
     return U.clamp(n, lo, MATCH.maxPlayers);
+  },
+  clampRounds(n) {
+    n = Math.round(n || 1);
+    if (MATCH.roundOptions.indexOf(n) < 0) n = 3;
+    return n;
   }
 };
 
@@ -233,7 +239,7 @@ function makeRng(seed) {
 const Store = {
   key: 'cs3d.save.v1',
   data: { sens: 2.2, fov: 80, vol: 60, quality: 1, touchSens: 1.5, name: '', best: 0, bestWave: 0, killsTotal: 0, matches: 0, wins: 0, signalSrv: 0, aimBest: 0, aimAutoFire: 1,
-          map: 'arena', players: 2, maxHP: 100, aimAssist: 1, horde: 0, clears: 0, freeplay: 0 },
+          map: 'arena', players: 2, maxHP: 100, aimAssist: 1, horde: 0, clears: 0, freeplay: 0, rounds: 3 },
   load() {
     try { const r = localStorage.getItem(this.key); if (r) Object.assign(this.data, JSON.parse(r)); } catch (e) { }
     return this.data;

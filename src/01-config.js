@@ -108,7 +108,15 @@ const MATCH = window.MATCH = {
   },
   /* custom offline mode: how many zombies and how tough they are */
   countOptions: [1, 2, 5, 10, 20],
-  hpOptionsOff: [0.25, 0.5, 1, 2, 5]
+  hpOptionsOff: [0.25, 0.5, 1, 2, 5],
+
+  /* which shop categories a room allows (host picks it in the lobby; only
+     enforced in ONLINE matches). Built from BUY_CATS at call time. */
+  defaultShopAllow() {
+    const o = {};
+    (typeof BUY_CATS !== 'undefined' ? BUY_CATS : []).forEach(c => { o[c.id] = 1; });
+    return o;
+  }
 };
 
 /* ---------------- weapons (CS-inspired) ----------------
@@ -284,7 +292,7 @@ const Store = {
   key: 'cs3d.save.v1',
   data: { sens: 2.2, fov: 80, vol: 60, quality: 1, touchSens: 1.5, name: '', best: 0, bestWave: 0, killsTotal: 0, matches: 0, wins: 0, signalSrv: 0, aimBest: 0, aimAutoFire: 1,
           map: 'arena', players: 2, maxHP: 100, aimAssist: 1, horde: 0, clears: 0, freeplay: 0, rounds: 3, playTime: 0,
-          offCount: 1, offHp: 1, offFree: 0 },
+          offCount: 1, offHp: 1, offFree: 0, shopAllow: {} },
   load() {
     try { const r = localStorage.getItem(this.key); if (r) Object.assign(this.data, JSON.parse(r)); } catch (e) { }
     return this.data;

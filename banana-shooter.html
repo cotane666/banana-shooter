@@ -9517,8 +9517,11 @@ const Game = {
       Store.data.bestWave = recWave;
       Store.data.killsTotal += 0;
       Store.save();
-      // partial heal
-      this.player.health = Math.min(CFG.maxHP, this.player.health + 22);
+      // partial heal, capped at the MATCH's health (100/125/150/200…) — using
+      // CFG.maxHP (always 100) here silently dropped the player to 100 HP after
+      // every wave whenever a higher health setting was chosen.
+      const healCap = this.matchHP || this.player.maxHealth || CFG.maxHP;
+      this.player.health = Math.min(healCap, this.player.health + 22);
     }
   },
 

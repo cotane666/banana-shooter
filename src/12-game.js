@@ -1042,7 +1042,6 @@ const Game = {
       case 'Digit2': if (!this.paused) this.switchSlot(2); break;
       case 'Digit3': if (!this.paused) this.switchSlot(3); break;
       case 'KeyQ': if (!this.paused) this.switchSlot(this.player.nextSlot()); break;
-      case 'KeyG': if (!this.paused && this.player.dropWeapon()) { Audio3D_SFX.pickup(); UI.toast('Оружие сброшено'); } break;
       case 'KeyN': this.invertY(); break;
       // On PC the pointer is locked during play, so DOM buttons cannot be
       // clicked at all — the range features get keyboard shortcuts.

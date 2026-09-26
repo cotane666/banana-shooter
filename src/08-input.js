@@ -52,7 +52,7 @@ const Input = {
       if (!this.keys[k]) { if (this.onKeyDown) this.onKeyDown(k, e); }
       this.keys[k] = true;
       if (this.enabled) {
-        if (['Tab', 'Space', 'KeyB', 'KeyG', 'KeyR', 'Digit1', 'Digit2', 'Digit3'].indexOf(k) >= 0) e.preventDefault();
+        if (['Tab', 'Space', 'KeyB', 'KeyR', 'Digit1', 'Digit2', 'Digit3'].indexOf(k) >= 0) e.preventDefault();
         if (k === 'F5' || k === 'F11' || k === 'F12') return;
       }
     });

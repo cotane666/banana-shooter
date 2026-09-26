@@ -738,16 +738,6 @@ class Player {
     const i = order.indexOf(this.slot);
     return order[(i + 1) % order.length];
   }
-  dropWeapon() {
-    const slot = this.slot;
-    if (slot === 3 || !this.inv[slot]) return null;
-    const w = this.inv[slot];
-    this.inv[slot] = null;
-    this.slot = this.inv[2] ? 2 : (this.inv[1] ? 1 : 3);
-    this.deployT = .3;
-    this.buildViewModel();
-    return w.id;
-  }
 
   resetSpawn(x, y, z, yaw) {
     this.pos.x = x; this.pos.y = y; this.pos.z = z;

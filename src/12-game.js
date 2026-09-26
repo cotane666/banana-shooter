@@ -3550,7 +3550,16 @@ const Game = {
       }
       if (this.effects) this.effects.update(dt);
       this.updateProjectiles(dt);
-      if (this.mode === CS.MODE.ONLINE) { this.updateRemoteProjectiles(dt); Net.tick(dt); }
+      /* The other players keep moving while we fly the drone: without this the
+         remote models (and their incoming shots) froze until the drone landed. */
+      if (this.mode === CS.MODE.ONLINE) {
+        this.updateRemoteProjectiles(dt);
+        Net.tick(dt);
+        this._netStateT -= dt;
+        if (this._netStateT <= 0) { this._netStateT = 1 / CFG.netSendLocalHz; this.broadcastState(); }
+        for (const rp of this.remotePlayers) { rp.advance(dt); rp.interp(CFG.netInterpMs); rp.sync(dt); }
+        this.checkPeerAlive(dt);
+      }
       this.cameraUpdate(dt);
       this.renderFrame(dt);
       this.updateHUD(dt);

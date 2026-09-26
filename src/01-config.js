@@ -116,7 +116,26 @@ const MATCH = window.MATCH = {
     const o = {};
     (typeof BUY_CATS !== 'undefined' ? BUY_CATS : []).forEach(c => { o[c.id] = 1; });
     return o;
-  }
+  },
+  /* every individual buyable in the shop, grouped by category. Weapons with a
+     price plus all gear. Used for the per-item allow-list. */
+  shopItems() {
+    const out = {};
+    if (typeof BUY_CATS === 'undefined') return out;
+    BUY_CATS.forEach(c => { out[c.id] = []; });
+    if (typeof WEAPONS !== 'undefined') {
+      for (const id in WEAPONS) {
+        const w = WEAPONS[id];
+        if (w.price > 0 && out[w.cat]) out[w.cat].push({ id: id, name: w.name });
+      }
+    }
+    if (typeof GEAR !== 'undefined' && out.gear) {
+      for (const id in GEAR) out.gear.push({ id: id, name: GEAR[id].name });
+    }
+    return out;
+  },
+  /* per-item allow map; missing = allowed */
+  defaultItemAllow() { return {}; }
 };
 
 /* ---------------- weapons (CS-inspired) ----------------
@@ -292,7 +311,7 @@ const Store = {
   key: 'cs3d.save.v1',
   data: { sens: 2.2, fov: 80, vol: 60, quality: 1, touchSens: 1.5, name: '', best: 0, bestWave: 0, killsTotal: 0, matches: 0, wins: 0, signalSrv: 0, aimBest: 0, aimAutoFire: 1,
           map: 'arena', players: 2, maxHP: 100, aimAssist: 1, horde: 0, clears: 0, freeplay: 0, rounds: 3, playTime: 0,
-          offCount: 1, offHp: 1, offFree: 0, shopAllow: {} },
+          offCount: 1, offHp: 1, offFree: 0, shopAllow: {}, shopItems: {} },
   load() {
     try { const r = localStorage.getItem(this.key); if (r) Object.assign(this.data, JSON.parse(r)); } catch (e) { }
     return this.data;

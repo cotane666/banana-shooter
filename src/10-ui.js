@@ -21,7 +21,7 @@ const UI = {
       'btnCopy', 'dmgDirs', 'android', 'ios', 'credits', 'crPlayer', 'crStats',
       'matchEnd', 'meTitle', 'meWinner', 'meScore', 'meDetail', 'btnMatchAgain', 'btnMatchMenu',
       'mapChips', 'playerChips', 'hpChips', 'hordeChips', 'lobbyMaps', 'lobbyPlayers', 'lobbyHp', 'lobbyFree', 'lobbyRounds',
-      'offCountChips', 'offHpChips', 'offFreeChips', 'custom', 'lobbyShop',
+      'offCountChips', 'offHpChips', 'offFreeChips', 'custom', 'lobbyShop', 'lobbyShopItems',
       'medkitTag', 'droneTag'];
     ids.forEach(i => this.el[i] = $(i));
     this.buildBuyCats();
@@ -190,9 +190,9 @@ const UI = {
           cur[c.id] = cur[c.id] ? 0 : 1;
           Game.shopAllow = cur;
           Store.data.shopAllow = cur; Store.save();
-          this.refreshChips();
+          this.refreshChips(); this.renderShopItems();
           if (typeof Net !== 'undefined' && Net.role === CS.NETROLE.HOST && Net.connected) {
-            Net.send({ t: 'round', st: 'settings', players: Store.data.players, hp: Store.data.maxHP, map: Store.data.map, free: Store.data.freeplay, rounds: Store.data.rounds, shop: cur });
+            Net.send({ t: 'round', st: 'settings', players: Store.data.players, hp: Store.data.maxHP, map: Store.data.map, free: Store.data.freeplay, rounds: Store.data.rounds, shop: cur, shopItems: Game.shopItemsAllow() });
           }
           Audio3D_SFX.uiClick();
         });
@@ -424,9 +424,11 @@ const UI = {
 
     wrap.innerHTML = '';
     let n = 0;
-    // in ONLINE matches the host may disable whole categories of the shop
+    // in ONLINE matches the host may disable whole categories / single items
     const allow = (typeof Game !== 'undefined') ? Game.shopAllow : null;
     const shopAllows = (cat) => !allow || allow[cat] !== 0;
+    const itemAllow = (typeof Game !== 'undefined' && Game.shopItemAllow) ? Game.shopItemAllow : null;
+    const itemAllowed = (id) => !itemAllow || itemAllow[id] !== 0;
     const mkCard = (id, name, desc, price, stats, owned, cant, onClick) => {
       n++;
       const d = document.createElement('div');
@@ -444,6 +446,7 @@ const UI = {
       Object.keys(GEAR).forEach(gid => {
         const g = GEAR[gid];
         if (!shopAllows('gear')) return;
+        if (!itemAllowed(gid)) return;
         /* Consumables are never "owned": ammo can always be refilled and a
            medkit/drone can be bought again after being used. */
         let owned, cant, stats, desc;
@@ -491,6 +494,7 @@ const UI = {
       defs.forEach(id => {
         const w = WEAPONS[id];
         if (!shopAllows(w.cat)) return;
+        if (!itemAllowed(id)) return;
         const owned = player.has(id);
         const rpm = Math.round(w.rpm);
         const stats = [['УРОН', w.dmg], ['ТЕМП', rpm]];
@@ -514,6 +518,56 @@ const UI = {
     if (p.medkits > 0) s += ' · аптечек: ' + p.medkits;
     if (p.drone) s += ' · дрон';
     return s;
+  },
+
+  /* Per-item shop allow-list: one expandable block per category, each button a
+     single weapon/gear entry. Only meaningful for online hosts; harmless for
+     clients (their toggles are simply ignored). */
+  renderShopItems() {
+    const wrap = this.el.lobbyShopItems;
+    if (!wrap) return;
+    const cats = (typeof BUY_CATS !== 'undefined') ? BUY_CATS : [];
+    const items = (typeof MATCH !== 'undefined' && MATCH.shopItems) ? MATCH.shopItems() : {};
+    const catAllow = (typeof Game !== 'undefined' && Game.shopAllow) ? Game.shopAllow : MATCH.defaultShopAllow();
+    const itemAllow = (typeof Game !== 'undefined' && Game.shopItemsAllow) ? Game.shopItemsAllow() : {};
+    wrap.innerHTML = '';
+    cats.forEach(c => {
+      const list = items[c.id] || [];
+      if (!list.length) return;
+      const block = document.createElement('div');
+      block.className = 'si-cat';
+      const off = catAllow[c.id] === 0;
+      const head = document.createElement('div');
+      head.className = 'si-head';
+      const onCount = list.filter(it => itemAllow[it.id] !== 0).length;
+      head.innerHTML = '<span class="si-title">' + U.esc(c.label) + '</span>' +
+        '<span class="si-count">' + (off ? 'ВЫКЛЮЧЕНО ЦЕЛИКОМ' : onCount + '/' + list.length + ' доступно') + '</span>';
+      block.appendChild(head);
+      const grid = document.createElement('div');
+      grid.className = 'si-grid';
+      list.forEach(it => {
+        const b = document.createElement('button');
+        const allowed = itemAllow[it.id] !== 0;
+        b.textContent = it.name;
+        b.className = allowed ? 'on' : 'off';
+        if (off) b.disabled = true;
+        b.addEventListener('click', () => {
+          if (catAllow[c.id] === 0) return;
+          const cur = Game.shopItemsAllow();
+          cur[it.id] = cur[it.id] === 0 ? 1 : 0;
+          Game.shopItemAllow = cur;
+          Store.data.shopItems = cur; Store.save();
+          this.renderShopItems();
+          if (typeof Net !== 'undefined' && Net.role === CS.NETROLE.HOST && Net.connected) {
+            Net.send({ t: 'round', st: 'settings', players: Store.data.players, hp: Store.data.maxHP, map: Store.data.map, free: Store.data.freeplay, rounds: Store.data.rounds, shop: Game.shopAllow, shopItems: cur });
+          }
+          Audio3D_SFX.uiClick();
+        });
+        grid.appendChild(b);
+      });
+      block.appendChild(grid);
+      wrap.appendChild(block);
+    });
   },
 
   /* ---------------- minimap ---------------- */

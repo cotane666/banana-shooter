@@ -1461,6 +1461,10 @@ const Game = {
     // which categories the shop allows: host's choice, or default (everything)
     this.shopAllow = opts.shop ? Object.assign({}, opts.shop)
       : (this.online.role === CS.NETROLE.HOST ? this.hostShopAllow() : MATCH.defaultShopAllow());
+    // per-item allow-list (missing = allowed). Clients wait for the host's list,
+    // so they start with everything allowed rather than their own saved bans.
+    this.shopItemAllow = opts.shopItems ? Object.assign({}, opts.shopItems)
+      : (this.online.role === CS.NETROLE.HOST ? this.hostShopItemsAllow() : {});
     if (this.online.role === CS.NETROLE.HOST) { Store.data.map = mapId; Store.data.maxHP = this.matchHP; Store.save(); }
 
     this.remotePlayers = []; this.remote = null;
@@ -1806,6 +1810,14 @@ const Game = {
     return out;
   },
 
+  /* The host's per-item allow-list, loaded from the saved choice. */
+  hostShopItemsAllow() {
+    const out = {};
+    const saved = Store.data.shopItems;
+    if (saved && typeof saved === 'object') for (const k in saved) out[k] = saved[k] ? 1 : 0;
+    return out;
+  },
+
   /* Is the shop free right now? The range is always free; online can be started
      with "ВСЁ БЕСПЛАТНО" (set in the lobby and synced by the host); the offline
      "БЕСПЛАТНАЯ ОРДА" mode also runs with a free shop. */
@@ -1823,11 +1835,27 @@ const Game = {
     return !a || a[cat] !== 0;
   },
 
+  /* Individual item allow-list (missing = allowed). Only enforced online. */
+  shopItemsAllow() {
+    if (this.shopItemAllow) return this.shopItemAllow;
+    const out = {};
+    const saved = Store.data.shopItems;
+    if (saved && typeof saved === 'object') for (const k in saved) out[k] = saved[k] ? 1 : 0;
+    this.shopItemAllow = out;
+    return out;
+  },
+  itemAllowed(id) {
+    if (this.mode !== CS.MODE.ONLINE) return true;
+    const a = this.shopItemsAllow();
+    return a[id] !== 0;
+  },
+
   tryBuy(id) {
     const w = WEAPONS[id];
     if (!w) return;
     if (this.roundState !== 'buy' && this.mode !== CS.MODE.RANGE) { Audio3D_SFX.deny(); UI.toast('Магазин закрыт'); return; }
     if (!this.shopAllows(w.cat)) { Audio3D_SFX.deny(); UI.toast('Этот класс оружия выключен хостом'); return; }
+    if (!this.itemAllowed(id)) { Audio3D_SFX.deny(); UI.toast('Это оружие выключено хостом'); return; }
     if (this.player.has(id)) { Audio3D_SFX.deny(); UI.toast('Уже куплено'); return; }
     const free = this.isFreeShop();
     if (!free && this.player.money < w.price) { Audio3D_SFX.deny(); UI.toast('Не хватает денег'); return; }
@@ -1848,6 +1876,7 @@ const Game = {
     if (!g) return;
     if (this.roundState !== 'buy' && this.mode !== CS.MODE.RANGE) { Audio3D_SFX.deny(); return; }
     if (!this.shopAllows('gear')) { Audio3D_SFX.deny(); UI.toast('Снаряжение выключено хостом'); return; }
+    if (!this.itemAllowed(id)) { Audio3D_SFX.deny(); UI.toast('Этот предмет выключен хостом'); return; }
     const free = this.isFreeShop();
 
     /* Consumables: ammo refill, kamikaze drone, and the medkit upgrade. */
@@ -3397,7 +3426,9 @@ const Game = {
     if (UI.el.inName) UI.el.inName.value = Store.data.name || '';
     // seed the shop allow-list from the saved choice so the chips show it
     this.shopAllow = this.hostShopAllow();
+    this.shopItemAllow = this.hostShopItemsAllow();
     UI.refreshChips();
+    UI.renderShopItems();
   },
 
   doHost() {
@@ -3493,7 +3524,7 @@ const Game = {
     if (Net.role === CS.NETROLE.HOST) {
       Net.send({ t: 'roster', roster: Net.peers });
       // and make sure everyone agrees on the economy for this room
-      Net.send({ t: 'round', st: 'settings', players: Store.data.players, hp: this.matchHP, map: MAP.id, free: this.freePlay ? 1 : 0, rounds: this.online ? this.online.rounds : MATCH.clampRounds(Store.data.rounds), shop: this.shopAllow });
+      Net.send({ t: 'round', st: 'settings', players: Store.data.players, hp: this.matchHP, map: MAP.id, free: this.freePlay ? 1 : 0, rounds: this.online ? this.online.rounds : MATCH.clampRounds(Store.data.rounds), shop: this.shopAllow, shopItems: this.shopItemsAllow() });
     }
   },
 
@@ -3842,6 +3873,7 @@ const Game = {
       if (r.free !== undefined) this.freePlay = !!r.free;
       if (r.rounds !== undefined) this.online.rounds = MATCH.clampRounds(r.rounds);
       if (r.shop) this.shopAllow = Object.assign({}, r.shop);
+      if (r.shopItems) this.shopItemAllow = Object.assign({}, r.shopItems);
       if (r.winner) this.online.winnerName = r.winner;
       UI.renderPeerList();
       return;

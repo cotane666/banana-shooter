@@ -109,6 +109,20 @@ html.touch #menu .menu-inner{padding:calc(16px + env(safe-area-inset-top,0px)) 1
   padding:6px 11px;border-radius:3px;font-size:12.5px;color:#c3ccd4;display:flex;justify-content:space-between}
 .peerlist div em{font-style:normal;color:var(--or);font-size:10px;letter-spacing:1.4px}
 
+/* per-item shop toggles in the lobby (expand a category to pick single items) */
+.shopitems{margin-top:9px;display:flex;flex-direction:column;gap:9px}
+.shopitems .si-cat{background:#0c0f12;border:1px solid var(--line);border-radius:3px;padding:8px 9px}
+.shopitems .si-head{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.shopitems .si-title{font-size:10.5px;letter-spacing:2px;color:var(--or2);font-weight:700}
+.shopitems .si-count{color:var(--dim);font-size:10.5px}
+.shopitems .si-grid{display:flex;flex-wrap:wrap;gap:5px;margin-top:7px}
+.shopitems .si-grid button{background:#171d22;border:1px solid var(--line);color:var(--dim);
+  padding:5px 9px;font-size:10.5px;letter-spacing:.6px;cursor:pointer;border-radius:3px;font-family:inherit;transition:.1s}
+.shopitems .si-grid button:hover{border-color:#414d57;color:#fff}
+.shopitems .si-grid button.on{background:var(--green);border-color:var(--green);color:#12161a;font-weight:700}
+.shopitems .si-grid button.off{background:#2a1416;border-color:#7a3a3a;color:#ff9d9d}
+html.touch .shopitems .si-grid button{padding:7px 10px;font-size:11px}
+
 /* iOS install guide */
 .ios-steps{display:flex;flex-direction:column;gap:10px;margin-bottom:6px}
 .ios-row{display:flex;gap:13px;align-items:flex-start;font-size:13.5px;color:#c3ccd4;line-height:1.5}

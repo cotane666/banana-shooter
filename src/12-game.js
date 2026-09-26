@@ -2300,7 +2300,8 @@ const Game = {
     this._crateT -= dt;
     if (this._crateT <= 0) {
       this._crateT = CFG.crateInterval;
-      this.spawnCrate();
+      // never flood the map: at most CFG.crateMax crates live at once
+      if (this.crates.length < CFG.crateMax) this.spawnCrate();
     }
 
     // collect / retire crates
@@ -2322,6 +2323,7 @@ const Game = {
 
   /* pick a walkable spot away from walls and drop a crate there */
   spawnCrate() {
+    if (this.crates.length >= CFG.crateMax) return;      // hard cap, belt and braces
     const nav = MAP.nav;
     const p = this.player;
     let spot = null;

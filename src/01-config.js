@@ -69,6 +69,7 @@ const CFG = {
   crateAmmoFrac: 0.25,  // fraction of the FULL stock restored per crate
   cratePickupDist: 2.2, // how close the player must get to collect it
   crateLife: 60,        // a crate vanishes if it is not collected in time
+  crateMax: 5,          // at most this many crates on the map at once
 
   /* ---- BOSS WAVES ---- */
   bossWaves: [15, 30, 50, 100],  // waves that summon a boss

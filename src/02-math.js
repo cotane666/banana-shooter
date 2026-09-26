@@ -184,6 +184,17 @@ class CollisionWorld {
       for (let i = 0; i < list.length; i++) {
         if (cylinderOverlapsAABB(cyl, list[i])) hit.push(list[i]);
       }
+      /* On an UPWARD move a low obstacle must not act as a ceiling. Otherwise
+         standing flush against a knee-high crate made the rising cylinder clip
+         its edge, the jump was reported as hitting a ceiling and got cancelled —
+         so the player could not jump while touching the object, but could from a
+         step away. Anything we could simply step onto (top within stepUp of our
+         feet) is ignored here; a genuine wall still blocks the jump. */
+      if (axis === 'y' && amount > 0 && stepUp) {
+        for (let i = hit.length - 1; i >= 0; i--) {
+          if (hit[i].maxY <= ent.y + stepUp + 0.02) hit.splice(i, 1);
+        }
+      }
       if (hit.length) {
         if (axis === 'x' || axis === 'z') blockBoxes = hit;
         /* Step-up only makes sense over something we could stand on. A box whose

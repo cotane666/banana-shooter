@@ -187,7 +187,7 @@ const WEAPONS = {
   atomicRpg: { name: 'АТОМНОЕ РПГ СВОБОДЫ', cat: 'heavy', slot: 2, price: 20000, dmg: 1300, rpm: 34, mag: 1, reserve: 20,
          auto: false, spread: .006, moveSpread: .070, recoil: 7.3, falloff: .99, range: 260, headMul: 1.2,
          sound: 'awp', projectile: 'rocket', projSpeed: 52, projGravity: 3,
-         splash: 42.0, splashDmg: 1200, explosionColor: [0x39ff5a, 0x0a1a0a], noSelfDamage: true },
+         splash: 14.0, splashDmg: 1200, explosionColor: [0x39ff5a, 0x0a1a0a], noSelfDamage: true, nuke: true },
 
   /* ---------------- Y.H.S: absurdly strong, absurdly fast MG ---------------- */
   yhs: { name: 'Y.H.S', cat: 'lmg', slot: 2, price: 20000, dmg: 180, rpm: 5750, mag: 2000, reserve: 0,

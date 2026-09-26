@@ -211,8 +211,9 @@ class Effects {
   }
 
   /* ---------- explosion / grenade-ish ----------
-     `tint` optionally recolours the blast (e.g. the atomic RPG's green/black). */
-  explosion(x, y, z, radius, tint) {
+     `tint` optionally recolours the blast (e.g. the atomic RPG's green/black);
+     `nuke` additionally spawns the mushroom cloud + tornado FX. */
+  explosion(x, y, z, radius, tint, nuke) {
     const sparkMat = tint ? this._tintMat(tint[0], true) : null;
     const smokeMat = tint ? this._tintMat(tint[1], false) : null;
     for (let i = 0; i < 30; i++) {
@@ -229,6 +230,67 @@ class Effects {
     light.position.set(x, y, z);
     this.scene.add(light);
     this.particles.push({ mesh: light, light: true, life: .22, max: .22, vx: 0, vy: 0, vz: 0, grav: 0 });
+    if (nuke) this.nukeFx(x, y, z);
+  }
+
+  /* ---------- nuclear FX: a green/black mushroom cloud + a spinning tornado ----------
+     Purely cosmetic. Built from two custom groups that live in `this.nukes` and
+     are animated in update(): the stalk/cloud rises and swells, the tornado
+     spins and fades. */
+  nukeFx(x, y, z) {
+    const GREEN = 0x39ff5a, DARK = 0x0b1a0e, MID = 0x1e3d24;
+    const capMat = this._tintMat(GREEN, false);
+    const capMat2 = this._tintMat(MID, false);
+    const smokeMat = this._tintMat(DARK, false);
+
+    const g = new THREE.Group();
+    g.position.set(x, y, z);
+
+    // --- mushroom: a rising stalk of rings, topped by a swelling cap ---
+    const stalk = new THREE.Group();
+    for (let i = 0; i < 6; i++) {
+      const r = .9 + i * .35;
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(r, .34, 6, 18), i % 2 ? smokeMat : capMat2);
+      ring.rotation.x = Math.PI / 2;
+      ring.position.y = 1.0 + i * .9;
+      stalk.add(ring);
+    }
+    const cap = new THREE.Mesh(new THREE.SphereGeometry(3.4, 14, 10), capMat);
+    cap.position.y = 7.4;
+    cap.scale.set(1, .62, 1);
+    stalk.add(cap);
+    // a second, darker dome just under the cap for shading
+    const cap2 = new THREE.Mesh(new THREE.SphereGeometry(4.3, 14, 10), smokeMat);
+    cap2.position.y = 6.6;
+    cap2.scale.set(1.15, .42, 1.15);
+    stalk.add(cap2);
+    g.add(stalk);
+
+    // --- tornado: stacked, offset rings that read as a spinning funnel ---
+    const tornado = new THREE.Group();
+    const spin = [];
+    for (let i = 0; i < 9; i++) {
+      const t = i / 8;                       // 0 = ground, 1 = top
+      const r = .7 + t * 3.1;                // widens toward the top
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(r, .26, 5, 20), i % 2 ? capMat : capMat2);
+      ring.rotation.x = Math.PI / 2;
+      ring.position.y = .3 + t * 6.5;
+      ring.rotation.z = t * 2.2;             // helical offset
+      ring.userData.spin = .6 + t * 1.6;
+      tornado.add(ring);
+      spin.push(ring);
+    }
+    g.add(tornado);
+
+    this.scene.add(g);
+    const light = new THREE.PointLight(GREEN, 80, 60, 2);
+    light.position.set(x, y + 4, z);
+    this.scene.add(light);
+
+    (this.nukes || (this.nukes = [])).push({
+      group: g, stalk: stalk, cap: cap, tornado: tornado, spin: spin, light: light,
+      life: 3.4, max: 3.4
+    });
   }
 
   muzzleSmoke(x, y, z, dir) {
@@ -265,6 +327,33 @@ class Effects {
           this.lasers.splice(i, 1);
         } else {
           L.mesh.material.opacity = (L.life / L.max);
+        }
+      }
+    }
+    // nuclear FX: the mushroom rises/swells, the tornado spins and fades
+    if (this.nukes) {
+      for (let i = this.nukes.length - 1; i >= 0; i--) {
+        const n = this.nukes[i];
+        n.life -= dt;
+        const k = U.clamp(1 - n.life / n.max, 0, 1);      // 0 → 1 over the lifetime
+        const fade = n.life < .9 ? n.life / .9 : 1;
+        // stalk grows upward, cap swells then settles
+        n.stalk.scale.set(0.6 + k * .7, 0.5 + k * .9, 0.6 + k * .7);
+        n.cap.scale.setScalar(.6 + k * .5);
+        n.cap.position.y = 7.4 + k * 1.2;
+        // tornado spins, widens slightly and drifts upward
+        n.tornado.rotation.y += dt * 3.4;
+        n.tornado.position.y = k * 1.1;
+        for (const ring of n.spin) ring.rotation.z += dt * ring.userData.spin;
+        // fade out by gently shrinking the whole group near the end
+        const s = fade < 1 ? fade : 1;
+        n.group.scale.setScalar(s);
+        if (n.light) n.light.intensity = 80 * fade;
+        if (n.life <= 0) {
+          n.group.traverse(o => { if (o.geometry) o.geometry.dispose(); });
+          this.scene.remove(n.group);
+          if (n.light && n.light.parent) n.light.parent.remove(n.light);
+          this.nukes.splice(i, 1);
         }
       }
     }
@@ -322,6 +411,14 @@ class Effects {
     this.tracers.forEach(t => { if (t.mesh.parent) t.mesh.parent.remove(t.mesh); this.tracerPool.push(t.mesh); });
     this.tracers.length = 0;
     if (this.lasers) { this.lasers.forEach(L => { if (L.mesh.parent) L.mesh.parent.remove(L.mesh); }); this.lasers.length = 0; }
+    if (this.nukes) {
+      this.nukes.forEach(n => {
+        n.group.traverse(o => { if (o.geometry) o.geometry.dispose(); });
+        if (n.group.parent) n.group.parent.remove(n.group);
+        if (n.light && n.light.parent) n.light.parent.remove(n.light);
+      });
+      this.nukes.length = 0;
+    }
     this.particles.forEach(p => { if (!p.light && p.mesh.parent) p.mesh.parent.remove(p.mesh); if (!p.light) this.particlePool.push(p.mesh); else if (p.mesh.parent) p.mesh.parent.remove(p.mesh); });
     this.particles.length = 0;
     this.decals.forEach(d => this.scene.remove(d));

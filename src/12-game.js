@@ -2802,6 +2802,7 @@ const Game = {
       splashDmg: def.splashDmg || 0,
       explosionColor: def.explosionColor || null,
       noSelfDamage: !!def.noSelfDamage, // e.g. the atomic RPG never hurts its owner
+      nuke: !!def.nuke,                 // spawn the mushroom + tornado FX
       ownerIsLocal: true
     });
     if (this.projectiles.length > 40) {
@@ -2905,12 +2906,12 @@ const Game = {
   /* radial blast damage for rockets: falls off linearly to the edge */
   explode(center, pr) {
     const R = pr.splash, dmg = pr.splashDmg || pr.dmg;
-    this.effects.explosion(center.x, center.y, center.z, R, pr.explosionColor);
+    this.effects.explosion(center.x, center.y, center.z, R, pr.explosionColor, pr.nuke);
     Audio3D_SFX.explosionAt(center.x, center.y, center.z);
     UI.hitmark(false);
     // tell the room so everyone sees and hears the rocket, not just the shooter
     if (this.mode === CS.MODE.ONLINE) {
-      Net.send({ t: 'boom', from: Net.selfId(), x: +center.x.toFixed(2), y: +center.y.toFixed(2), z: +center.z.toFixed(2), r: R, c: pr.explosionColor || undefined });
+      Net.send({ t: 'boom', from: Net.selfId(), x: +center.x.toFixed(2), y: +center.y.toFixed(2), z: +center.z.toFixed(2), r: R, c: pr.explosionColor || undefined, nk: pr.nuke ? 1 : undefined });
     }
     // zombies
     if (this.horde) {
@@ -3677,7 +3678,7 @@ const Game = {
     // an enemy rocket detonated somewhere on the map — show the same blast the
     // shooter saw, so a rocket is never a private event
     const R = b.r || 6;
-    if (this.effects) this.effects.explosion(b.x, b.y, b.z, R, b.c || null);
+    if (this.effects) this.effects.explosion(b.x, b.y, b.z, R, b.c || null, !!b.nk);
     Audio3D_SFX.explosionAt(b.x, b.y, b.z);
     // drop the cosmetic copy so it does not fly on and detonate again
     this.removeRemoteProjectileNear(b.x, b.y, b.z);

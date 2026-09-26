@@ -37,6 +37,7 @@
       <button class="mbtn primary" id="btnOffline"><b>ОФФЛАЙН</b><i>Волны зомби — зарабатывай счёт</i></button>
       <button class="mbtn" id="btnHorde"><b>ОРДА ×10</b><i>В 10 раз больше зомби, но они хилые</i></button>
       <button class="mbtn" id="btnFreeHorde"><b>БЕСПЛАТНАЯ ОРДА</b><i>Орда ×10 и всё оружие бесплатно</i></button>
+      <button class="mbtn" id="btnCustom"><b>СВОЙ ОФФЛАЙН</b><i>Свои множители зомби и здоровья · платно или бесплатно</i></button>
       <button class="mbtn" id="btnRange"><b>ПОЛИГОН</b><i>Всё оружие бесплатно · манекены и урон в секунду</i></button>
       <button class="mbtn" id="btnOnline"><b>ОНЛАЙН</b><i>Бой против друзей: 2–4 игрока, выбор карты</i></button>
       <button class="mbtn" id="btnMatch"><b>ПАРАМЕТРЫ МАТЧА</b><i>Карта · число игроков · здоровье</i></button>
@@ -47,6 +48,30 @@
 
     <div class="menu-stats" id="menuStats"></div>
     <div class="menu-foot" id="menuControlsHint">WASD — движение &nbsp;·&nbsp; ЛКМ — огонь &nbsp;·&nbsp; B — магазин &nbsp;·&nbsp; Tab — счёт</div>
+  </div>
+</div>
+
+<!-- ============ CUSTOM OFFLINE ============ -->
+<div id="custom" class="screen hidden">
+  <div class="panel">
+    <h2>СВОЙ ОФФЛАЙН</h2>
+    <div class="hintbox" style="margin-top:0">
+      Настройте, сколько зомби приходит за волну и насколько они крепкие, и
+      играйте с платным или бесплатным магазином. Значения запоминаются.
+    </div>
+    <div class="fld">Зомби за волну
+      <div class="chips" id="offCountChips"></div>
+    </div>
+    <div class="fld">Здоровье зомби
+      <div class="chips" id="offHpChips"></div>
+    </div>
+    <div class="fld">Магазин
+      <div class="chips" id="offFreeChips"></div>
+    </div>
+    <div class="btnrow">
+      <button class="mbtn primary" id="btnCustomStart"><b>НАЧАТЬ</b><i>Запустить свой оффлайн</i></button>
+      <button class="mbtn small" id="btnCustomBack">НАЗАД</button>
+    </div>
   </div>
 </div>
 

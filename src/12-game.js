@@ -830,6 +830,9 @@ const Game = {
     bindClick('btnOffline', () => this.startOffline());
     bindClick('btnHorde', () => this.startOffline(true));
     bindClick('btnFreeHorde', () => this.startOffline(true, true));
+    bindClick('btnCustom', () => { UI.show('custom'); UI.refreshChips(); });
+    bindClick('btnCustomBack', () => UI.show('menu'));
+    bindClick('btnCustomStart', () => this.startOffline(false, false, true));
     bindClick('btnCreditsClose', () => this.closeCredits());
     bindClick('btnMatchAgain', () => this.rematchOnline());
     bindClick('btnMatchMenu', () => this.backToMenuFromMatch());
@@ -866,7 +869,7 @@ const Game = {
     bindClick('btnLeave', () => this.stopToMenu());
     bindClick('btnReset', () => {
       if (confirm('Сбросить весь прогресс и настройки?')) {
-        Store.data = { sens: 2.2, fov: 80, vol: 60, quality: 1, touchSens: 1.5, name: '', best: 0, bestWave: 0, killsTotal: 0, matches: 0, wins: 0, signalSrv: 0, aimBest: 0, aimAutoFire: 1, map: 'arena', players: 2, maxHP: 100, aimAssist: 1, horde: 0, clears: 0, freeplay: 0, rounds: 3, playTime: 0 };
+        Store.data = { sens: 2.2, fov: 80, vol: 60, quality: 1, touchSens: 1.5, name: '', best: 0, bestWave: 0, killsTotal: 0, matches: 0, wins: 0, signalSrv: 0, aimBest: 0, aimAutoFire: 1, map: 'arena', players: 2, maxHP: 100, aimAssist: 1, horde: 0, clears: 0, freeplay: 0, rounds: 3, playTime: 0, offCount: 1, offHp: 1, offFree: 0 };
         Store.save();
         UI.refreshChips(); UI.renderMenuStats(); UI.toast('Прогресс сброшен');
       }
@@ -1092,7 +1095,7 @@ const Game = {
   /* ============================================================
      MODE START / STOP
      ============================================================ */
-  startOffline(horde, free) {
+  startOffline(horde, free, custom) {
     this.stopToMenu(true);
     this.mode = CS.MODE.OFFLINE;
     this._campaignDone = false;
@@ -1102,14 +1105,25 @@ const Game = {
     this.offlineDead = false;
     this.offlineDeadT = 0;
     this._creditsOpen = false;
-    // free mode: only the "БЕСПЛАТНАЯ ОРДА" button (or a restart of it) turns it on
-    this.freePlay = free === true;
+    // CUSTOM mode reads its own multipliers from the settings.
+    this.customOffline = custom === true;
+    if (this.customOffline) {
+      this.freePlay = Store.data.offFree === 1;
+      this.hordeMode = false;                       // custom replaces the fixed ×10 preset
+      this.offCountMul = U.clamp(parseFloat(Store.data.offCount) || 1, 0.1, 50);
+      this.offHpMul = U.clamp(parseFloat(Store.data.offHp) || 1, 0.05, 20);
+    } else {
+      // fixed presets: the "БЕСПЛАТНАЯ ОРДА" button (or a restart of it) sets free
+      this.freePlay = free === true;
+      this.offCountMul = null;
+      this.offHpMul = null;
+    }
     this._freeHorde = this.freePlay;
     this.ensureMap(Store.data.map);
     this.matchHP = Store.data.maxHP || 100;
     // ОРДА ×10: force the mass mode from the menu button, otherwise honour the
-    // choice made in the settings panel.
-    this.hordeMode = (horde === true) || (horde !== false && Store.data.horde === 1);
+    // choice made in the settings panel. (Ignored in custom mode.)
+    if (!this.customOffline) this.hordeMode = (horde === true) || (horde !== false && Store.data.horde === 1);
     this.offline = {
       wave: 0, toSpawn: 0, spawnedThisWave: 0, totalThisWave: 0,
       betweenWaves: false, breakT: 0, alive: 0, kills: 0, startTime: U.now(),
@@ -1136,10 +1150,16 @@ const Game = {
     this.effects.clear();
 
     this.spawnPlayerLocal(0);
-    this.beginBuyPhase(30, this.hordeMode ? (this.freePlay ? 'БЕСПЛАТНАЯ ОРДА — ВОЛНА 1' : 'ОРДА — ВОЛНА 1') : 'ВОЛНА 1');
+    if (this.customOffline) {
+      this.beginBuyPhase(30, 'СВОЙ ОФФЛАЙН — ВОЛНА 1');
+      UI.toast('Свой оффлайн: зомби ×' + this.offCountMul + ' · HP ×' + this.offHpMul +
+        (this.freePlay ? ' · магазин бесплатный' : ' · магазин платный'), '#4aa3ff');
+    } else {
+      this.beginBuyPhase(30, this.hordeMode ? (this.freePlay ? 'БЕСПЛАТНАЯ ОРДА — ВОЛНА 1' : 'ОРДА — ВОЛНА 1') : 'ВОЛНА 1');
+      if (this.freePlay && this.hordeMode) UI.toast('БЕСПЛАТНАЯ ОРДА: всё оружие бесплатно', '#57d16a');
+      else if (this.hordeMode) UI.toast('ОРДА ×10: зомби в 10 раз больше, но хилые', '#e33a2e');
+    }
     this.enterGame();
-    if (this.freePlay && this.hordeMode) UI.toast('БЕСПЛАТНАЯ ОРДА: всё оружие бесплатно', '#57d16a');
-    else if (this.hordeMode) UI.toast('ОРДА ×10: зомби в 10 раз больше, но хилые', '#e33a2e');
     UI.toast('Карта: ' + this.mapName() + ' · магазин: B', '#ff9d21');
   },
 
@@ -2249,7 +2269,9 @@ const Game = {
     o.bosses = 0;
     o.bossPending = 0;
     let count = Math.round(CFG.zombieStartCount + (o.wave - 1) * 2.4);
-    if (this.hordeMode) count *= CFG.hordeCountMul;
+    // zombie-count multiplier: custom mode uses its own, else the ×10 preset
+    const countMul = (this.offCountMul != null) ? this.offCountMul : (this.hordeMode ? CFG.hordeCountMul : 1);
+    count = Math.round(count * countMul);
 
     /* ---- BOSS WAVE ----
        At 15 / 30 / 50 / 100 a boss joins the wave. ОРДА ×10 summons five of them
@@ -2293,8 +2315,9 @@ const Game = {
     const s = MAP.zombieSpawns && MAP.zombieSpawns.length ? U.pick(MAP.zombieSpawns) : { x: 0, z: 0 };
     const b = this.horde.spawn(type, s.x, s.z);
     // ОРДА ×10: five bosses, but each is far squishier. БЕСПЛАТНАЯ ОРДА keeps
-    // the normal boss health (there is no ammo/armour handicap there).
-    if (this.hordeMode && !this.freePlay) b.maxHealth *= .30;
+    // the normal boss health; custom mode scales bosses by its own HP setting.
+    if (this.offHpMul != null) b.maxHealth *= this.offHpMul;
+    else if (this.hordeMode && !this.freePlay) b.maxHealth *= .30;
     b.health = b.maxHealth;
     b.isBoss = true;
     return b;
@@ -2507,11 +2530,13 @@ const Game = {
     // spawn queue
     if (o.toSpawn > 0) {
       o.spawnAcc = (o.spawnAcc || 0) + dt;
-      const waveSpd = this.hordeMode ? CFG.hordeSpawnInterval : CFG.zombieSpawnInterval;
-      const interval = Math.max(.10, waveSpd - o.wave * (this.hordeMode ? .006 : .045));
-      const maxAlive = this.hordeMode ? CFG.hordeMaxAlive : CFG.zombieMaxAlive;
+      // custom multipliers may be huge, so spawn faster / allow more alive
+      const big = (this.offCountMul || 1) > 3 || this.hordeMode;
+      const waveSpd = big ? CFG.hordeSpawnInterval : CFG.zombieSpawnInterval;
+      const interval = Math.max(.10, waveSpd - o.wave * (big ? .006 : .045));
+      const maxAlive = big ? CFG.hordeMaxAlive : CFG.zombieMaxAlive;
       let guard = 0;
-      const burst = this.hordeMode ? 8 : 6;
+      const burst = big ? 8 : 6;
       while (o.spawnAcc >= interval && o.toSpawn > 0 && guard++ < burst) {
         o.spawnAcc -= interval;
         // count dying bodies too: they still cost CPU and occupy space
@@ -2519,9 +2544,10 @@ const Game = {
         const t = this.pickZombieType(o.wave);
         const scale = 1 + (o.wave - 1) * .085;
         const z = this.horde.spawnRandom(t, this.player.pos.x, this.player.pos.z, 26);
-        /* ОРДА ×10 keeps the weakened zombies; БЕСПЛАТНАЯ ОРДА uses the normal
-           offline health (full-strength zombies) since the shop is free. */
-        const hpMul = (this.hordeMode && !this.freePlay) ? CFG.hordeHpMul : 1;
+        /* HP multiplier: custom mode uses its own setting; ОРДА ×10 keeps the
+           weakened zombies; БЕСПЛАТНАЯ ОРДА uses normal full-strength health. */
+        const hpMul = (this.offHpMul != null) ? this.offHpMul
+          : ((this.hordeMode && !this.freePlay) ? CFG.hordeHpMul : 1);
         z.maxHealth *= scale * hpMul;
         z.health = z.maxHealth;
         z.dmg *= (1 + (o.wave - 1) * .05);
@@ -4315,8 +4341,10 @@ const Game = {
     if (this._restartPending && !this._creditsOpen && (Input.keys['Enter'] || Input.keys['NumpadEnter'])) {
       const wasHorde = this.hordeMode;
       const wasFree = this._freeHorde;
+      const wasCustom = this.customOffline;
       this._restartPending = false; this._offeredRestart = false; this.offlineDead = false; this.offlineDeadT = 0;
-      this.startOffline(wasHorde, wasFree);
+      // keep the custom mode (and read fresh multipliers), otherwise the presets
+      this.startOffline(wasHorde, wasFree, wasCustom);
     }
     // after the final online round, Enter returns to the menu
     if (this._matchOverPending && (Input.keys['Enter'] || Input.keys['NumpadEnter'])) {

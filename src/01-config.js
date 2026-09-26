@@ -105,7 +105,10 @@ const MATCH = window.MATCH = {
     n = Math.round(n || 1);
     if (MATCH.roundOptions.indexOf(n) < 0) n = 3;
     return n;
-  }
+  },
+  /* custom offline mode: how many zombies and how tough they are */
+  countOptions: [1, 2, 5, 10, 20],
+  hpOptionsOff: [0.25, 0.5, 1, 2, 5]
 };
 
 /* ---------------- weapons (CS-inspired) ----------------
@@ -179,7 +182,7 @@ const WEAPONS = {
          splash: 6.0, splashDmg: 120 },
 
   /* ---------------- futuristic: laser rifle (pierces everything) ---------------- */
-  laser: { name: 'ЛАЗЕРНАЯ ВИНТОВКА', cat: 'rifle', slot: 2, price: 16500, dmg: 150, rpm: 240, mag: 30, reserve: 120,
+  laser: { name: 'ЛАЗЕРНАЯ ВИНТОВКА', cat: 'heavy', slot: 2, price: 16500, dmg: 150, rpm: 240, mag: 30, reserve: 120,
            auto: true, spread: .004, moveSpread: .030, recoil: 1.4, falloff: .98, range: 220, headMul: 1.8,
            sound: 'laser', pierce: true },
 
@@ -190,7 +193,7 @@ const WEAPONS = {
          splash: 14.0, splashDmg: 1200, explosionColor: [0x39ff5a, 0x0a1a0a], noSelfDamage: true, nuke: true },
 
   /* ---------------- Y.H.S: absurdly strong, absurdly fast MG ---------------- */
-  yhs: { name: 'Y.H.S', cat: 'lmg', slot: 2, price: 20000, dmg: 180, rpm: 5750, mag: 2000, reserve: 0,
+  yhs: { name: 'Y.H.S', cat: 'heavy', slot: 2, price: 20000, dmg: 180, rpm: 5750, mag: 2000, reserve: 0,
          auto: true, spread: .030, moveSpread: .020, recoil: .35, falloff: .85, range: 140, headMul: 2.3,
          sound: 'rifle', spinUp: .35 },
 
@@ -280,7 +283,8 @@ function makeRng(seed) {
 const Store = {
   key: 'cs3d.save.v1',
   data: { sens: 2.2, fov: 80, vol: 60, quality: 1, touchSens: 1.5, name: '', best: 0, bestWave: 0, killsTotal: 0, matches: 0, wins: 0, signalSrv: 0, aimBest: 0, aimAutoFire: 1,
-          map: 'arena', players: 2, maxHP: 100, aimAssist: 1, horde: 0, clears: 0, freeplay: 0, rounds: 3, playTime: 0 },
+          map: 'arena', players: 2, maxHP: 100, aimAssist: 1, horde: 0, clears: 0, freeplay: 0, rounds: 3, playTime: 0,
+          offCount: 1, offHp: 1, offFree: 0 },
   load() {
     try { const r = localStorage.getItem(this.key); if (r) Object.assign(this.data, JSON.parse(r)); } catch (e) { }
     return this.data;

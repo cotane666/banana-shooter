@@ -616,6 +616,7 @@ html.touch .fld input{padding:10px;font-size:15px}
       <button class="mbtn primary" id="btnOffline"><b>ОФФЛАЙН</b><i>Волны зомби — зарабатывай счёт</i></button>
       <button class="mbtn" id="btnHorde"><b>ОРДА ×10</b><i>В 10 раз больше зомби, но они хилые</i></button>
       <button class="mbtn" id="btnFreeHorde"><b>БЕСПЛАТНАЯ ОРДА</b><i>Орда ×10 и всё оружие бесплатно</i></button>
+      <button class="mbtn" id="btnCustom"><b>СВОЙ ОФФЛАЙН</b><i>Свои множители зомби и здоровья · платно или бесплатно</i></button>
       <button class="mbtn" id="btnRange"><b>ПОЛИГОН</b><i>Всё оружие бесплатно · манекены и урон в секунду</i></button>
       <button class="mbtn" id="btnOnline"><b>ОНЛАЙН</b><i>Бой против друзей: 2–4 игрока, выбор карты</i></button>
       <button class="mbtn" id="btnMatch"><b>ПАРАМЕТРЫ МАТЧА</b><i>Карта · число игроков · здоровье</i></button>
@@ -626,6 +627,30 @@ html.touch .fld input{padding:10px;font-size:15px}
 
     <div class="menu-stats" id="menuStats"></div>
     <div class="menu-foot" id="menuControlsHint">WASD — движение &nbsp;·&nbsp; ЛКМ — огонь &nbsp;·&nbsp; B — магазин &nbsp;·&nbsp; Tab — счёт</div>
+  </div>
+</div>
+
+<!-- ============ CUSTOM OFFLINE ============ -->
+<div id="custom" class="screen hidden">
+  <div class="panel">
+    <h2>СВОЙ ОФФЛАЙН</h2>
+    <div class="hintbox" style="margin-top:0">
+      Настройте, сколько зомби приходит за волну и насколько они крепкие, и
+      играйте с платным или бесплатным магазином. Значения запоминаются.
+    </div>
+    <div class="fld">Зомби за волну
+      <div class="chips" id="offCountChips"></div>
+    </div>
+    <div class="fld">Здоровье зомби
+      <div class="chips" id="offHpChips"></div>
+    </div>
+    <div class="fld">Магазин
+      <div class="chips" id="offFreeChips"></div>
+    </div>
+    <div class="btnrow">
+      <button class="mbtn primary" id="btnCustomStart"><b>НАЧАТЬ</b><i>Запустить свой оффлайн</i></button>
+      <button class="mbtn small" id="btnCustomBack">НАЗАД</button>
+    </div>
   </div>
 </div>
 
@@ -1080,7 +1105,10 @@ const MATCH = window.MATCH = {
     n = Math.round(n || 1);
     if (MATCH.roundOptions.indexOf(n) < 0) n = 3;
     return n;
-  }
+  },
+  /* custom offline mode: how many zombies and how tough they are */
+  countOptions: [1, 2, 5, 10, 20],
+  hpOptionsOff: [0.25, 0.5, 1, 2, 5]
 };
 
 /* ---------------- weapons (CS-inspired) ----------------
@@ -1154,7 +1182,7 @@ const WEAPONS = {
          splash: 6.0, splashDmg: 120 },
 
   /* ---------------- futuristic: laser rifle (pierces everything) ---------------- */
-  laser: { name: 'ЛАЗЕРНАЯ ВИНТОВКА', cat: 'rifle', slot: 2, price: 16500, dmg: 150, rpm: 240, mag: 30, reserve: 120,
+  laser: { name: 'ЛАЗЕРНАЯ ВИНТОВКА', cat: 'heavy', slot: 2, price: 16500, dmg: 150, rpm: 240, mag: 30, reserve: 120,
            auto: true, spread: .004, moveSpread: .030, recoil: 1.4, falloff: .98, range: 220, headMul: 1.8,
            sound: 'laser', pierce: true },
 
@@ -1165,7 +1193,7 @@ const WEAPONS = {
          splash: 14.0, splashDmg: 1200, explosionColor: [0x39ff5a, 0x0a1a0a], noSelfDamage: true, nuke: true },
 
   /* ---------------- Y.H.S: absurdly strong, absurdly fast MG ---------------- */
-  yhs: { name: 'Y.H.S', cat: 'lmg', slot: 2, price: 20000, dmg: 180, rpm: 5750, mag: 2000, reserve: 0,
+  yhs: { name: 'Y.H.S', cat: 'heavy', slot: 2, price: 20000, dmg: 180, rpm: 5750, mag: 2000, reserve: 0,
          auto: true, spread: .030, moveSpread: .020, recoil: .35, falloff: .85, range: 140, headMul: 2.3,
          sound: 'rifle', spinUp: .35 },
 
@@ -1255,7 +1283,8 @@ function makeRng(seed) {
 const Store = {
   key: 'cs3d.save.v1',
   data: { sens: 2.2, fov: 80, vol: 60, quality: 1, touchSens: 1.5, name: '', best: 0, bestWave: 0, killsTotal: 0, matches: 0, wins: 0, signalSrv: 0, aimBest: 0, aimAutoFire: 1,
-          map: 'arena', players: 2, maxHP: 100, aimAssist: 1, horde: 0, clears: 0, freeplay: 0, rounds: 3, playTime: 0 },
+          map: 'arena', players: 2, maxHP: 100, aimAssist: 1, horde: 0, clears: 0, freeplay: 0, rounds: 3, playTime: 0,
+          offCount: 1, offHp: 1, offFree: 0 },
   load() {
     try { const r = localStorage.getItem(this.key); if (r) Object.assign(this.data, JSON.parse(r)); } catch (e) { }
     return this.data;
@@ -6218,6 +6247,7 @@ const UI = {
       'btnCopy', 'dmgDirs', 'android', 'ios', 'credits', 'crPlayer', 'crStats',
       'matchEnd', 'meTitle', 'meWinner', 'meScore', 'meDetail', 'btnMatchAgain', 'btnMatchMenu',
       'mapChips', 'playerChips', 'hpChips', 'hordeChips', 'lobbyMaps', 'lobbyPlayers', 'lobbyHp', 'lobbyFree', 'lobbyRounds',
+      'offCountChips', 'offHpChips', 'offFreeChips', 'custom',
       'medkitTag', 'droneTag'];
     ids.forEach(i => this.el[i] = $(i));
     this.buildBuyCats();
@@ -6226,7 +6256,7 @@ const UI = {
 
   /* ---------------- screens ---------------- */
   show(name) {
-    ['loading', 'menu', 'controls', 'lobby', 'hud', 'buy', 'scoreboard', 'pause', 'connect', 'android', 'ios', 'credits', 'matchEnd', 'clickToPlay'].forEach(s => {
+    ['loading', 'menu', 'controls', 'lobby', 'hud', 'buy', 'scoreboard', 'pause', 'connect', 'android', 'ios', 'credits', 'matchEnd', 'custom', 'clickToPlay'].forEach(s => {
       const e = this.el[s];
       if (!e) return;
       const on = s === name;
@@ -6235,12 +6265,12 @@ const UI = {
     this.current = name;
   },
   hideOverlays() {
-    ['buy', 'scoreboard', 'pause', 'controls', 'lobby', 'menu', 'connect', 'android', 'ios', 'credits', 'matchEnd'].forEach(s => {
+    ['buy', 'scoreboard', 'pause', 'controls', 'lobby', 'menu', 'connect', 'android', 'ios', 'credits', 'matchEnd', 'custom'].forEach(s => {
       if (this.el[s]) this.el[s].classList.add('hidden');
     });
   },
   overlayOpen() {
-    return ['buy', 'scoreboard', 'pause', 'controls', 'lobby', 'menu', 'connect', 'android', 'ios', 'credits', 'matchEnd'].some(s => this.el[s] && !this.el[s].classList.contains('hidden'));
+    return ['buy', 'scoreboard', 'pause', 'controls', 'lobby', 'menu', 'connect', 'android', 'ios', 'credits', 'matchEnd', 'custom'].some(s => this.el[s] && !this.el[s].classList.contains('hidden'));
   },
 
   /* ============================================================
@@ -6338,8 +6368,41 @@ const UI = {
         wrap.appendChild(b);
       });
     };
-    const fillHorde = (wrap) => {
+    /* custom-offline chips: zombie count, zombie health, shop economics */
+    const saveOff = () => {
+      Store.save(); this.refreshChips();
+      // a running custom match picks up the new values immediately
+      if (typeof Game !== 'undefined' && Game.customOffline && Game.mode === CS.MODE.OFFLINE) {
+        Game.offCountMul = U.clamp(parseFloat(Store.data.offCount) || 1, 0.1, 50);
+        Game.offHpMul = U.clamp(parseFloat(Store.data.offHp) || 1, 0.05, 20);
+        Game.freePlay = Store.data.offFree === 1;
+      }
+      Audio3D_SFX.uiClick();
+    };
+    const fillOff = (wrap, key, opts, fmt) => {
       if (!wrap) return;
+      wrap.innerHTML = '';
+      opts.forEach(v => {
+        const b = document.createElement('button');
+        b.dataset.v = v;
+        b.innerHTML = fmt(v);
+        b.addEventListener('click', () => { Store.data[key] = v; saveOff(); });
+        wrap.appendChild(b);
+      });
+    };
+    fillOff(this.el.offCountChips, 'offCount', MATCH.countOptions, v => '<b>' + (v === 1 ? '×1' : '×' + v) + '</b><i>зомби</i>');
+    fillOff(this.el.offHpChips, 'offHp', MATCH.hpOptionsOff, v => '<b>' + (v === 1 ? '×1' : '×' + v) + '</b><i>HP</i>');
+    if (this.el.offFreeChips) {
+      this.el.offFreeChips.innerHTML = '';
+      [{ v: 0, b: 'ПЛАТНЫЙ', i: 'деньги и закупка' }, { v: 1, b: 'БЕСПЛАТНЫЙ', i: 'без экономики' }].forEach(o => {
+        const b = document.createElement('button');
+        b.dataset.v = o.v;
+        b.innerHTML = '<b>' + o.b + '</b><i>' + o.i + '</i>';
+        b.addEventListener('click', () => { Store.data.offFree = o.v; saveOff(); });
+        this.el.offFreeChips.appendChild(b);
+      });
+    }
+    const fillHorde = (wrap) => {      if (!wrap) return;
       wrap.innerHTML = '';
       [{ n: 0, b: 'ОБЫЧНЫЙ', i: 'стандартные волны' }, { n: 1, b: 'ОРДА ×10', i: 'зомби в 10× больше, но хилые' }].forEach(o => {
         const b = document.createElement('button');
@@ -6376,6 +6439,9 @@ const UI = {
     mark(this.el.hordeChips, 'horde', S.horde);
     mark(this.el.lobbyFree, 'free', S.freeplay);
     mark(this.el.lobbyRounds, 'rounds', MATCH.clampRounds(S.rounds));
+    mark(this.el.offCountChips, 'v', parseFloat(S.offCount) || 1);
+    mark(this.el.offHpChips, 'v', parseFloat(S.offHp) || 1);
+    mark(this.el.offFreeChips, 'v', Number(S.offFree) || 0);
   },
 
   /* connected peers, shown in the lobby so the host can see who is in */
@@ -8296,6 +8362,9 @@ const Game = {
     bindClick('btnOffline', () => this.startOffline());
     bindClick('btnHorde', () => this.startOffline(true));
     bindClick('btnFreeHorde', () => this.startOffline(true, true));
+    bindClick('btnCustom', () => { UI.show('custom'); UI.refreshChips(); });
+    bindClick('btnCustomBack', () => UI.show('menu'));
+    bindClick('btnCustomStart', () => this.startOffline(false, false, true));
     bindClick('btnCreditsClose', () => this.closeCredits());
     bindClick('btnMatchAgain', () => this.rematchOnline());
     bindClick('btnMatchMenu', () => this.backToMenuFromMatch());
@@ -8332,7 +8401,7 @@ const Game = {
     bindClick('btnLeave', () => this.stopToMenu());
     bindClick('btnReset', () => {
       if (confirm('Сбросить весь прогресс и настройки?')) {
-        Store.data = { sens: 2.2, fov: 80, vol: 60, quality: 1, touchSens: 1.5, name: '', best: 0, bestWave: 0, killsTotal: 0, matches: 0, wins: 0, signalSrv: 0, aimBest: 0, aimAutoFire: 1, map: 'arena', players: 2, maxHP: 100, aimAssist: 1, horde: 0, clears: 0, freeplay: 0, rounds: 3, playTime: 0 };
+        Store.data = { sens: 2.2, fov: 80, vol: 60, quality: 1, touchSens: 1.5, name: '', best: 0, bestWave: 0, killsTotal: 0, matches: 0, wins: 0, signalSrv: 0, aimBest: 0, aimAutoFire: 1, map: 'arena', players: 2, maxHP: 100, aimAssist: 1, horde: 0, clears: 0, freeplay: 0, rounds: 3, playTime: 0, offCount: 1, offHp: 1, offFree: 0 };
         Store.save();
         UI.refreshChips(); UI.renderMenuStats(); UI.toast('Прогресс сброшен');
       }
@@ -8558,7 +8627,7 @@ const Game = {
   /* ============================================================
      MODE START / STOP
      ============================================================ */
-  startOffline(horde, free) {
+  startOffline(horde, free, custom) {
     this.stopToMenu(true);
     this.mode = CS.MODE.OFFLINE;
     this._campaignDone = false;
@@ -8568,14 +8637,25 @@ const Game = {
     this.offlineDead = false;
     this.offlineDeadT = 0;
     this._creditsOpen = false;
-    // free mode: only the "БЕСПЛАТНАЯ ОРДА" button (or a restart of it) turns it on
-    this.freePlay = free === true;
+    // CUSTOM mode reads its own multipliers from the settings.
+    this.customOffline = custom === true;
+    if (this.customOffline) {
+      this.freePlay = Store.data.offFree === 1;
+      this.hordeMode = false;                       // custom replaces the fixed ×10 preset
+      this.offCountMul = U.clamp(parseFloat(Store.data.offCount) || 1, 0.1, 50);
+      this.offHpMul = U.clamp(parseFloat(Store.data.offHp) || 1, 0.05, 20);
+    } else {
+      // fixed presets: the "БЕСПЛАТНАЯ ОРДА" button (or a restart of it) sets free
+      this.freePlay = free === true;
+      this.offCountMul = null;
+      this.offHpMul = null;
+    }
     this._freeHorde = this.freePlay;
     this.ensureMap(Store.data.map);
     this.matchHP = Store.data.maxHP || 100;
     // ОРДА ×10: force the mass mode from the menu button, otherwise honour the
-    // choice made in the settings panel.
-    this.hordeMode = (horde === true) || (horde !== false && Store.data.horde === 1);
+    // choice made in the settings panel. (Ignored in custom mode.)
+    if (!this.customOffline) this.hordeMode = (horde === true) || (horde !== false && Store.data.horde === 1);
     this.offline = {
       wave: 0, toSpawn: 0, spawnedThisWave: 0, totalThisWave: 0,
       betweenWaves: false, breakT: 0, alive: 0, kills: 0, startTime: U.now(),
@@ -8602,10 +8682,16 @@ const Game = {
     this.effects.clear();
 
     this.spawnPlayerLocal(0);
-    this.beginBuyPhase(30, this.hordeMode ? (this.freePlay ? 'БЕСПЛАТНАЯ ОРДА — ВОЛНА 1' : 'ОРДА — ВОЛНА 1') : 'ВОЛНА 1');
+    if (this.customOffline) {
+      this.beginBuyPhase(30, 'СВОЙ ОФФЛАЙН — ВОЛНА 1');
+      UI.toast('Свой оффлайн: зомби ×' + this.offCountMul + ' · HP ×' + this.offHpMul +
+        (this.freePlay ? ' · магазин бесплатный' : ' · магазин платный'), '#4aa3ff');
+    } else {
+      this.beginBuyPhase(30, this.hordeMode ? (this.freePlay ? 'БЕСПЛАТНАЯ ОРДА — ВОЛНА 1' : 'ОРДА — ВОЛНА 1') : 'ВОЛНА 1');
+      if (this.freePlay && this.hordeMode) UI.toast('БЕСПЛАТНАЯ ОРДА: всё оружие бесплатно', '#57d16a');
+      else if (this.hordeMode) UI.toast('ОРДА ×10: зомби в 10 раз больше, но хилые', '#e33a2e');
+    }
     this.enterGame();
-    if (this.freePlay && this.hordeMode) UI.toast('БЕСПЛАТНАЯ ОРДА: всё оружие бесплатно', '#57d16a');
-    else if (this.hordeMode) UI.toast('ОРДА ×10: зомби в 10 раз больше, но хилые', '#e33a2e');
     UI.toast('Карта: ' + this.mapName() + ' · магазин: B', '#ff9d21');
   },
 
@@ -9715,7 +9801,9 @@ const Game = {
     o.bosses = 0;
     o.bossPending = 0;
     let count = Math.round(CFG.zombieStartCount + (o.wave - 1) * 2.4);
-    if (this.hordeMode) count *= CFG.hordeCountMul;
+    // zombie-count multiplier: custom mode uses its own, else the ×10 preset
+    const countMul = (this.offCountMul != null) ? this.offCountMul : (this.hordeMode ? CFG.hordeCountMul : 1);
+    count = Math.round(count * countMul);
 
     /* ---- BOSS WAVE ----
        At 15 / 30 / 50 / 100 a boss joins the wave. ОРДА ×10 summons five of them
@@ -9759,8 +9847,9 @@ const Game = {
     const s = MAP.zombieSpawns && MAP.zombieSpawns.length ? U.pick(MAP.zombieSpawns) : { x: 0, z: 0 };
     const b = this.horde.spawn(type, s.x, s.z);
     // ОРДА ×10: five bosses, but each is far squishier. БЕСПЛАТНАЯ ОРДА keeps
-    // the normal boss health (there is no ammo/armour handicap there).
-    if (this.hordeMode && !this.freePlay) b.maxHealth *= .30;
+    // the normal boss health; custom mode scales bosses by its own HP setting.
+    if (this.offHpMul != null) b.maxHealth *= this.offHpMul;
+    else if (this.hordeMode && !this.freePlay) b.maxHealth *= .30;
     b.health = b.maxHealth;
     b.isBoss = true;
     return b;
@@ -9973,11 +10062,13 @@ const Game = {
     // spawn queue
     if (o.toSpawn > 0) {
       o.spawnAcc = (o.spawnAcc || 0) + dt;
-      const waveSpd = this.hordeMode ? CFG.hordeSpawnInterval : CFG.zombieSpawnInterval;
-      const interval = Math.max(.10, waveSpd - o.wave * (this.hordeMode ? .006 : .045));
-      const maxAlive = this.hordeMode ? CFG.hordeMaxAlive : CFG.zombieMaxAlive;
+      // custom multipliers may be huge, so spawn faster / allow more alive
+      const big = (this.offCountMul || 1) > 3 || this.hordeMode;
+      const waveSpd = big ? CFG.hordeSpawnInterval : CFG.zombieSpawnInterval;
+      const interval = Math.max(.10, waveSpd - o.wave * (big ? .006 : .045));
+      const maxAlive = big ? CFG.hordeMaxAlive : CFG.zombieMaxAlive;
       let guard = 0;
-      const burst = this.hordeMode ? 8 : 6;
+      const burst = big ? 8 : 6;
       while (o.spawnAcc >= interval && o.toSpawn > 0 && guard++ < burst) {
         o.spawnAcc -= interval;
         // count dying bodies too: they still cost CPU and occupy space
@@ -9985,9 +10076,10 @@ const Game = {
         const t = this.pickZombieType(o.wave);
         const scale = 1 + (o.wave - 1) * .085;
         const z = this.horde.spawnRandom(t, this.player.pos.x, this.player.pos.z, 26);
-        /* ОРДА ×10 keeps the weakened zombies; БЕСПЛАТНАЯ ОРДА uses the normal
-           offline health (full-strength zombies) since the shop is free. */
-        const hpMul = (this.hordeMode && !this.freePlay) ? CFG.hordeHpMul : 1;
+        /* HP multiplier: custom mode uses its own setting; ОРДА ×10 keeps the
+           weakened zombies; БЕСПЛАТНАЯ ОРДА uses normal full-strength health. */
+        const hpMul = (this.offHpMul != null) ? this.offHpMul
+          : ((this.hordeMode && !this.freePlay) ? CFG.hordeHpMul : 1);
         z.maxHealth *= scale * hpMul;
         z.health = z.maxHealth;
         z.dmg *= (1 + (o.wave - 1) * .05);
@@ -11781,8 +11873,10 @@ const Game = {
     if (this._restartPending && !this._creditsOpen && (Input.keys['Enter'] || Input.keys['NumpadEnter'])) {
       const wasHorde = this.hordeMode;
       const wasFree = this._freeHorde;
+      const wasCustom = this.customOffline;
       this._restartPending = false; this._offeredRestart = false; this.offlineDead = false; this.offlineDeadT = 0;
-      this.startOffline(wasHorde, wasFree);
+      // keep the custom mode (and read fresh multipliers), otherwise the presets
+      this.startOffline(wasHorde, wasFree, wasCustom);
     }
     // after the final online round, Enter returns to the menu
     if (this._matchOverPending && (Input.keys['Enter'] || Input.keys['NumpadEnter'])) {

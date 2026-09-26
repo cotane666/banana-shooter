@@ -21,6 +21,7 @@ const UI = {
       'btnCopy', 'dmgDirs', 'android', 'ios', 'credits', 'crPlayer', 'crStats',
       'matchEnd', 'meTitle', 'meWinner', 'meScore', 'meDetail', 'btnMatchAgain', 'btnMatchMenu',
       'mapChips', 'playerChips', 'hpChips', 'hordeChips', 'lobbyMaps', 'lobbyPlayers', 'lobbyHp', 'lobbyFree', 'lobbyRounds',
+      'offCountChips', 'offHpChips', 'offFreeChips', 'custom',
       'medkitTag', 'droneTag'];
     ids.forEach(i => this.el[i] = $(i));
     this.buildBuyCats();
@@ -29,7 +30,7 @@ const UI = {
 
   /* ---------------- screens ---------------- */
   show(name) {
-    ['loading', 'menu', 'controls', 'lobby', 'hud', 'buy', 'scoreboard', 'pause', 'connect', 'android', 'ios', 'credits', 'matchEnd', 'clickToPlay'].forEach(s => {
+    ['loading', 'menu', 'controls', 'lobby', 'hud', 'buy', 'scoreboard', 'pause', 'connect', 'android', 'ios', 'credits', 'matchEnd', 'custom', 'clickToPlay'].forEach(s => {
       const e = this.el[s];
       if (!e) return;
       const on = s === name;
@@ -38,12 +39,12 @@ const UI = {
     this.current = name;
   },
   hideOverlays() {
-    ['buy', 'scoreboard', 'pause', 'controls', 'lobby', 'menu', 'connect', 'android', 'ios', 'credits', 'matchEnd'].forEach(s => {
+    ['buy', 'scoreboard', 'pause', 'controls', 'lobby', 'menu', 'connect', 'android', 'ios', 'credits', 'matchEnd', 'custom'].forEach(s => {
       if (this.el[s]) this.el[s].classList.add('hidden');
     });
   },
   overlayOpen() {
-    return ['buy', 'scoreboard', 'pause', 'controls', 'lobby', 'menu', 'connect', 'android', 'ios', 'credits', 'matchEnd'].some(s => this.el[s] && !this.el[s].classList.contains('hidden'));
+    return ['buy', 'scoreboard', 'pause', 'controls', 'lobby', 'menu', 'connect', 'android', 'ios', 'credits', 'matchEnd', 'custom'].some(s => this.el[s] && !this.el[s].classList.contains('hidden'));
   },
 
   /* ============================================================
@@ -141,8 +142,41 @@ const UI = {
         wrap.appendChild(b);
       });
     };
-    const fillHorde = (wrap) => {
+    /* custom-offline chips: zombie count, zombie health, shop economics */
+    const saveOff = () => {
+      Store.save(); this.refreshChips();
+      // a running custom match picks up the new values immediately
+      if (typeof Game !== 'undefined' && Game.customOffline && Game.mode === CS.MODE.OFFLINE) {
+        Game.offCountMul = U.clamp(parseFloat(Store.data.offCount) || 1, 0.1, 50);
+        Game.offHpMul = U.clamp(parseFloat(Store.data.offHp) || 1, 0.05, 20);
+        Game.freePlay = Store.data.offFree === 1;
+      }
+      Audio3D_SFX.uiClick();
+    };
+    const fillOff = (wrap, key, opts, fmt) => {
       if (!wrap) return;
+      wrap.innerHTML = '';
+      opts.forEach(v => {
+        const b = document.createElement('button');
+        b.dataset.v = v;
+        b.innerHTML = fmt(v);
+        b.addEventListener('click', () => { Store.data[key] = v; saveOff(); });
+        wrap.appendChild(b);
+      });
+    };
+    fillOff(this.el.offCountChips, 'offCount', MATCH.countOptions, v => '<b>' + (v === 1 ? '×1' : '×' + v) + '</b><i>зомби</i>');
+    fillOff(this.el.offHpChips, 'offHp', MATCH.hpOptionsOff, v => '<b>' + (v === 1 ? '×1' : '×' + v) + '</b><i>HP</i>');
+    if (this.el.offFreeChips) {
+      this.el.offFreeChips.innerHTML = '';
+      [{ v: 0, b: 'ПЛАТНЫЙ', i: 'деньги и закупка' }, { v: 1, b: 'БЕСПЛАТНЫЙ', i: 'без экономики' }].forEach(o => {
+        const b = document.createElement('button');
+        b.dataset.v = o.v;
+        b.innerHTML = '<b>' + o.b + '</b><i>' + o.i + '</i>';
+        b.addEventListener('click', () => { Store.data.offFree = o.v; saveOff(); });
+        this.el.offFreeChips.appendChild(b);
+      });
+    }
+    const fillHorde = (wrap) => {      if (!wrap) return;
       wrap.innerHTML = '';
       [{ n: 0, b: 'ОБЫЧНЫЙ', i: 'стандартные волны' }, { n: 1, b: 'ОРДА ×10', i: 'зомби в 10× больше, но хилые' }].forEach(o => {
         const b = document.createElement('button');
@@ -179,6 +213,9 @@ const UI = {
     mark(this.el.hordeChips, 'horde', S.horde);
     mark(this.el.lobbyFree, 'free', S.freeplay);
     mark(this.el.lobbyRounds, 'rounds', MATCH.clampRounds(S.rounds));
+    mark(this.el.offCountChips, 'v', parseFloat(S.offCount) || 1);
+    mark(this.el.offHpChips, 'v', parseFloat(S.offHp) || 1);
+    mark(this.el.offFreeChips, 'v', Number(S.offFree) || 0);
   },
 
   /* connected peers, shown in the lobby so the host can see who is in */

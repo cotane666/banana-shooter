@@ -4047,11 +4047,14 @@ const Audio3D_SFX = {
     const th = m.th, i = m.step++;
     const chord = th.prog[Math.floor(i / 8) % th.prog.length];
     const semi = (n) => th.root * Math.pow(2, n / 12);
-    // bass on every beat
+    // bass on every beat.
+    // NOTE: the bass used to run through `th.wave`, i.e. a sawtooth/square on
+    // most tracks, which buzzed harshly in the ears. The timbre is now a warm
+    // triangle; the note itself (the melody) is untouched.
     if (i % 2 === 0) {
-      const o = this.ctx.createOscillator(); o.type = th.wave;
+      const o = this.ctx.createOscillator(); o.type = 'triangle';
       o.frequency.setValueAtTime(semi(chord), t);
-      const lp = this.ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 320;
+      const lp = this.ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 520; lp.Q.value = .7;
       const g = this.ctx.createGain();
       g.gain.setValueAtTime(.20, t);
       g.gain.exponentialRampToValueAtTime(.001, t + beat * .9);
@@ -4085,16 +4088,18 @@ const Audio3D_SFX = {
     ag.gain.exponentialRampToValueAtTime(.001, t + beat * .45);
     a.connect(bp); bp.connect(ag); ag.connect(m.out);
     a.start(t); a.stop(t + beat * .5);
-    // a sustained pad at the top of each bar
+    // a sustained pad at the top of each bar (warm triangle — same notes)
     if (i % 8 === 0) {
-      const p = this.ctx.createOscillator(); p.type = th.wave;
+      const p = this.ctx.createOscillator(); p.type = 'triangle';
       p.frequency.setValueAtTime(semi(chord + 12), t);
       p.frequency.linearRampToValueAtTime(semi(chord + 12 + th.scale[2]), t + beat * 3);
       const pg = this.ctx.createGain();
       pg.gain.setValueAtTime(.001, t);
-      pg.gain.linearRampToValueAtTime(.06, t + beat);
+      pg.gain.linearRampToValueAtTime(.05, t + beat);
       pg.gain.exponentialRampToValueAtTime(.001, t + beat * 3.6);
-      p.connect(pg); pg.connect(m.out);
+      // a gentle low-pass keeps the sustained pad round instead of buzzy
+      const plp = this.ctx.createBiquadFilter(); plp.type = 'lowpass'; plp.frequency.value = 900; plp.Q.value = .6;
+      p.connect(plp); plp.connect(pg); pg.connect(m.out);
       p.start(t); p.stop(t + beat * 4);
     }
   },

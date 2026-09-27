@@ -866,6 +866,7 @@ html.touch .fld input{padding:10px;font-size:15px}
       <div class="krow"><kbd>M</kbd><span>Сохранить игру в любой момент</span></div>
       <div class="krow"><kbd>Y</kbd><span>Сбросить зомби на спавн (раз в 2 мин)</span></div>
       <div class="krow"><kbd>ЛКМ/ПКМ</kbd><span>Мехакостюм: миниган / лазер</span></div>
+      <div class="krow"><kbd>Space</kbd><span>Мехакостюм: джетпак (1.5с · перезаряд 1.5с)</span></div>
       <div class="krow"><kbd>F</kbd><span>Дрон-камикадзе</span></div>
       <div class="krow"><kbd>V</kbd><span>Дрон-турель (снаряжение)</span></div>
       <div class="krow"><kbd>1 2 3</kbd><span>Пистолет / Основное / Нож</span></div>
@@ -1041,6 +1042,7 @@ html.touch .fld input{padding:10px;font-size:15px}
       <span id="droneTag" class="geartag hidden">ДРОН</span>
       <span id="grenadeTag" class="geartag hidden">ГРАНАТА ×2</span>
       <span id="zResetTag" class="geartag hidden">СБРОС ЗОМБИ</span>
+      <span id="jetTag" class="geartag hidden">ДЖЕТПАК</span>
       <span id="shieldTag" class="geartag hidden">ЩИТ</span>
       <span id="heatTag" class="geartag hidden">ЛАЗЕР</span>
     </div>
@@ -1322,6 +1324,10 @@ const CFG = {
   mechHeight: 3.55,
   mechRadius: 0.62,
   mechMissileCd: 2.6,       // секунд между залпами самонаводящихся ракет (E)
+  /* мех-джетпак: держишь прыжок — 1.5с тяги, затем 1.5с перезарядки */
+  mechJetMax: 1.5,
+  mechJetRecharge: 1.5,
+  mechJetThrust: 9.5,       // вертикальная тяга (м/с), поднимает даже без земли
   maxHP: 100,
   maxAP: 100,
   stepUp: 0.62,
@@ -5974,11 +5980,22 @@ function buildMechChassis() {
   box(.16, .09, .04, matG, 0, 2.44, -.50);              // eagle emblem
   box(.05, .16, .04, matG, 0, 2.44, -.50);
   [-1, 1].forEach(s => box(.08, .11, .04, matG, s * .09, 2.44, -.50, 0, 0, s * .5));
+  // raised armour plate + panel lines + vents (more detail on the chest)
+  box(.88, .42, .05, matB2, 0, 2.42, -.47);
+  box(.62, .045, .05, matD, 0, 2.62, -.49);
+  box(.62, .045, .05, matD, 0, 2.24, -.49);
+  for (let i = 0; i < 4; i++) box(.10, .05, .06, matD, -.24 + i * .16, 2.12, -.47);
+  [-.34, .34].forEach(x => { const riv = new THREE.Mesh(new THREE.SphereGeometry(.045, 8, 6), matG); riv.position.set(x, 2.62, -.50); g.add(riv); });
+  // warning chevrons on the chest (blue-white)
+  box(.20, .05, .04, matW, -.30, 2.36, -.51);
+  box(.20, .05, .04, matW, .30, 2.36, -.51);
   // ------- side shoulder blocks (out at ±1, tops kept low so they frame the view) -------
   [-1, 1].forEach(s => {
     box(.50, .40, .60, matB, s * 1.02, 2.92, -.02);    // pauldron (top ≈ 3.12, at the very side)
     box(.54, .10, .64, matB2, s * 1.02, 3.14, -.02);
+    box(.44, .06, .56, matW, s * 1.02, 3.00, .06);     // white trim band
     for (let i = 0; i < 3; i++) box(.055, .055, .055, matG, s * 1.24, 3.02 - i * .12, .20);
+    for (let i = 0; i < 2; i++) box(.10, .09, .05, matD, s * .86, 2.86 - i * .14, -.30); // small vents
   });
   // ------- open roll-cage: thin bars around the view, NOT across it -------
   // two uprights behind the pilot + a top rail at the very top (above eye line)
@@ -6022,14 +6039,41 @@ function buildMechChassis() {
   [-1, 1].forEach(s => {
     box(.40, .72, .46, matB, s * .42, 1.44, 0);        // thigh
     box(.42, .12, .48, matB2, s * .42, 1.76, 0);
+    box(.34, .10, .40, matW, s * .42, 1.52, .16);      // knee plate (white)
     box(.46, .82, .40, matD, s * .42, .80, .05);       // shin
     box(.42, .16, .44, matB, s * .42, 1.14, .02);
+    for (let i = 0; i < 3; i++) box(.30, .05, .05, matD, s * .42, .92 + i * .16, .26);  // shin ribs
     box(.52, .22, .78, matB, s * .42, .14, .10);       // foot
     box(.54, .10, .84, matB2, s * .42, .26, .10);
+    box(.40, .06, .40, matG, s * .42, .035, .10);      // golden toe strip
     box(.16, .16, .04, matG, s * .42, 1.24, .28);      // golden badge
   });
   // exhaust stacks on the BACK (+z is behind the pilot, since forward is -z)
   [-.55, .55].forEach(x => { const e = new THREE.Mesh(new THREE.CylinderGeometry(.09, .11, .5, 10), matD); e.position.set(x, 2.9, .5); g.add(e); });
+  /* ---- jetpack: two big nozzles between the shoulders, with thrusters ---- */
+  const jet = new THREE.Group();
+  box(1.0, .55, .38, matB2, 0, 2.75, .62);            // jetpack body
+  box(.92, .10, .34, matB, 0, 3.05, .62);             // top plate
+  [-.42, .42].forEach(x => {
+    const noz = new THREE.Mesh(new THREE.CylinderGeometry(.16, .11, .46, 12), matD);
+    noz.position.set(x, 2.42, .62); jet.add(noz);      // nozzle (points down)
+    const rim = new THREE.Mesh(new THREE.TorusGeometry(.15, .03, 8, 14), matG);
+    rim.position.set(x, 2.62, .62); rim.rotation.x = Math.PI / 2; jet.add(rim);
+  });
+  // glowing thruster cones (hidden until the jet fires)
+  const flames = [];
+  [-.42, .42].forEach(x => {
+    const f = new THREE.Mesh(new THREE.ConeGeometry(.15, .9, 10),
+      new THREE.MeshBasicMaterial({ color: 0x7fd8ff, transparent: true, opacity: .85, blending: THREE.AdditiveBlending, depthWrite: false }));
+    f.position.set(x, 1.95, .62); f.rotation.x = Math.PI; f.visible = false;
+    jet.add(f); flames.push(f);
+  });
+  const jetLight = new THREE.PointLight(0x6fc8ff, 0, 6, 2);
+  jetLight.position.set(0, 2.1, .62); jet.add(jetLight);
+  g.add(jet);
+  g.userData.jet = jet;
+  g.userData.jetFlames = flames;
+  g.userData.jetLight = jetLight;
   // power cables (behind)
   for (let i = 0; i < 3; i++) box(.03, .03, .6, matD, -.85 + i * .06, 2.4, .42, .5, 0, 0);
   for (let i = 0; i < 3; i++) box(.03, .03, .6, matD, .85 - i * .06, 2.4, .42, .5, 0, 0);
@@ -6222,6 +6266,9 @@ class Player {
     this.turretDrone = 0;     // turret-drone charges (gear, launched with V)
     this.mechOwned = false;   // has bought the mech suit (can re-enter it)
     this.mechSuit = false;    // currently sitting in the mech cockpit
+    this.jetActive = false;   // jetpack thrusting
+    this.jetT = 0;            // seconds of thrust left this burst
+    this.jetCd = 0;           // seconds until the pack can fire again
     this.grenades = { frag: 0, freeze: 0, napalm: 0 };   // thrown with G
     this.builds = { turret: 0, barricade: 0, mine: 0 };  // placed with K
     // energy shield (active shield): raised by LMB for a few seconds, then cools
@@ -6519,6 +6566,21 @@ class Player {
       this.vel.y = CFG.jumpSpeed;
       this.onGround = false;
     }
+
+    /* ---- МЕХАКОСТЮМ: jetpack ----
+       Hold Space in the mech: for `mechJetMax` seconds thrust lifts you, then the
+       pack must recharge for `mechJetRecharge` seconds before it can fire again. */
+    if (this.mechSuit) {
+      if (this.jetActive) {
+        this.jetT -= dt;
+        this.vel.y = Math.max(this.vel.y, CFG.mechJetThrust);
+        if (this.jetT <= 0) { this.jetActive = false; this.jetCd = CFG.mechJetRecharge; }
+      } else if (this.jetCd > 0) {
+        this.jetCd -= dt;
+      } else if (input.wantJump) {
+        this.jetActive = true; this.jetT = CFG.mechJetMax;
+      }
+    } else { this.jetActive = false; this.jetCd = 0; this.jetT = 0; }
 
     // ---- gravity ----
     this.vel.y -= CFG.gravity * dt;
@@ -9683,7 +9745,7 @@ const UI = {
       'offCountChips', 'offHpChips', 'offFreeChips', 'offModeChips', 'offCustomBox', 'offHordeBox', 'offSpecialBox', 'offCpBox', 'offCpInfo', 'offCpMode', 'offCpList', 'offCountExact', 'offCountFixed', 'btnOffContinue', 'custom', 'lobbyShop', 'lobbyShopItems',
       'modScreen', 'modGrid', 'modActive',
       'extras', 'achGrid', 'recTable', 'btnExtrasBack', 'weaponWheel', 'wwInner',
-      'medkitTag', 'droneTag', 'grenadeTag', 'zResetTag', 'shieldTag', 'heatTag', 'missileHud', 'mhTime', 'mhReadout',
+      'medkitTag', 'droneTag', 'grenadeTag', 'zResetTag', 'jetTag', 'shieldTag', 'heatTag', 'missileHud', 'mhTime', 'mhReadout',
       'sdScreen', 'sdGrid', 'sdSearch', 'sdToggle2', 'sdClose', 'sdConfig',
       'esScreen', 'esGrid', 'esSearch', 'esCount', 'esClear', 'esClose', 'esConfig'];
     ids.forEach(i => this.el[i] = $(i));
@@ -10105,6 +10167,16 @@ const UI = {
       e.grenadeTag.textContent = grenadeName(kind) + ' ×' + n;
       e.grenadeTag.classList.toggle('hidden', n <= 0 && !(p.grenades && (p.grenades.frag + p.grenades.freeze + p.grenades.napalm) > 0));
       e.grenadeTag.classList.toggle('usable', n > 0);
+    }
+    // jetpack charge indicator (mech only)
+    if (e.jetTag) {
+      const inMech = (typeof Game !== 'undefined') && Game.isMechActive && Game.isMechActive();
+      e.jetTag.classList.toggle('hidden', !inMech);
+      if (inMech) {
+        if (p.jetActive) { e.jetTag.textContent = 'ДЖЕТПАК ' + Math.max(0, p.jetT).toFixed(1) + 'с'; e.jetTag.classList.add('usable'); }
+        else if (p.jetCd > 0) { e.jetTag.textContent = 'ДЖЕТПАК · ' + Math.max(0, p.jetCd).toFixed(1) + 'с'; e.jetTag.classList.remove('usable'); }
+        else { e.jetTag.textContent = 'ДЖЕТПАК · ПРОБЕЛ'; e.jetTag.classList.add('usable'); }
+      }
     }
     // Y — unstick cooldown indicator (only while recharging)
     if (e.zResetTag && typeof Game !== 'undefined') {
@@ -16460,6 +16532,19 @@ const Game = {
           ud.pod.position.y = 3.00 + podKick * .16 + bob;
           ud.pod.rotation.x = -aimPitch * .4;
         }
+        /* ---- jetpack flames ---- */
+        const on = p.jetActive === true;
+        if (ud.jetFlames) {
+          ud.jetFlames.forEach((f, i) => {
+            f.visible = on;
+            if (on) {
+              const k = .7 + Math.sin(t * 40 + i) * .3;
+              f.scale.set(1, k, 1);
+              f.material.opacity = .6 + Math.random() * .35;
+            }
+          });
+        }
+        if (ud.jetLight) ud.jetLight.intensity = on ? (5 + Math.random() * 3) : 0;
       },
       /* ЛКМ fires the minigun, ПКМ fires the laser, both independent and held */
       updateMech(dt, lmb, rmb) {
@@ -18139,8 +18224,11 @@ const Game = {
     }
     p.in.f = mv.f; p.in.r = mv.r; p.in.run = mv.run; p.in.crouch = mv.crouch;
     // jump: held Space on desktop; on touch it is a one-shot, so wantJump must be
-    // cleared again or the player would re-jump every time they touch the ground
-    if (IS_TOUCH) {
+    // cleared again or the player would re-jump every time they touch the ground.
+    // In the MECH the jump key drives the jetpack, so it is held regardless of ground.
+    if (this.isMechActive()) {
+      p.in.wantJump = IS_TOUCH ? (TouchUI.jumpHeld || Input.keys['Space']) : !!mv.wantJump;
+    } else if (IS_TOUCH) {
       p.in.wantJump = Input.consumeJump() && p.onGround;
     } else {
       if (mv.wantJump && p.onGround) p.in.wantJump = true;

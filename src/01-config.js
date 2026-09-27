@@ -29,6 +29,10 @@ const CFG = {
   mechHeight: 3.55,
   mechRadius: 0.62,
   mechMissileCd: 2.6,       // секунд между залпами самонаводящихся ракет (E)
+  /* мех-джетпак: держишь прыжок — 1.5с тяги, затем 1.5с перезарядки */
+  mechJetMax: 1.5,
+  mechJetRecharge: 1.5,
+  mechJetThrust: 9.5,       // вертикальная тяга (м/с), поднимает даже без земли
   maxHP: 100,
   maxAP: 100,
   stepUp: 0.62,

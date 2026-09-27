@@ -24,7 +24,7 @@ const UI = {
       'offCountChips', 'offHpChips', 'offFreeChips', 'offModeChips', 'offCustomBox', 'offHordeBox', 'offSpecialBox', 'offCpBox', 'offCpInfo', 'offCpMode', 'offCpList', 'offCountExact', 'offCountFixed', 'btnOffContinue', 'custom', 'lobbyShop', 'lobbyShopItems',
       'modScreen', 'modGrid', 'modActive',
       'extras', 'achGrid', 'recTable', 'btnExtrasBack', 'weaponWheel', 'wwInner',
-      'medkitTag', 'droneTag', 'grenadeTag', 'zResetTag', 'shieldTag', 'heatTag', 'missileHud', 'mhTime', 'mhReadout',
+      'medkitTag', 'droneTag', 'grenadeTag', 'zResetTag', 'jetTag', 'shieldTag', 'heatTag', 'missileHud', 'mhTime', 'mhReadout',
       'sdScreen', 'sdGrid', 'sdSearch', 'sdToggle2', 'sdClose', 'sdConfig',
       'esScreen', 'esGrid', 'esSearch', 'esCount', 'esClear', 'esClose', 'esConfig'];
     ids.forEach(i => this.el[i] = $(i));
@@ -446,6 +446,16 @@ const UI = {
       e.grenadeTag.textContent = grenadeName(kind) + ' ×' + n;
       e.grenadeTag.classList.toggle('hidden', n <= 0 && !(p.grenades && (p.grenades.frag + p.grenades.freeze + p.grenades.napalm) > 0));
       e.grenadeTag.classList.toggle('usable', n > 0);
+    }
+    // jetpack charge indicator (mech only)
+    if (e.jetTag) {
+      const inMech = (typeof Game !== 'undefined') && Game.isMechActive && Game.isMechActive();
+      e.jetTag.classList.toggle('hidden', !inMech);
+      if (inMech) {
+        if (p.jetActive) { e.jetTag.textContent = 'ДЖЕТПАК ' + Math.max(0, p.jetT).toFixed(1) + 'с'; e.jetTag.classList.add('usable'); }
+        else if (p.jetCd > 0) { e.jetTag.textContent = 'ДЖЕТПАК · ' + Math.max(0, p.jetCd).toFixed(1) + 'с'; e.jetTag.classList.remove('usable'); }
+        else { e.jetTag.textContent = 'ДЖЕТПАК · ПРОБЕЛ'; e.jetTag.classList.add('usable'); }
+      }
     }
     // Y — unstick cooldown indicator (only while recharging)
     if (e.zResetTag && typeof Game !== 'undefined') {

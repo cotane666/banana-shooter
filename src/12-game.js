@@ -5226,6 +5226,19 @@ const Game = {
           ud.pod.position.y = 3.00 + podKick * .16 + bob;
           ud.pod.rotation.x = -aimPitch * .4;
         }
+        /* ---- jetpack flames ---- */
+        const on = p.jetActive === true;
+        if (ud.jetFlames) {
+          ud.jetFlames.forEach((f, i) => {
+            f.visible = on;
+            if (on) {
+              const k = .7 + Math.sin(t * 40 + i) * .3;
+              f.scale.set(1, k, 1);
+              f.material.opacity = .6 + Math.random() * .35;
+            }
+          });
+        }
+        if (ud.jetLight) ud.jetLight.intensity = on ? (5 + Math.random() * 3) : 0;
       },
       /* ЛКМ fires the minigun, ПКМ fires the laser, both independent and held */
       updateMech(dt, lmb, rmb) {
@@ -6905,8 +6918,11 @@ const Game = {
     }
     p.in.f = mv.f; p.in.r = mv.r; p.in.run = mv.run; p.in.crouch = mv.crouch;
     // jump: held Space on desktop; on touch it is a one-shot, so wantJump must be
-    // cleared again or the player would re-jump every time they touch the ground
-    if (IS_TOUCH) {
+    // cleared again or the player would re-jump every time they touch the ground.
+    // In the MECH the jump key drives the jetpack, so it is held regardless of ground.
+    if (this.isMechActive()) {
+      p.in.wantJump = IS_TOUCH ? (TouchUI.jumpHeld || Input.keys['Space']) : !!mv.wantJump;
+    } else if (IS_TOUCH) {
       p.in.wantJump = Input.consumeJump() && p.onGround;
     } else {
       if (mv.wantJump && p.onGround) p.in.wantJump = true;

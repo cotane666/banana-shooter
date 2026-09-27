@@ -1564,11 +1564,22 @@ function buildMechChassis() {
   box(.16, .09, .04, matG, 0, 2.44, -.50);              // eagle emblem
   box(.05, .16, .04, matG, 0, 2.44, -.50);
   [-1, 1].forEach(s => box(.08, .11, .04, matG, s * .09, 2.44, -.50, 0, 0, s * .5));
+  // raised armour plate + panel lines + vents (more detail on the chest)
+  box(.88, .42, .05, matB2, 0, 2.42, -.47);
+  box(.62, .045, .05, matD, 0, 2.62, -.49);
+  box(.62, .045, .05, matD, 0, 2.24, -.49);
+  for (let i = 0; i < 4; i++) box(.10, .05, .06, matD, -.24 + i * .16, 2.12, -.47);
+  [-.34, .34].forEach(x => { const riv = new THREE.Mesh(new THREE.SphereGeometry(.045, 8, 6), matG); riv.position.set(x, 2.62, -.50); g.add(riv); });
+  // warning chevrons on the chest (blue-white)
+  box(.20, .05, .04, matW, -.30, 2.36, -.51);
+  box(.20, .05, .04, matW, .30, 2.36, -.51);
   // ------- side shoulder blocks (out at ±1, tops kept low so they frame the view) -------
   [-1, 1].forEach(s => {
     box(.50, .40, .60, matB, s * 1.02, 2.92, -.02);    // pauldron (top ≈ 3.12, at the very side)
     box(.54, .10, .64, matB2, s * 1.02, 3.14, -.02);
+    box(.44, .06, .56, matW, s * 1.02, 3.00, .06);     // white trim band
     for (let i = 0; i < 3; i++) box(.055, .055, .055, matG, s * 1.24, 3.02 - i * .12, .20);
+    for (let i = 0; i < 2; i++) box(.10, .09, .05, matD, s * .86, 2.86 - i * .14, -.30); // small vents
   });
   // ------- open roll-cage: thin bars around the view, NOT across it -------
   // two uprights behind the pilot + a top rail at the very top (above eye line)
@@ -1612,14 +1623,41 @@ function buildMechChassis() {
   [-1, 1].forEach(s => {
     box(.40, .72, .46, matB, s * .42, 1.44, 0);        // thigh
     box(.42, .12, .48, matB2, s * .42, 1.76, 0);
+    box(.34, .10, .40, matW, s * .42, 1.52, .16);      // knee plate (white)
     box(.46, .82, .40, matD, s * .42, .80, .05);       // shin
     box(.42, .16, .44, matB, s * .42, 1.14, .02);
+    for (let i = 0; i < 3; i++) box(.30, .05, .05, matD, s * .42, .92 + i * .16, .26);  // shin ribs
     box(.52, .22, .78, matB, s * .42, .14, .10);       // foot
     box(.54, .10, .84, matB2, s * .42, .26, .10);
+    box(.40, .06, .40, matG, s * .42, .035, .10);      // golden toe strip
     box(.16, .16, .04, matG, s * .42, 1.24, .28);      // golden badge
   });
   // exhaust stacks on the BACK (+z is behind the pilot, since forward is -z)
   [-.55, .55].forEach(x => { const e = new THREE.Mesh(new THREE.CylinderGeometry(.09, .11, .5, 10), matD); e.position.set(x, 2.9, .5); g.add(e); });
+  /* ---- jetpack: two big nozzles between the shoulders, with thrusters ---- */
+  const jet = new THREE.Group();
+  box(1.0, .55, .38, matB2, 0, 2.75, .62);            // jetpack body
+  box(.92, .10, .34, matB, 0, 3.05, .62);             // top plate
+  [-.42, .42].forEach(x => {
+    const noz = new THREE.Mesh(new THREE.CylinderGeometry(.16, .11, .46, 12), matD);
+    noz.position.set(x, 2.42, .62); jet.add(noz);      // nozzle (points down)
+    const rim = new THREE.Mesh(new THREE.TorusGeometry(.15, .03, 8, 14), matG);
+    rim.position.set(x, 2.62, .62); rim.rotation.x = Math.PI / 2; jet.add(rim);
+  });
+  // glowing thruster cones (hidden until the jet fires)
+  const flames = [];
+  [-.42, .42].forEach(x => {
+    const f = new THREE.Mesh(new THREE.ConeGeometry(.15, .9, 10),
+      new THREE.MeshBasicMaterial({ color: 0x7fd8ff, transparent: true, opacity: .85, blending: THREE.AdditiveBlending, depthWrite: false }));
+    f.position.set(x, 1.95, .62); f.rotation.x = Math.PI; f.visible = false;
+    jet.add(f); flames.push(f);
+  });
+  const jetLight = new THREE.PointLight(0x6fc8ff, 0, 6, 2);
+  jetLight.position.set(0, 2.1, .62); jet.add(jetLight);
+  g.add(jet);
+  g.userData.jet = jet;
+  g.userData.jetFlames = flames;
+  g.userData.jetLight = jetLight;
   // power cables (behind)
   for (let i = 0; i < 3; i++) box(.03, .03, .6, matD, -.85 + i * .06, 2.4, .42, .5, 0, 0);
   for (let i = 0; i < 3; i++) box(.03, .03, .6, matD, .85 - i * .06, 2.4, .42, .5, 0, 0);
@@ -1812,6 +1850,9 @@ class Player {
     this.turretDrone = 0;     // turret-drone charges (gear, launched with V)
     this.mechOwned = false;   // has bought the mech suit (can re-enter it)
     this.mechSuit = false;    // currently sitting in the mech cockpit
+    this.jetActive = false;   // jetpack thrusting
+    this.jetT = 0;            // seconds of thrust left this burst
+    this.jetCd = 0;           // seconds until the pack can fire again
     this.grenades = { frag: 0, freeze: 0, napalm: 0 };   // thrown with G
     this.builds = { turret: 0, barricade: 0, mine: 0 };  // placed with K
     // energy shield (active shield): raised by LMB for a few seconds, then cools
@@ -2109,6 +2150,21 @@ class Player {
       this.vel.y = CFG.jumpSpeed;
       this.onGround = false;
     }
+
+    /* ---- МЕХАКОСТЮМ: jetpack ----
+       Hold Space in the mech: for `mechJetMax` seconds thrust lifts you, then the
+       pack must recharge for `mechJetRecharge` seconds before it can fire again. */
+    if (this.mechSuit) {
+      if (this.jetActive) {
+        this.jetT -= dt;
+        this.vel.y = Math.max(this.vel.y, CFG.mechJetThrust);
+        if (this.jetT <= 0) { this.jetActive = false; this.jetCd = CFG.mechJetRecharge; }
+      } else if (this.jetCd > 0) {
+        this.jetCd -= dt;
+      } else if (input.wantJump) {
+        this.jetActive = true; this.jetT = CFG.mechJetMax;
+      }
+    } else { this.jetActive = false; this.jetCd = 0; this.jetT = 0; }
 
     // ---- gravity ----
     this.vel.y -= CFG.gravity * dt;

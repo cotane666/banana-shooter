@@ -1004,8 +1004,10 @@ const Game = {
     bindClick('btnOffline', () => { UI.show('custom'); UI.refreshChips(); });
     bindClick('btnRange', () => this.startRange());
     bindClick('btnCustomBack', () => UI.show('menu'));
+    bindClick('btnOffContinue', () => { if (!this.resumeFromCheckpoint()) UI.toast('Чекпоинта нет', '#e33a2e'); });
     bindClick('btnCustomStart', () => {
       const mode = Store.data.offMode || 'normal';
+      this.clearCheckpoint();               // a new game starts from scratch
       if (mode === 'custom') this.startOffline(false, false, true);
       else if (mode === 'freehorde') this.startOffline(true, true, false, true);
       else if (mode === 'horde') this.startOffline(true, false, false, true);
@@ -1060,7 +1062,7 @@ const Game = {
     bindClick('btnLeave', () => this.stopToMenu());
     bindClick('btnReset', () => {
       if (confirm('Сбросить весь прогресс и настройки?')) {
-        Store.data = { sens: 2.2, fov: 80, vol: 60, quality: 1, touchSens: 1.5, name: '', best: 0, bestWave: 0, killsTotal: 0, matches: 0, wins: 0, signalSrv: 0, aimBest: 0, aimAutoFire: 1, map: 'arena', players: 2, maxHP: 100, aimAssist: 1, horde: 0, clears: 0, freeplay: 0, rounds: 3, playTime: 0, offCount: 1, offHp: 1, offFree: 0, shopAllow: {}, shopItems: {}, music: 1, sfxVol: 100, musicVol: 70 };
+        Store.data = { sens: 2.2, fov: 80, vol: 60, quality: 1, touchSens: 1.5, name: '', best: 0, bestWave: 0, killsTotal: 0, matches: 0, wins: 0, signalSrv: 0, aimBest: 0, aimAutoFire: 1, map: 'arena', players: 2, maxHP: 100, aimAssist: 1, horde: 0, clears: 0, freeplay: 0, rounds: 3, playTime: 0, offCount: 1, offHp: 1, offFree: 0, offMode: 'normal', checkpoint: null, shopAllow: {}, shopItems: {}, music: 1, sfxVol: 100, musicVol: 70 };
         this.shopAllow = MATCH.defaultShopAllow();
         Store.save();
         UI.refreshChips(); UI.renderMenuStats(); UI.toast('Прогресс сброшен');
@@ -1328,8 +1330,9 @@ const Game = {
     this.offlineDead = false;
     this.offlineDeadT = 0;
     this._creditsOpen = false;
-    // a fresh run clears any checkpoint; resumeFromCheckpoint restores it after
-    this._checkpoint = null;
+    // NOTE: the checkpoint is deliberately NOT cleared here. It is dropped only
+    // by an explicit "НОВАЯ ИГРА" (or after being consumed), so leaving to the
+    // menu and returning can still resume the run.
     // CUSTOM mode reads its own multipliers from the settings.
     this.customOffline = custom === true;
     if (this.customOffline) {
@@ -5323,28 +5326,57 @@ const Game = {
     this._restartPending = true;
   },
 
-  /* Save a checkpoint every 20 waves so a death is not a total restart. */
+  /* Save a checkpoint every 20 waves so a death is not a total restart. It is
+     also persisted to the settings store, so leaving to the menu and coming
+     back later can still resume the run. */
   saveCheckpoint(wave) {
+    const p = this.player;
     this._checkpoint = {
       wave: wave,
-      player: this.player,
-      money: this.player.money,
-      score: this.player.score,
-      inv1: this.player.inv[1] ? this.player.inv[1].id : null,
-      inv2: this.player.inv[2] ? { id: this.player.inv[2].id, mag: this.player.inv[2].mag, reserve: this.player.inv[2].reserve } : null,
-      armor: this.player.armor, helmet: this.player.helmet, heavy: !!this.player.heavyArmor,
-      medkits: this.player.medkits || 0, medkitUnlimited: !!this.player.medkitUnlimited,
-      drone: this.player.drone || 0, droneOwned: !!this.player.droneOwned
+      money: p.money,
+      score: p.score,
+      inv1: p.inv[1] ? p.inv[1].id : null,
+      inv2: p.inv[2] ? { id: p.inv[2].id, mag: p.inv[2].mag, reserve: p.inv[2].reserve } : null,
+      armor: p.armor, helmet: p.helmet, heavy: !!p.heavyArmor,
+      medkits: p.medkits || 0, medkitUnlimited: !!p.medkitUnlimited,
+      drone: p.drone || 0, droneOwned: !!p.droneOwned,
+      // which offline preset this run used, so resuming restores the same mode
+      horde: !!this.hordeMode, free: !!this.freePlay, custom: !!this.customOffline,
+      offCount: this.offCountMul, offHp: this.offHpMul
     };
+    try { Store.data.checkpoint = this._checkpoint; Store.save(); } catch (e) { }
+  },
+
+  /* Restore the saved checkpoint from localStorage into `_checkpoint`. */
+  loadCheckpoint() {
+    if (this._checkpoint) return this._checkpoint;
+    const cp = Store.data && Store.data.checkpoint;
+    if (cp && cp.wave) this._checkpoint = cp;
+    return this._checkpoint;
+  },
+
+  /* True when there is a checkpoint to continue from. */
+  hasCheckpoint() { return !!(this.loadCheckpoint()); },
+
+  /* Drop the checkpoint (new run, or after it is consumed). */
+  clearCheckpoint() {
+    this._checkpoint = null;
+    if (Store.data) { Store.data.checkpoint = null; try { Store.save(); } catch (e) { } }
   },
 
   /* Resume from the last checkpoint: rebuild the run around the saved state and
      jump straight back to the checked wave rather than wave 1. */
   resumeFromCheckpoint() {
-    const cp = this._checkpoint;
+    const cp = this.loadCheckpoint();
     if (!cp) return false;
-    const horde = this.hordeMode, free = this.freePlay, custom = this.customOffline;
-    this.startOffline(horde, free, custom, true);
+    // restore the exact preset the run used (falling back to the saved mode)
+    if (cp.custom) this.startOffline(false, !!cp.free, true, true);
+    else this.startOffline(!!cp.horde, !!cp.free, false, true);
+    if (cp.custom) {
+      if (cp.offCount != null) { this.offCountMul = cp.offCount; Store.data.offCount = cp.offCount; }
+      if (cp.offHp != null) { this.offHpMul = cp.offHp; Store.data.offHp = cp.offHp; }
+      this.freePlay = !!cp.free;
+    }
     const o = this.offline;
     o.wave = Math.max(0, cp.wave - 1);         // startWave() increments
     const p = this.player;

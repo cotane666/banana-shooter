@@ -21,7 +21,7 @@ const UI = {
       'btnCopy', 'dmgDirs', 'android', 'ios', 'credits', 'crPlayer', 'crStats',
       'matchEnd', 'meTitle', 'meWinner', 'meScore', 'meDetail', 'btnMatchAgain', 'btnMatchMenu',
       'mapChips', 'playerChips', 'hpChips', 'hordeChips', 'lobbyMaps', 'lobbyPlayers', 'lobbyHp', 'lobbyFree', 'lobbyRounds',
-      'offCountChips', 'offHpChips', 'offFreeChips', 'offModeChips', 'offCustomBox', 'offHordeBox', 'custom', 'lobbyShop', 'lobbyShopItems',
+      'offCountChips', 'offHpChips', 'offFreeChips', 'offModeChips', 'offCustomBox', 'offHordeBox', 'offCpBox', 'offCpInfo', 'btnOffContinue', 'custom', 'lobbyShop', 'lobbyShopItems',
       'medkitTag', 'droneTag', 'shieldTag', 'heatTag', 'missileHud', 'mhTime', 'mhReadout',
       'sdScreen', 'sdGrid', 'sdSearch', 'sdToggle2', 'sdClose', 'sdConfig',
       'esScreen', 'esGrid', 'esSearch', 'esCount', 'esClear', 'esClose', 'esConfig'];
@@ -266,6 +266,17 @@ const UI = {
     }
     if (this.el.offCustomBox) this.el.offCustomBox.classList.toggle('hidden', mode !== 'custom');
     if (this.el.offHordeBox) this.el.offHordeBox.classList.toggle('hidden', mode !== 'horde' && mode !== 'freehorde');
+    // checkpoint: show "ПРОДОЛЖИТЬ" only when there is one to continue from
+    const cp = (typeof Game !== 'undefined' && Game.loadCheckpoint) ? Game.loadCheckpoint() : null;
+    if (this.el.offCpBox) this.el.offCpBox.classList.toggle('hidden', !cp);
+    if (this.el.offCpInfo) this.el.offCpInfo.textContent = cp ? ('волна ' + cp.wave) : '';
+    if (this.el.btnOffContinue) {
+      this.el.btnOffContinue.classList.toggle('hidden', !cp);
+      const b = this.el.btnOffContinue.querySelector('b');
+      const i = this.el.btnOffContinue.querySelector('i');
+      if (b) b.textContent = 'ПРОДОЛЖИТЬ' + (cp ? ' · ВОЛНА ' + cp.wave : '');
+      if (i) i.textContent = cp ? ('Оружие и счёт с волны ' + cp.wave) : 'С последнего чекпоинта';
+    }
     // shop toggles: a category is "on" when it is allowed
     if (this.el.lobbyShop) {
       const allow = (typeof Game !== 'undefined' && Game.shopAllow) ? Game.shopAllow : MATCH.defaultShopAllow();

@@ -51,7 +51,7 @@ const CFG = {
   medkitFieldInterval: 20,  // seconds between field medkit drops (offline)
   medkitFieldMax: 2,        // at most this many field medkits on the map
   medkitFieldLife: 90,      // a field medkit vanishes after this long
-  moneyCap: 65000,      // most money a player can hold (prices go up to 20000)
+  moneyCap: 100000,     // most money a player can hold (prices go up to 80000)
   droneSpeed: 15,       // m/s cruise for the guided drone
   droneBoost: 1.7,      // speed multiplier while boosting (Shift)
   droneLife: 26,        // seconds before the drone runs out of fuel
@@ -229,7 +229,7 @@ const WEAPONS = {
          splash: 14.0, splashDmg: 1200, explosionColor: [0x39ff5a, 0x0a1a0a], noSelfDamage: true, nuke: true },
 
   /* ---------------- Y.H.S: absurdly strong, absurdly fast MG ---------------- */
-  yhs: { name: 'Y.H.S', cat: 'heavy', slot: 2, price: 35000, dmg: 180, rpm: 5750, mag: 2000, reserve: 0,
+  yhs: { name: 'Y.H.S', cat: 'heavy', slot: 2, price: 80000, dmg: 180, rpm: 5750, mag: 2000, reserve: 0,
          auto: true, spread: .030, moveSpread: .020, recoil: .35, falloff: .85, range: 140, headMul: 2.3,
          sound: 'rifle', spinUp: .35 },
 
@@ -349,7 +349,7 @@ const Store = {
   key: 'cs3d.save.v1',
   data: { sens: 2.2, fov: 80, vol: 60, quality: 1, touchSens: 1.5, name: '', best: 0, bestWave: 0, killsTotal: 0, matches: 0, wins: 0, signalSrv: 0, aimBest: 0, aimAutoFire: 1,
           map: 'arena', players: 2, maxHP: 100, aimAssist: 1, horde: 0, clears: 0, freeplay: 0, rounds: 3, playTime: 0,
-          offCount: 1, offHp: 1, offFree: 0, offMode: 'normal', shopAllow: {}, shopItems: {}, music: 1, sfxVol: 100, musicVol: 70 },
+          offCount: 1, offHp: 1, offFree: 0, offMode: 'normal', checkpoint: null, shopAllow: {}, shopItems: {}, music: 1, sfxVol: 100, musicVol: 70 },
   load() {
     try { const r = localStorage.getItem(this.key); if (r) Object.assign(this.data, JSON.parse(r)); } catch (e) { }
     return this.data;

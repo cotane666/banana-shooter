@@ -253,7 +253,63 @@ const WEAPONS = {
      lowered to match the higher rate, otherwise the view would climb to the sky. */
   banana: { name: 'БАНАН', cat: 'banana', slot: 2, price: 10000, dmg: 55, rpm: 900, mag: 45, reserve: 180,
             auto: true, spread: .018, moveSpread: .026, recoil: .85, falloff: .85, range: 120, headMul: 1.6,
-            sound: 'banana', projectile: 'banana', projSpeed: 52, projGravity: 13 }
+            sound: 'banana', projectile: 'banana', projSpeed: 52, projGravity: 13 },
+
+  /* ============================================================
+     ЭКСПЕРИМЕНТАЛЬНОЕ — nine unusual weapons (20 000 – 80 000)
+     They all sit in the `exp` shop category and use either a `special` handler
+     (fired straight from Game.fireSpecial) or a dedicated `projectile` kind.
+     ============================================================ */
+  /* ХИМИЯ: acid sprayer — leaves a pool that keeps burning the horde */
+  acid: { name: 'КИСЛОТОМЁТ', cat: 'exp', slot: 2, price: 25000, dmg: 34, rpm: 300, mag: 24, reserve: 96,
+          auto: true, spread: .040, moveSpread: .030, recoil: 1.1, falloff: .70, range: 60, headMul: 1.4,
+          sound: 'shotgun', projectile: 'acid', projSpeed: 23, projGravity: 18,
+          acidR: 2.7, acidDps: 55, acidLife: 6.5 },
+
+  /* КОНТРОЛЬ: hive — launches a hive that hatches homing kamikaze drones */
+  hive: { name: 'РОЙ', cat: 'exp', slot: 2, price: 30000, dmg: 40, rpm: 34, mag: 2, reserve: 8,
+          auto: false, spread: .020, moveSpread: .050, recoil: 3.0, falloff: .90, range: 140, headMul: 1.2,
+          sound: 'banana', projectile: 'hive', projSpeed: 24, projGravity: 11,
+          hiveCount: 5, splash: .6, splashDmg: 40 },
+
+  /* РИКОШЕТ: disc — bounces off walls and enemies, then flies home */
+  disc: { name: 'ДИСКОБОЛ', cat: 'exp', slot: 2, price: 35000, dmg: 190, rpm: 46, mag: 1, reserve: 8,
+          auto: false, spread: .004, moveSpread: .050, recoil: 4.0, falloff: .98, range: 200, headMul: 1.4,
+          sound: 'laser', projectile: 'disc', projSpeed: 36, projGravity: 1.5, bounces: 6, discReturn: 3.0 },
+
+  /* ХОЛОД: absolute zero — freezes the horde, frozen bodies shatter */
+  freeze: { name: 'АБСОЛЮТНЫЙ НОЛЬ', cat: 'exp', slot: 2, price: 40000, dmg: 80, rpm: 84, mag: 5, reserve: 20,
+          auto: false, spread: .020, moveSpread: .040, recoil: 2.2, falloff: .80, range: 90, headMul: 1.4,
+          sound: 'laser', projectile: 'freeze', projSpeed: 30, projGravity: 7,
+          splash: 3.4, splashDmg: 90, freezeT: 4.0 },
+
+  /* ЦЕПЬ: tesla — lightning arcs from one enemy to the next */
+  tesla: { name: 'ТЕСЛА-ПУШКА', cat: 'exp', slot: 2, price: 45000, dmg: 95, rpm: 130, mag: 40, reserve: 160,
+          auto: true, spread: .014, moveSpread: .030, recoil: 1.0, falloff: .85, range: 78, headMul: 1.7,
+          sound: 'laser', special: 'tesla', chain: 5, chainRange: 9.5 },
+
+  /* ПОРТАЛЫ: mirror gun — two linked gates teleport what enters them */
+  portal: { name: 'ЗЕРКАЛЬНАЯ ПУШКА', cat: 'exp', slot: 2, price: 55000, dmg: 0, rpm: 70, mag: Infinity, reserve: 0,
+          auto: false, spread: 0, moveSpread: 0, recoil: .6, falloff: 1, range: 60, headMul: 1,
+          sound: 'laser', special: 'portal', portalR: 1.9 },
+
+  /* ГРАВИТАЦИЯ: black hole — a sphere that drags the horde in, then implodes */
+  blackhole: { name: 'ЧЁРНАЯ ДЫРА', cat: 'exp', slot: 2, price: 65000, dmg: 60, rpm: 30, mag: 1, reserve: 5,
+          auto: false, spread: .004, moveSpread: .050, recoil: 5.0, falloff: .99, range: 240, headMul: 1.2,
+          sound: 'awp', projectile: 'blackhole', projSpeed: 32, projGravity: 3,
+          wellR: 9.5, wellLife: 4.2, wellDps: 45, wellPull: 11,
+          splash: 8.5, splashDmg: 900, explosionColor: [0x9a5aff, 0x08040f], noSelfDamage: true },
+
+  /* КОМПАНЬОН: turret drone — a helper that follows and fires for you */
+  turretDrone: { name: 'ДРОН-ТУРЕЛЬ', cat: 'exp', slot: 2, price: 70000, dmg: 40, rpm: 70, mag: Infinity, reserve: 0,
+          auto: false, spread: 0, moveSpread: 0, recoil: 0, falloff: .90, range: 46, headMul: 1.8,
+          sound: 'laser', special: 'turret', turretDmg: 48, turretCd: .16, turretRange: 46 },
+
+  /* ВРЕМЯ: chrono — a bubble that slows everything inside it */
+  chrono: { name: 'ХРОНО-ПУШКА', cat: 'exp', slot: 2, price: 80000, dmg: 30, rpm: 44, mag: 3, reserve: 9,
+          auto: false, spread: .010, moveSpread: .050, recoil: 3.4, falloff: .95, range: 200, headMul: 1.2,
+          sound: 'awp', projectile: 'chrono', projSpeed: 32, projGravity: 3,
+          chronoR: 8.5, chronoLife: 7, chronoSlow: .16 }
 };
 
 const GEAR = {
@@ -276,6 +332,7 @@ const BUY_CATS = [
   { id: 'shotgun', label: 'ДРОБОВИКИ' },
   { id: 'lmg',     label: 'ПУЛЕМЁТЫ' },
   { id: 'heavy',   label: 'ТЯЖЁЛОЕ' },
+  { id: 'exp',     label: 'ЭКСПЕРИМЕНТАЛЬНОЕ' },
   { id: 'banana',  label: 'БАНАНЫ' },
   { id: 'gear',    label: 'СНАРЯЖЕНИЕ' }
 ];

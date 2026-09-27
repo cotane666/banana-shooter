@@ -1161,6 +1161,12 @@ const Game = {
     Bus.on('zombieHit', (z, part, dmg, dir) => this.onZombieHit(z, part, dmg, dir));
     Bus.on('zombieGrowl', z => Audio3D_SFX.growl(z.pos.x, z.pos.y + 1.4, z.pos.z, z.type));
     Bus.on('zombieShoot', (z, from) => this.onZombieShoot(z, from));
+    Bus.on('zombieShatter', z => {
+      // АБСОЛЮТНЫЙ НОЛЬ: a frozen body burst into ice shards
+      this.effects.frostBurst(z.pos.x, z.pos.y + 1, z.pos.z, 2.6);
+      this.effects.decal(z.pos.x, .02, z.pos.z, 0, 1, 0, 2.6, 'frost');
+      Audio3D_SFX.explosionAt(z.pos.x, z.pos.y + 1, z.pos.z);
+    });
 
     // network events
     Net.on('hello', m => this.onPeerHello(m));
@@ -3811,6 +3817,8 @@ const Game = {
     }
     const def = p.def;
     if (def.shield) { this.activateShield(); return false; }   // shield raises, never fires
+    /* experimental weapons with bespoke behaviour (tesla / portal / turret …) */
+    if (def.special) { this.fireSpecial(def, w); return true; }
     if (w.mag !== Infinity) w.mag--;
     p.fireCd = 60 / def.rpm;
     p.bulletsFired++;
@@ -3891,12 +3899,17 @@ const Game = {
     const kind = def.projectile;
     const isRocket = kind === 'rocket';
     const isGuided = kind === 'guided';
-    const mesh = isGuided ? buildGuidedMissile() : (isRocket ? buildRocketProjectile() : buildBananaProjectile());
+    const builder = {
+      guided: buildGuidedMissile, rocket: buildRocketProjectile, acid: buildAcidProjectile,
+      hive: buildHivePod, disc: buildDiscProjectile, freeze: buildFreezeOrb,
+      blackhole: buildBlackHoleShell, chrono: buildChronoOrb
+    }[kind];
+    const mesh = builder ? builder() : buildBananaProjectile();
     mesh.position.set(origin.x, origin.y, origin.z);
     if (!isRocket && !isGuided) mesh.rotation.x = Math.PI / 2;   // bananas lie along the flight path
     this.scene.add(mesh);
     const speed = def.projSpeed || 30;
-    this.projectiles.push({
+    const pr = {
       mesh: mesh,
       kind: kind,
       pid: 'pr' + (this._projSeq = (this._projSeq || 0) + 1),
@@ -3915,7 +3928,16 @@ const Game = {
       nuke: !!def.nuke,                 // spawn the mushroom + tornado FX
       guided: isGuided,                 // the player steers this rocket
       ownerIsLocal: true
-    });
+    };
+    // per-kind extras copied from the weapon definition
+    if (kind === 'acid') { pr.acidR = def.acidR; pr.acidDps = def.acidDps; pr.acidLife = def.acidLife; }
+    if (kind === 'hive') { pr.hiveCount = def.hiveCount; pr.hiveReleased = false; }
+    if (kind === 'freeze') { pr.freezeT = def.freezeT; }
+    if (kind === 'blackhole') { pr.wellR = def.wellR; pr.wellLife = def.wellLife; pr.wellDps = def.wellDps; pr.wellPull = def.wellPull; pr.wellArmed = true; }
+    if (kind === 'chrono') { pr.chronoR = def.chronoR; pr.chronoLife = def.chronoLife; pr.chronoSlow = def.chronoSlow; }
+    if (kind === 'disc') { pr.bounces = def.bounces; pr.discReturn = def.discReturn; pr.returnT = def.discReturn; pr.bounced = 0; }
+    if (kind === 'freeze') pr.life = 7;
+    this.projectiles.push(pr);
     // while a guided missile is in the air the player steers it, like the drone
     if (isGuided) this._guidedMissile = true;
     if (this.projectiles.length > 40) {
@@ -3953,6 +3975,26 @@ const Game = {
       }
 
       pr.vel.y -= pr.grav * dt;
+
+      /* ЧЁРНАЯ ДЫРА: drag the horde toward the singularity while it flies */
+      if (pr.kind === 'blackhole') {
+        if (pr.mesh.userData.ring) pr.mesh.userData.ring.rotation.z += dt * 3.2;
+        if (this.horde && pr.wellArmed) {
+          const R = pr.wellR || 9;
+          for (const z of this.horde.list) {
+            if (!z.alive || z.dying) continue;
+            const dx = pr.pos.x - z.pos.x, dz = pr.pos.z - z.pos.z;
+            const d = Math.hypot(dx, dz);
+            if (d < R && d > .4) {
+              const pull = (pr.wellPull || 10) * (1 - d / R);
+              z.pos.x += (dx / d) * pull * dt;
+              z.pos.z += (dz / d) * pull * dt;
+            }
+          }
+        }
+      }
+      if (pr.kind === 'chrono' && pr.mesh.userData.ring) pr.mesh.userData.ring.rotation.z += dt * 2.5;
+      if (pr.kind === 'disc') { pr.mesh.rotation.z += dt * 22; pr.returnT -= dt; }
       const nx = pr.pos.x + pr.vel.x * dt, ny = pr.pos.y + pr.vel.y * dt, nz = pr.pos.z + pr.vel.z * dt;
 
       // segment we travel this frame
@@ -4000,6 +4042,69 @@ const Game = {
       }
 
       if (impactPoint) {
+        /* ---- experimental projectiles: on-hit behaviour ---- */
+        if (pr.kind === 'freeze') {
+          // shatter burst: chill everything close and leave a frost patch
+          const R = pr.splash || 3.2, dmg = pr.splashDmg || pr.dmg;
+          this.effects.frostBurst(impactPoint.x, impactPoint.y, impactPoint.z, R);
+          this.effects.decal(impactPoint.x, impactPoint.y + .02, impactPoint.z, 0, 1, 0, R * .9, 'frost', null, null, R * .9, { x: impactPoint.x, y: impactPoint.y, z: impactPoint.z });
+          this.freezeAt(impactPoint, R, pr.freezeT || 4, dmg);
+          this.removeProjectile(i);
+          continue;
+        }
+        if (pr.kind === 'hive') {
+          this.releaseHive(impactPoint, pr.hiveCount || 5);
+          this.removeProjectile(i);
+          continue;
+        }
+        if (pr.kind === 'acid') {
+          // splash puddle that keeps burning
+          const R = pr.acidR || 2.6;
+          this.effects.acidSplash(impactPoint.x, impactPoint.y, impactPoint.z, R);
+          this.effects.decal(impactPoint.x, impactPoint.y + .02, impactPoint.z, 0, 1, 0, R, 'acid', null, null, R, { x: impactPoint.x, y: impactPoint.y, z: impactPoint.z });
+          if (this.horde) for (const z of this.horde.list) {
+            if (!z.alive || z.dying) continue;
+            const d = Math.hypot(z.pos.x - impactPoint.x, z.pos.z - impactPoint.z);
+            if (d < R) { z.takeDamage(pr.dmg, 'body', dir); this.player.damageDealt += pr.dmg; }
+          }
+          this.removeProjectile(i);
+          continue;
+        }
+        if (pr.kind === 'blackhole') {
+          // implode: the well has already dragged them in — now it detonates
+          this.effects.implodeFx(impactPoint.x, impactPoint.y, impactPoint.z, pr.wellR || 9);
+          this.explode(impactPoint, pr);
+          this.removeProjectile(i);
+          continue;
+        }
+        if (pr.kind === 'chrono') {
+          this.effects.chronoField(impactPoint.x, impactPoint.y, impactPoint.z, pr.chronoR || 8, pr.chronoLife || 7);
+          this.openChrono(impactPoint, pr.chronoR || 8, pr.chronoLife || 7, pr.chronoSlow || .16);
+          this.removeProjectile(i);
+          continue;
+        }
+        if (pr.kind === 'disc') {
+          // a disc bounces off a wall a few times before it fades
+          // a disc bounces off a wall a few times before it fades.
+      // If `impactNormal` is null this was a zombie hit: the disc slices through
+      // and keeps flying (only walls stop it).
+      if (!impactNormal) { UI.hitmark(true); this._hitmarkT = U.now(); continue; }
+      if (pr.bounced < (pr.bounces || 5)) {
+            const vn = pr.vel.x * impactNormal.x + pr.vel.y * impactNormal.y + pr.vel.z * impactNormal.z;
+            pr.vel.x -= 2 * vn * impactNormal.x;
+            pr.vel.y -= 2 * vn * impactNormal.y;
+            pr.vel.z -= 2 * vn * impactNormal.z;
+            pr.pos.x = impactPoint.x + impactNormal.x * .08;
+            pr.pos.y = impactPoint.y + impactNormal.y * .08;
+            pr.pos.z = impactPoint.z + impactNormal.z * .08;
+            pr.bounced++;
+            this.effects.spark(impactPoint, impactNormal);
+            continue;
+          }
+          this.effects.spark(impactPoint, impactNormal);
+          this.removeProjectile(i);
+          continue;
+        }
         if (pr.splash > 0) {
           // rockets detonate: blast damage to everything nearby
           this.explode(impactPoint, pr);
@@ -4030,6 +4135,16 @@ const Game = {
         pr.mesh.rotateY(Math.sin(performance.now() * .02) * .4);   // silly spin
       }
       if (pr.life <= 0 || pr.pos.y < -3) {
+        /* a disc flies home once it has spent its outbound time */
+        if (pr.kind === 'disc' && pr.returnT <= 0 && pr.ownerIsLocal) {
+          const p = this.player;
+          const toH = { x: p.pos.x - pr.pos.x, y: (p.pos.y + 1.2) - pr.pos.y, z: p.pos.z - pr.pos.z };
+          const l = Math.hypot(toH.x, toH.y, toH.z) || 1, sp = 46;
+          pr.vel.x = toH.x / l * sp; pr.vel.y = toH.y / l * sp; pr.vel.z = toH.z / l * sp;
+          pr.grav = 0; pr.returnT = 1;
+          if (l < 2.5) { this.removeProjectile(i); continue; }   // caught it back
+          continue;
+        }
         // a rocket that runs out of life or hits the void still detonates
         if (pr.splash > 0) this.explode({ x: pr.pos.x, y: pr.pos.y, z: pr.pos.z }, pr);
         this.removeProjectile(i);
@@ -4037,8 +4152,391 @@ const Game = {
     }
   },
 
-  /* radial blast damage for rockets: falls off linearly to the edge */
-  explode(center, pr) {
+      /* ============================================================
+         EXPERIMENTAL WEAPONS — bespoke firing behaviours
+         ============================================================ */
+
+      /* dispatcher: weapons with a `special` handler never fire a bullet */
+      fireSpecial(def, w) {
+        const p = this.player;
+        const muzzle = this.muzzleWorldPos();
+        const origin = this.eyePos();
+        const dir = this.cameraDir();
+        if (w.mag !== Infinity) w.mag--;
+        p.bulletsFired++;
+        p.fireCd = 60 / def.rpm;
+        p.flashT = .05;
+        if (def.special === 'tesla') return this.fireTesla(def, muzzle, origin, dir);
+        if (def.special === 'portal') { this.placePortal(def, origin, dir); return; }
+        if (def.special === 'turret') { this.toggleTurretDrone(def); return; }
+      },
+
+      /* ТЕСЛА-ПУШКА: hits the first target, then arcs from it to the nearest
+       * other zombies, damage decaying with every jump. */
+      fireTesla(def, muzzle, origin, dir) {
+        const range = def.range || 70;
+        let hit = null, hitZ = null;
+        if (this.horde) for (const z of this.horde.list) {
+          if (!z.alive || z.dying) continue;
+          const h = rayZombie(origin, dir, z, range);
+          if (h && (!hit || h.t < hit.t)) { hit = h; hitZ = z; }
+        }
+        const wall = this.world.raycast(origin, dir, range, ['ground']);
+        let end;
+        if (hit && hitZ && (!wall || hit.t < wall.t)) {
+          end = { x: origin.x + dir.x * hit.t, y: origin.y + dir.y * hit.t, z: origin.z + dir.z * hit.t };
+          let src = hitZ, prevPoint = end, dmg = def.dmg;
+          const hitIds = { };
+          hitIds[src.id] = 1;
+          for (let c = 0; c <= (def.chain || 4); c++) {
+            const hs = c === 0 && hit.part === 'head';
+            const dealt = dmg * (hs ? (def.headMul || 1) : 1);
+            src.takeDamage(dealt, c === 0 ? hit.part : 'body', dir);
+            this.player.damageDealt += dealt;
+            // find the nearest not-yet-hit zombie within the chain radius
+            let next = null, nd = 1e9, npt = null;
+            for (const z of this.horde.list) {
+              if (!z.alive || z.dying || hitIds[z.id]) continue;
+              const d = Math.hypot(z.pos.x - src.pos.x, z.pos.z - src.pos.z);
+              if (d < (def.chainRange || 9) && d < nd) {
+                nd = d; next = z; npt = { x: z.pos.x, y: z.pos.y + 1.0 * z.scale, z: z.pos.z };
+              }
+            }
+            if (!next) break;
+            this.effects.arc(prevPoint, npt, 0x9ad6ff);
+            prevPoint = npt; hitIds[next.id] = 1; src = next; dmg *= .82;
+          }
+          this.effects.arc(muzzle, end, 0x9ad6ff);
+          UI.hitmark(true);
+        } else {
+          end = wall ? wall.point : { x: origin.x + dir.x * range, y: origin.y + dir.y * range, z: origin.z + dir.z * range };
+          this.effects.arc(muzzle, end, 0x9ad6ff);
+          UI.hitmark(false);
+        }
+        Audio3D_SFX.laser(muzzle.x, muzzle.y, muzzle.z);
+        this._hitmarkT = U.now();
+      },
+
+      /* ЗЕРКАЛЬНАЯ ПУШКА: drop portals on the surface you aim at. Anything that
+       * reaches the first gate comes out of the second. */
+      placePortal(def, origin, dir) {
+        if (this.mode === CS.MODE.ONLINE) { UI.toast('Порталы — только в оффлайне', '#ff9d21'); return; }
+        const range = def.range || 60;
+        const wall = this.world.raycast(origin, dir, range, ['ground']);
+        const pt = wall ? wall.point : { x: origin.x + dir.x * range, y: origin.y + dir.y * range, z: origin.z + dir.z * range };
+        const n = wall ? wall.normal : { x: -dir.x, y: -dir.y, z: -dir.z };
+        this.portals = this.portals || [];
+        if (this.portals.length >= 2) this.removePortal(0);
+        const color = this.portals.length === 0 ? 0x7be0ff : 0xff7be0;
+        const mesh = this.buildPortalMesh(pt, n, color);
+        this.portals.push({
+          pos: { x: pt.x + n.x * .06, y: pt.y + n.y * .06, z: pt.z + n.z * .06 },
+          normal: n, life: 22, color: color, mesh: mesh
+        });
+        Audio3D_SFX.laser(origin.x, origin.y, origin.z);
+        UI.toast(this.portals.length === 1 ? 'Портал A открыт' : 'Портал B открыт · шагните в него', color === 0x7be0ff ? '#7be0ff' : '#ff7be0');
+      },
+
+      buildPortalMesh(pt, n, color) {
+        const g = new THREE.Group();
+        const R = (WEAPONS.portal.portalR || 1.9);
+        const ring = new THREE.Mesh(new THREE.TorusGeometry(R, .10, 8, 30),
+          new THREE.MeshBasicMaterial({ color: color, transparent: true, opacity: .9, blending: THREE.AdditiveBlending, depthWrite: false }));
+        const disc = new THREE.Mesh(new THREE.CircleGeometry(R * .92, 28),
+          new THREE.MeshBasicMaterial({ color: color, transparent: true, opacity: .16, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
+        g.add(ring); g.add(disc);
+        const nv = new THREE.Vector3(n.x, n.y, n.z);
+        if (nv.lengthSq() < 1e-6) nv.set(0, 1, 0);
+        nv.normalize();
+        g.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), nv);
+        g.position.set(pt.x + nv.x * .06, pt.y + nv.y * .06, pt.z + nv.z * .06);
+        g.renderOrder = 3;
+        this.scene.add(g);
+        return g;
+      },
+
+      removePortal(idx) {
+        const p = this.portals && this.portals[idx];
+        if (!p) return;
+        if (p.mesh.parent) p.mesh.parent.remove(p.mesh);
+        p.mesh.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material) o.material.dispose(); });
+        this.portals.splice(idx, 1);
+      },
+
+      clearPortals() {
+        if (!this.portals) return;
+        while (this.portals.length) this.removePortal(0);
+      },
+
+      updatePortals(dt) {
+        if (!this.portals || this.portals.length !== 2) {
+          if (this.portals) this.portals.forEach(p => p.mesh.rotation.z += dt);
+          return;
+        }
+        for (const p of this.portals) { p.life -= dt; p.mesh.rotation.z += dt * 1.6; }
+        for (let i = this.portals.length - 1; i >= 0; i--) {
+          if (this.portals[i].life <= 0) { this.removePortal(i); }
+        }
+        if (this.portals.length !== 2) return;
+        const A = this.portals[0], B = this.portals[1];
+        const R = WEAPONS.portal.portalR || 1.9;
+        // zombies fall through
+        if (this.horde) for (const z of this.horde.list) {
+          if (!z.alive || z.dying || (z.portalCd || 0) > 0) continue;
+          for (const pair of [[A, B], [B, A]]) {
+            const from = pair[0], to = pair[1];
+            const d = Math.hypot(z.pos.x - from.pos.x, z.pos.z - from.pos.z);
+            if (d < R * .7) {
+              z.pos.x = to.pos.x + to.normal.x * 1.1;
+              z.pos.y = to.pos.y + to.normal.y * 1.1;
+              z.pos.z = to.pos.z + to.normal.z * 1.1;
+              z.portalCd = .6;
+              break;
+            }
+          }
+        }
+        // and the player
+        this._portalCd = Math.max(0, (this._portalCd || 0) - dt);
+        const pl = this.player;
+        if (this._portalCd <= 0) {
+          for (const pair of [[A, B], [B, A]]) {
+            const from = pair[0], to = pair[1];
+            const d = Math.hypot(pl.pos.x - from.pos.x, pl.pos.z - from.pos.z);
+            if (d < R * .7 && Math.abs(pl.pos.y - from.pos.y) < 2.4) {
+              pl.pos.x = to.pos.x + to.normal.x * 1.1;
+              pl.pos.y = to.pos.y + to.normal.y * 1.1 + .05;
+              pl.pos.z = to.pos.z + to.normal.z * 1.1;
+              pl.vel.x = pl.vel.y = pl.vel.z = 0;
+              this._portalCd = .8;
+              Audio3D_SFX.pickup();
+              this.effects.spark({ x: to.pos.x, y: to.pos.y, z: to.pos.z }, to.normal);
+              break;
+            }
+          }
+        }
+      },
+
+      /* ДРОН-ТУРЕЛЬ: summons a companion that flies beside you and shoots. */
+      toggleTurretDrone(def) {
+        if (this.turretDrone) { this.removeTurretDrone(); UI.toast('Дрон-турель отозван', '#ff9d21'); return; }
+        const p = this.player;
+        const mesh = buildDroneModel();
+        mesh.scale.setScalar(.85);
+        const start = { x: p.pos.x, y: p.pos.y + 2.2, z: p.pos.z };
+        mesh.position.set(start.x, start.y, start.z);
+        this.scene.add(mesh);
+        this.turretDrone = {
+          mesh: mesh, pos: start, life: 45, fireCd: 0, yaw: 0,
+          dmg: def.turretDmg || 46, cd: def.turretCd || .16, range: def.turretRange || 46
+        };
+        Audio3D_SFX.droneLaunch && Audio3D_SFX.droneLaunch();
+        UI.toast('Дрон-турель на связи', '#4ad6ff');
+      },
+
+      removeTurretDrone() {
+        const td = this.turretDrone;
+        if (!td) return;
+        if (td.mesh.parent) td.mesh.parent.remove(td.mesh);
+        td.mesh.traverse(o => { if (o.geometry) o.geometry.dispose(); });
+        this.turretDrone = null;
+      },
+
+      updateTurretDrone(dt) {
+        const td = this.turretDrone;
+        if (!td) return;
+        const p = this.player;
+        td.life -= dt;
+        if (td.life <= 0) { this.removeTurretDrone(); UI.toast('Дрон-турель сел (ждите перезарядки)', '#ff9d21'); return; }
+        // hover just behind the player's right shoulder
+        const tx = p.pos.x - Math.sin(p.yaw + .7) * 2.2;
+        const tz = p.pos.z - Math.cos(p.yaw + .7) * 2.2;
+        const gy = (this.world.groundAt(tx, tz, p.pos.y + 5) || 0) + 2.1;
+        td.pos.x = U.lerp(td.pos.x, tx, 1 - Math.pow(.02, dt));
+        td.pos.y = U.lerp(td.pos.y, gy, 1 - Math.pow(.04, dt));
+        td.pos.z = U.lerp(td.pos.z, tz, 1 - Math.pow(.02, dt));
+        td.mesh.position.set(td.pos.x, td.pos.y, td.pos.z);
+        // acquire the nearest zombie
+        let best = null, bd = 1e9;
+        if (this.horde) for (const z of this.horde.list) {
+          if (!z.alive || z.dying) continue;
+          const d = Math.hypot(z.pos.x - td.pos.x, z.pos.z - td.pos.z);
+          if (d < td.range && d < bd) { bd = d; best = z; }
+        }
+        if (!best) { td.fireCd = 0; return; }
+        const to = { x: best.pos.x, y: best.pos.y + 1.0 * best.scale, z: best.pos.z };
+        td.mesh.lookAt(to.x, to.y, to.z);
+        td.fireCd -= dt;
+        if (td.fireCd <= 0) {
+          td.fireCd = td.cd;
+          best.takeDamage(td.dmg, 'body', { x: 0, y: 0, z: 0 });
+          this.player.damageDealt += td.dmg;
+          this.effects.tracer({ x: td.pos.x, y: td.pos.y, z: td.pos.z }, to, true, .6);
+          Audio3D_SFX.shot('smg', td.pos.x, td.pos.y, td.pos.z);
+        }
+      },
+
+      /* АБСОЛЮТНЫЙ НОЛЬ: chills everything in the blast; chilled bodies shatter. */
+      freezeAt(center, R, seconds, dmg) {
+        if (!this.horde) return;
+        for (const z of this.horde.list) {
+          if (!z.alive || z.dying || z.isBoss) continue;     // bosses shrug it off
+          const d = Math.hypot(z.pos.x - center.x, z.pos.z - center.z);
+          if (d > R) continue;
+          z.takeDamage(dmg * (1 - (d / R) * .5), 'body', { x: 0, y: 0, z: 0 });
+          if (z.alive && !z.dying) {
+            if (typeof z.freeze === 'function') z.freeze(seconds);
+            else { z.frozen = true; z.freezeT = Math.max(z.freezeT || 0, seconds); }
+          }
+        }
+      },
+
+      updateFreezeShatter(dt) {
+        if (!this.horde) return;
+        for (const z of this.horde.list) {
+          if (!z.frozen || z.dying) continue;
+          z.freezeT -= dt;
+          if (z.freezeT <= 0) { z.frozen = false; z.freezeBank = 0; }
+        }
+      },
+
+      /* РОЙ: the hive hatches a swarm of homing kamikaze drones. */
+      releaseHive(center, n) {
+        this.hiveDrones = this.hiveDrones || [];
+        for (let i = 0; i < n; i++) {
+          const a = (i / n) * Math.PI * 2;
+          const mesh = buildDroneModel();
+          mesh.scale.setScalar(.6);
+          mesh.position.set(center.x, center.y, center.z);
+          this.scene.add(mesh);
+          this.hiveDrones.push({
+            mesh: mesh, pos: { x: center.x, y: center.y, z: center.z }, life: 9,
+            target: null, vel: { x: Math.cos(a) * 4, y: 2.5, z: Math.sin(a) * 4 }, dmg: 130
+          });
+        }
+        this.effects.explosion(center.x, center.y, center.z, 1.6, [0xffc94a, 0x3a2406]);
+        Audio3D_SFX.bananaSplat(center.x, center.y, center.z);
+      },
+
+      nearestZombie(x, z, r) {
+        if (!this.horde) return null;
+        let best = null, bd = r * r;
+        for (const zz of this.horde.list) {
+          if (!zz.alive || zz.dying) continue;
+          const d = (zz.pos.x - x) * (zz.pos.x - x) + (zz.pos.z - z) * (zz.pos.z - z);
+          if (d < bd) { bd = d; best = zz; }
+        }
+        return best;
+      },
+
+      updateHives(dt) {
+        if (!this.hiveDrones || !this.hiveDrones.length) return;
+        for (let i = this.hiveDrones.length - 1; i >= 0; i--) {
+          const hd = this.hiveDrones[i];
+          hd.life -= dt;
+          if (!hd.target || !hd.target.alive || hd.target.dying) hd.target = this.nearestZombie(hd.pos.x, hd.pos.z, 32);
+          if (hd.target) {
+            const to = { x: hd.target.pos.x - hd.pos.x, y: (hd.target.pos.y + 1.0 * hd.target.scale) - hd.pos.y, z: hd.target.pos.z - hd.pos.z };
+            const l = Math.hypot(to.x, to.y, to.z) || 1, sp = 24;
+            hd.vel.x = U.lerp(hd.vel.x, to.x / l * sp, 1 - Math.pow(.05, dt));
+            hd.vel.y = U.lerp(hd.vel.y, to.y / l * sp, 1 - Math.pow(.05, dt));
+            hd.vel.z = U.lerp(hd.vel.z, to.z / l * sp, 1 - Math.pow(.05, dt));
+          } else hd.vel.y -= 6 * dt;
+          hd.pos.x += hd.vel.x * dt; hd.pos.y += hd.vel.y * dt; hd.pos.z += hd.vel.z * dt;
+          hd.mesh.position.set(hd.pos.x, hd.pos.y, hd.pos.z);
+          const vl = Math.hypot(hd.vel.x, hd.vel.y, hd.vel.z) || 1;
+          hd.mesh.lookAt(hd.pos.x + hd.vel.x / vl, hd.pos.y + hd.vel.y / vl, hd.pos.z + hd.vel.z / vl);
+          hd.mesh.rotateZ(dt * 9);
+          let boom = hd.life <= 0;
+          if (hd.target) {
+            const dd = Math.hypot(hd.target.pos.x - hd.pos.x, (hd.target.pos.y + 1.0 * hd.target.scale) - hd.pos.y, hd.target.pos.z - hd.pos.z);
+            if (dd < 1.1) boom = true;
+          }
+          if (boom) {
+            if (hd.target && hd.target.alive) { hd.target.takeDamage(hd.dmg, 'body', { x: 0, y: 0, z: 0 }); this.player.damageDealt += hd.dmg; }
+            this.effects.explosion(hd.pos.x, hd.pos.y, hd.pos.z, 2.2, [0xffc94a, 0x2a1a05]);
+            Audio3D_SFX.explosionAt(hd.pos.x, hd.pos.y, hd.pos.z);
+            if (hd.mesh.parent) hd.mesh.parent.remove(hd.mesh);
+            hd.mesh.traverse(o => { if (o.geometry) o.geometry.dispose(); });
+            this.hiveDrones.splice(i, 1);
+          }
+        }
+      },
+
+      clearHiveDrones() {
+        if (!this.hiveDrones) return;
+        for (const hd of this.hiveDrones) {
+          if (hd.mesh.parent) hd.mesh.parent.remove(hd.mesh);
+          hd.mesh.traverse(o => { if (o.geometry) o.geometry.dispose(); });
+        }
+        this.hiveDrones.length = 0;
+      },
+
+      /* ХРОНО-ПУШКА: a bubble in which the horde moves in slow motion. */
+      openChrono(center, R, life, slow) {
+        this.chronoFields = this.chronoFields || [];
+        this.chronoFields.push({ pos: { x: center.x, y: center.y, z: center.z }, R: R, life: life, slow: slow || .16 });
+        this._chronoUsed = true;
+      },
+
+      updateChronoFields(dt) {
+        if (!this._chronoUsed) return;
+        const fs = this.chronoFields;
+        // reset every frame, then re-apply for whoever is inside a live bubble
+        if (this.horde) for (const z of this.horde.list) z.speedMul = 1;
+        if (!fs || !fs.length) { this._chronoUsed = false; return; }
+        for (let i = fs.length - 1; i >= 0; i--) {
+          const f = fs[i];
+          f.life -= dt;
+          if (f.life <= 0) { fs.splice(i, 1); continue; }
+          if (this.horde) for (const z of this.horde.list) {
+            if (!z.alive || z.dying) continue;
+            const d = Math.hypot(z.pos.x - f.pos.x, z.pos.z - f.pos.z);
+            if (d < f.R && Math.abs(z.pos.y - f.pos.y) < f.R) z.speedMul = Math.min(z.speedMul, f.slow);
+          }
+        }
+        if (!fs.length) this._chronoUsed = false;
+      },
+
+      clearChrono() {
+        if (this.chronoFields) this.chronoFields.length = 0;
+        if (this._chronoUsed && this.horde) for (const z of this.horde.list) z.speedMul = 1;
+        this._chronoUsed = false;
+      },
+
+      /* КИСЛОТОМЁТ / АБСОЛЮТНЫЙ НОЛЬ: decals that keep working after they land. */
+      updateFields(dt) {
+        if (!this.effects || !this.effects.fields.length) return;
+        const fields = this.effects.fields;
+        for (let i = fields.length - 1; i >= 0; i--) {
+          const m = fields[i];
+          const fd = m.userData.damaging;
+          if (!fd) { fields.splice(i, 1); continue; }
+          // the underlying decal may have faded away first
+          if (this.effects.decals.indexOf(m) < 0) { fields.splice(i, 1); continue; }
+          fd.left -= dt;
+          if (fd.left <= 0) { fields.splice(i, 1); continue; }
+          fd.tick -= dt;
+          if (fd.tick > 0) continue;
+          fd.tick = .5;
+          if (!this.horde) continue;
+          for (const z of this.horde.list) {
+            if (!z.alive || z.dying) continue;
+            const d = Math.hypot(z.pos.x - fd.pos.x, z.pos.z - fd.pos.z);
+            if (d > fd.radius) continue;
+            if (fd.kind === 'acid') {
+              const dealt = (fd.dps || 55) * .5;
+              z.takeDamage(dealt, 'body', { x: 0, y: 0, z: 0 });
+              this.player.damageDealt += dealt;
+            } else if (fd.kind === 'frost' && !z.isBoss) {
+              if (typeof z.freeze === 'function') z.freeze(1.0);
+              else { z.frozen = true; z.freezeT = Math.max(z.freezeT || 0, 1.0); }
+            }
+          }
+        }
+      },
+
+      /* radial blast damage for rockets: falls off linearly to the edge */
+      explode(center, pr) {
     const R = pr.splash, dmg = pr.splashDmg || pr.dmg;
     this.effects.explosion(center.x, center.y, center.z, R, pr.explosionColor, pr.nuke);
     Audio3D_SFX.explosionAt(center.x, center.y, center.z);
@@ -4094,6 +4592,10 @@ const Game = {
     for (const pr of this.projectiles) { if (pr.mesh.parent) pr.mesh.parent.remove(pr.mesh); }
     this.projectiles.length = 0;
     this.clearRemoteProjectiles();
+    this.clearPortals();
+    this.removeTurretDrone();
+    this.clearHiveDrones();
+    this.clearChrono();
   },
 
   clearDrone() {
@@ -5355,6 +5857,13 @@ const Game = {
 
     // ---- effects ----
     if (this.effects) this.effects.update(dt);
+    if (this.mode === CS.MODE.OFFLINE || this.mode === CS.MODE.RANGE) {
+      this.updateFields(dt);         // acid pools / frost patches
+      this.updateChronoFields(dt);   // time-dilation bubbles
+      this.updateHives(dt);          // hives hatching their swarm
+      this.updatePortals(dt);        // mirror-gate teleport + lifetime
+      this.updateTurretDrone(dt);    // companion turret auto-fire
+    }
 
     // ---- flying bananas ----
     this.updateProjectiles(dt);

@@ -944,6 +944,163 @@ function buildWeaponModel(id) {
       break;
     }
 
+    /* ============ ЭКСПЕРИМЕНТАЛЬНЫЕ СТВОЛЫ (20к–80к) ============ */
+
+    /* КИСЛОТОМЁТ: баллон с кислотой и распылительное сопло */
+    case 'acid': {
+      const ACC = 0x9fd23a, DARK = 0x3d4a1f;
+      add(B(.09, .10, .30, PAL.gun, 0, .04, -.18));            // ствольная коробка
+      add(B(.10, .11, .16, DARK, 0, .05, .02));                // затвор
+      add(CYL(.055, .46, PAL.steel, 0, .02, -.48));            // ствол
+      add(CYL(.085, .10, ACC, 0, .02, -.72));                  // сопло
+      add(B(.13, .016, .03, ACC, 0, .08, -.66));               // усы распыла
+      add(B(.13, .016, .03, ACC, 0, -.04, -.66));
+      add(B(.052, .13, .07, PAL.black, 0, -.075, .04, .16));   // рукоять
+      add(B(.09, .17, .12, 0x2f3a16, 0, .02, .20));            // баллон
+      add(B(.075, .15, .10, 0x7fae2a, 0, .02, .205));          // свечение баллона
+      add(CYL(.030, .10, PAL.black, 0, .13, .18));             // крышка баллона
+      add(B(.06, .02, .30, PAL.gunLight, 0, .10, -.18));       // планка
+      add(DOT(.014, 0xd6ff5a, 0, .13, -.34));
+      break;
+    }
+
+    /* РОЙ: улей-пусковая с сотами */
+    case 'hive': {
+      const AMB = 0xe0a021, AMB2 = 0x8a5a12, CELL = 0xffc94a;
+      add(B(.13, .13, .26, 0x6a4a17, 0, .05, -.12));           // корпус улья
+      for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) {  // соты на срезе
+        add(CYL(.017, .05, CELL, (c - 1) * .042, .05 + (r - 1) * .042, -.245, 6));
+      }
+      add(CYL(.05, .16, AMB, 0, .05, .10));                    // задняя камера
+      add(B(.05, .12, .06, PAL.black, 0, -.07, .06, .18));     // рукоять
+      add(B(.10, .02, .26, AMB2, 0, .13, -.12));               // верхняя лента
+      add(DOT(.016, 0xffd25a, 0, .16, -.26));
+      add(B(.03, .03, .03, 0x2b2b2b, .06, .11, -.03));         // «глаза» пчёл
+      add(B(.03, .03, .03, 0x2b2b2b, -.06, .11, -.03));
+      break;
+    }
+
+    /* ДИСКОБОЛ: пусковая с видимым диском */
+    case 'disc': {
+      const T = 0x35d6c0, TD = 0x1c6f64;
+      add(CYL(.11, .12, PAL.gun, 0, .04, -.16));               // круглый кожух
+      add(CYL(.13, .03, TD, 0, .04, -.225));                   // передняя плита
+      const disc = new THREE.Mesh(new THREE.CylinderGeometry(.10, .10, .018, 16), gunMat(T));
+      disc.rotation.x = Math.PI / 2; disc.position.set(0, .04, -.30); add(disc);
+      add(B(.05, .11, .06, PAL.black, 0, -.07, .02, .14));     // рукоять
+      add(B(.14, .03, .18, PAL.gunLight, 0, .12, -.14));       // верх
+      add(B(.02, .10, .05, T, .10, .06, -.24, 0, .3));         // эмиттеры-рожки
+      add(B(.02, .10, .05, T, -.10, .06, -.24, 0, -.3));
+      add(B(.02, .06, .14, TD, .11, .04, -.10));               // направляющие диска
+      add(B(.02, .06, .14, TD, -.11, .04, -.10));
+      add(B(.05, .04, .05, PAL.steel, 0, -.02, -.20));         // нижняя планка
+      add(DOT(.015, T, 0, .13, -.05));
+      break;
+    }
+
+    /* АБСОЛЮТНЫЙ НОЛЬ: крио-пушка, катушки и бак хладагента */
+    case 'freeze': {
+      const ICE = 0x8fe6ff, ICE2 = 0x2f7fa8;
+      add(B(.09, .10, .32, PAL.gun, 0, .05, -.16));            // коробка
+      add(CYL(.05, .44, ICE2, 0, .03, -.46));                  // ствол
+      for (let i = 0; i < 5; i++) add(CYL(.062, .022, ICE, 0, .03, -.30 - i * .075));  // катушки
+      add(CYL(.09, .10, ICE, 0, .03, -.70));                   // морозное сопло
+      add(B(.055, .13, .07, PAL.black, 0, -.075, .04, .16));   // рукоять
+      add(B(.08, .16, .11, 0x1f4a63, 0, .02, .21));            // бак
+      add(CYL(.03, .12, PAL.black, 0, .12, .21));              // крышка бака
+      add(DOT(.015, ICE, 0, .14, -.30));
+      break;
+    }
+
+    /* ТЕСЛА-ПУШКА: катушечная с разрядными кольцами */
+    case 'tesla': {
+      const ARC = 0x9ad6ff, CU = 0xb5762f;
+      add(B(.09, .10, .34, PAL.gun, 0, .05, -.14));            // корпус
+      add(CYL(.02, .40, PAL.steel, 0, .04, -.46));             // стержень
+      for (let i = 0; i < 6; i++) add(CYL(.055, .02, CU, 0, .04, -.28 - i * .07));  // медные катушки
+      add(B(.02, .12, .06, ARC, .07, .10, -.64, 0, .2));       // рожки
+      add(B(.02, .12, .06, ARC, -.07, .10, -.64, 0, -.2));
+      add(CYL(.05, .06, ARC, 0, .04, -.68, 8));                // дульное кольцо
+      add(B(.055, .13, .07, PAL.black, 0, -.075, .04, .16));   // рукоять
+      add(B(.08, .12, .12, 0x24404f, 0, .02, .20));            // конденсатор
+      add(DOT(.018, ARC, 0, .14, -.06));
+      break;
+    }
+
+    /* ЗЕРКАЛЬНАЯ ПУШКА: эмиттер с рожками и линзой */
+    case 'portal': {
+      const MG = 0xc9a0ff, MGD = 0x5b3a8a;
+      add(B(.09, .09, .30, PAL.gun, 0, .05, -.14));            // корпус
+      add(CYL(.06, .16, MGD, 0, .05, -.34));                   // обойма
+      for (let i = 0; i < 4; i++) {                            // четыре рожка
+        const a = i / 4 * Math.PI * 2;
+        add(B(.02, .10, .04, MG, Math.cos(a) * .09, .05 + Math.sin(a) * .09, -.46));
+      }
+      const lens = new THREE.Mesh(new THREE.SphereGeometry(.045, 10, 8), new THREE.MeshBasicMaterial({ color: MG }));
+      lens.position.set(0, .05, -.46); add(lens);
+      add(B(.055, .12, .07, PAL.black, 0, -.075, .04, .16));   // рукоять
+      add(B(.07, .10, .12, 0x2a2140, 0, .02, .20));            // батарея
+      add(DOT(.015, MG, 0, .13, -.10));
+      break;
+    }
+
+    /* ЧЁРНАЯ ДЫРА: гравитационный проектор с сингулярностью */
+    case 'blackhole': {
+      const VI = 0xb27bff, VID = 0x2a1240;
+      add(B(.10, .11, .36, 0x2a2f3a, 0, .05, -.14));           // корпус
+      add(CYL(.075, .22, VID, 0, .05, -.40));                  // конус проектора
+      add(CYL(.11, .05, VI, 0, .05, -.51));                    // устье
+      const core = new THREE.Mesh(new THREE.SphereGeometry(.06, 12, 10), new THREE.MeshBasicMaterial({ color: VI }));
+      core.position.set(0, .05, -.46); add(core);
+      for (let i = 0; i < 3; i++) {                            // три стяжки
+        const a = i / 3 * Math.PI * 2;
+        add(B(.018, .12, .02, PAL.steel, Math.cos(a) * .085, .05 + Math.sin(a) * .085, -.34));
+      }
+      add(B(.06, .13, .08, PAL.black, 0, -.08, .04, .16));     // рукоять
+      add(B(.09, .14, .14, 0x1a1030, 0, .03, .22));            // энергоячейка
+      add(DOT(.02, VI, 0, .15, -.14));
+      break;
+    }
+
+    /* ДРОН-ТУРЕЛЬ: пусковой блок, из которого вылетает дрон-помощник */
+    case 'turretDrone': {
+      const RD = 0xe33a2e;
+      add(B(.14, .14, .20, 0x2f353b, 0, .04, -.06));           // блок
+      add(B(.15, .02, .21, PAL.gunLight, 0, .12, -.06));       // верхняя плита
+      add(CYL(.05, .10, 0x1b1f23, 0, .04, -.20));              // пусковая труба
+      add(CYL(.06, .03, RD, 0, .04, -.25));                    // сопло трубы
+      [-1, 1].forEach(s => {                                   // сложенные лучи роторов
+        add(B(.10, .015, .05, PAL.gunLight, s * .10, .06, -.02, 0, 0, s * .3));
+        add(CYL(.04, .012, PAL.black, s * .15, .075, -.02));
+      });
+      add(B(.05, .12, .06, PAL.black, 0, -.075, .04, .16));    // рукоять
+      add(DOT(.016, RD, 0, .15, -.12));
+      break;
+    }
+
+    /* ХРОНО-ПУШКА: эмиттер с циферблатом и светящимся ядром */
+    case 'chrono': {
+      const TQ = 0x7fe6d0, TQD = 0x1e5a52;
+      add(B(.09, .10, .34, PAL.gun, 0, .05, -.14));            // корпус
+      add(CYL(.075, .18, TQD, 0, .05, -.36));                  // обойма эмиттера
+      add(CYL(.10, .04, TQ, 0, .05, -.46));                    // дульное кольцо
+      const dial = new THREE.Mesh(new THREE.CylinderGeometry(.055, .055, .02, 16), new THREE.MeshBasicMaterial({ color: TQ }));
+      dial.rotation.z = Math.PI / 2; dial.position.set(.075, .06, -.06); add(dial);
+      const hand = new THREE.Mesh(new THREE.BoxGeometry(.008, .05, .012), gunMat(0x0c2b28));
+      hand.position.set(.086, .07, -.06); add(hand);
+      const core = new THREE.Mesh(new THREE.SphereGeometry(.035, 10, 8), new THREE.MeshBasicMaterial({ color: 0xbafff2 }));
+      core.position.set(0, .05, -.42); add(core);
+      add(B(.055, .13, .07, PAL.black, 0, -.075, .04, .16));   // рукоять
+      add(B(.08, .13, .12, 0x123a36, 0, .02, .20));            // хроно-ячейка
+      add(CYL(.03, .10, PAL.black, 0, .12, .20));              // крышка ячейки
+      add(B(.10, .02, .22, TQD, 0, .115, -.14));               // верхняя планка
+      add(B(.02, .09, .06, TQ, .055, .06, -.30, 0, .25));      // боковые дуги
+      add(B(.02, .09, .06, TQ, -.055, .06, -.30, 0, -.25));
+      add(B(.05, .03, .05, PAL.steel, 0, -.03, -.18));         // нижняя планка
+      add(DOT(.015, TQ, 0, .14, -.18));
+      break;
+    }
+
     /* ---------------- Knife ---------------- */
     default:
     case 'knife': {
@@ -982,7 +1139,9 @@ const MUZZLE_Z = {
   laser: -0.98, atomicRpg: -1.06, yhs: -1.16,
   laserCannon: -1.20,
   rocketgun: -0.94, shield: -0.30,
-  banana: -0.92
+  banana: -0.92,
+  acid: -0.76, hive: -0.26, disc: -0.32, freeze: -0.76, tesla: -0.72,
+  portal: -0.48, blackhole: -0.54, turretDrone: -0.28, chrono: -0.48
 };
 
 /* An RPG rocket: a tube body with a pointed warhead and fins */
@@ -1065,6 +1224,90 @@ function buildBananaProjectile() {
   tip.position.set(0, .03, -(SEG - 1) / 2 * .085 - .05);
   g.add(tip);
   return g;
+}
+
+/* ---- experimental weapon projectiles ---- */
+/* ДИСКОБОЛ: a flat spinning plasma disc */
+function buildDiscProjectile() {
+  const g = new THREE.Group();
+  const disc = new THREE.Mesh(new THREE.CylinderGeometry(.20, .20, .035, 18),
+    new THREE.MeshLambertMaterial({ color: 0x35d6c0, emissive: 0x0d5a50 }));
+  disc.rotation.x = Math.PI / 2;
+  g.add(disc);
+  const halo = new THREE.Mesh(new THREE.CylinderGeometry(.27, .27, .02, 18),
+    new THREE.MeshBasicMaterial({ color: 0x7dffe8, transparent: true, opacity: .5, blending: THREE.AdditiveBlending, depthWrite: false }));
+  halo.rotation.x = Math.PI / 2; g.add(halo);
+  const hub = new THREE.Mesh(new THREE.SphereGeometry(.05, 8, 6), new THREE.MeshBasicMaterial({ color: 0xddfff6 }));
+  g.add(hub);
+  return g;
+}
+/* КИСЛОТОМЁТ: a fat drop of acid */
+function buildAcidProjectile() {
+  const g = new THREE.Group();
+  g.add(new THREE.Mesh(new THREE.SphereGeometry(.15, 10, 8),
+    new THREE.MeshLambertMaterial({ color: 0x9fd23a, emissive: 0x33500c })));
+  addGlowSphere(g, .21, 0x7fbf2a, .4);
+  return g;
+}
+/* РОЙ: a buzzing hive pod */
+function buildHivePod() {
+  const g = new THREE.Group();
+  const pod = new THREE.Mesh(new THREE.SphereGeometry(.22, 10, 8),
+    new THREE.MeshLambertMaterial({ color: 0xe0a021, emissive: 0x3a2406 }));
+  pod.scale.y = 1.25; g.add(pod);
+  for (let i = 0; i < 6; i++) {
+    const a = i / 6 * Math.PI * 2;
+    const cell = new THREE.Mesh(new THREE.CylinderGeometry(.045, .045, .02, 6),
+      new THREE.MeshBasicMaterial({ color: 0xffd25a }));
+    cell.rotation.z = Math.PI / 2;
+    cell.position.set(Math.cos(a) * .18, Math.sin(a) * .18, .20);
+    g.add(cell);
+  }
+  addGlowSphere(g, .30, 0xffc94a, .28);
+  return g;
+}
+/* АБСОЛЮТНЫЙ НОЛЬ: a shard of blue ice */
+function buildFreezeOrb() {
+  const g = new THREE.Group();
+  g.add(new THREE.Mesh(new THREE.IcosahedronGeometry(.15, 0),
+    new THREE.MeshLambertMaterial({ color: 0x8fe6ff, emissive: 0x1e5a78 })));
+  addGlowSphere(g, .24, 0x6fd6ff, .45);
+  return g;
+}
+/* ЧЁРНАЯ ДЫРА: a dark core ringed by an accretion halo */
+function buildBlackHoleShell() {
+  const g = new THREE.Group();
+  const core = new THREE.Mesh(new THREE.SphereGeometry(.30, 16, 12),
+    new THREE.MeshBasicMaterial({ color: 0x08040f }));
+  g.add(core);
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(.42, .05, 8, 28),
+    new THREE.MeshBasicMaterial({ color: 0xb27bff, transparent: true, opacity: .8, blending: THREE.AdditiveBlending, depthWrite: false }));
+  g.add(ring);
+  const haloS = new THREE.Mesh(new THREE.SphereGeometry(.5, 14, 10),
+    new THREE.MeshBasicMaterial({ color: 0x7a3aff, transparent: true, opacity: .28, blending: THREE.AdditiveBlending, depthWrite: false }));
+  g.add(haloS);
+  g.userData.ring = ring;
+  return g;
+}
+/* ХРОНО-ПУШКА: a clockwork orb with a tick ring */
+function buildChronoOrb() {
+  const g = new THREE.Group();
+  g.add(new THREE.Mesh(new THREE.SphereGeometry(.16, 12, 10),
+    new THREE.MeshLambertMaterial({ color: 0x2f7f74, emissive: 0x0f3a34 })));
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(.30, .022, 8, 24),
+    new THREE.MeshBasicMaterial({ color: 0x7fe6d0, transparent: true, opacity: .85, blending: THREE.AdditiveBlending, depthWrite: false }));
+  g.add(ring);
+  const core = new THREE.Mesh(new THREE.SphereGeometry(.07, 10, 8), new THREE.MeshBasicMaterial({ color: 0xd6fff8 }));
+  g.add(core);
+  g.userData.ring = ring;
+  return g;
+}
+/* small helper: an additive glow sphere around a projectile core */
+function addGlowSphere(g, r, color, opacity) {
+  const halo = new THREE.Mesh(new THREE.SphereGeometry(r, 10, 8),
+    new THREE.MeshBasicMaterial({ color, transparent: true, opacity: opacity === undefined ? .4 : opacity, blending: THREE.AdditiveBlending, depthWrite: false }));
+  g.add(halo);
+  return halo;
 }
 
 /* A glob of acid thrown by a spitter: a sickly green sphere with a soft glow */

@@ -30,10 +30,13 @@ class Effects {
       concrete: new THREE.MeshBasicMaterial({ map: this._holeTexture(0x2a2724), transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4 }),
       metal: new THREE.MeshBasicMaterial({ map: this._holeTexture(0x3a3d40), transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4 }),
       blood: new THREE.MeshBasicMaterial({ map: this._bloodTexture(), transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4 }),
-      scorch: new THREE.MeshBasicMaterial({ map: this._scorchTexture(), transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -5, blending: THREE.AdditiveBlending })
+      scorch: new THREE.MeshBasicMaterial({ map: this._scorchTexture(), transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -5, blending: THREE.AdditiveBlending }),
+      acid: new THREE.MeshBasicMaterial({ map: this._blobTexture('150,210,60'), transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4, blending: THREE.AdditiveBlending }),
+      frost: new THREE.MeshBasicMaterial({ map: this._blobTexture('150,230,255'), transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4, blending: THREE.AdditiveBlending })
     };
     this.tracerPool = [];
     this.particlePool = [];
+    this.fields = [];            // damaging acid pools / frost patches (ticked by Game)
     this._scorchAcc = 0;
     this._t = 0;
   }
@@ -58,6 +61,18 @@ class Effects {
     g.addColorStop(.5, 'rgba(110,8,6,.7)');
     g.addColorStop(1, 'rgba(80,4,4,0)');
     x.fillStyle = g; x.beginPath(); x.arc(32, 32, 26, 0, 7); x.fill();
+    const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
+  }
+  /* a soft round splat used for acid pools and frost patches.
+     `rgb` is a bare "r,g,b" string so callers can tint it. */
+  _blobTexture(rgb) {
+    const c = makeCanvas(64); const x = c.getContext('2d');
+    x.clearRect(0, 0, 64, 64);
+    const g = x.createRadialGradient(32, 32, 2, 32, 32, 28);
+    g.addColorStop(0, 'rgba(' + rgb + ',.85)');
+    g.addColorStop(.55, 'rgba(' + rgb + ',.45)');
+    g.addColorStop(1, 'rgba(' + rgb + ',0)');
+    x.fillStyle = g; x.beginPath(); x.arc(32, 32, 28, 0, 7); x.fill();
     const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
   }
   /* a blazing fire streak left by the laser: a white-hot core line wrapped in
@@ -128,6 +143,88 @@ class Effects {
     m.visible = true;
     this.scene.add(m);
     this.tracers.push({ mesh: m, life: .055, max: .055 });
+  }
+
+  /* ---------- experimental weapon FX ---------- */
+  /* a sharp metallic spark (disc ricochet, wall hit) */
+  spark(pos, normal) {
+    if (!pos) return;
+    for (let i = 0; i < 4; i++) {
+      this.particle(pos.x, pos.y, pos.z,
+        (normal ? normal.x : 0) * U.rand(0, 2) + U.rand(-2, 2),
+        U.rand(.4, 2.4), (normal ? normal.z : 0) * U.rand(0, 2) + U.rand(-2, 2),
+        U.rand(.03, .08), 'spark', U.rand(.2, .45));
+    }
+    this.decal(pos.x, pos.y, pos.z, normal ? normal.x : 0, normal ? normal.y : 1, normal ? normal.z : 0, .2, 'metal');
+  }
+  /* acid splashes out of the puddle */
+  acidSplash(x, y, z, R) {
+    for (let i = 0; i < 12; i++) {
+      const a = U.rand(0, 6.28), r = U.rand(.2, R);
+      this.particle(x + Math.cos(a) * r, y + .1, z + Math.sin(a) * r,
+        Math.cos(a) * U.rand(.5, 2), U.rand(.4, 2.2), Math.sin(a) * U.rand(.5, 2),
+        U.rand(.06, .16), 'smoke', U.rand(.3, .7));
+    }
+  }
+  /* frost shards bursting outward from a cryo impact */
+  frostBurst(x, y, z, R) {
+    for (let i = 0; i < 16; i++) {
+      const a = U.rand(0, 6.28), e = U.rand(-.2, 1);
+      this.particle(x, y, z, Math.cos(a) * U.rand(1, R * 1.6), e * U.rand(1, R * 1.4), Math.sin(a) * U.rand(1, R * 1.6),
+        U.rand(.05, .14), 'spark', U.rand(.3, .8));
+    }
+  }
+  /* gravitic implosion: a dark sphere collapses inward with a violet flash */
+  implodeFx(x, y, z, R) {
+    const g = new THREE.Group();
+    g.position.set(x, y, z);
+    const mat = new THREE.MeshBasicMaterial({ color: 0xb27bff, transparent: true, opacity: .8, blending: THREE.AdditiveBlending, depthWrite: false });
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(1, .08, 8, 26), mat);
+    ring.rotation.x = Math.PI / 2;
+    g.add(ring);
+    const core = new THREE.Mesh(new THREE.SphereGeometry(.6, 12, 10),
+      new THREE.MeshBasicMaterial({ color: 0x0a0414, transparent: true, opacity: .9, depthWrite: false }));
+    g.add(core);
+    const light = new THREE.PointLight(0xb27bff, 90, R * 3, 2);
+    g.add(light);
+    this.scene.add(g);
+    this.particles.push({ mesh: g, group: true, ring: ring, life: .6, max: .6, R: R, vx: 0, vy: 0, vz: 0, grav: 0 });
+    for (let i = 0; i < 24; i++) {
+      const a = U.rand(0, 6.28);
+      this.particle(x + Math.cos(a) * R, y + U.rand(.2, R), z + Math.sin(a) * R,
+        -Math.cos(a) * U.rand(4, 12), U.rand(-3, 3), -Math.sin(a) * U.rand(4, 12),
+        U.rand(.06, .16), 'spark', U.rand(.4, .9));
+    }
+  }
+  /* chrono bubble: a translucent sphere that shimmers while time is slowed */
+  chronoField(x, y, z, R, life) {
+    const mat = new THREE.MeshBasicMaterial({ color: 0x7fe6d0, transparent: true, opacity: .14, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
+    const dome = new THREE.Mesh(new THREE.SphereGeometry(R, 20, 14), mat);
+    dome.position.set(x, y, z);
+    this.scene.add(dome);
+    const light = new THREE.PointLight(0x7fe6d0, 40, R * 2.5, 2);
+    light.position.set(x, y + 1, z);
+    this.scene.add(light);
+    this.particles.push({ mesh: dome, field: 'chrono', light: light, life: life, max: life, R: R, vx: 0, vy: 0, vz: 0, grav: 0 });
+  }
+
+  /* a jagged lightning arc (tesla chain, portal gate) */
+  arc(from, to, color) {
+    const c = color === undefined ? 0x9ad6ff : color;
+    const N = 8, pts = [];
+    for (let i = 0; i <= N; i++) {
+      const t = i / N;
+      const j = (i === 0 || i === N) ? 0 : .22;
+      pts.push(new THREE.Vector3(
+        from.x + (to.x - from.x) * t + U.rand(-j, j),
+        from.y + (to.y - from.y) * t + U.rand(-j, j),
+        from.z + (to.z - from.z) * t + U.rand(-j, j)));
+    }
+    const geo = new THREE.BufferGeometry().setFromPoints(pts);
+    const mat = new THREE.LineBasicMaterial({ color: c, transparent: true, opacity: .95, blending: THREE.AdditiveBlending, depthWrite: false });
+    const line = new THREE.Line(geo, mat);
+    this.scene.add(line);
+    (this.arcs || (this.arcs = [])).push({ mesh: line, life: .12, max: .12 });
   }
 
   /* ---------- laser beam: a bright green core with a soft outer glow ---------- */
@@ -307,13 +404,14 @@ class Effects {
   }
 
   /* ---------- decals ---------- */
-  decal(x, y, z, nx, ny, nz, size, kind, dir, length) {
+  decal(x, y, z, nx, ny, nz, size, kind, dir, length, radius, pos) {
     if (this.decals.length >= this.maxDecals) {
       const old = this.decals.shift();
       this.scene.remove(old);
       if (old.material) old.material = null;
     }
-    const mat = this.decalMats[kind === 'blood' ? 'blood' : kind === 'metal' ? 'metal' : kind === 'scorch' ? 'scorch' : 'concrete'];
+    const mat = this.decalMats[kind === 'blood' ? 'blood' : kind === 'metal' ? 'metal'
+      : kind === 'scorch' ? 'scorch' : kind === 'acid' ? 'acid' : kind === 'frost' ? 'frost' : 'concrete'];
     const isScorch = kind === 'scorch';
     const m = new THREE.Mesh(this.decalGeo, mat);
     if (isScorch) {
@@ -357,6 +455,22 @@ class Effects {
     // the fire streak fades by shrinking along its length (local X) — see the
     // decal-fade loop
     if (isScorch) m.userData.fadeAxis = 'x';
+
+    /* ---- damaging field: an acid pool keeps burning, a frost patch chills ---- */
+    if (radius) {
+      const isFrost = kind === 'frost';
+      m.userData.damaging = {
+        kind: isFrost ? 'frost' : 'acid',
+        radius: radius,
+        life: isFrost ? 7 : 34,
+        left: isFrost ? 7 : 34,
+        tick: 0, dps: 55,
+        pos: pos || { x: x, y: y, z: z }
+      };
+      this.fields.push(m);
+      // a frost/cryo patch must outlive the damaging field so shatter can trigger
+      if (isFrost) m.userData.ttl = 8;
+    }
   }
 
   /* Project the beam direction onto the surface plane and return a unit vector
@@ -612,6 +726,19 @@ class Effects {
         }
       }
     }
+    // lightning arcs (tesla chain)
+    if (this.arcs) {
+      for (let i = this.arcs.length - 1; i >= 0; i--) {
+        const a = this.arcs[i];
+        a.life -= dt;
+        a.mesh.material.opacity = Math.max(0, a.life / a.max);
+        if (a.life <= 0) {
+          if (a.mesh.parent) a.mesh.parent.remove(a.mesh);
+          if (a.mesh.geometry) a.mesh.geometry.dispose();
+          this.arcs.splice(i, 1);
+        }
+      }
+    }
     // nuclear FX: eases in (grow + fade up), holds, then eases out
     if (this.nukes) {
       for (let i = this.nukes.length - 1; i >= 0; i--) {
@@ -672,6 +799,12 @@ class Effects {
       if (p.life <= 0) {
         if (p.light) {
           if (p.mesh.parent) p.mesh.parent.remove(p.mesh);
+          if (p.light.parent) p.light.parent.remove(p.light);
+          if (p.mesh !== p.light) { if (p.mesh.geometry) p.mesh.geometry.dispose(); if (p.mesh.material) p.mesh.material.dispose(); }
+        } else if (p.group || p.field) {
+          // a compound FX (implosion group / chrono dome): dispose, never pool
+          if (p.mesh.parent) p.mesh.parent.remove(p.mesh);
+          p.mesh.traverse && p.mesh.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material) o.material.dispose(); });
         } else {
           p.mesh.visible = false;
           if (p.mesh.parent) p.mesh.parent.remove(p.mesh);
@@ -682,6 +815,20 @@ class Effects {
       }
       if (p.light) {
         p.mesh.intensity = 60 * (p.life / p.max);
+        continue;
+      }
+      if (p.group) {
+        // implosion: the ring races inward and the core collapses
+        const k = U.clamp(p.life / p.max, 0, 1);
+        if (p.ring) { p.ring.scale.setScalar(Math.max(.05, k)); p.ring.material.opacity = k * .8; }
+        if (p.mesh.children[1]) p.mesh.children[1].scale.setScalar(Math.max(.05, 1 - (1 - k) * 1.4));
+        continue;
+      }
+      if (p.field === 'chrono') {
+        const k = U.clamp(p.life / p.max, 0, 1);
+        p.mesh.scale.setScalar(1 + (1 - k) * .12);
+        p.mesh.material.opacity = Math.min(.2, k * .3);
+        if (p.light) p.light.intensity = 40 * k;
         continue;
       }
       p.vy -= p.grav * dt;
@@ -730,10 +877,16 @@ class Effects {
       });
       this.nukes.length = 0;
     }
-    this.particles.forEach(p => { if (!p.light && p.mesh.parent) p.mesh.parent.remove(p.mesh); if (!p.light) this.particlePool.push(p.mesh); else if (p.mesh.parent) p.mesh.parent.remove(p.mesh); });
+    if (this.arcs) { this.arcs.forEach(a => { if (a.mesh.parent) a.mesh.parent.remove(a.mesh); if (a.mesh.geometry) a.mesh.geometry.dispose(); }); this.arcs.length = 0; }
+    this.particles.forEach(p => {
+      if (p.group || p.field) { if (p.mesh.parent) p.mesh.parent.remove(p.mesh); p.mesh.traverse && p.mesh.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material) o.material.dispose(); }); if (p.light && p.light.parent) p.light.parent.remove(p.light); }
+      else if (!p.light) { if (p.mesh.parent) p.mesh.parent.remove(p.mesh); this.particlePool.push(p.mesh); }
+      else if (p.mesh.parent) p.mesh.parent.remove(p.mesh);
+    });
     this.particles.length = 0;
     this.decals.forEach(d => this.scene.remove(d));
     this.decals.length = 0;
+    this.fields.length = 0;
     if (this._beam) {
       this._beam.traverse(o => { if (o.geometry) o.geometry.dispose(); });
       if (this._beam.parent) this._beam.parent.remove(this._beam);

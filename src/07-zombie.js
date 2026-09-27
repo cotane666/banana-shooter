@@ -384,6 +384,9 @@ class Zombie {
     this.lastPos = { x, z };
     this.speedMul = 1;
     this.frozen = false;
+    this.freezeT = 0;        // seconds of frost left (АБСОЛЮТНЫЙ НОЛЬ)
+    this.freezeBank = 0;     // damage stored while frozen, paid out on shatter
+    this.portalCd = 0;       // mirror-gate re-teleport cooldown
 
     this.group = buildZombieMesh(type);
     this.group.scale.setScalar(this.scale);
@@ -412,6 +415,15 @@ class Zombie {
 
   takeDamage(amount, part, fromDir) {
     if (this.dying || !this.alive) return false;
+    /* a FROZEN body banks all damage; it only pays out when it thaws (or is
+       shattered early by a big hit). This makes freeze-then-shatter work. */
+    if (this.frozen) {
+      this.freezeBank = (this.freezeBank || 0) + amount;
+      this.hitFlash = .12;
+      // a hard enough blow shatters the statue on the spot
+      if (this.freezeBank > this.maxHealth * .35) { this.shatter(); return true; }
+      return false;
+    }
     let mul = 1;
     if (part === 'head') mul = CFG.headshotMultiplier;
     else if (part === 'legs') mul = CFG.limbMultiplier;
@@ -433,6 +445,45 @@ class Zombie {
     this.fallDir = headshot ? U.rand(-1, 1) : U.rand(-1, 1);
     this.fallSpeed = U.rand(2.2, 3.4);
     Bus.emit('zombieDied', this, headshot);
+  }
+
+  /* АБСОЛЮТНЫЙ НОЛЬ: a frozen body exploded into shards. It dies instantly and
+     banks whatever damage it had stored while chilled. */
+  shatter() {
+    if (this.dying || !this.alive) return;
+    this.alive = false;
+    this.health = 0;
+    this.dying = true;
+    this.deadT = 0;
+    this.fallDir = U.rand(-1, 1);
+    this.fallSpeed = 3.4;
+    Bus.emit('zombieDied', this, false);
+    Bus.emit('zombieShatter', this);
+  }
+
+  /* АБСОЛЮТНЫЙ НОЛЬ: encase the zombie in an ice shell; it cannot move. */
+  freeze(seconds) {
+    if (this.dying) return;
+    this.frozen = true;
+    this.freezeT = Math.max(this.freezeT || 0, seconds);
+    if (!this.iceShell) {
+      const m = new THREE.Mesh(new THREE.BoxGeometry(.95, 1.95, .62),
+        new THREE.MeshLambertMaterial({ color: 0x9fe8ff, emissive: 0x1f5a7a, transparent: true, opacity: .5 }));
+      m.position.y = .97;
+      m.scale.setScalar(this.scale);
+      m.renderOrder = 4;
+      this.group.add(m);
+      this.iceShell = m;
+    }
+  }
+  thaw() {
+    this.frozen = false;
+    this.freezeT = 0;
+    if (this.iceShell) {
+      this.group.remove(this.iceShell);
+      this.iceShell.geometry.dispose(); this.iceShell.material.dispose();
+      this.iceShell = null;
+    }
   }
 
   update(dt, ctx) {
@@ -458,8 +509,22 @@ class Zombie {
     if (this.shootCd > 0) this.shootCd -= dt;
 
     if (this.frozen) {
-      this.applyVisual(dt, 0);
-      return;
+      /* АБСОЛЮТНЫЙ НОЛЬ: stay locked in ice until it thaws; banked damage is
+         paid out now (shooting a frozen zombie then letting it thaw kills it). */
+      this.freezeT -= dt;
+      if (this.freezeT <= 0) {
+        const bank = this.freezeBank || 0;
+        this.freezeBank = 0;
+        this.thaw();
+        if (bank > 0) {
+          this.health -= bank;
+          this.hitFlash = .12;
+          if (this.health <= 0) { this.die(false); return; }
+        }
+      } else {
+        this.applyVisual(dt, 0);
+        return;
+      }
     }
 
     const player = ctx.player;

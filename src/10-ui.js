@@ -605,6 +605,11 @@ const UI = {
           cant = !free && player.money < g.price;
           stats = [['ЗАРЯДОВ', player.turretDrone || 0], ['УРОН', 48], ['КЛАВИША', 'V']];
           desc = g.desc;
+        } else if (g.mechSuit) {
+          owned = !!player.mechOwned;
+          cant = (!free && player.money < g.price) || !!player.mechSuit;
+          stats = [['СТАТУС', player.mechSuit ? 'В МЕХЕ' : 'Готов'], ['ЛКМ', 'МИНИГАН'], ['ПКМ', 'ЛАЗЕР']];
+          desc = player.mechSuit ? 'G — выйти из меха' : 'Купить и сесть в мех · G — выйти';
         } else if (g.ammo) {
           owned = false;
           cant = !free && player.money < g.price;

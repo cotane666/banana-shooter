@@ -1808,6 +1808,8 @@ class Player {
     this.drone = 0;           // kamikaze drones ready to launch, with F
     this.droneOwned = false;  // has bought the drone: it recharges every online round
     this.turretDrone = 0;     // turret-drone charges (gear, launched with V)
+    this.mechOwned = false;   // has bought the mech suit (can re-enter it)
+    this.mechSuit = false;    // currently sitting in the mech cockpit
     this.grenades = { frag: 0, freeze: 0, napalm: 0 };   // thrown with G
     this.builds = { turret: 0, barricade: 0, mine: 0 };  // placed with K
     // energy shield (active shield): raised by LMB for a few seconds, then cools

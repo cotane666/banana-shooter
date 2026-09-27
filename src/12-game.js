@@ -1267,7 +1267,16 @@ const Game = {
         break;
       case 'KeyR': if (!this.paused) this.player.reload(); break;
       case 'KeyH': if (!this.paused) this.useMedkit(); break;
-      case 'KeyG': if (!this.paused) this.throwGrenade(); break;
+      case 'KeyG':
+        if (!this.paused) {
+          // in the mech G leaves the cockpit; if the suit is owned, G re-enters it;
+          // otherwise G throws a grenade
+          const pp = this.player;
+          if (this.isMechActive()) this.exitMechSuit();
+          else if (pp && pp.mechOwned) this.equipMechSuit();
+          else this.throwGrenade();
+        }
+        break;
       case 'KeyJ': if (!this.paused) this.cycleGrenade(); break;
       case 'KeyF': if (!this.paused) { if (this.drone) this.detonateDrone(false); else this.launchDrone(); } break;
       // dedicated climb: E vaults onto whatever the player is facing
@@ -3196,7 +3205,9 @@ const Game = {
         this.player.turretDrone = (this.player.turretDrone || 0) + 1;
       }
       else if (g.mechSuit) {
-        this.equipMechSuit();
+        // buy/enter the suit the first time; if already owned, toggle in/out
+        if (this.player.mechOwned) this.toggleMechSuit();
+        else this.equipMechSuit();
       }
       Audio3D_SFX.buy();
       const extra = g.medkitBox ? ' — лимит аптечек снят'
@@ -4352,17 +4363,22 @@ const Game = {
     const muzzle = this.muzzleWorldPos();
     const range = def.flameRange || 13;
     const cone = def.flameCone || .42;
+    const extraR = def.flameRadius || 0;
     const dps = (def.flameDps || def.dmg) * dt;
+    const cosCone = Math.cos(cone);
     if (this.horde) {
       for (const z of this.horde.list) {
         if (!z.alive || z.dying) continue;
-        // distance + angle test (a cone, not a ray)
+        // distance + angle test (a wide cone, not a ray)
         const dx = z.pos.x - origin.x, dy = (z.pos.y + 1 * z.scale) - origin.y, dz = z.pos.z - origin.z;
         const d = Math.hypot(dx, dy, dz);
-        if (d > range + z.radius) continue;
+        const reach = range + z.radius + extraR;
+        if (d > reach) continue;
         const nd = Math.max(d, .001);
         const dot = (dx / nd) * dir.x + (dy / nd) * dir.y + (dz / nd) * dir.z;
-        if (dot < Math.cos(cone)) continue;
+        // near the muzzle everything within reach is caught even at a steep angle,
+        // so zombies right in front are always lit — and the close zone is wide
+        if (d > 4.0 && dot < cosCone) continue;
         z.takeDamage(dps, 'body', dir);
         p.damageDealt += dps;
         if (z.alive && !z.dying && def.burnT) { z.burnT = Math.max(z.burnT || 0, def.burnT); z.burnDps = def.burnDps || 100; }
@@ -4924,11 +4940,38 @@ const Game = {
         return true;
       },
 
+      /* leave the mech: back to the normal body, keep the suit owned so it can be
+         re-entered with the gear (or the same key) */
+      exitMechSuit() {
+        const p = this.player;
+        if (!p || !p.mechSuit) return false;
+        p.mechSuit = false;
+        p.height = CFG.playerHeight;
+        p.radius = CFG.playerRadius;
+        // put the normal pistol back in hand instead of the mech weapons
+        p.inv[2] = null; p.inv[1] = null;
+        p.slot = 3;
+        p.deployT = .5;
+        p.buildViewModel(); this.attachViewModel();
+        this.removeMechBody();
+        this.clearMechMissiles();
+        if (this.effects) { this.effects.endFlame(); }
+        UI.center('МЕХ ОСТАВЛЕН', 'G — снова войти в мех', 2.0);
+        UI.toast('Вы вышли из меха: рост и обзор обычные', '#ff9d21');
+        return true;
+      },
+      /* toggle in/out of the suit (used by the G key and the shop card) */
+      toggleMechSuit() {
+        const p = this.player;
+        if (p && p.mechSuit) return this.exitMechSuit();
+        return this.equipMechSuit();
+      },
       /* МЕХАКОСТЮМ: grants the mech minigun (slot 2) + hyper laser (slot 1).
          They are equipped like normal weapons because they use the standard
          slots, so 1/2 switch between them and reloading works as usual. */
       equipMechSuit() {
         const p = this.player;
+        p.mechOwned = true;
         p.give('mechMinigun');
         p.give('mechLaser');
         p.mechSuit = true;
@@ -4940,8 +4983,8 @@ const Game = {
         p.mechMissiles = 0;
         p.buildViewModel(); this.attachViewModel();
         this.buildMechBody();
-        UI.center('МЕХАКОСТЮМ', 'ЛКМ — миниган · ПКМ — лазер · E — ракеты', 2.6);
-        UI.toast('Вы в кабине меха: ЛКМ миниган · ПКМ лазер · E ракеты', '#4ad6ff');
+        UI.center('МЕХАКОСТЮМ', 'ЛКМ — миниган · ПКМ — лазер · E — ракеты · G — выйти', 2.6);
+        UI.toast('Вы в кабине меха: ЛКМ миниган · ПКМ лазер · E ракеты · G выйти', '#4ad6ff');
       },
       /* visible mech chassis + cockpit around the player (third-person shell).
          In first person the cockpit frame appears as the view model braces. */

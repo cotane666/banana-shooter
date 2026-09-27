@@ -309,8 +309,8 @@ class Effects {
       const b = this._flameBlobs[i];
       const f = ((b.seed + t * 2.1) % 1);              // 0..1 along the jet
       const dist = f * range;
-      // the jet expands gently as it travels
-      const spread = .06 + f * .55;
+      // the jet expands as it travels (wider now that the damage cone is wider)
+      const spread = .08 + f * .9;
       const jx = Math.sin(t * 26 + b.off) * spread * .5;
       const jy = Math.cos(t * 21 + b.off * 1.7) * spread * .42;
       const jz = Math.cos(t * 28 + b.off) * spread * .5;

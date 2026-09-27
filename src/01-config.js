@@ -285,8 +285,8 @@ const WEAPONS = {
 
   /* ОГОНЬ: flamethrower — a held cone of fire that burns everything in front */
   flamer: { name: 'ОГНЕМЁТ', cat: 'exp', slot: 2, price: 20000, dmg: 22, rpm: 60, mag: 200, reserve: 400,
-          auto: true, spread: .07, moveSpread: .030, recoil: 0, falloff: .6, range: 14, headMul: 1.2,
-          sound: 'shotgun', flame: true, flameDps: 900, flameRange: 13, flameCone: .42, burnT: 3.5, burnDps: 120 },
+          auto: true, spread: .07, moveSpread: .030, recoil: 0, falloff: .6, range: 22, headMul: 1.2,
+          sound: 'shotgun', flame: true, flameDps: 900, flameRange: 21, flameCone: 1.0, flameRadius: 1.6, burnT: 4.5, burnDps: 160 },
 
   /* ---------- МЕХАКОСТЮМ: giant 6-barrel minigun (primary) + hyper laser (secondary) ---------- */
   mechMinigun: { name: 'МЕХА-МИНИГАН', cat: 'exp', slot: 2, price: 0, dmg: 55, rpm: 1600, mag: 9999, reserve: 0,

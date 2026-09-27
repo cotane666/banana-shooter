@@ -334,43 +334,98 @@ const Audio3D_SFX = {
     o.connect(lp); lp.connect(g); g.connect(out);
     o.start(t); o.stop(t + .58);
   },
-  /* the beam itself: a sustained, crackling roar that loops while it is up */
+  /* the beam itself: a sustained laser whine that RISES over time.
+     `heat` (0..1) is the fraction of the beam's burn time elapsed: as it climbs
+     the tone sweeps upward, the ring-mod gets faster and the hiss gets sharper,
+     so holding the trigger sounds like the cannon charging to overload. */
   cannonBeamStart(x, y, z) {
     if (!this.ctx || this.muted || this._beamSnd) return;
-    const sp = this._spatial(x, y, z, 3, 160);
+    const sp = this._spatial(x, y, z, 3, 170);
     const t = this.ctx.currentTime;
-    const out = this.ctx.createGain(); out.gain.value = Math.max(sp.gain, .25);
+    const out = this.ctx.createGain(); out.gain.value = 0.0001;
     const pan = this.ctx.createStereoPanner ? this.ctx.createStereoPanner() : null;
     if (pan) { pan.pan.value = sp.pan; out.connect(pan); pan.connect(this.sfx); } else out.connect(this.sfx);
-    // low saw rumble
+    // fade the whole bed in quickly so there is no click
+    out.gain.linearRampToValueAtTime(Math.max(sp.gain, .3), t + .05);
+
+    // --- main laser tone: a bright saw that sweeps up as it heats ---
     const o = this.ctx.createOscillator(); o.type = 'sawtooth';
-    o.frequency.setValueAtTime(140, t);
-    o.frequency.linearRampToValueAtTime(96, t + .6);
-    const olp = this.ctx.createBiquadFilter(); olp.type = 'lowpass'; olp.frequency.value = 700;
-    const og = this.ctx.createGain(); og.gain.value = .12;
+    o.frequency.setValueAtTime(520, t);
+    const olp = this.ctx.createBiquadFilter(); olp.type = 'lowpass'; olp.frequency.value = 3200; olp.Q.value = 6;
+    const og = this.ctx.createGain(); og.gain.value = .10;
     o.connect(olp); olp.connect(og); og.connect(out);
-    // hissing noise bed with a bandpass that sweeps a little
+    o.start(t);
+
+    // --- a fifth above, detuned, so it shimmers like an energy weapon ---
+    const o2 = this.ctx.createOscillator(); o2.type = 'square';
+    o2.frequency.setValueAtTime(522.2, t);
+    const o2g = this.ctx.createGain(); o2g.gain.value = .05;
+    o2.connect(o2g); o2g.connect(out);
+    o2.start(t);
+
+    // --- ring modulation: a low LFO multiplying the tone gives the classic
+    //     "pew / laser" warble, and its rate climbs with the heat ---
+    const trem = this.ctx.createGain(); trem.gain.value = 0;
+    const lfo = this.ctx.createOscillator(); lfo.type = 'sine'; lfo.frequency.value = 26;
+    const lfoGain = this.ctx.createGain(); lfoGain.gain.value = .06;
+    lfo.connect(lfoGain); lfoGain.connect(trem.gain);
+    // route the detuned tone through the tremolo gain
+    o2.disconnect(); o2.connect(trem); trem.connect(out);
+    lfo.start(t);
+
+    // --- airy hiss that sharpens as it heats ---
     const src = this.ctx.createBufferSource(); src.buffer = this.noiseBuf; src.loop = true;
-    const bp = this.ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 2200; bp.Q.value = .8;
-    const ng = this.ctx.createGain(); ng.gain.value = .10;
+    const bp = this.ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 2600; bp.Q.value = 1.1;
+    const ng = this.ctx.createGain(); ng.gain.value = .07;
     src.connect(bp); bp.connect(ng); ng.connect(out);
-    o.start(); src.start();
-    // a sharp ignition crack on top of the sustained roar
+    src.start(t);
+
+    // --- ignition zap on top ---
     const zap = this.ctx.createOscillator(); zap.type = 'triangle';
-    zap.frequency.setValueAtTime(2400, t);
-    zap.frequency.exponentialRampToValueAtTime(500, t + .18);
+    zap.frequency.setValueAtTime(3000, t);
+    zap.frequency.exponentialRampToValueAtTime(600, t + .16);
     const zg = this.ctx.createGain();
-    zg.gain.setValueAtTime(.16, t);
-    zg.gain.exponentialRampToValueAtTime(.001, t + .2);
+    zg.gain.setValueAtTime(.18, t);
+    zg.gain.exponentialRampToValueAtTime(.001, t + .18);
     zap.connect(zg); zg.connect(out);
-    zap.start(t); zap.stop(t + .22);
-    this._beamSnd = { o, src, out };
+    zap.start(t); zap.stop(t + .2);
+
+    this._beamSnd = { o, o2, o2g, src, out, olp, bp, ng, lfo, lfoGain, trem, pan, heat: 0 };
+  },
+  /* Update the rising character of the beam. `heat` is 0..1. */
+  cannonBeamHeat(heat) {
+    const s = this._beamSnd;
+    if (!s || !this.ctx) return;
+    heat = U.clamp(heat, 0, 1);
+    if (heat < s.heat - .05) { /* restarted */ }
+    s.heat = heat;
+    const t = this.ctx.currentTime, now = .08;
+    // sweep the base frequency up (520 Hz → ~1750 Hz) as the beam heats up
+    const base = 520 + heat * 1230;
+    s.o.frequency.setTargetAtTime(base, t, now);
+    s.o2.frequency.setTargetAtTime(base * 1.004, t, now);
+    // open the low-pass so it gets brighter / angrier
+    s.olp.frequency.setTargetAtTime(3200 + heat * 5200, t, now);
+    // faster and deeper warble
+    s.lfo.frequency.setTargetAtTime(26 + heat * 70, t, now);
+    s.lfoGain.gain.setTargetAtTime(.06 + heat * .10, t, now);
+    // hiss gets sharper and louder
+    s.bp.frequency.setTargetAtTime(2600 + heat * 3600, t, now);
+    s.ng.gain.setTargetAtTime(.07 + heat * .06, t, now);
   },
   cannonBeamStop() {
     if (!this._beamSnd) return;
     const s = this._beamSnd; this._beamSnd = null;
-    try { s.o.stop(); s.src.stop(); } catch (e) { }
-    try { s.out.disconnect(); } catch (e) { }
+    try {
+      const t = this.ctx.currentTime;
+      s.out.gain.cancelScheduledValues(t);
+      s.out.gain.setValueAtTime(s.out.gain.value, t);
+      s.out.gain.linearRampToValueAtTime(.0001, t + .08);
+    } catch (e) { }
+    const stop = (n) => { try { n.stop(); } catch (e) { } };
+    const off = (n) => { try { n.disconnect(); } catch (e) { } };
+    stop(s.o); stop(s.o2); stop(s.lfo); stop(s.src);
+    setTimeout(() => { off(s.out); off(s.o); off(s.o2); off(s.lfo); off(s.lfoGain); off(s.trem); off(s.src); off(s.olp); off(s.bp); off(s.ng); }, 160);
   },
   /* overheat: a descending vent hiss */
   cannonOverheat() {

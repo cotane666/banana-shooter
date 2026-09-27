@@ -1487,6 +1487,8 @@ class Player {
       } else if (this.alive && this.triggerDown && this.spinT > .85 && this.reloadT <= 0 && this.deployT <= 0 && this.weapon.mag > 0) {
         if (this.isLocal && !this._beamSnd) Audio3D_SFX.cannonBeamStart(this.pos.x, this.pos.y + 1.2, this.pos.z);
         this.beamHeat += dt;
+        // the whine rises with the burn time: 0 → 1 over the full beam window
+        if (this.isLocal) Audio3D_SFX.cannonBeamHeat(this.beamHeat / Math.max(.001, (def.beamMax || 10)));
         if (this.beamHeat >= (def.beamMax || 10)) {
           this.beamHeat = 0;                       // overheat — forced vent
           this.beamVent = def.beamVent || 3.5;

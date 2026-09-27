@@ -4317,7 +4317,7 @@ const Game = {
     const right = _v2.set(1, 0, 0).applyEuler(e);
     const up = new THREE.Vector3(0, 1, 0).applyEuler(e);
     const sx = side === 'left' ? -1.25 : 1.25;      // arm offset to the side
-    const sy = -CFG.mechEyeHeight + 2.55 + .05;     // arms sit below the cockpit eye
+    const sy = -CFG.mechEyeHeight + 2.80 + .05;     // arms sit below the cockpit eye
     const fz = side === 'left' ? 1.25 : 1.45;       // barrel reach forward to the muzzle
     const v = out || new THREE.Vector3();
     v.set(
@@ -5192,22 +5192,19 @@ const Game = {
         const t = this._mechT;
         const hspeed = Math.hypot(p.vel.x, p.vel.z);
         const walk = U.clamp(hspeed / CFG.walkSpeed, 0, 1.4);
-        // aim: arms follow BOTH axes of the look. + pitch = look up, + yaw = look
-        // right; the arms swing with it (non-inverted), plus a left/right traverse.
-        const aimPitch = U.clamp(p.pitch, -1.2, 1.2);
-        // lateral swing: how fast the view is turning (decays), plus strafing.
-        // Tracking a wrapped DELTA avoids the ±π snap of an absolute yaw.
-        const prevYaw = (this._mechPrevYaw === undefined) ? p.yaw : this._mechPrevYaw;
-        let dyaw = p.yaw - prevYaw;
-        while (dyaw > Math.PI) dyaw -= Math.PI * 2;
-        while (dyaw < -Math.PI) dyaw += Math.PI * 2;
-        this._mechPrevYaw = p.yaw;
-        this._mechSwing = (this._mechSwing || 0) * Math.pow(.004, dt) + dyaw * 60;
-        const swing = U.clamp(this._mechSwing, -.6, .6);
-        // lateral traverse from turning + strafing (guns slide/swing sideways)
-        const strafe = U.clamp(p.in.r || 0, -1, 1);
-        const lateral = U.clamp(swing + strafe * .10, -.6, .6);
-        // walking bob + idle sway
+        /* The chassis turns with p.yaw, exactly like the camera. So the arms just
+           have to point along the LOCAL aim direction (the camera's pitch + any
+           recoil/yaw punch): both barrels then lie precisely on the bullet's
+           line of fire and the shots never leave the crosshair. */
+        const pitchA = U.clamp(p.pitch + p.recoil + p.viewPunchP, -1.5, 1.5);
+        const yawA = (p.recoilYaw || 0) + (p.viewPunchY || 0);
+        const cp = Math.cos(pitchA);
+        const dirx = -cp * Math.sin(yawA);
+        const diry = Math.sin(pitchA);
+        const dirz = -cp * Math.cos(yawA);
+        const yawD = Math.atan2(-dirx, -dirz);            // barrel yaw (model forward = -Z)
+        const elevD = Math.atan2(diry, Math.hypot(dirx, dirz)); // barrel elevation
+        // walking bob + idle sway (position only — never changes the aim)
         const bob = Math.sin(t * (4 + walk * 5)) * (.012 + walk * .022);
         const sway = Math.cos(t * 2.1) * .010;
         // recoil springs for each arm (fired when that weapon fires)
@@ -5220,29 +5217,23 @@ const Game = {
 
         if (ud.mgArm) {
           const b = ud.mgArm.userData.basePos;
-          const by = ud.mgArm.userData.baseYaw || 0;
-          ud.mgArm.position.set(
-            b.x + sway * .5 - lateral * .30,
-            b.y + bob + aimPitch * .12 + mgKick * .05,
-            b.z + mgKick * .16);
-          ud.mgArm.rotation.x = aimPitch * .55 - mgKick * .12;
-          ud.mgArm.rotation.y = by + swing * .18 - lateral * .10;
+          ud.mgArm.rotation.order = 'YXZ';
+          ud.mgArm.rotation.y = yawD;
+          ud.mgArm.rotation.x = elevD - mgKick * .10;     // recoil lifts the muzzle
+          ud.mgArm.position.set(b.x + sway * .5, b.y + bob, b.z + mgKick * .14);
         }
         if (ud.lzArm) {
           const b = ud.lzArm.userData.basePos;
-          const by = ud.lzArm.userData.baseYaw || 0;
-          ud.lzArm.position.set(
-            b.x - sway * .5 - lateral * .30,
-            b.y + bob * .8 + aimPitch * .12 + lzKick * .05 + podKick * .10,
-            b.z + lzKick * .14);
-          ud.lzArm.rotation.x = aimPitch * .55 - lzKick * .10;
-          ud.lzArm.rotation.y = by + swing * .18 - lateral * .10;
+          ud.lzArm.rotation.order = 'YXZ';
+          ud.lzArm.rotation.y = yawD;
+          ud.lzArm.rotation.x = elevD - lzKick * .10;
+          ud.lzArm.position.set(b.x - sway * .5, b.y + bob * .8, b.z + lzKick * .12);
         }
         if (ud.pod) {
-          const b = ud.pod.userData.basePos || ud.pod.position;
-          ud.pod.position.y = 3.00 + podKick * .16 + bob;
-          ud.pod.rotation.x = aimPitch * .45;
-          ud.pod.rotation.y = (ud.pod.userData.baseYaw || 0) + swing * .14;
+          ud.pod.rotation.order = 'YXZ';
+          ud.pod.rotation.y = yawD;
+          ud.pod.rotation.x = elevD + podKick * .12;
+          ud.pod.position.y = 3.34 + podKick * .14 + bob;
         }
         /* ---- jetpack flames ---- */
         const on = p.jetActive === true;

@@ -1581,32 +1581,55 @@ function buildMechChassis() {
     for (let i = 0; i < 3; i++) box(.055, .055, .055, matG, s * 1.24, 3.02 - i * .12, .20);
     for (let i = 0; i < 2; i++) box(.10, .09, .05, matD, s * .86, 2.86 - i * .14, -.30); // small vents
   });
-  // ------- open roll-cage: thin bars around the view, NOT across it -------
-  // two uprights behind the pilot + a top rail at the very top (above eye line)
-  [-.62, .62].forEach(x => box(.06, 1.9, .06, matD, x, 3.0, .40, .12, 0, 0));
-  box(1.34, .07, .07, matD, 0, 3.94, .34, .12, 0, 0);  // over-head rail (well above eyes)
-  box(.07, 1.9, .06, matD, -.62, 3.0, .40, .12, 0, 0);
-  // small angled corner braces so the cage reads as a structure
-  box(.07, .06, .5, matD, -.62, 3.86, .16, .5, 0, 0);
-  box(.07, .06, .5, matD, .62, 3.86, .16, .5, 0, 0);
+  // ------- PILOT: green flight suit, legs stretched out onto the footwell -------
+  const matSuit = new THREE.MeshLambertMaterial({ color: 0x3f6b34 });
+  const matBoot = new THREE.MeshLambertMaterial({ color: 0x22262b });
+  box(.54, .44, .44, matSuit, 0, 3.06, .14);            // pilot torso (reclined)
+  box(.26, .26, .26, matSuit, 0, 3.34, .16);            // head
+  [-1, 1].forEach(s => {
+    box(.30, .28, .70, matSuit, s * .24, 3.12, -.52, -.16, 0, 0);   // thigh (forward)
+    box(.28, .26, .28, matSuit, s * .24, 3.04, -.92);               // knee
+    box(.24, .24, .58, matSuit, s * .24, 2.99, -1.26, -.06, 0, 0);  // shin
+    box(.32, .20, .48, matBoot, s * .24, 2.94, -1.60, .04, 0, 0);   // boot
+  });
+  // ------- GLASS COCKPIT DOME — a clear canopy ball around the pilot -------
+  const dome = new THREE.Group();
+  const DOME_R = CFG.mechDomeRadius, DOME_Y = 3.62, DOME_Z = .06;
+  const glass = new THREE.Mesh(
+    new THREE.SphereGeometry(DOME_R, 24, 18),
+    new THREE.MeshPhongMaterial({ color: 0x9fd7ff, transparent: true, opacity: .13, shininess: 100, specular: 0xffffff, side: THREE.DoubleSide, depthWrite: false }));
+  glass.position.set(0, DOME_Y, DOME_Z); dome.add(glass);
+  // frame: side arches + a base band, kept OFF the centre of the view
+  [-1, 1].forEach(s => {
+    const rib = new THREE.Mesh(new THREE.TorusGeometry(DOME_R, .030, 6, 24, Math.PI), matB2);
+    rib.rotation.y = Math.PI / 2; rib.position.set(s * DOME_R, DOME_Y, DOME_Z); dome.add(rib);
+  });
+  const band = new THREE.Mesh(new THREE.TorusGeometry(DOME_R, .042, 6, 28), matB);
+  band.position.set(0, DOME_Y - .50, DOME_Z); band.rotation.x = Math.PI / 2; dome.add(band);
+  const domeTop = new THREE.Mesh(new THREE.CylinderGeometry(.09, .11, .10, 12), matB2);
+  domeTop.position.set(0, DOME_Y + DOME_R - .03, DOME_Z); dome.add(domeTop);
+  g.add(dome);
+  g.userData.dome = dome;
   // ------- right arm: the actual MECH-MINIGUN model, mounted on the arm -------
   const mgArm = new THREE.Group();
   const mgGun = buildWeaponModel('mechMinigun');
   mgGun.scale.setScalar(1.18);
   mgArm.add(mgGun);
-  mgArm.position.set(1.34, 2.50, .04);
+  mgArm.position.set(1.12, 2.80, .12);
   mgArm.userData.baseYaw = -CFG.mechArmToe;            // toe-in toward the crosshair (right arm points left)
+  mgArm.rotation.order = 'YXZ';                        // yaw first, then a pure elevation
   mgArm.rotation.y = mgArm.userData.baseYaw;
   g.add(mgArm);
-  box(.40, .38, .58, matB2, 1.30, 2.90, .12);          // right shoulder housing
+  box(.40, .38, .58, matB2, 1.12, 3.00, .22);          // right shoulder housing
   const cluster = mgGun.getObjectByName('barrels');    // spin this
   // ------- left arm: the actual HYPER-LASER model + red missile tubes -------
   const lzArm = new THREE.Group();
   const lzGun = buildWeaponModel('mechLaser');
   lzGun.scale.setScalar(1.18);
   lzArm.add(lzGun);
-  lzArm.position.set(-1.34, 2.50, .04);
+  lzArm.position.set(-1.12, 2.80, .12);
   lzArm.userData.baseYaw = CFG.mechArmToe;             // toe-in toward the crosshair (left arm points right)
+  lzArm.rotation.order = 'YXZ';
   lzArm.rotation.y = lzArm.userData.baseYaw;
   g.add(lzArm);
   // a shoulder pod with red missile tubes above the laser
@@ -1620,7 +1643,8 @@ function buildMechChassis() {
     tube.position.set((c - 1) * .12, .06 - r * .12, -.28);
     pod.add(tube);
   }
-  pod.position.set(-1.30, 3.00, .05);
+  pod.position.set(-1.12, 3.34, .16);
+  pod.rotation.order = 'YXZ';
   pod.userData.baseYaw = CFG.mechArmToe * .6;
   pod.rotation.y = pod.userData.baseYaw;
   g.add(pod);

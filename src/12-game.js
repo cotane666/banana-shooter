@@ -1953,7 +1953,7 @@ const Game = {
     this.beginBuyPhase(99999, 'ПОЛИГОН');   // never times out
     this.enterGame();
     this.updateRangePanel();
-    UI.toast('Полигон: всё бесплатно · B — магазин', '#ff9d21');
+    UI.toast('Полигон: всё бесплатно · ' + (IS_TOUCH ? 'кнопка МАГАЗИН' : 'B — магазин'), '#ff9d21');
   },
 
   spawnDummies() {
@@ -2731,7 +2731,7 @@ const Game = {
       el.best.textContent = String(Store.data.aimBest || 0);
       // On PC the pointer is locked during play, so a DOM button cannot be
       // clicked — advertise the keyboard shortcut on the button itself.
-      el.toggle.textContent = 'АИМ-ТРЕНИРОВКА (T)';
+      el.toggle.textContent = 'АИМ-ТРЕНИРОВКА' + (IS_TOUCH ? '' : ' (T)');
       el.toggle.classList.remove('on');
     }
     // shooting-dummy controls
@@ -2739,13 +2739,16 @@ const Game = {
       const d = this.shooterDummy;
       const on = !!(d && d.active);
       const def = d ? WEAPONS[d.weaponId] : null;
-      el.sdToggle.textContent = on
-        ? 'ВЫКЛЮЧИТЬ (V) · ' + (def ? def.name : '')
-        : 'ВКЛЮЧИТЬ (V) · ' + (def ? def.name : '');
+      // on a phone there is no keyboard, so the PC shortcut hints are dropped
+      const key = (name) => IS_TOUCH ? '' : ' (' + name + ')';
+      el.sdToggle.textContent = (on ? 'ВЫКЛЮЧИТЬ' : 'ВКЛЮЧИТЬ') + key('V') + ' · ' + (def ? def.name : '');
       el.sdToggle.classList.toggle('on', on);
     }
     // range enemy spawner label
-    if (el.esConfig) el.esConfig.textContent = 'СПАВН ВРАГА (X) · ×' + (this._spawnHpMul || 1);
+    if (el.esConfig) el.esConfig.textContent = 'СПАВН ВРАГА' + (IS_TOUCH ? '' : ' (X)') + ' · ×' + (this._spawnHpMul || 1);
+    // weapon picker button (drop the keyboard hint on a phone)
+    const sdConf = document.getElementById('sdConfig');
+    if (sdConf) sdConf.textContent = 'ОРУЖИЕ' + (IS_TOUCH ? '' : ' (C)');
   },
 
   startOnlineHost() { this.startOnline(CS.NETROLE.HOST); },
@@ -3040,7 +3043,7 @@ const Game = {
       this.buyTimer = 0;
       this.roundT = 0;
       this.resetSkipVotes();
-      UI.center('ПОЛИГОН', 'B — магазин · всё бесплатно', 2.4);
+      UI.center('ПОЛИГОН', IS_TOUCH ? 'Всё бесплатно · кнопка МАГАЗИН' : 'B — магазин · всё бесплатно', 2.4);
       this.roundNo++;
       return;
     }

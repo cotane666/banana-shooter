@@ -3,6 +3,16 @@
    ============================================================ */
 
 /* ---------------- procedural zombie mesh ---------------- */
+/* helper: a box mesh (centre-anchored) for boss builds */
+function mkBox(w, h, d, color, x, y, z) {
+  const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), new THREE.MeshLambertMaterial({ color }));
+  m.position.set(x, y, z);
+  return m;
+}
+function addBossBox(g, w, h, d, color, x, y, z) { const m = mkBox(w, h, d, color, x, y, z); g.add(m); return m; }
+/* a pale bone material for the reaper's blade */
+function boneBladeMat() { return new THREE.MeshLambertMaterial({ color: 0xe8e2d0, emissive: 0x2a2530 }); }
+
 function buildZombieMesh(type) {
   const col = ZOMBIES[type].color;
   const skinMat = new THREE.MeshLambertMaterial({ map: canvasTexture(TEXTURES.zombie, 1, 2), color: col });
@@ -140,25 +150,191 @@ function buildZombieMesh(type) {
     g.add(cannon);
     parts.cannon = cannon;
   } else if (ZOMBIES[type] && ZOMBIES[type].boss) {
-    /* Bosses: bulkier frame, spiked shoulders and a burning core so they read
-       as a threat even from across the arena. */
+    /* Every boss gets its own silhouette so it reads instantly from across the
+       arena. Shared base is bulked up first, then the type-specific build adds
+       armour, weapons and a glowing core. */
     chest.scale.set(1.6, 1.15, 1.5);
     pelvis.scale.set(1.4, 1.05, 1.3);
     armL.scale.set(1.7, 1.15, 1.7); armR.scale.set(1.7, 1.15, 1.7);
     legL.scale.set(1.5, 1.05, 1.5); legR.scale.set(1.5, 1.05, 1.5);
     skull.scale.set(1.3, 1.1, 1.3);
-    // shoulder spikes
-    [-1, 1].forEach(sgn => {
-      const spike = new THREE.Mesh(new THREE.ConeGeometry(.09, .34, 6), clothMat);
-      spike.position.set(sgn * .40, 1.60, 0);
-      spike.rotation.z = sgn * -.5;
-      g.add(spike);
-    });
-    // glowing core in the chest
-    const coreMat = new THREE.MeshBasicMaterial({ color: ZOMBIES[type].final ? 0xc24bff : 0xff5a2a });
-    const core = new THREE.Mesh(new THREE.SphereGeometry(.15, 8, 6), coreMat);
-    core.position.set(0, 1.12, -.20);
-    torso.add(core);
+    const glowMat = (c) => new THREE.MeshBasicMaterial({ color: c });
+    const eye2 = (c) => {
+      const m = new THREE.MeshBasicMaterial({ color: c });
+      [-.09, .09].forEach(ox => {
+        const e = new THREE.Mesh(new THREE.SphereGeometry(.04, 8, 6), m);
+        e.position.set(ox, .04, -.16); head.add(e);
+      });
+    };
+
+    if (type === 'bossWarden') {
+      /* СТРАЖ — armoured sentinel: stone-grey plating, spiked pauldrons, a tall
+         kite shield on the left arm and a spiked mace on the right. */
+      const PLATE = 0x9aa0a6, DARK = 0x3c4147, ORANGE = 0xff7a3a;
+      chest.material = new THREE.MeshLambertMaterial({ color: 0x8a4a3a });
+      skull.material = new THREE.MeshLambertMaterial({ color: PLATE });
+      // chest armour plates
+      addBossBox(g, 1.05, .80, .34, PLATE, 0, 1.20, -.06);
+      addBossBox(g, 1.15, .16, .40, DARK, 0, 1.62, -.06);
+      // spiked pauldrons
+      [-1, 1].forEach(sgn => {
+        addBossBox(g, .46, .34, .44, PLATE, sgn * .60, 1.60, 0);
+        for (let i = 0; i < 3; i++) {
+          const sp = new THREE.Mesh(new THREE.ConeGeometry(.07, .28, 6), clothMat);
+          sp.position.set(sgn * .60, 1.82, -.14 + i * .14); sp.rotation.z = sgn * -.4;
+          g.add(sp);
+        }
+      });
+      // tower shield on the left arm
+      const shield = new THREE.Group();
+      shield.add(mkBox(.12, 1.30, .78, PLATE, 0, 0, 0));
+      shield.add(mkBox(.14, 1.30, .10, DARK, 0, 0, .30));
+      shield.add(mkBox(.14, .10, .78, ORANGE, 0, .62, 0));
+      shield.position.set(-1.05, 1.05, .28);
+      g.add(shield); parts.shield = shield;
+      // spiked mace on the right arm
+      const mace = new THREE.Group();
+      mace.add(mkBox(.11, .11, .90, DARK, 0, 0, .30));
+      const ball = new THREE.Mesh(new THREE.SphereGeometry(.24, 10, 8), new THREE.MeshLambertMaterial({ color: PLATE }));
+      ball.position.z = .82; mace.add(ball);
+      for (let i = 0; i < 6; i++) {
+        const sp = new THREE.Mesh(new THREE.ConeGeometry(.06, .20, 5), clothMat);
+        const a = (i / 6) * Math.PI * 2;
+        sp.position.set(Math.cos(a) * .22, Math.sin(a) * .22, .82);
+        sp.rotation.z = a - Math.PI / 2; mace.add(sp);
+      }
+      mace.position.set(1.02, 1.05, .18);
+      g.add(mace); parts.mace = mace;
+      eye2(0xff7a3a);
+      // glowing core
+      const core = new THREE.Mesh(new THREE.SphereGeometry(.18, 10, 8), glowMat(ORANGE));
+      core.position.set(0, 1.18, -.22); torso.add(core);
+    } else if (type === 'bossBrute') {
+      /* ЖНЕЦ — skeletal reaper: bone frame, hooded skull, ragged purple cloak
+         and a huge scythe in the right hand. */
+      const BONE = 0xd8d2c0, CLOTH = 0x3a2352, PURPLE = 0xc24bff;
+      chest.material = clothMat; skull.material = new THREE.MeshLambertMaterial({ color: BONE });
+      jaw.material = new THREE.MeshLambertMaterial({ color: BONE });
+      legL.material = new THREE.MeshLambertMaterial({ color: BONE });
+      legR.material = new THREE.MeshLambertMaterial({ color: BONE });
+      // ribcage: a stack of bone bars
+      for (let i = 0; i < 5; i++) addBossBox(g, .80 - i * .06, .06, .30, BONE, 0, 1.42 - i * .13, -.10);
+      // spine
+      addBossBox(g, .09, 1.0, .09, BONE, 0, 1.05, .04);
+      // hooded cloak: a cone behind the shoulders
+      const cloak = new THREE.Mesh(new THREE.ConeGeometry(.85, 1.8, 8, 1, true),
+        new THREE.MeshLambertMaterial({ color: CLOTH, side: THREE.DoubleSide }));
+      cloak.position.set(0, 1.28, .24); g.add(cloak); parts.cloak = cloak;
+      // bony pauldrons
+      [-1, 1].forEach(sgn => {
+        const sk = new THREE.Mesh(new THREE.BoxGeometry(.44, .22, .40), new THREE.MeshLambertMaterial({ color: BONE }));
+        sk.position.set(sgn * .55, 1.66, 0); g.add(sk);
+      });
+      // scythe
+      const scythe = new THREE.Group();
+      scythe.add(mkBox(.09, 2.0, .09, 0x4a3418, 0, 0, 0));
+      const blade = new THREE.Mesh(new THREE.TorusGeometry(.75, .045, 6, 14, Math.PI * .85), boneBladeMat());
+      blade.rotation.z = -Math.PI / 2; blade.position.set(0, .95, 0);
+      scythe.add(blade);
+      scythe.position.set(1.15, 1.15, .10);
+      g.add(scythe); parts.scythe = scythe;
+      eye2(PURPLE);
+      const core = new THREE.Mesh(new THREE.SphereGeometry(.17, 10, 8), glowMat(PURPLE));
+      core.position.set(0, 1.20, -.24); torso.add(core);
+    } else if (type === 'bossTitan') {
+      /* ТИТАН — colossal rock giant: boulder shoulders, magma cracks, a massive
+         stone hammer and a molten core. */
+      const ROCK = 0x5a4a42, ROCK2 = 0x3e332d, MAGMA = 0xff4a2a;
+      chest.material = new THREE.MeshLambertMaterial({ color: ROCK });
+      skull.material = new THREE.MeshLambertMaterial({ color: ROCK });
+      armL.material = new THREE.MeshLambertMaterial({ color: ROCK2 });
+      armR.material = new THREE.MeshLambertMaterial({ color: ROCK2 });
+      // boulder shoulders
+      [-1, 1].forEach(sgn => {
+        const b = new THREE.Mesh(new THREE.DodecahedronGeometry(.42, 0), new THREE.MeshLambertMaterial({ color: ROCK2 }));
+        b.position.set(sgn * .62, 1.66, 0); g.add(b);
+      });
+      // glowing magma cracks across the chest
+      for (let i = 0; i < 5; i++) {
+        const crack = mkBox(.70 - i * .08, .05, .04, MAGMA, U.rand(-.1, .1), 1.55 - i * .18, -.20);
+        crack.rotation.z = U.rand(-.3, .3); g.add(crack);
+      }
+      // stone hammer
+      const hammer = new THREE.Group();
+      hammer.add(mkBox(.12, 1.7, .12, 0x3a2a1e, 0, 0, 0));
+      const headH = new THREE.Mesh(new THREE.BoxGeometry(.70, .55, .55), new THREE.MeshLambertMaterial({ color: ROCK2 }));
+      headH.position.y = .95; hammer.add(headH);
+      const band = mkBox(.74, .10, .59, MAGMA, 0, .95, 0); hammer.add(band);
+      hammer.position.set(1.20, 1.10, .12);
+      g.add(hammer); parts.hammer = hammer;
+      eye2(MAGMA);
+      const core = new THREE.Mesh(new THREE.SphereGeometry(.26, 12, 10), glowMat(0xffb060));
+      core.position.set(0, 1.15, -.26); torso.add(core);
+    } else {
+      /* ПОЖИРАТЕЛЬ — void horror: a starfield body, a gaping maw of glowing
+         teeth, orbiting shards and a purple singularity core. */
+      const VOID = 0x1a1030, VOID2 = 0x2e1b4d, PURPLE = 0x9a3aff;
+      chest.material = new THREE.MeshLambertMaterial({ color: VOID });
+      pelvis.material = new THREE.MeshLambertMaterial({ color: VOID2 });
+      skull.material = new THREE.MeshLambertMaterial({ color: VOID });
+      // a gaping maw of glowing teeth on the chest
+      const maw = new THREE.Group();
+      maw.add(mkBox(.62, .40, .10, 0x0a0612, 0, 0, -.22));
+      for (let i = 0; i < 7; i++) {
+        const t = new THREE.Mesh(new THREE.ConeGeometry(.05, .16, 4), glowMat(PURPLE));
+        t.position.set(-.27 + i * .09, .16, -.24); t.rotation.x = Math.PI; maw.add(t);
+        const t2 = new THREE.Mesh(new THREE.ConeGeometry(.05, .16, 4), glowMat(PURPLE));
+        t2.position.set(-.27 + i * .09, -.16, -.24); maw.add(t2);
+      }
+      maw.position.set(0, 1.15, 0); torso.add(maw);
+      // jagged void spikes on the shoulders
+      [-1, 1].forEach(sgn => {
+        for (let i = 0; i < 3; i++) {
+          const sp = new THREE.Mesh(new THREE.ConeGeometry(.08, .46, 5), glowMat(i === 1 ? 0xd7b0ff : PURPLE));
+          sp.position.set(sgn * (.45 + i * .10), 1.72 + i * .06, 0);
+          sp.rotation.z = sgn * -.5; g.add(sp);
+        }
+      });
+      // orbiting shards (animated in Zombie.update)
+      const shards = new THREE.Group();
+      for (let i = 0; i < 6; i++) {
+        const sh = new THREE.Mesh(new THREE.TetrahedronGeometry(.16, 0), glowMat(PURPLE));
+        const a = (i / 6) * Math.PI * 2;
+        sh.position.set(Math.cos(a) * .95, 0, Math.sin(a) * .95);
+        shards.add(sh);
+      }
+      shards.position.y = 1.15; g.add(shards); parts.shards = shards;
+      eye2(PURPLE);
+      // the singularity core
+      const core = new THREE.Mesh(new THREE.SphereGeometry(.30, 14, 12), glowMat(0xd7b0ff));
+      core.position.set(0, 1.15, -.30); torso.add(core);
+      const halo = new THREE.Mesh(new THREE.SphereGeometry(.46, 14, 12),
+        new THREE.MeshBasicMaterial({ color: PURPLE, transparent: true, opacity: .35, blending: THREE.AdditiveBlending, depthWrite: false }));
+      halo.position.copy(core.position); torso.add(halo); parts.coreHalo = halo;
+    }
+
+    /* ---- menacing aura: two glowing rings that hover at the boss's feet ---- */
+    if (ZOMBIES[type].aura) {
+      const aura = new THREE.Group();
+      const arc = ZOMBIES[type].aura;
+      const mkRing = (r, tube, op) => {
+        const geo = new THREE.TorusGeometry(r, tube, 6, 28);
+        const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({
+          color: arc, transparent: true, opacity: op, blending: THREE.AdditiveBlending, depthWrite: false
+        }));
+        m.rotation.x = Math.PI / 2;
+        return m;
+      };
+      aura.add(mkRing(.95, .045, .55));
+      const r2 = mkRing(1.30, .030, .35); r2.position.y = .06; aura.add(r2);
+      aura.position.y = .10;
+      g.add(aura);
+      parts.aura = aura; parts.auraRing2 = r2;
+      // a soft coloured lamp so the boss lights its little patch of floor
+      const lamp = new THREE.PointLight(ZOMBIES[type].aura, 6, 9, 2);
+      lamp.position.set(0, 1.2, 0);
+      g.add(lamp); parts.auraLight = lamp;
+    }
   }
 
   g.userData.parts = parts;
@@ -480,6 +656,23 @@ class Zombie {
     this.group.rotation.z = 0;
     this.group.rotation.x = this.type === 'crawler' ? 0 : 0;
     p.torso.position.y = (this.type === 'crawler' ? .82 : 1.02) + Math.abs(Math.sin(ph)) * .035 * bob;
+
+    // ---- boss flair: animate their signature props ----
+    if (p.mace) p.mace.rotation.x = reach + .3 + Math.sin(ph) * .25 * (0.4 + bob);
+    if (p.hammer) p.hammer.rotation.x = reach + .35 + Math.sin(ph + 1) * .30 * (0.4 + bob);
+    if (p.scythe) { p.scythe.rotation.z = .25 + Math.sin(ph * .9) * .18; p.scythe.rotation.x = reach * .5; }
+    if (p.cloak) p.cloak.rotation.x = -Math.abs(Math.sin(ph * .8)) * .12 * (0.3 + bob);
+    if (p.shards) p.shards.rotation.y += dt * 2.2;
+    if (p.aura) {
+      p.aura.rotation.y += dt * .7;
+      if (p.auraRing2) { p.auraRing2.rotation.z += dt * 1.4; p.auraRing2.scale.setScalar(1 + .06 * Math.sin(ph * 2)); }
+      if (p.auraLight) p.auraLight.intensity = 5 + Math.sin(ph * 2) * 2;
+    }
+    if (p.coreHalo) {
+      const k = .5 + .5 * Math.sin(ph * 1.5);
+      p.coreHalo.scale.setScalar(.9 + k * .35);
+      p.coreHalo.material.opacity = .22 + k * .25;
+    }
 
     // hit flash
     const flash = this.hitFlash > 0;

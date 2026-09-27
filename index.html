@@ -1474,15 +1474,17 @@ const ZOMBIES = {
   /* ---- BOSSES (spawned on dedicated boss waves) ----
      Every boss has its own `abilities` list. `Game.updateBosses` fires one at
      random every `abilityCd` seconds: summon reinforcements, a shockwave slam,
-     a charge rush or a projectile barrage. */
-  bossWarden: { name: 'СТРАЖ',        hp: 3200,  speed: 1.35, dmg: 42, score: 4000,  money: 3000, scale: 2.35, color: 0x7d3b2e, atkRange: 2.6, boss: true,
-                abilities: ['summon', 'shockwave'], abilityCd: 8 },
-  bossBrute:  { name: 'ЖНЕЦ',         hp: 6800,  speed: 1.55, dmg: 55, score: 8000,  money: 5000, scale: 2.75, color: 0x5a2b6b, atkRange: 2.9, boss: true,
-                abilities: ['charge', 'summon'], abilityCd: 7 },
-  bossTitan:  { name: 'ТИТАН',        hp: 14000, speed: 1.15, dmg: 70, score: 16000, money: 8000, scale: 3.25, color: 0x6b2b2b, atkRange: 3.2, boss: true,
-                abilities: ['shockwave', 'summon', 'charge'], abilityCd: 9 },
-  bossFinal:  { name: 'ПОЖИРАТЕЛЬ',   hp: 42000, speed: 1.05, dmg: 95, score: 50000, money: 16000, scale: 4.10, color: 0x2e1b4d, atkRange: 3.6, boss: true, final: true,
-                abilities: ['barrage', 'summon', 'shockwave'], abilityCd: 6.5 }
+     a charge rush, a projectile barrage or (the final boss) summoning
+     mini-bosses. Each one is armoured, hits harder and has its own model,
+     music and aura. */
+  bossWarden: { name: 'СТРАЖ',        hp: 5200,  speed: 1.45, dmg: 58, score: 6000,  money: 4000, scale: 2.45, color: 0x7d3b2e, atkRange: 2.7, boss: true, armor: .15,
+                abilities: ['summon', 'shockwave', 'charge'], abilityCd: 7, aura: 0xff7a3a },
+  bossBrute:  { name: 'ЖНЕЦ',         hp: 12000, speed: 1.70, dmg: 78, score: 12000, money: 6500, scale: 2.85, color: 0x5a2b6b, atkRange: 3.0, boss: true, armor: .20,
+                abilities: ['charge', 'summon', 'barrage'], abilityCd: 6, aura: 0xc24bff },
+  bossTitan:  { name: 'ТИТАН',        hp: 26000, speed: 1.20, dmg: 104, score: 24000, money: 10000, scale: 3.35, color: 0x6b2b2b, atkRange: 3.3, boss: true, armor: .30,
+                abilities: ['shockwave', 'summon', 'charge', 'barrage'], abilityCd: 8, aura: 0xff4a2a },
+  bossFinal:  { name: 'ПОЖИРАТЕЛЬ',   hp: 70000, speed: 1.10, dmg: 135, score: 80000, money: 22000, scale: 4.20, color: 0x2e1b4d, atkRange: 3.7, boss: true, final: true, armor: .35,
+                abilities: ['barrage', 'summon', 'shockwave', 'summonMinions'], abilityCd: 5.5, aura: 0x9a3aff }
 };
 
 /* ---------------- utils ---------------- */
@@ -3613,6 +3615,95 @@ const Audio3D_SFX = {
     notes.forEach((n, i) => setTimeout(() => this.tone(n, .3, 'triangle', .14), i * 150));
   },
   uiClick() { this.tone(1100, .025, 'square', .05); },
+
+  /* ============================================================
+     BOSS MUSIC — each boss plays its own looping theme
+     Themes are built from a chord progression that a scheduler re-triggers
+     every few seconds (bass line + arpeggio + a sustained pad), so no audio
+     files are needed. Only one theme can play at a time.
+     ============================================================ */
+  bossThemes: {
+    bossWarden: { root: 110.0,  scale: [0, 3, 5, 7, 10], prog: [0, -2, -4, -5], bpm: 96,  wave: 'sawtooth', bright: 1200 },
+    bossBrute:  { root: 87.31,  scale: [0, 2, 3, 7, 8],  prog: [0, -3, -1, -5], bpm: 132, wave: 'square',   bright: 1500 },
+    bossTitan:  { root: 65.41,  scale: [0, 2, 5, 7, 10], prog: [0, -5, -3, -7], bpm: 84,  wave: 'sawtooth', bright: 900 },
+    bossFinal:  { root: 55.0,   scale: [0, 1, 5, 6, 10], prog: [0, -1, -6, -4], bpm: 150, wave: 'square',   bright: 1800 }
+  },
+  bossMusicStart(type) {
+    if (!this.ctx || this.muted) return;
+    if (this._music && this._music.type === type) return;   // already playing
+    this.bossMusicStop();
+    const th = this.bossThemes[type];
+    if (!th) return;
+    const out = this.ctx.createGain(); out.gain.value = .0001;
+    out.connect(this.master);
+    // fade in
+    const t0 = this.ctx.currentTime;
+    out.gain.linearRampToValueAtTime(.5, t0 + 1.2);
+    this._music = { type, out, th, step: 0, timer: null, next: t0 + .1 };
+    const beat = 60 / th.bpm;
+    const schedule = () => {
+      if (!this._music || !this.ctx) return;
+      const m = this._music;
+      const now = this.ctx.currentTime;
+      // schedule a couple of steps ahead
+      while (m.next < now + .4) {
+        this._musicStep(m, m.next, beat);
+        m.next += beat * .5;    // eighth notes
+      }
+      m.timer = setTimeout(schedule, 120);
+    };
+    schedule();
+  },
+  _musicStep(m, t, beat) {
+    const th = m.th, i = m.step++;
+    const chord = th.prog[Math.floor(i / 8) % th.prog.length];
+    const semi = (n) => th.root * Math.pow(2, n / 12);
+    // bass on every beat
+    if (i % 2 === 0) {
+      const o = this.ctx.createOscillator(); o.type = th.wave;
+      o.frequency.setValueAtTime(semi(chord), t);
+      const lp = this.ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 320;
+      const g = this.ctx.createGain();
+      g.gain.setValueAtTime(.20, t);
+      g.gain.exponentialRampToValueAtTime(.001, t + beat * .9);
+      o.connect(lp); lp.connect(g); g.connect(m.out);
+      o.start(t); o.stop(t + beat);
+    }
+    // arpeggio note (higher)
+    const deg = th.scale[(i * 3) % th.scale.length];
+    const a = this.ctx.createOscillator(); a.type = 'triangle';
+    a.frequency.setValueAtTime(semi(chord + deg + 24), t);
+    const bp = this.ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = th.bright; bp.Q.value = 1.2;
+    const ag = this.ctx.createGain();
+    ag.gain.setValueAtTime(.10, t);
+    ag.gain.exponentialRampToValueAtTime(.001, t + beat * .45);
+    a.connect(bp); bp.connect(ag); ag.connect(m.out);
+    a.start(t); a.stop(t + beat * .5);
+    // a sustained pad at the top of each bar
+    if (i % 8 === 0) {
+      const p = this.ctx.createOscillator(); p.type = th.wave;
+      p.frequency.setValueAtTime(semi(chord + 12), t);
+      p.frequency.linearRampToValueAtTime(semi(chord + 12 + th.scale[2]), t + beat * 3);
+      const pg = this.ctx.createGain();
+      pg.gain.setValueAtTime(.001, t);
+      pg.gain.linearRampToValueAtTime(.06, t + beat);
+      pg.gain.exponentialRampToValueAtTime(.001, t + beat * 3.6);
+      p.connect(pg); pg.connect(m.out);
+      p.start(t); p.stop(t + beat * 4);
+    }
+  },
+  bossMusicStop() {
+    if (!this._music) return;
+    const m = this._music; this._music = null;
+    if (m.timer) clearTimeout(m.timer);
+    try {
+      const t = this.ctx.currentTime;
+      m.out.gain.cancelScheduledValues(t);
+      m.out.gain.linearRampToValueAtTime(.0001, t + .6);
+      setTimeout(() => { try { m.out.disconnect(); } catch (e) { } }, 800);
+    } catch (e) { }
+  },
+
   ambientStart() {
     if (!this.ctx || this.amb) return;
     // low wind bed
@@ -5160,6 +5251,16 @@ function disposeGroup(g) {
    ============================================================ */
 
 /* ---------------- procedural zombie mesh ---------------- */
+/* helper: a box mesh (centre-anchored) for boss builds */
+function mkBox(w, h, d, color, x, y, z) {
+  const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), new THREE.MeshLambertMaterial({ color }));
+  m.position.set(x, y, z);
+  return m;
+}
+function addBossBox(g, w, h, d, color, x, y, z) { const m = mkBox(w, h, d, color, x, y, z); g.add(m); return m; }
+/* a pale bone material for the reaper's blade */
+function boneBladeMat() { return new THREE.MeshLambertMaterial({ color: 0xe8e2d0, emissive: 0x2a2530 }); }
+
 function buildZombieMesh(type) {
   const col = ZOMBIES[type].color;
   const skinMat = new THREE.MeshLambertMaterial({ map: canvasTexture(TEXTURES.zombie, 1, 2), color: col });
@@ -5297,25 +5398,191 @@ function buildZombieMesh(type) {
     g.add(cannon);
     parts.cannon = cannon;
   } else if (ZOMBIES[type] && ZOMBIES[type].boss) {
-    /* Bosses: bulkier frame, spiked shoulders and a burning core so they read
-       as a threat even from across the arena. */
+    /* Every boss gets its own silhouette so it reads instantly from across the
+       arena. Shared base is bulked up first, then the type-specific build adds
+       armour, weapons and a glowing core. */
     chest.scale.set(1.6, 1.15, 1.5);
     pelvis.scale.set(1.4, 1.05, 1.3);
     armL.scale.set(1.7, 1.15, 1.7); armR.scale.set(1.7, 1.15, 1.7);
     legL.scale.set(1.5, 1.05, 1.5); legR.scale.set(1.5, 1.05, 1.5);
     skull.scale.set(1.3, 1.1, 1.3);
-    // shoulder spikes
-    [-1, 1].forEach(sgn => {
-      const spike = new THREE.Mesh(new THREE.ConeGeometry(.09, .34, 6), clothMat);
-      spike.position.set(sgn * .40, 1.60, 0);
-      spike.rotation.z = sgn * -.5;
-      g.add(spike);
-    });
-    // glowing core in the chest
-    const coreMat = new THREE.MeshBasicMaterial({ color: ZOMBIES[type].final ? 0xc24bff : 0xff5a2a });
-    const core = new THREE.Mesh(new THREE.SphereGeometry(.15, 8, 6), coreMat);
-    core.position.set(0, 1.12, -.20);
-    torso.add(core);
+    const glowMat = (c) => new THREE.MeshBasicMaterial({ color: c });
+    const eye2 = (c) => {
+      const m = new THREE.MeshBasicMaterial({ color: c });
+      [-.09, .09].forEach(ox => {
+        const e = new THREE.Mesh(new THREE.SphereGeometry(.04, 8, 6), m);
+        e.position.set(ox, .04, -.16); head.add(e);
+      });
+    };
+
+    if (type === 'bossWarden') {
+      /* СТРАЖ — armoured sentinel: stone-grey plating, spiked pauldrons, a tall
+         kite shield on the left arm and a spiked mace on the right. */
+      const PLATE = 0x9aa0a6, DARK = 0x3c4147, ORANGE = 0xff7a3a;
+      chest.material = new THREE.MeshLambertMaterial({ color: 0x8a4a3a });
+      skull.material = new THREE.MeshLambertMaterial({ color: PLATE });
+      // chest armour plates
+      addBossBox(g, 1.05, .80, .34, PLATE, 0, 1.20, -.06);
+      addBossBox(g, 1.15, .16, .40, DARK, 0, 1.62, -.06);
+      // spiked pauldrons
+      [-1, 1].forEach(sgn => {
+        addBossBox(g, .46, .34, .44, PLATE, sgn * .60, 1.60, 0);
+        for (let i = 0; i < 3; i++) {
+          const sp = new THREE.Mesh(new THREE.ConeGeometry(.07, .28, 6), clothMat);
+          sp.position.set(sgn * .60, 1.82, -.14 + i * .14); sp.rotation.z = sgn * -.4;
+          g.add(sp);
+        }
+      });
+      // tower shield on the left arm
+      const shield = new THREE.Group();
+      shield.add(mkBox(.12, 1.30, .78, PLATE, 0, 0, 0));
+      shield.add(mkBox(.14, 1.30, .10, DARK, 0, 0, .30));
+      shield.add(mkBox(.14, .10, .78, ORANGE, 0, .62, 0));
+      shield.position.set(-1.05, 1.05, .28);
+      g.add(shield); parts.shield = shield;
+      // spiked mace on the right arm
+      const mace = new THREE.Group();
+      mace.add(mkBox(.11, .11, .90, DARK, 0, 0, .30));
+      const ball = new THREE.Mesh(new THREE.SphereGeometry(.24, 10, 8), new THREE.MeshLambertMaterial({ color: PLATE }));
+      ball.position.z = .82; mace.add(ball);
+      for (let i = 0; i < 6; i++) {
+        const sp = new THREE.Mesh(new THREE.ConeGeometry(.06, .20, 5), clothMat);
+        const a = (i / 6) * Math.PI * 2;
+        sp.position.set(Math.cos(a) * .22, Math.sin(a) * .22, .82);
+        sp.rotation.z = a - Math.PI / 2; mace.add(sp);
+      }
+      mace.position.set(1.02, 1.05, .18);
+      g.add(mace); parts.mace = mace;
+      eye2(0xff7a3a);
+      // glowing core
+      const core = new THREE.Mesh(new THREE.SphereGeometry(.18, 10, 8), glowMat(ORANGE));
+      core.position.set(0, 1.18, -.22); torso.add(core);
+    } else if (type === 'bossBrute') {
+      /* ЖНЕЦ — skeletal reaper: bone frame, hooded skull, ragged purple cloak
+         and a huge scythe in the right hand. */
+      const BONE = 0xd8d2c0, CLOTH = 0x3a2352, PURPLE = 0xc24bff;
+      chest.material = clothMat; skull.material = new THREE.MeshLambertMaterial({ color: BONE });
+      jaw.material = new THREE.MeshLambertMaterial({ color: BONE });
+      legL.material = new THREE.MeshLambertMaterial({ color: BONE });
+      legR.material = new THREE.MeshLambertMaterial({ color: BONE });
+      // ribcage: a stack of bone bars
+      for (let i = 0; i < 5; i++) addBossBox(g, .80 - i * .06, .06, .30, BONE, 0, 1.42 - i * .13, -.10);
+      // spine
+      addBossBox(g, .09, 1.0, .09, BONE, 0, 1.05, .04);
+      // hooded cloak: a cone behind the shoulders
+      const cloak = new THREE.Mesh(new THREE.ConeGeometry(.85, 1.8, 8, 1, true),
+        new THREE.MeshLambertMaterial({ color: CLOTH, side: THREE.DoubleSide }));
+      cloak.position.set(0, 1.28, .24); g.add(cloak); parts.cloak = cloak;
+      // bony pauldrons
+      [-1, 1].forEach(sgn => {
+        const sk = new THREE.Mesh(new THREE.BoxGeometry(.44, .22, .40), new THREE.MeshLambertMaterial({ color: BONE }));
+        sk.position.set(sgn * .55, 1.66, 0); g.add(sk);
+      });
+      // scythe
+      const scythe = new THREE.Group();
+      scythe.add(mkBox(.09, 2.0, .09, 0x4a3418, 0, 0, 0));
+      const blade = new THREE.Mesh(new THREE.TorusGeometry(.75, .045, 6, 14, Math.PI * .85), boneBladeMat());
+      blade.rotation.z = -Math.PI / 2; blade.position.set(0, .95, 0);
+      scythe.add(blade);
+      scythe.position.set(1.15, 1.15, .10);
+      g.add(scythe); parts.scythe = scythe;
+      eye2(PURPLE);
+      const core = new THREE.Mesh(new THREE.SphereGeometry(.17, 10, 8), glowMat(PURPLE));
+      core.position.set(0, 1.20, -.24); torso.add(core);
+    } else if (type === 'bossTitan') {
+      /* ТИТАН — colossal rock giant: boulder shoulders, magma cracks, a massive
+         stone hammer and a molten core. */
+      const ROCK = 0x5a4a42, ROCK2 = 0x3e332d, MAGMA = 0xff4a2a;
+      chest.material = new THREE.MeshLambertMaterial({ color: ROCK });
+      skull.material = new THREE.MeshLambertMaterial({ color: ROCK });
+      armL.material = new THREE.MeshLambertMaterial({ color: ROCK2 });
+      armR.material = new THREE.MeshLambertMaterial({ color: ROCK2 });
+      // boulder shoulders
+      [-1, 1].forEach(sgn => {
+        const b = new THREE.Mesh(new THREE.DodecahedronGeometry(.42, 0), new THREE.MeshLambertMaterial({ color: ROCK2 }));
+        b.position.set(sgn * .62, 1.66, 0); g.add(b);
+      });
+      // glowing magma cracks across the chest
+      for (let i = 0; i < 5; i++) {
+        const crack = mkBox(.70 - i * .08, .05, .04, MAGMA, U.rand(-.1, .1), 1.55 - i * .18, -.20);
+        crack.rotation.z = U.rand(-.3, .3); g.add(crack);
+      }
+      // stone hammer
+      const hammer = new THREE.Group();
+      hammer.add(mkBox(.12, 1.7, .12, 0x3a2a1e, 0, 0, 0));
+      const headH = new THREE.Mesh(new THREE.BoxGeometry(.70, .55, .55), new THREE.MeshLambertMaterial({ color: ROCK2 }));
+      headH.position.y = .95; hammer.add(headH);
+      const band = mkBox(.74, .10, .59, MAGMA, 0, .95, 0); hammer.add(band);
+      hammer.position.set(1.20, 1.10, .12);
+      g.add(hammer); parts.hammer = hammer;
+      eye2(MAGMA);
+      const core = new THREE.Mesh(new THREE.SphereGeometry(.26, 12, 10), glowMat(0xffb060));
+      core.position.set(0, 1.15, -.26); torso.add(core);
+    } else {
+      /* ПОЖИРАТЕЛЬ — void horror: a starfield body, a gaping maw of glowing
+         teeth, orbiting shards and a purple singularity core. */
+      const VOID = 0x1a1030, VOID2 = 0x2e1b4d, PURPLE = 0x9a3aff;
+      chest.material = new THREE.MeshLambertMaterial({ color: VOID });
+      pelvis.material = new THREE.MeshLambertMaterial({ color: VOID2 });
+      skull.material = new THREE.MeshLambertMaterial({ color: VOID });
+      // a gaping maw of glowing teeth on the chest
+      const maw = new THREE.Group();
+      maw.add(mkBox(.62, .40, .10, 0x0a0612, 0, 0, -.22));
+      for (let i = 0; i < 7; i++) {
+        const t = new THREE.Mesh(new THREE.ConeGeometry(.05, .16, 4), glowMat(PURPLE));
+        t.position.set(-.27 + i * .09, .16, -.24); t.rotation.x = Math.PI; maw.add(t);
+        const t2 = new THREE.Mesh(new THREE.ConeGeometry(.05, .16, 4), glowMat(PURPLE));
+        t2.position.set(-.27 + i * .09, -.16, -.24); maw.add(t2);
+      }
+      maw.position.set(0, 1.15, 0); torso.add(maw);
+      // jagged void spikes on the shoulders
+      [-1, 1].forEach(sgn => {
+        for (let i = 0; i < 3; i++) {
+          const sp = new THREE.Mesh(new THREE.ConeGeometry(.08, .46, 5), glowMat(i === 1 ? 0xd7b0ff : PURPLE));
+          sp.position.set(sgn * (.45 + i * .10), 1.72 + i * .06, 0);
+          sp.rotation.z = sgn * -.5; g.add(sp);
+        }
+      });
+      // orbiting shards (animated in Zombie.update)
+      const shards = new THREE.Group();
+      for (let i = 0; i < 6; i++) {
+        const sh = new THREE.Mesh(new THREE.TetrahedronGeometry(.16, 0), glowMat(PURPLE));
+        const a = (i / 6) * Math.PI * 2;
+        sh.position.set(Math.cos(a) * .95, 0, Math.sin(a) * .95);
+        shards.add(sh);
+      }
+      shards.position.y = 1.15; g.add(shards); parts.shards = shards;
+      eye2(PURPLE);
+      // the singularity core
+      const core = new THREE.Mesh(new THREE.SphereGeometry(.30, 14, 12), glowMat(0xd7b0ff));
+      core.position.set(0, 1.15, -.30); torso.add(core);
+      const halo = new THREE.Mesh(new THREE.SphereGeometry(.46, 14, 12),
+        new THREE.MeshBasicMaterial({ color: PURPLE, transparent: true, opacity: .35, blending: THREE.AdditiveBlending, depthWrite: false }));
+      halo.position.copy(core.position); torso.add(halo); parts.coreHalo = halo;
+    }
+
+    /* ---- menacing aura: two glowing rings that hover at the boss's feet ---- */
+    if (ZOMBIES[type].aura) {
+      const aura = new THREE.Group();
+      const arc = ZOMBIES[type].aura;
+      const mkRing = (r, tube, op) => {
+        const geo = new THREE.TorusGeometry(r, tube, 6, 28);
+        const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({
+          color: arc, transparent: true, opacity: op, blending: THREE.AdditiveBlending, depthWrite: false
+        }));
+        m.rotation.x = Math.PI / 2;
+        return m;
+      };
+      aura.add(mkRing(.95, .045, .55));
+      const r2 = mkRing(1.30, .030, .35); r2.position.y = .06; aura.add(r2);
+      aura.position.y = .10;
+      g.add(aura);
+      parts.aura = aura; parts.auraRing2 = r2;
+      // a soft coloured lamp so the boss lights its little patch of floor
+      const lamp = new THREE.PointLight(ZOMBIES[type].aura, 6, 9, 2);
+      lamp.position.set(0, 1.2, 0);
+      g.add(lamp); parts.auraLight = lamp;
+    }
   }
 
   g.userData.parts = parts;
@@ -5637,6 +5904,23 @@ class Zombie {
     this.group.rotation.z = 0;
     this.group.rotation.x = this.type === 'crawler' ? 0 : 0;
     p.torso.position.y = (this.type === 'crawler' ? .82 : 1.02) + Math.abs(Math.sin(ph)) * .035 * bob;
+
+    // ---- boss flair: animate their signature props ----
+    if (p.mace) p.mace.rotation.x = reach + .3 + Math.sin(ph) * .25 * (0.4 + bob);
+    if (p.hammer) p.hammer.rotation.x = reach + .35 + Math.sin(ph + 1) * .30 * (0.4 + bob);
+    if (p.scythe) { p.scythe.rotation.z = .25 + Math.sin(ph * .9) * .18; p.scythe.rotation.x = reach * .5; }
+    if (p.cloak) p.cloak.rotation.x = -Math.abs(Math.sin(ph * .8)) * .12 * (0.3 + bob);
+    if (p.shards) p.shards.rotation.y += dt * 2.2;
+    if (p.aura) {
+      p.aura.rotation.y += dt * .7;
+      if (p.auraRing2) { p.auraRing2.rotation.z += dt * 1.4; p.auraRing2.scale.setScalar(1 + .06 * Math.sin(ph * 2)); }
+      if (p.auraLight) p.auraLight.intensity = 5 + Math.sin(ph * 2) * 2;
+    }
+    if (p.coreHalo) {
+      const k = .5 + .5 * Math.sin(ph * 1.5);
+      p.coreHalo.scale.setScalar(.9 + k * .35);
+      p.coreHalo.material.opacity = .22 + k * .25;
+    }
 
     // hit flash
     const flash = this.hitFlash > 0;
@@ -10243,10 +10527,11 @@ const Game = {
   /* ============================================================
      BOSS ABILITIES
      Each boss rolls one of its `abilities` on a timer:
-       summon    — calls a handful of fresh zombies around itself
-       shockwave — a telegraphed ground slam that knocks the player back
-       charge    — a fast rush that deals heavy contact damage
-       barrage   — a fan of plasma bolts
+       summon        — calls a handful of fresh zombies around itself
+       summonMinions — the final boss calls armoured mini-bosses (robot zombies)
+       shockwave     — a telegraphed ground slam that knocks the player back
+       charge        — a fast rush that deals heavy contact damage
+       barrage       — a fan of plasma bolts
      ============================================================ */
   updateBosses(dt) {
     if (!this.horde) return;
@@ -10285,19 +10570,38 @@ const Game = {
       Audio3D_SFX.growl(z.pos.x, z.pos.y, z.pos.z, 'brute');
       return;
     }
-    if (kind === 'shockwave') {
-      this.effects.explosion(z.pos.x, z.pos.y + .4, z.pos.z, 6.5, [0xffb347, 0x2a1a0a]);
+    if (kind === 'summonMinions') {
+      // the final boss tears open portals and calls armoured mini-bosses
+      const n = 2;
+      for (let i = 0; i < n; i++) {
+        const a = U.rand(0, Math.PI * 2), r = U.rand(4, 7);
+        const x = z.pos.x + Math.cos(a) * r, yy = z.pos.z + Math.sin(a) * r;
+        const s = this.horde.spawn('robot', x, yy);
+        if (this.offHpMul != null) s.maxHealth *= this.offHpMul;
+        else if (this.hordeMode && !this.freePlay) s.maxHealth *= CFG.hordeHpMul;
+        s.health = s.maxHealth; s.isMiniBoss = true;
+        // a dramatic portal flash where it appears
+        this.effects.explosion(x, (this.world.groundAt(x, yy, 6) || 0) + 1.0, yy, 3.4, [0x9a3aff, 0x1a0a30]);
+      }
+      this.bossTell(z, 'ПРИЗЫВ МИНИ-БОССОВ', '#9a3aff');
       Audio3D_SFX.explosionAt(z.pos.x, z.pos.y, z.pos.z);
+      Audio3D_SFX.growl(z.pos.x, z.pos.y, z.pos.z, 'robot');
+      return;
+    }
+    if (kind === 'shockwave') {
+      this.effects.explosion(z.pos.x, z.pos.y + .4, z.pos.z, 8.0, [z.def.aura || 0xffb347, 0x2a1a0a]);
+      Audio3D_SFX.explosionAt(z.pos.x, z.pos.y, z.pos.z);
+      const R = 10;
       const ds = Math.hypot(p.pos.x - z.pos.x, p.pos.z - z.pos.z);
-      if (ds <= 8.5) {
-        const k = 1 - ds / 8.5;
+      if (ds <= R) {
+        const k = 1 - ds / R;
         if (!this.playerShieldUp()) {
-          this.applyDamageToSelf(Math.max(5, (z.dmg || 40) * .6 * k), { x: z.pos.x, y: z.pos.y, z: z.pos.z });
+          this.applyDamageToSelf(Math.max(6, (z.dmg || 40) * .7 * k), { x: z.pos.x, y: z.pos.y, z: z.pos.z });
           // knock the player back
           const ax = p.pos.x - z.pos.x, az = p.pos.z - z.pos.z;
           const l = Math.max(.001, Math.hypot(ax, az));
-          p.vel.x += (ax / l) * 12 * k; p.vel.z += (az / l) * 12 * k;
-          if (p.onGround) p.vel.y = Math.max(p.vel.y, 3.5 * k);
+          p.vel.x += (ax / l) * 15 * k; p.vel.z += (az / l) * 15 * k;
+          if (p.onGround) p.vel.y = Math.max(p.vel.y, 4.5 * k);
         } else this.reflectAtDummy({ x: z.pos.x, y: z.pos.y, z: z.pos.z }, z.dmg || 40, false);
       }
       this.bossTell(z, 'УДАРНАЯ ВОЛНА', '#ff9d21');
@@ -10778,6 +11082,7 @@ const Game = {
       Input.releaseLock();
       Audio3D_SFX.ambientStop();
       Audio3D_SFX.cannonBeamStop();
+      Audio3D_SFX.bossMusicStop();
       this.mode = CS.MODE.MENU;
       clearWorld();
       this.offline = null; this.online = null;
@@ -11532,6 +11837,13 @@ const Game = {
     else if (this.hordeMode && !this.freePlay) b.maxHealth *= .30;
     b.health = b.maxHealth;
     b.isBoss = true;
+    b._introT = 1.6;                    // drives the entrance FX / slow time-in
+    // a dramatic arrival: blast ring + aura burst + the boss's own theme
+    const gy = b.pos.y;
+    this.effects.explosion(b.pos.x, gy + 1.2, b.pos.z, 5.5, [ZOMBIES[type].aura || 0xff5a2a, 0x100608], ZOMBIES[type].final);
+    Audio3D_SFX.explosionAt(b.pos.x, gy + 1, b.pos.z);
+    Audio3D_SFX.growl(b.pos.x, gy + 1.5, b.pos.z, 'brute');
+    if (this.mode === CS.MODE.OFFLINE) Audio3D_SFX.bossMusicStart(type);
     return b;
   },
 
@@ -12763,6 +13075,19 @@ const Game = {
     Audio3D_SFX.kill();
     UI.hitmark(true);
     this._hitmarkT = U.now();
+    /* Boss/mini-boss death: a huge detonation, coloured to their aura, and the
+       boss theme fades out when the last one falls. */
+    if (z.isBoss || z.isMiniBoss) {
+      const tint = def.aura || (z.isBoss ? 0xff5a2a : 0x4ad6ff);
+      this.effects.explosion(z.pos.x, z.pos.y + 1.2 * z.scale, z.pos.z,
+        z.isBoss ? 9 : 5, [tint, 0x120709], !!def.final);
+      Audio3D_SFX.explosionAt(z.pos.x, z.pos.y + 1, z.pos.z);
+      UI.center(z.isBoss ? 'БОСС ПОВЕРЖЕН' : 'МИНИ-БОСС ПОВЕРЖЕН', def.name, 2.4);
+      Audio3D_SFX.roundEnd(true);
+      // no boss left alive → fade the music out
+      const anyLeft = this.horde && this.horde.list.some(o => o !== z && (o.isBoss || o.isMiniBoss) && o.alive && !o.dying);
+      if (!anyLeft) Audio3D_SFX.bossMusicStop();
+    }
     UI.feed('<b>' + U.esc(p.name) + '</b> <span class="z">✖ ' + def.name + (headshot ? ' (в голову)' : '') + '</span> +$' + def.money);
     if (headshot) UI.toast('В ГОЛОВУ! +$' + def.money + ' +' + Math.round(def.score * 1.5) + ' очков', '#ff9d21');
     Bus.emit('kill', z, headshot);

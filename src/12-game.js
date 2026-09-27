@@ -1877,10 +1877,11 @@ const Game = {
   /* ============================================================
      BOSS ABILITIES
      Each boss rolls one of its `abilities` on a timer:
-       summon    — calls a handful of fresh zombies around itself
-       shockwave — a telegraphed ground slam that knocks the player back
-       charge    — a fast rush that deals heavy contact damage
-       barrage   — a fan of plasma bolts
+       summon        — calls a handful of fresh zombies around itself
+       summonMinions — the final boss calls armoured mini-bosses (robot zombies)
+       shockwave     — a telegraphed ground slam that knocks the player back
+       charge        — a fast rush that deals heavy contact damage
+       barrage       — a fan of plasma bolts
      ============================================================ */
   updateBosses(dt) {
     if (!this.horde) return;
@@ -1919,19 +1920,38 @@ const Game = {
       Audio3D_SFX.growl(z.pos.x, z.pos.y, z.pos.z, 'brute');
       return;
     }
-    if (kind === 'shockwave') {
-      this.effects.explosion(z.pos.x, z.pos.y + .4, z.pos.z, 6.5, [0xffb347, 0x2a1a0a]);
+    if (kind === 'summonMinions') {
+      // the final boss tears open portals and calls armoured mini-bosses
+      const n = 2;
+      for (let i = 0; i < n; i++) {
+        const a = U.rand(0, Math.PI * 2), r = U.rand(4, 7);
+        const x = z.pos.x + Math.cos(a) * r, yy = z.pos.z + Math.sin(a) * r;
+        const s = this.horde.spawn('robot', x, yy);
+        if (this.offHpMul != null) s.maxHealth *= this.offHpMul;
+        else if (this.hordeMode && !this.freePlay) s.maxHealth *= CFG.hordeHpMul;
+        s.health = s.maxHealth; s.isMiniBoss = true;
+        // a dramatic portal flash where it appears
+        this.effects.explosion(x, (this.world.groundAt(x, yy, 6) || 0) + 1.0, yy, 3.4, [0x9a3aff, 0x1a0a30]);
+      }
+      this.bossTell(z, 'ПРИЗЫВ МИНИ-БОССОВ', '#9a3aff');
       Audio3D_SFX.explosionAt(z.pos.x, z.pos.y, z.pos.z);
+      Audio3D_SFX.growl(z.pos.x, z.pos.y, z.pos.z, 'robot');
+      return;
+    }
+    if (kind === 'shockwave') {
+      this.effects.explosion(z.pos.x, z.pos.y + .4, z.pos.z, 8.0, [z.def.aura || 0xffb347, 0x2a1a0a]);
+      Audio3D_SFX.explosionAt(z.pos.x, z.pos.y, z.pos.z);
+      const R = 10;
       const ds = Math.hypot(p.pos.x - z.pos.x, p.pos.z - z.pos.z);
-      if (ds <= 8.5) {
-        const k = 1 - ds / 8.5;
+      if (ds <= R) {
+        const k = 1 - ds / R;
         if (!this.playerShieldUp()) {
-          this.applyDamageToSelf(Math.max(5, (z.dmg || 40) * .6 * k), { x: z.pos.x, y: z.pos.y, z: z.pos.z });
+          this.applyDamageToSelf(Math.max(6, (z.dmg || 40) * .7 * k), { x: z.pos.x, y: z.pos.y, z: z.pos.z });
           // knock the player back
           const ax = p.pos.x - z.pos.x, az = p.pos.z - z.pos.z;
           const l = Math.max(.001, Math.hypot(ax, az));
-          p.vel.x += (ax / l) * 12 * k; p.vel.z += (az / l) * 12 * k;
-          if (p.onGround) p.vel.y = Math.max(p.vel.y, 3.5 * k);
+          p.vel.x += (ax / l) * 15 * k; p.vel.z += (az / l) * 15 * k;
+          if (p.onGround) p.vel.y = Math.max(p.vel.y, 4.5 * k);
         } else this.reflectAtDummy({ x: z.pos.x, y: z.pos.y, z: z.pos.z }, z.dmg || 40, false);
       }
       this.bossTell(z, 'УДАРНАЯ ВОЛНА', '#ff9d21');
@@ -2412,6 +2432,7 @@ const Game = {
       Input.releaseLock();
       Audio3D_SFX.ambientStop();
       Audio3D_SFX.cannonBeamStop();
+      Audio3D_SFX.bossMusicStop();
       this.mode = CS.MODE.MENU;
       clearWorld();
       this.offline = null; this.online = null;
@@ -3166,6 +3187,13 @@ const Game = {
     else if (this.hordeMode && !this.freePlay) b.maxHealth *= .30;
     b.health = b.maxHealth;
     b.isBoss = true;
+    b._introT = 1.6;                    // drives the entrance FX / slow time-in
+    // a dramatic arrival: blast ring + aura burst + the boss's own theme
+    const gy = b.pos.y;
+    this.effects.explosion(b.pos.x, gy + 1.2, b.pos.z, 5.5, [ZOMBIES[type].aura || 0xff5a2a, 0x100608], ZOMBIES[type].final);
+    Audio3D_SFX.explosionAt(b.pos.x, gy + 1, b.pos.z);
+    Audio3D_SFX.growl(b.pos.x, gy + 1.5, b.pos.z, 'brute');
+    if (this.mode === CS.MODE.OFFLINE) Audio3D_SFX.bossMusicStart(type);
     return b;
   },
 
@@ -4397,6 +4425,19 @@ const Game = {
     Audio3D_SFX.kill();
     UI.hitmark(true);
     this._hitmarkT = U.now();
+    /* Boss/mini-boss death: a huge detonation, coloured to their aura, and the
+       boss theme fades out when the last one falls. */
+    if (z.isBoss || z.isMiniBoss) {
+      const tint = def.aura || (z.isBoss ? 0xff5a2a : 0x4ad6ff);
+      this.effects.explosion(z.pos.x, z.pos.y + 1.2 * z.scale, z.pos.z,
+        z.isBoss ? 9 : 5, [tint, 0x120709], !!def.final);
+      Audio3D_SFX.explosionAt(z.pos.x, z.pos.y + 1, z.pos.z);
+      UI.center(z.isBoss ? 'БОСС ПОВЕРЖЕН' : 'МИНИ-БОСС ПОВЕРЖЕН', def.name, 2.4);
+      Audio3D_SFX.roundEnd(true);
+      // no boss left alive → fade the music out
+      const anyLeft = this.horde && this.horde.list.some(o => o !== z && (o.isBoss || o.isMiniBoss) && o.alive && !o.dying);
+      if (!anyLeft) Audio3D_SFX.bossMusicStop();
+    }
     UI.feed('<b>' + U.esc(p.name) + '</b> <span class="z">✖ ' + def.name + (headshot ? ' (в голову)' : '') + '</span> +$' + def.money);
     if (headshot) UI.toast('В ГОЛОВУ! +$' + def.money + ' +' + Math.round(def.score * 1.5) + ' очков', '#ff9d21');
     Bus.emit('kill', z, headshot);

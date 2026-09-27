@@ -458,6 +458,95 @@ const Audio3D_SFX = {
     notes.forEach((n, i) => setTimeout(() => this.tone(n, .3, 'triangle', .14), i * 150));
   },
   uiClick() { this.tone(1100, .025, 'square', .05); },
+
+  /* ============================================================
+     BOSS MUSIC — each boss plays its own looping theme
+     Themes are built from a chord progression that a scheduler re-triggers
+     every few seconds (bass line + arpeggio + a sustained pad), so no audio
+     files are needed. Only one theme can play at a time.
+     ============================================================ */
+  bossThemes: {
+    bossWarden: { root: 110.0,  scale: [0, 3, 5, 7, 10], prog: [0, -2, -4, -5], bpm: 96,  wave: 'sawtooth', bright: 1200 },
+    bossBrute:  { root: 87.31,  scale: [0, 2, 3, 7, 8],  prog: [0, -3, -1, -5], bpm: 132, wave: 'square',   bright: 1500 },
+    bossTitan:  { root: 65.41,  scale: [0, 2, 5, 7, 10], prog: [0, -5, -3, -7], bpm: 84,  wave: 'sawtooth', bright: 900 },
+    bossFinal:  { root: 55.0,   scale: [0, 1, 5, 6, 10], prog: [0, -1, -6, -4], bpm: 150, wave: 'square',   bright: 1800 }
+  },
+  bossMusicStart(type) {
+    if (!this.ctx || this.muted) return;
+    if (this._music && this._music.type === type) return;   // already playing
+    this.bossMusicStop();
+    const th = this.bossThemes[type];
+    if (!th) return;
+    const out = this.ctx.createGain(); out.gain.value = .0001;
+    out.connect(this.master);
+    // fade in
+    const t0 = this.ctx.currentTime;
+    out.gain.linearRampToValueAtTime(.5, t0 + 1.2);
+    this._music = { type, out, th, step: 0, timer: null, next: t0 + .1 };
+    const beat = 60 / th.bpm;
+    const schedule = () => {
+      if (!this._music || !this.ctx) return;
+      const m = this._music;
+      const now = this.ctx.currentTime;
+      // schedule a couple of steps ahead
+      while (m.next < now + .4) {
+        this._musicStep(m, m.next, beat);
+        m.next += beat * .5;    // eighth notes
+      }
+      m.timer = setTimeout(schedule, 120);
+    };
+    schedule();
+  },
+  _musicStep(m, t, beat) {
+    const th = m.th, i = m.step++;
+    const chord = th.prog[Math.floor(i / 8) % th.prog.length];
+    const semi = (n) => th.root * Math.pow(2, n / 12);
+    // bass on every beat
+    if (i % 2 === 0) {
+      const o = this.ctx.createOscillator(); o.type = th.wave;
+      o.frequency.setValueAtTime(semi(chord), t);
+      const lp = this.ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 320;
+      const g = this.ctx.createGain();
+      g.gain.setValueAtTime(.20, t);
+      g.gain.exponentialRampToValueAtTime(.001, t + beat * .9);
+      o.connect(lp); lp.connect(g); g.connect(m.out);
+      o.start(t); o.stop(t + beat);
+    }
+    // arpeggio note (higher)
+    const deg = th.scale[(i * 3) % th.scale.length];
+    const a = this.ctx.createOscillator(); a.type = 'triangle';
+    a.frequency.setValueAtTime(semi(chord + deg + 24), t);
+    const bp = this.ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = th.bright; bp.Q.value = 1.2;
+    const ag = this.ctx.createGain();
+    ag.gain.setValueAtTime(.10, t);
+    ag.gain.exponentialRampToValueAtTime(.001, t + beat * .45);
+    a.connect(bp); bp.connect(ag); ag.connect(m.out);
+    a.start(t); a.stop(t + beat * .5);
+    // a sustained pad at the top of each bar
+    if (i % 8 === 0) {
+      const p = this.ctx.createOscillator(); p.type = th.wave;
+      p.frequency.setValueAtTime(semi(chord + 12), t);
+      p.frequency.linearRampToValueAtTime(semi(chord + 12 + th.scale[2]), t + beat * 3);
+      const pg = this.ctx.createGain();
+      pg.gain.setValueAtTime(.001, t);
+      pg.gain.linearRampToValueAtTime(.06, t + beat);
+      pg.gain.exponentialRampToValueAtTime(.001, t + beat * 3.6);
+      p.connect(pg); pg.connect(m.out);
+      p.start(t); p.stop(t + beat * 4);
+    }
+  },
+  bossMusicStop() {
+    if (!this._music) return;
+    const m = this._music; this._music = null;
+    if (m.timer) clearTimeout(m.timer);
+    try {
+      const t = this.ctx.currentTime;
+      m.out.gain.cancelScheduledValues(t);
+      m.out.gain.linearRampToValueAtTime(.0001, t + .6);
+      setTimeout(() => { try { m.out.disconnect(); } catch (e) { } }, 800);
+    } catch (e) { }
+  },
+
   ambientStart() {
     if (!this.ctx || this.amb) return;
     // low wind bed

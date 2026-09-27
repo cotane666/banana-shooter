@@ -298,15 +298,17 @@ const ZOMBIES = {
   /* ---- BOSSES (spawned on dedicated boss waves) ----
      Every boss has its own `abilities` list. `Game.updateBosses` fires one at
      random every `abilityCd` seconds: summon reinforcements, a shockwave slam,
-     a charge rush or a projectile barrage. */
-  bossWarden: { name: 'СТРАЖ',        hp: 3200,  speed: 1.35, dmg: 42, score: 4000,  money: 3000, scale: 2.35, color: 0x7d3b2e, atkRange: 2.6, boss: true,
-                abilities: ['summon', 'shockwave'], abilityCd: 8 },
-  bossBrute:  { name: 'ЖНЕЦ',         hp: 6800,  speed: 1.55, dmg: 55, score: 8000,  money: 5000, scale: 2.75, color: 0x5a2b6b, atkRange: 2.9, boss: true,
-                abilities: ['charge', 'summon'], abilityCd: 7 },
-  bossTitan:  { name: 'ТИТАН',        hp: 14000, speed: 1.15, dmg: 70, score: 16000, money: 8000, scale: 3.25, color: 0x6b2b2b, atkRange: 3.2, boss: true,
-                abilities: ['shockwave', 'summon', 'charge'], abilityCd: 9 },
-  bossFinal:  { name: 'ПОЖИРАТЕЛЬ',   hp: 42000, speed: 1.05, dmg: 95, score: 50000, money: 16000, scale: 4.10, color: 0x2e1b4d, atkRange: 3.6, boss: true, final: true,
-                abilities: ['barrage', 'summon', 'shockwave'], abilityCd: 6.5 }
+     a charge rush, a projectile barrage or (the final boss) summoning
+     mini-bosses. Each one is armoured, hits harder and has its own model,
+     music and aura. */
+  bossWarden: { name: 'СТРАЖ',        hp: 5200,  speed: 1.45, dmg: 58, score: 6000,  money: 4000, scale: 2.45, color: 0x7d3b2e, atkRange: 2.7, boss: true, armor: .15,
+                abilities: ['summon', 'shockwave', 'charge'], abilityCd: 7, aura: 0xff7a3a },
+  bossBrute:  { name: 'ЖНЕЦ',         hp: 12000, speed: 1.70, dmg: 78, score: 12000, money: 6500, scale: 2.85, color: 0x5a2b6b, atkRange: 3.0, boss: true, armor: .20,
+                abilities: ['charge', 'summon', 'barrage'], abilityCd: 6, aura: 0xc24bff },
+  bossTitan:  { name: 'ТИТАН',        hp: 26000, speed: 1.20, dmg: 104, score: 24000, money: 10000, scale: 3.35, color: 0x6b2b2b, atkRange: 3.3, boss: true, armor: .30,
+                abilities: ['shockwave', 'summon', 'charge', 'barrage'], abilityCd: 8, aura: 0xff4a2a },
+  bossFinal:  { name: 'ПОЖИРАТЕЛЬ',   hp: 70000, speed: 1.10, dmg: 135, score: 80000, money: 22000, scale: 4.20, color: 0x2e1b4d, atkRange: 3.7, boss: true, final: true, armor: .35,
+                abilities: ['barrage', 'summon', 'shockwave', 'summonMinions'], abilityCd: 5.5, aura: 0x9a3aff }
 };
 
 /* ---------------- utils ---------------- */

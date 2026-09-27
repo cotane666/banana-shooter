@@ -1578,41 +1578,35 @@ function buildMechChassis() {
   // small angled corner braces so the cage reads as a structure
   box(.07, .06, .5, matD, -.62, 3.86, .16, .5, 0, 0);
   box(.07, .06, .5, matD, .62, 3.86, .16, .5, 0, 0);
-  // ------- right arm: minigun cluster, held low and out to the right -------
+  // ------- right arm: the actual MECH-MINIGUN model, mounted on the arm -------
   const mgArm = new THREE.Group();
-  const cluster = new THREE.Group();
-  for (let i = 0; i < 6; i++) {
-    const a = (i / 6) * Math.PI * 2;
-    const bc = new THREE.Mesh(new THREE.CylinderGeometry(.045, .045, 1.35, 8), matD);
-    bc.rotation.x = Math.PI / 2;
-    bc.position.set(Math.cos(a) * .14, Math.sin(a) * .14, -1.05);
-    cluster.add(bc);
-  }
-  const clamp = new THREE.Mesh(new THREE.CylinderGeometry(.17, .17, .16, 14), matD);
-  clamp.rotation.x = Math.PI / 2; clamp.position.z = -.5; cluster.add(clamp);
-  const ring = new THREE.Mesh(new THREE.CylinderGeometry(.14, .14, .10, 14), new THREE.MeshBasicMaterial({ color: 0x4ad6ff }));
-  ring.rotation.x = Math.PI / 2; ring.position.z = -1.7; cluster.add(ring);
-  cluster.name = 'barrels';
-  mgArm.add(cluster);
-  mgArm.position.set(1.28, 2.55, -.15);                // low + right
+  const mgGun = buildWeaponModel('mechMinigun');
+  mgGun.scale.setScalar(1.15);
+  mgArm.add(mgGun);
+  mgArm.position.set(1.28, 2.55, -.08);
   g.add(mgArm);
-  box(.40, .38, .58, matB2, 1.30, 2.86, .12);          // right arm housing
-  // ------- left arm: laser pod + red missile tubes, low and out to the left -------
+  box(.40, .38, .58, matB2, 1.30, 2.90, .12);          // right shoulder housing
+  const cluster = mgGun.getObjectByName('barrels');    // spin this
+  // ------- left arm: the actual HYPER-LASER model + red missile tubes -------
   const lzArm = new THREE.Group();
-  box(.44, .44, .64, matB2, 0, 0, 0);
-  box(.10, .40, .64, matW, -.26, 0, 0);
-  for (let r = 0; r < 3; r++) for (let c = 0; c < 2; c++) {
-    const tube = new THREE.Mesh(new THREE.CylinderGeometry(.052, .052, .10, 10), new THREE.MeshLambertMaterial({ color: RED }));
-    tube.rotation.x = Math.PI / 2;
-    tube.position.set((c - .5) * .12, .09 - r * .12, -.36);
-    lzArm.add(tube);
-  }
-  const emit = new THREE.Mesh(new THREE.CylinderGeometry(.09, .09, .85, 12), matD);
-  emit.rotation.x = Math.PI / 2; emit.position.set(0, -.28, -.65); lzArm.add(emit);
-  const emitRing = new THREE.Mesh(new THREE.CylinderGeometry(.11, .11, .08, 12), new THREE.MeshBasicMaterial({ color: 0x39ff6a }));
-  emitRing.rotation.x = Math.PI / 2; emitRing.position.set(0, -.28, -1.02); lzArm.add(emitRing);
-  lzArm.position.set(-1.28, 2.58, -.15);
+  const lzGun = buildWeaponModel('mechLaser');
+  lzGun.scale.setScalar(1.1);
+  lzArm.add(lzGun);
+  lzArm.position.set(-1.28, 2.58, -.08);
   g.add(lzArm);
+  // a shoulder pod with red missile tubes above the laser
+  const pod = new THREE.Group();
+  box(.42, .30, .50, matB2, 0, 0, 0);
+  box(.44, .08, .52, matB2, 0, .16, 0);
+  box(.09, .28, .50, matW, -.24, 0, 0);
+  for (let r = 0; r < 2; r++) for (let c = 0; c < 3; c++) {
+    const tube = new THREE.Mesh(new THREE.CylinderGeometry(.045, .045, .10, 10), new THREE.MeshLambertMaterial({ color: RED }));
+    tube.rotation.x = Math.PI / 2;
+    tube.position.set((c - 1) * .12, .06 - r * .12, -.28);
+    pod.add(tube);
+  }
+  pod.position.set(-1.28, 3.02, .05);
+  g.add(pod);
   // ------- pelvis + legs -------
   box(.88, .40, .62, matB2, 0, 1.90, -.02);
   [-1, 1].forEach(s => {

@@ -4301,6 +4301,29 @@ const Game = {
     return { x: dYaw * 0.16, y: dPitch * 0.16 };
   },
 
+  /* the mech's arm muzzle in world space. Arms sit at ±1.28 local X, ~2.55 high,
+     barrels reaching forward (-Z). 'right' = minigun, 'left' = laser pod. */
+  mechMuzzleWorldPos(side, out) {
+    const p = this.player;
+    const eye = this.eyePos();
+    const yaw = p.yaw + p.recoilYaw + p.viewPunchY;
+    const pitch = p.pitch + p.recoil + p.viewPunchP;
+    const e = new THREE.Euler(pitch, yaw, 0, 'YXZ');
+    const fwd = _v1.set(0, 0, -1).applyEuler(e);
+    const right = _v2.set(1, 0, 0).applyEuler(e);
+    const up = new THREE.Vector3(0, 1, 0).applyEuler(e);
+    const sx = side === 'left' ? -1.25 : 1.25;      // arm offset to the side
+    const sy = -CFG.mechEyeHeight + 2.55 + .05;     // arms sit below the cockpit eye
+    const fz = side === 'left' ? 1.25 : 1.45;       // barrel reach forward to the muzzle
+    const v = out || new THREE.Vector3();
+    v.set(
+      eye.x + right.x * sx + up.x * sy + fwd.x * fz,
+      eye.y + right.y * sx + up.y * sy + fwd.y * fz,
+      eye.z + right.z * sx + up.z * sy + fwd.z * fz
+    );
+    return v;
+  },
+
   cameraDir() {
     const p = this.player;
     const e = new THREE.Euler(
@@ -4318,6 +4341,8 @@ const Game = {
      the camera basis: eye + forward*barrelLength + right/up gun offsets. */
   muzzleWorldPos(out) {
     const p = this.player;
+    // in the mech the shots come from the CHASSIS arms, not the hidden view model
+    if (this.isMechActive()) return this.mechMuzzleWorldPos('right', out);
     const eye = this.eyePos();
     const yaw = p.yaw + p.recoilYaw + p.viewPunchY;
     const pitch = p.pitch + p.recoil + p.viewPunchP;
@@ -5012,7 +5037,6 @@ const Game = {
         }
         this._mechMissileAt = now;
         this.mechMissiles = this.mechMissiles || [];
-        const eye = this.eyePos();
         const dir = this.cameraDir();
         // pick up to 4 nearest zombies as targets
         let targets = [];
@@ -5022,10 +5046,12 @@ const Game = {
             .sort((a, b) => a.d - b.d).slice(0, 4).map(o => o.z);
         }
         for (let i = 0; i < 4; i++) {
-          const sx = .35 * (i % 2 === 0 ? 1 : -1);
-          const sy = .1 + (i < 2 ? .12 : -.02);
+          // launch from the left shoulder pod (where the red tubes are)
+          const side = i % 2 === 0 ? 'left' : 'right';
+          const from = this.mechMuzzleWorldPos(side);
+          const sx = (i % 2 === 0 ? -.35 : .35);
           const mesh = buildMechMissile();
-          mesh.position.set(eye.x + dir.x * .8 + sx, eye.y + sy, eye.z + dir.z * .8);
+          mesh.position.set(from.x + sx * .3, from.y + .5, from.z);
           this.scene.add(mesh);
           this.mechMissiles.push({
             mesh: mesh, pos: { x: mesh.position.x, y: mesh.position.y, z: mesh.position.z },
@@ -5097,11 +5123,18 @@ const Game = {
       /* position the visible chassis around the player each frame */
       updateMechBody(dt) {
         if (!this.mechBody) return;
-        if (!this.isMechActive() || !this.player.alive) { this.mechBody.visible = false; return; }
+        if (!this.isMechActive() || !this.player.alive) {
+          this.mechBody.visible = false;
+          if (this.player.vmGroup) this.player.vmGroup.visible = true;
+          return;
+        }
         const p = this.player;
         this.mechBody.visible = true;
         this.mechBody.position.set(p.pos.x, p.pos.y, p.pos.z);
         this.mechBody.rotation.y = p.yaw;
+        // the first-person weapon model is not used in the mech: the chassis arms
+        // ARE the weapons. Hide it so no floating gun sits on screen.
+        if (p.vmGroup) p.vmGroup.visible = false;
         // spin the minigun cluster when firing the minigun
         const cluster = this.mechBody.userData.barrels;
         if (cluster) {
@@ -5121,7 +5154,7 @@ const Game = {
           if (p.spinT >= 1 && mg.mag > 0) {
             p.fireCd = p.fireCd || 0;
             if (p.fireCd <= 0 && p.deployT <= 0 && p.reloadT <= 0) {
-              this.fireWeaponAt('mechMinigun', def, mg);
+              this.fireWeaponAt('mechMinigun', def, mg, 'right');
               p.fireCd = 60 / def.rpm;
             }
           }
@@ -5135,13 +5168,15 @@ const Game = {
           if (p.fireCd2 === undefined) p.fireCd2 = 0;
           p.fireCd2 -= dt;
           if (p.fireCd2 <= 0 && lz.mag > 0 && p.deployT <= 0) {
-            this.fireWeaponAt('mechLaser', def, lz);
+            this.fireWeaponAt('mechLaser', def, lz, 'left');
             p.fireCd2 = 60 / def.rpm;
           }
         }
       },
-      /* fire a specific weapon (by id) without switching the held slot */
-      fireWeaponAt(id, def, w) {
+      /* fire a specific weapon (by id) without switching the held slot.
+         `mechSide` selects which chassis arm the shot leaves (right=minigun,
+         left=laser); when omitted the normal view-model muzzle is used. */
+      fireWeaponAt(id, def, w, mechSide) {
         const p = this.player;
         if (w.mag !== Infinity) w.mag--;
         p.bulletsFired++;
@@ -5149,7 +5184,7 @@ const Game = {
         const baseDir = this.cameraDir();
         const spread = (def.spread || 0) + (p.spread || 0) * .5;
         const pellets = def.pellets || 1;
-        const muzzleWorld = this.muzzleWorldPos();
+        const muzzleWorld = mechSide ? this.mechMuzzleWorldPos(mechSide) : this.muzzleWorldPos();
         p.flashT = .05;
         for (let i = 0; i < pellets; i++) {
           const dir = this.spreadDirection(baseDir, spread, pellets > 1);
@@ -7178,7 +7213,7 @@ const Game = {
       const deployK = U.clamp(p.deployT / .42, 0, 1);
       const runK = (p.in.run && spd > .3) ? spd : 0;
       const zoomHide = p.zoom > .55;
-      vm.visible = !zoomHide;
+      vm.visible = !zoomHide && !this.isMechActive();
       const baseX = .20, baseY = -.20, baseZ = -.46;
       const swayX = -recoilYaw * 2.2;
       const swayY = -recoilPitch * 1.6;

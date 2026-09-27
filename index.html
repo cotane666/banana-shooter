@@ -5988,41 +5988,35 @@ function buildMechChassis() {
   // small angled corner braces so the cage reads as a structure
   box(.07, .06, .5, matD, -.62, 3.86, .16, .5, 0, 0);
   box(.07, .06, .5, matD, .62, 3.86, .16, .5, 0, 0);
-  // ------- right arm: minigun cluster, held low and out to the right -------
+  // ------- right arm: the actual MECH-MINIGUN model, mounted on the arm -------
   const mgArm = new THREE.Group();
-  const cluster = new THREE.Group();
-  for (let i = 0; i < 6; i++) {
-    const a = (i / 6) * Math.PI * 2;
-    const bc = new THREE.Mesh(new THREE.CylinderGeometry(.045, .045, 1.35, 8), matD);
-    bc.rotation.x = Math.PI / 2;
-    bc.position.set(Math.cos(a) * .14, Math.sin(a) * .14, -1.05);
-    cluster.add(bc);
-  }
-  const clamp = new THREE.Mesh(new THREE.CylinderGeometry(.17, .17, .16, 14), matD);
-  clamp.rotation.x = Math.PI / 2; clamp.position.z = -.5; cluster.add(clamp);
-  const ring = new THREE.Mesh(new THREE.CylinderGeometry(.14, .14, .10, 14), new THREE.MeshBasicMaterial({ color: 0x4ad6ff }));
-  ring.rotation.x = Math.PI / 2; ring.position.z = -1.7; cluster.add(ring);
-  cluster.name = 'barrels';
-  mgArm.add(cluster);
-  mgArm.position.set(1.28, 2.55, -.15);                // low + right
+  const mgGun = buildWeaponModel('mechMinigun');
+  mgGun.scale.setScalar(1.15);
+  mgArm.add(mgGun);
+  mgArm.position.set(1.28, 2.55, -.08);
   g.add(mgArm);
-  box(.40, .38, .58, matB2, 1.30, 2.86, .12);          // right arm housing
-  // ------- left arm: laser pod + red missile tubes, low and out to the left -------
+  box(.40, .38, .58, matB2, 1.30, 2.90, .12);          // right shoulder housing
+  const cluster = mgGun.getObjectByName('barrels');    // spin this
+  // ------- left arm: the actual HYPER-LASER model + red missile tubes -------
   const lzArm = new THREE.Group();
-  box(.44, .44, .64, matB2, 0, 0, 0);
-  box(.10, .40, .64, matW, -.26, 0, 0);
-  for (let r = 0; r < 3; r++) for (let c = 0; c < 2; c++) {
-    const tube = new THREE.Mesh(new THREE.CylinderGeometry(.052, .052, .10, 10), new THREE.MeshLambertMaterial({ color: RED }));
-    tube.rotation.x = Math.PI / 2;
-    tube.position.set((c - .5) * .12, .09 - r * .12, -.36);
-    lzArm.add(tube);
-  }
-  const emit = new THREE.Mesh(new THREE.CylinderGeometry(.09, .09, .85, 12), matD);
-  emit.rotation.x = Math.PI / 2; emit.position.set(0, -.28, -.65); lzArm.add(emit);
-  const emitRing = new THREE.Mesh(new THREE.CylinderGeometry(.11, .11, .08, 12), new THREE.MeshBasicMaterial({ color: 0x39ff6a }));
-  emitRing.rotation.x = Math.PI / 2; emitRing.position.set(0, -.28, -1.02); lzArm.add(emitRing);
-  lzArm.position.set(-1.28, 2.58, -.15);
+  const lzGun = buildWeaponModel('mechLaser');
+  lzGun.scale.setScalar(1.1);
+  lzArm.add(lzGun);
+  lzArm.position.set(-1.28, 2.58, -.08);
   g.add(lzArm);
+  // a shoulder pod with red missile tubes above the laser
+  const pod = new THREE.Group();
+  box(.42, .30, .50, matB2, 0, 0, 0);
+  box(.44, .08, .52, matB2, 0, .16, 0);
+  box(.09, .28, .50, matW, -.24, 0, 0);
+  for (let r = 0; r < 2; r++) for (let c = 0; c < 3; c++) {
+    const tube = new THREE.Mesh(new THREE.CylinderGeometry(.045, .045, .10, 10), new THREE.MeshLambertMaterial({ color: RED }));
+    tube.rotation.x = Math.PI / 2;
+    tube.position.set((c - 1) * .12, .06 - r * .12, -.28);
+    pod.add(tube);
+  }
+  pod.position.set(-1.28, 3.02, .05);
+  g.add(pod);
   // ------- pelvis + legs -------
   box(.88, .40, .62, matB2, 0, 1.90, -.02);
   [-1, 1].forEach(s => {
@@ -15533,6 +15527,29 @@ const Game = {
     return { x: dYaw * 0.16, y: dPitch * 0.16 };
   },
 
+  /* the mech's arm muzzle in world space. Arms sit at ±1.28 local X, ~2.55 high,
+     barrels reaching forward (-Z). 'right' = minigun, 'left' = laser pod. */
+  mechMuzzleWorldPos(side, out) {
+    const p = this.player;
+    const eye = this.eyePos();
+    const yaw = p.yaw + p.recoilYaw + p.viewPunchY;
+    const pitch = p.pitch + p.recoil + p.viewPunchP;
+    const e = new THREE.Euler(pitch, yaw, 0, 'YXZ');
+    const fwd = _v1.set(0, 0, -1).applyEuler(e);
+    const right = _v2.set(1, 0, 0).applyEuler(e);
+    const up = new THREE.Vector3(0, 1, 0).applyEuler(e);
+    const sx = side === 'left' ? -1.25 : 1.25;      // arm offset to the side
+    const sy = -CFG.mechEyeHeight + 2.55 + .05;     // arms sit below the cockpit eye
+    const fz = side === 'left' ? 1.25 : 1.45;       // barrel reach forward to the muzzle
+    const v = out || new THREE.Vector3();
+    v.set(
+      eye.x + right.x * sx + up.x * sy + fwd.x * fz,
+      eye.y + right.y * sx + up.y * sy + fwd.y * fz,
+      eye.z + right.z * sx + up.z * sy + fwd.z * fz
+    );
+    return v;
+  },
+
   cameraDir() {
     const p = this.player;
     const e = new THREE.Euler(
@@ -15550,6 +15567,8 @@ const Game = {
      the camera basis: eye + forward*barrelLength + right/up gun offsets. */
   muzzleWorldPos(out) {
     const p = this.player;
+    // in the mech the shots come from the CHASSIS arms, not the hidden view model
+    if (this.isMechActive()) return this.mechMuzzleWorldPos('right', out);
     const eye = this.eyePos();
     const yaw = p.yaw + p.recoilYaw + p.viewPunchY;
     const pitch = p.pitch + p.recoil + p.viewPunchP;
@@ -16244,7 +16263,6 @@ const Game = {
         }
         this._mechMissileAt = now;
         this.mechMissiles = this.mechMissiles || [];
-        const eye = this.eyePos();
         const dir = this.cameraDir();
         // pick up to 4 nearest zombies as targets
         let targets = [];
@@ -16254,10 +16272,12 @@ const Game = {
             .sort((a, b) => a.d - b.d).slice(0, 4).map(o => o.z);
         }
         for (let i = 0; i < 4; i++) {
-          const sx = .35 * (i % 2 === 0 ? 1 : -1);
-          const sy = .1 + (i < 2 ? .12 : -.02);
+          // launch from the left shoulder pod (where the red tubes are)
+          const side = i % 2 === 0 ? 'left' : 'right';
+          const from = this.mechMuzzleWorldPos(side);
+          const sx = (i % 2 === 0 ? -.35 : .35);
           const mesh = buildMechMissile();
-          mesh.position.set(eye.x + dir.x * .8 + sx, eye.y + sy, eye.z + dir.z * .8);
+          mesh.position.set(from.x + sx * .3, from.y + .5, from.z);
           this.scene.add(mesh);
           this.mechMissiles.push({
             mesh: mesh, pos: { x: mesh.position.x, y: mesh.position.y, z: mesh.position.z },
@@ -16329,11 +16349,18 @@ const Game = {
       /* position the visible chassis around the player each frame */
       updateMechBody(dt) {
         if (!this.mechBody) return;
-        if (!this.isMechActive() || !this.player.alive) { this.mechBody.visible = false; return; }
+        if (!this.isMechActive() || !this.player.alive) {
+          this.mechBody.visible = false;
+          if (this.player.vmGroup) this.player.vmGroup.visible = true;
+          return;
+        }
         const p = this.player;
         this.mechBody.visible = true;
         this.mechBody.position.set(p.pos.x, p.pos.y, p.pos.z);
         this.mechBody.rotation.y = p.yaw;
+        // the first-person weapon model is not used in the mech: the chassis arms
+        // ARE the weapons. Hide it so no floating gun sits on screen.
+        if (p.vmGroup) p.vmGroup.visible = false;
         // spin the minigun cluster when firing the minigun
         const cluster = this.mechBody.userData.barrels;
         if (cluster) {
@@ -16353,7 +16380,7 @@ const Game = {
           if (p.spinT >= 1 && mg.mag > 0) {
             p.fireCd = p.fireCd || 0;
             if (p.fireCd <= 0 && p.deployT <= 0 && p.reloadT <= 0) {
-              this.fireWeaponAt('mechMinigun', def, mg);
+              this.fireWeaponAt('mechMinigun', def, mg, 'right');
               p.fireCd = 60 / def.rpm;
             }
           }
@@ -16367,13 +16394,15 @@ const Game = {
           if (p.fireCd2 === undefined) p.fireCd2 = 0;
           p.fireCd2 -= dt;
           if (p.fireCd2 <= 0 && lz.mag > 0 && p.deployT <= 0) {
-            this.fireWeaponAt('mechLaser', def, lz);
+            this.fireWeaponAt('mechLaser', def, lz, 'left');
             p.fireCd2 = 60 / def.rpm;
           }
         }
       },
-      /* fire a specific weapon (by id) without switching the held slot */
-      fireWeaponAt(id, def, w) {
+      /* fire a specific weapon (by id) without switching the held slot.
+         `mechSide` selects which chassis arm the shot leaves (right=minigun,
+         left=laser); when omitted the normal view-model muzzle is used. */
+      fireWeaponAt(id, def, w, mechSide) {
         const p = this.player;
         if (w.mag !== Infinity) w.mag--;
         p.bulletsFired++;
@@ -16381,7 +16410,7 @@ const Game = {
         const baseDir = this.cameraDir();
         const spread = (def.spread || 0) + (p.spread || 0) * .5;
         const pellets = def.pellets || 1;
-        const muzzleWorld = this.muzzleWorldPos();
+        const muzzleWorld = mechSide ? this.mechMuzzleWorldPos(mechSide) : this.muzzleWorldPos();
         p.flashT = .05;
         for (let i = 0; i < pellets; i++) {
           const dir = this.spreadDirection(baseDir, spread, pellets > 1);
@@ -18410,7 +18439,7 @@ const Game = {
       const deployK = U.clamp(p.deployT / .42, 0, 1);
       const runK = (p.in.run && spd > .3) ? spd : 0;
       const zoomHide = p.zoom > .55;
-      vm.visible = !zoomHide;
+      vm.visible = !zoomHide && !this.isMechActive();
       const baseX = .20, baseY = -.20, baseZ = -.46;
       const swayX = -recoilYaw * 2.2;
       const swayY = -recoilPitch * 1.6;

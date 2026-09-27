@@ -3532,8 +3532,10 @@ const Audio3D_SFX = {
     const out = this.ctx.createGain(); out.gain.value = 0.0001;
     const pan = this.ctx.createStereoPanner ? this.ctx.createStereoPanner() : null;
     if (pan) { pan.pan.value = sp.pan; out.connect(pan); pan.connect(this.sfx); } else out.connect(this.sfx);
-    // fade the whole bed in quickly so there is no click
-    out.gain.linearRampToValueAtTime(Math.max(sp.gain, .3), t + .05);
+    // fade the whole bed in quickly so there is no click. The cannon is
+    // deliberately quieter than a gunshot: it fires continuously, so a loud
+    // sustained tone would be exhausting over a long burst.
+    out.gain.linearRampToValueAtTime(Math.max(sp.gain, .3) * .5, t + .05);
 
     // --- main laser tone: a bright saw that sweeps up as it heats ---
     const o = this.ctx.createOscillator(); o.type = 'sawtooth';

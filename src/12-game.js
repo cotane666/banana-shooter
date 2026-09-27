@@ -1167,6 +1167,18 @@ const Game = {
     Bus.on('zombieAttack', (z, dmg) => this.playerHurt(dmg, z));    Bus.on('zombieDied', (z, hs) => this.onZombieDied(z, hs));
     Bus.on('touchUseMedkit', () => this.useMedkit());
     Bus.on('touchUseDrone', () => { if (this.drone) this.detonateDrone(false); else this.launchDrone(); });
+    /* contextual mobile actions added with the new abilities */
+    Bus.on('touchGrenade', () => this.throwGrenade());
+    Bus.on('touchCycleGrenade', () => this.cycleGrenade());
+    Bus.on('touchMechMissiles', () => this.launchMechMissiles());
+    Bus.on('touchMechToggle', () => {
+      if (this.isMechActive()) this.exitMechSuit();
+      else if (this.player && this.player.mechOwned && this.parkedMechDist() <= 6) this.equipMechSuit();
+    });
+    Bus.on('touchTurretGear', () => this.useTurretGear());
+    Bus.on('touchRangeDummy', () => this.toggleShooterDummy());
+    Bus.on('touchRangeSpawn', () => this.toggleEnemySpawn(!this.enemySpawnOpen));
+    Bus.on('touchUnstick', () => this.resetZombiePositions());
     Bus.on('zombieHit', (z, part, dmg, dir) => this.onZombieHit(z, part, dmg, dir));
     Bus.on('zombieGrowl', z => Audio3D_SFX.growl(z.pos.x, z.pos.y + 1.4, z.pos.z, z.type));
     Bus.on('zombieShoot', (z, from) => this.onZombieShoot(z, from));

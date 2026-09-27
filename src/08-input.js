@@ -254,13 +254,24 @@ const TouchUI = {
       '<button id="tCrouch" class="tbtn small">ПРИСЕСТЬ</button>' +
       '<button id="tReload" class="tbtn small">ПЕРЕЗАРЯДКА</button>' +
       '<button id="tSwap" class="tbtn small">СМЕНА</button>' +
-      '<button id="tHeal" class="tbtn small accent">АПТЕЧКА</button>' +
-      '<button id="tDrone" class="tbtn small accent">ДРОН</button>' +
-      '<button id="tClimb" class="tbtn small accent">ЗАЛЕЗТЬ</button>' +
-      '<button id="tDash" class="tbtn small accent">РЫВОК</button>' +
       '<button id="tBuy" class="tbtn small accent">МАГАЗИН</button>' +
       '<button id="tMenu" class="tbtn small">ПАУЗА</button>' +
-      '<div id="tHint">Слева — ходьба · Справа — обзор · Тап — огонь · АВТО — очередь · ЗАЛЕЗТЬ — паркур</div>';
+      '<button id="tClimb" class="tbtn small accent">ЗАЛЕЗТЬ</button>' +
+      '<button id="tDash" class="tbtn small accent">РЫВОК</button>' +
+      /* contextual actions: only the ones that make sense right now are shown */
+      '<div id="tActions">' +
+        '<button id="tHeal" class="tbtn act accent">АПТЕЧКА</button>' +
+        '<button id="tDrone" class="tbtn act accent">ДРОН</button>' +
+        '<button id="tGrenade" class="tbtn act accent">ГРАНАТА</button>' +
+        '<button id="tGrenadeKind" class="tbtn act">ТИП</button>' +
+        '<button id="tMissiles" class="tbtn act accent">РАКЕТЫ</button>' +
+        '<button id="tMech" class="tbtn act accent">ВЫЙТИ</button>' +
+        '<button id="tTurret" class="tbtn act accent">ТУРЕЛЬ</button>' +
+        '<button id="tDummy" class="tbtn act accent">МАНЕКЕН</button>' +
+        '<button id="tSpawn" class="tbtn act accent">СПАВН</button>' +
+        '<button id="tUnstick" class="tbtn act">СБРОС</button>' +
+      '</div>' +
+      '<div id="tHint">Слева — ходьба · Справа — обзор · Тап — огонь · АВТО — очередь · Кнопки справа появляются по ситуации</div>';
     document.body.appendChild(wrap);
     this.root = wrap;
     this._els = {
@@ -273,12 +284,21 @@ const TouchUI = {
       crouch: document.getElementById('tCrouch'),
       reload: document.getElementById('tReload'),
       swap: document.getElementById('tSwap'),
-      heal: document.getElementById('tHeal'),
-      drone: document.getElementById('tDrone'),
-      climb: document.getElementById('tClimb'),
-      dash: document.getElementById('tDash'),
       buy: document.getElementById('tBuy'),
       menu: document.getElementById('tMenu'),
+      climb: document.getElementById('tClimb'),
+      dash: document.getElementById('tDash'),
+      actions: document.getElementById('tActions'),
+      heal: document.getElementById('tHeal'),
+      drone: document.getElementById('tDrone'),
+      grenade: document.getElementById('tGrenade'),
+      grenadeKind: document.getElementById('tGrenadeKind'),
+      missiles: document.getElementById('tMissiles'),
+      mech: document.getElementById('tMech'),
+      turret: document.getElementById('tTurret'),
+      dummy: document.getElementById('tDummy'),
+      spawn: document.getElementById('tSpawn'),
+      unstick: document.getElementById('tUnstick'),
       hint: document.getElementById('tHint')
     };
     // fire/aim must be usable while a match is not running too, so we set the
@@ -319,6 +339,15 @@ const TouchUI = {
     E.dash.addEventListener('touchstart', e => { swallow(e); this.dashQueued = true; E.dash.classList.add('down'); setTimeout(() => E.dash.classList.remove('down'), 160); }, { passive: false });
     E.heal.addEventListener('touchstart', e => { swallow(e); Bus.emit('touchUseMedkit'); E.heal.classList.add('down'); setTimeout(() => E.heal.classList.remove('down'), 160); }, { passive: false });
     E.drone.addEventListener('touchstart', e => { swallow(e); Bus.emit('touchUseDrone'); E.drone.classList.add('down'); setTimeout(() => E.drone.classList.remove('down'), 160); }, { passive: false });
+    // contextual actions (only shown when useful)
+    E.grenade.addEventListener('touchstart', e => { swallow(e); Bus.emit('touchGrenade'); E.grenade.classList.add('down'); setTimeout(() => E.grenade.classList.remove('down'), 160); }, { passive: false });
+    E.grenadeKind.addEventListener('touchstart', e => { swallow(e); Bus.emit('touchCycleGrenade'); E.grenadeKind.classList.add('down'); setTimeout(() => E.grenadeKind.classList.remove('down'), 160); }, { passive: false });
+    E.missiles.addEventListener('touchstart', e => { swallow(e); Bus.emit('touchMechMissiles'); E.missiles.classList.add('down'); setTimeout(() => E.missiles.classList.remove('down'), 160); }, { passive: false });
+    E.mech.addEventListener('touchstart', e => { swallow(e); Bus.emit('touchMechToggle'); E.mech.classList.add('down'); setTimeout(() => E.mech.classList.remove('down'), 160); }, { passive: false });
+    E.turret.addEventListener('touchstart', e => { swallow(e); Bus.emit('touchTurretGear'); E.turret.classList.add('down'); setTimeout(() => E.turret.classList.remove('down'), 160); }, { passive: false });
+    E.dummy.addEventListener('touchstart', e => { swallow(e); Bus.emit('touchRangeDummy'); E.dummy.classList.add('down'); setTimeout(() => E.dummy.classList.remove('down'), 160); }, { passive: false });
+    E.spawn.addEventListener('touchstart', e => { swallow(e); Bus.emit('touchRangeSpawn'); E.spawn.classList.add('down'); setTimeout(() => E.spawn.classList.remove('down'), 160); }, { passive: false });
+    E.unstick.addEventListener('touchstart', e => { swallow(e); Bus.emit('touchUnstick'); E.unstick.classList.add('down'); setTimeout(() => E.unstick.classList.remove('down'), 160); }, { passive: false });
     E.buy.addEventListener('touchstart', e => { swallow(e); Bus.emit('touchBuy'); E.buy.classList.add('down'); setTimeout(() => E.buy.classList.remove('down'), 130); }, { passive: false });
     E.menu.addEventListener('touchstart', e => { swallow(e); Bus.emit('touchPause'); E.menu.classList.add('down'); setTimeout(() => E.menu.classList.remove('down'), 130); }, { passive: false });
     // double-tap the stick area toggles auto-run
@@ -422,30 +451,89 @@ const TouchUI = {
     if (!this.active) return;
     const show = Game && Game.running && Game.mode !== CS.MODE.MENU;
     this.root.style.display = show ? 'block' : 'none';
+    const E = this._els;
     // the shop button must also be reachable on the range, where there is no
     // buy phase (the range runs live with the shop always available)
     const buyVisible = show && (Game.roundState === 'buy' || Game.mode === CS.MODE.RANGE);
-    this._els.buy.style.display = buyVisible ? 'block' : 'none';
+    E.buy.style.display = buyVisible ? 'block' : 'none';
     // the stick and look layer are always live; the remaining buttons dim while
     // an overlay is up so they cannot be pressed through it
     const blocked = UI.overlayOpen() && !Game.buyOpen;
-    this._els.aim.style.opacity = blocked ? '.35' : '1';
-    this._els.auto.style.opacity = blocked ? '.35' : '1';
-    this._els.jump.style.opacity = blocked ? '.35' : '1';
-    this._els.crouch.style.opacity = blocked ? '.35' : '1';
-    this._els.reload.style.opacity = blocked ? '.35' : '1';
-    this._els.swap.style.opacity = blocked ? '.35' : '1';
-    if (this._els.climb) this._els.climb.style.opacity = blocked ? '.35' : '1';
-    // heal/drone are always visible but dim until the player actually owns them
-    const pp = (typeof Game !== 'undefined') ? Game.player : null;
-    if (this._els.heal) this._els.heal.style.opacity = (blocked || !pp || !(pp.medkits > 0)) ? '.35' : '1';
-    if (this._els.drone) this._els.drone.style.opacity = (blocked || !pp || !pp.drone) ? '.35' : '1';
-    this._els.menu.style.opacity = blocked ? '.35' : '1';
+    const dim = (el, need) => {
+      if (!el) return;
+      const on = !!need;
+      el.style.display = on ? 'flex' : 'none';
+      if (on) el.style.opacity = blocked ? '.35' : '1';
+    };
+    const p = (typeof Game !== 'undefined') ? Game.player : null;
+    const inMech = !!(typeof Game !== 'undefined' && Game.isMechActive && Game.isMechActive());
+    const round = Game && Game.roundState;
+
+    // --- always-available core buttons (dim under an overlay) ---
+    dim(E.aim, show);
+    dim(E.auto, show);
+    dim(E.jump, show);
+    dim(E.crouch, show);
+    dim(E.reload, show);
+    dim(E.swap, show);
+    dim(E.menu, show);
+
+    // --- climb only when facing something you can actually climb ---
+    // (the wall probe allocates, so it is throttled rather than run every frame)
+    this._probeT = (this._probeT || 0) + 1;
+    if (this._probeT >= 6 || this._canClimb === undefined) {
+      this._probeT = 0;
+      let canClimb = false;
+      if (show && p && p.alive && !inMech) {
+        const probe = p.probeWall(Game.world);
+        canClimb = !!(probe && probe.top > p.pos.y + CFG.stepUp + 0.05 && p.pos.y > (probe.low === undefined ? -Infinity : probe.low) - 1);
+      }
+      this._canClimb = canClimb;
+    }
+    dim(E.climb, this._canClimb);
+
+    // --- mech-only abilities ---
+    dim(E.dash, inMech);
+    dim(E.missiles, inMech);
+    if (inMech) E.missiles.style.opacity = (blocked || !!(Game && Game._mechMissileAt && U.now() - Game._mechMissileAt < CFG.mechMissileCd * 1000)) ? '.35' : '1';
+    dim(E.mech, inMech || (!!(p && p.mechOwned) && (Game.parkedMechDist ? Game.parkedMechDist() <= 6 : false)));
+
+    // --- grenades: only when a grenade of the selected kind is carried ---
+    const gk = (Store.data.grenade) || 'frag';
+    const gN = p && p.grenades ? (p.grenades[gk] || 0) : 0;
+    const gAny = p && p.grenades ? (p.grenades.frag + p.grenades.freeze + p.grenades.napalm) : 0;
+    dim(E.grenade, gN > 0 && !inMech && round !== 'buy');
+    dim(E.grenadeKind, gAny > 0 && !inMech && round !== 'buy');
+    if (gAny > 0 && gN > 0) E.grenade.textContent = grenadeName(gk) + ' ×' + gN;
+
+    // --- medkit: only with charges (and not at full HP) ---
+    const maxHP = (Game && Game.matchHP) || CFG.maxHP;
+    dim(E.heal, p && p.medkits > 0 && !inMech && p.health < maxHP);
+
+    // --- kamikaze drone: only when ready, or already in the air (to detonate) ---
+    dim(E.drone, p && (p.drone > 0 || (Game && Game.drone)) && !inMech);
+
+    // --- turret-drone gear: only when a charge is held, or one is deployed ---
+    dim(E.turret, p && (p.turretDrone > 0 || (Game && Game.turretDrone)) && !inMech);
+
+    // --- range-only tools ---
+    const onRange = Game && Game.mode === CS.MODE.RANGE;
+    dim(E.dummy, onRange);
+    dim(E.spawn, onRange);
+
+    // --- unstick: only while its 2-minute cooldown has run out ---
+    let unstickReady = false;
+    if (show && Game.mode === CS.MODE.OFFLINE) {
+      const left = Game._zResetAt ? (120000 - (U.now() - Game._zResetAt)) / 1000 : 0;
+      unstickReady = left <= 0.5;
+    }
+    dim(E.unstick, unstickReady);
+
     // the control hint is only useful at the very start of a match
-    if (this._els.hint) {
+    if (E.hint) {
       if (!this._hintAt && show) this._hintAt = U.now();
       const fresh = show && this._hintAt && (U.now() - this._hintAt < 9000);
-      this._els.hint.style.display = fresh ? 'block' : 'none';
+      E.hint.style.display = fresh ? 'block' : 'none';
     }
   },
 

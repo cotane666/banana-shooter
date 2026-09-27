@@ -615,12 +615,19 @@ html.touch .ecard .wn{font-size:13.5px}
 #tSwap{left:calc(50% - 30px);top:calc(10px + env(safe-area-inset-top,0px))}
 #tMenu{left:calc(50% + 32px);top:calc(10px + env(safe-area-inset-top,0px))}
 #tBuy{left:18px;bottom:104px;width:72px;height:48px;border-radius:12px;font-size:11.5px}
-#tHeal{right:16px;bottom:242px}
-#tDrone{right:88px;bottom:242px}
+/* Аптечка и ДРОН теперь живут в контекстном стеке #tActions */
 /* ЗАЛЕЗТЬ sits in the top-right corner, clear of both thumbs. The HUD's
    money/kills column is nudged left so the two never overlap. */
 #tClimb{right:12px;top:calc(10px + env(safe-area-inset-top,0px));
   width:64px;height:48px;border-radius:12px;font-size:10.5px;letter-spacing:.5px}
+
+/* Contextual action stack: only the buttons that apply right now are shown,
+   so the overlay stays uncluttered. It lives on the right edge, above the
+   fire cluster. */
+#tActions{position:fixed;right:16px;bottom:300px;display:flex;flex-direction:column-reverse;
+  gap:8px;align-items:flex-end;z-index:32;pointer-events:none}
+.tbtn.act{position:relative;pointer-events:auto;width:auto;min-width:92px;height:44px;
+  padding:0 14px;border-radius:12px;font-size:11.5px;letter-spacing:.4px}
 
 #tHint{position:fixed;left:50%;bottom:24%;transform:translateX(-50%);text-align:center;
   font-size:12px;color:rgba(255,255,255,.72);background:rgba(0,0,0,.5);
@@ -693,8 +700,8 @@ html.touch .fld input{padding:10px;font-size:15px}
   .tbtn.small{width:52px;height:52px;font-size:9.5px}
   #tAim{right:16px;bottom:96px}
   #tAuto{right:16px;bottom:154px}
-  #tHeal{right:16px;bottom:212px}
-  #tDrone{right:80px;bottom:212px}
+  #tActions{right:16px;bottom:206px;gap:6px}
+  .tbtn.act{min-width:84px;height:40px;font-size:10.5px;padding:0 11px}
   #tJump{right:18px;bottom:20px}
   #tCrouch{right:80px;bottom:24px}
   #tReload{left:calc(50% - 84px);top:calc(6px + env(safe-area-inset-top,0px))}
@@ -724,8 +731,7 @@ html.touch .fld input{padding:10px;font-size:15px}
   .tbtn.small{width:56px;height:56px}
   #tAim{right:14px;bottom:110px}
   #tAuto{right:14px;bottom:176px}
-  #tHeal{right:14px;bottom:242px}
-  #tDrone{right:82px;bottom:242px}
+  #tActions{right:14px;bottom:236px}
   #tJump{right:14px;bottom:28px}
   #tCrouch{right:82px;bottom:32px}
   #tReload{left:calc(50% - 92px);top:calc(10px + env(safe-area-inset-top,0px))}

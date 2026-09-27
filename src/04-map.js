@@ -573,13 +573,280 @@ function siteMesh(parent, mat, x, z, s) {
   return m;
 }
 
+/* ============================================================
+   MAP 6 — ГОРОД: streets between ruined blocks (room-to-room fights)
+   ============================================================ */
+function buildMapCity(parent, world) {
+  mapGround(parent, world, { tint: 0x9aa0a6 });
+  mapPerimeter(parent, world, MAT.concrete);
+
+  // a grid of city blocks with a cross-shaped avenue between them
+  const B = 15;
+  for (let gx = -2; gx <= 2; gx++) {
+    for (let gz = -2; gz <= 2; gz++) {
+      if (gx === 0 || gz === 0) continue;                  // leave the avenues open
+      const cx = gx * 22, cz = gz * 22;
+      const w = B - 5 + Math.abs(gx), d = B - 5 + Math.abs(gz);
+      const h = 6 + ((gx + gz + 4) % 3) * 2.4;
+      buildBuilding(parent, world, cx, cz, w, d, h, (gx === 1 && gz === 1) ? 'A' : (gx === -1 && gz === -1) ? 'B' : null);
+      // rooftop parapet bits to break silhouettes
+      solid(parent, world, cx, h, cz, w + 1, .5, .6, MAT.dark, { tag: 'cover' });
+    }
+  }
+  // avenue cover: cars (low metal boxes), planters and a bus wreck
+  const rng = makeRng(20240);
+  for (let i = 0; i < 26; i++) {
+    const alongX = rng() < .5;
+    const x = alongX ? (rng() * 2 - 1) * 46 : (rng() < .5 ? -11 : 11) + (rng() * 2 - 1) * 2;
+    const z = alongX ? ((rng() < .5 ? -11 : 11) + (rng() * 2 - 1) * 2) : (rng() * 2 - 1) * 46;
+    if (world.overlaps(x, .1, z, 2.4, 1.4)) continue;
+    const w = 3.4 + rng() * 1.2, d = 1.8;
+    solid(parent, world, x, .25, z, alongX ? d : w, .9, alongX ? w : d, alongX ? MAT.metal : MAT.wood, { tag: 'cover' });
+  }
+  // street props
+  for (let i = 0; i < 20; i++) {
+    const x = (rng() * 2 - 1) * 46, z = (rng() * 2 - 1) * 46;
+    if (world.overlaps(x, .1, z, 1.0, 1.0)) continue;
+    barrelMesh(parent, world, x, z);
+  }
+  // central plaza with sandbags (objective)
+  solid(parent, world, 0, 0, 0, 10, .8, 10, MAT.sand, { tag: 'plat' });
+  makeRamp(parent, world, 0, 6.6, 4, .8, 'south');
+  sandbag(parent, world, -8, 0, 5, true);
+  sandbag(parent, world, 8, 0, 5, true);
+  sandbag(parent, world, 0, -8, 5, false);
+
+  container(parent, world, -42, 20, true, 12);
+  container(parent, world, 42, -20, false, 12);
+  buildTower(parent, world, 40, 40);
+
+  siteMesh(parent, MAT.siteA, 22, 22, 9);
+  siteMesh(parent, MAT.siteB, -22, -22, 9);
+  MAP.sites = { A: { x: 22, z: 22 }, B: { x: -22, z: -22 } };
+}
+
+/* ============================================================
+   MAP 7 — БУНКЕР: a tight indoor maze of corridors and rooms
+   ============================================================ */
+function buildMapBunker(parent, world) {
+  mapGround(parent, world, { tint: 0x8c949c });
+  mapPerimeter(parent, world, MAT.metal);
+
+  // Outer ring corridor wall with doorways, and an inner core.
+  const H = 4.2, T = 1.4;
+  const wall = (x, z, w, d) => solid(parent, world, x, 0, z, w, H, d, MAT.metal, { tag: 'wall' });
+  // outer square (36 half-size) with doors on each side
+  wall(0, -36, 72, T); wall(0, 36, 72, T); wall(-36, 0, T, 72); wall(36, 0, T, 72);
+  doorwayCut(parent, world, 0, -36, 'x', 72, H, T);
+  doorwayCut(parent, world, 0, 36, 'x', 72, H, T);
+  doorwayCut(parent, world, -36, 0, 'z', 72, H, T);
+  doorwayCut(parent, world, 36, 0, 'z', 72, H, T);
+  // inner square (16 half-size) — the vault
+  wall(0, -16, 32, T); wall(0, 16, 32, T); wall(-16, 0, T, 32); wall(16, 0, T, 32);
+  doorwayCut(parent, world, 0, -16, 'x', 32, H, T);
+  doorwayCut(parent, world, 0, 16, 'x', 32, H, T);
+  doorwayCut(parent, world, -16, 0, 'z', 32, H, T);
+  doorwayCut(parent, world, 16, 0, 'z', 32, H, T);
+
+  // radial dividers making the ring a maze of rooms
+  for (let i = 0; i < 8; i++) {
+    const a = (i / 8) * Math.PI * 2 + Math.PI / 8;
+    const x = Math.cos(a) * 26, z = Math.sin(a) * 26;
+    if (Math.abs(Math.cos(a)) > Math.abs(Math.sin(a))) wall(x, z, T, 18);
+    else wall(x, z, 18, T);
+  }
+  // central objective inside the vault
+  solid(parent, world, 0, 0, 0, 8, 1.6, 8, MAT.concrete, { tag: 'plat' });
+  makeRamp(parent, world, 0, 5, 3.2, 1.6, 'south');
+  solid(parent, world, 0, 1.6, 0, 2.4, 1.2, 2.4, MAT.metal, { tag: 'cover' });
+
+  // crates and barrels in the rooms
+  const rng = makeRng(8888);
+  for (let i = 0; i < 34; i++) {
+    const x = (rng() * 2 - 1) * 32, z = (rng() * 2 - 1) * 32;
+    if (Math.hypot(x, z) < 12) continue;
+    if (world.overlaps(x, .1, z, 1.3, 1.3)) continue;
+    const s = 1.0 + rng() * .4;
+    solid(parent, world, x, 0, z, s, s, s, MAT.wood, { tag: 'cover' });
+  }
+  for (let i = 0; i < 14; i++) {
+    const x = (rng() * 2 - 1) * 32, z = (rng() * 2 - 1) * 32;
+    if (world.overlaps(x, .1, z, 1.0, 1.0)) continue;
+    barrelMesh(parent, world, x, z);
+  }
+
+  siteMesh(parent, MAT.siteA, -27, 0, 7);
+  siteMesh(parent, MAT.siteB, 27, 0, 7);
+  MAP.sites = { A: { x: -27, z: 0 }, B: { x: 27, z: 0 } };
+}
+
+/* ============================================================
+   MAP 8 — КРЫШИ: rooftop platforms over a lethal drop (parkour)
+   ============================================================ */
+function buildMapRooftops(parent, world) {
+  mapGround(parent, world, { tint: 0x6f7780 });
+  mapPerimeter(parent, world, MAT.concrete);
+
+  // a grid of rooftop "islands" at varying heights, linked by planks/ramps.
+  const rng = makeRng(13579);
+  const roofs = [
+    [-24, -24, 20, 20, 3.2], [24, -24, 18, 18, 4.6], [-24, 24, 18, 22, 2.4],
+    [24, 24, 22, 18, 5.4], [0, 0, 20, 20, 6.0], [-40, 0, 12, 26, 1.6],
+    [40, 0, 12, 26, 3.8], [0, -40, 26, 12, 2.8], [0, 40, 26, 12, 4.2]
+  ];
+  roofs.forEach(r => {
+    const x = r[0], z = r[1], w = r[2], d = r[3], h = r[4];
+    solid(parent, world, x, 0, z, w, h, d, MAT.concrete, { tag: 'plat' });
+    // parapet
+    solid(parent, world, x, h, z - d / 2 + .5, w, 1.0, .5, MAT.dark, { tag: 'cover' });
+    solid(parent, world, x, h, z + d / 2 - .5, w, 1.0, .5, MAT.dark, { tag: 'cover' });
+    solid(parent, world, x - w / 2 + .5, h, z, .5, 1.0, d, MAT.dark, { tag: 'cover' });
+    solid(parent, world, x + w / 2 - .5, h, z, .5, 1.0, d, MAT.dark, { tag: 'cover' });
+    // rooftop clutter / cover
+    for (let i = 0; i < 4; i++) {
+      const cx = x + (rng() * 2 - 1) * (w / 2 - 3), cz = z + (rng() * 2 - 1) * (d / 2 - 3);
+      if (world.overlaps(cx, h + .1, cz, 1.2, 1.2)) continue;
+      const s = 1.0 + rng() * .5;
+      solid(parent, world, cx, h, cz, s, s, s, MAT.wood, { tag: 'cover' });
+    }
+  });
+  // ramps up to the central roof from two sides
+  makeRamp(parent, world, 0, 11.2, 4.5, 6.0, 'south');
+  makeRamp(parent, world, 0, -11.2, 4.5, 6.0, 'north');
+  // ground-level cover beneath the roofs so it is not a total death trap
+  for (let i = 0; i < 22; i++) {
+    const x = (rng() * 2 - 1) * 44, z = (rng() * 2 - 1) * 44;
+    if (world.overlaps(x, .1, z, 1.4, 1.4)) continue;
+    const s = 1.0 + rng() * .5;
+    solid(parent, world, x, 0, z, s, s, s, MAT.wood, { tag: 'cover' });
+  }
+  sandbag(parent, world, -40, -40, 5, false);
+  sandbag(parent, world, 40, 40, 5, false);
+
+  siteMesh(parent, MAT.siteA, 0, -40, 7);
+  siteMesh(parent, MAT.siteB, 0, 40, 7);
+  MAP.sites = { A: { x: 0, z: -40 }, B: { x: 0, z: 40 } };
+}
+
+/* ============================================================
+   MAP 9 — ЛАБОРАТОРИЯ: clean sci-fi rooms with glass partitions
+   ============================================================ */
+function buildMapLab(parent, world) {
+  mapGround(parent, world, { tint: 0xc4ccd4 });
+  mapPerimeter(parent, world, MAT.metal);
+
+  const H = 4.0, T = 0.6;
+  // a clean grid of glass-partitioned rooms
+  const cell = 18;
+  const wallPiece = (x, z, w, d, mat) => solid(parent, world, x, 0, z, w, H, d, mat || MAT.metal, { tag: 'wall' });
+  // four long partition lines with doors
+  for (let i = -1; i <= 1; i++) {
+    const z = i * cell;
+    wallPiece(0, z, 86, T);
+    doorwayCut(parent, world, 0, z, 'x', 86, H, T);
+    doorwayCut(parent, world, i * 38, z, 'x', 86, H, T);
+    wallPiece(z, 0, T, 86);
+    doorwayCut(parent, world, z, 0, 'z', 86, H, T);
+    doorwayCut(parent, world, z, i * 38, 'z', 86, H, T);
+  }
+  // central hazardous reactor (a tall glowing-ish core)
+  solid(parent, world, 0, 0, 0, 10, 5.0, 10, MAT.metal, { tag: 'wall' });
+  solid(parent, world, 0, 5.0, 0, 6, 1.2, 6, MAT.dark, { tag: 'cover' });
+  solid(parent, world, 0, 0, 0, 14, .8, 14, MAT.concrete, { tag: 'plat' });
+  makeRamp(parent, world, 0, 8, 4, .8, 'south');
+  makeRamp(parent, world, 0, -8, 4, .8, 'north');
+
+  // lab benches / equipment cover in the rooms
+  const rng = makeRng(24680);
+  for (let i = 0; i < 40; i++) {
+    const x = (rng() * 2 - 1) * 44, z = (rng() * 2 - 1) * 44;
+    if (Math.hypot(x, z) < 12) continue;
+    if (world.overlaps(x, .1, z, 1.6, 1.2)) continue;
+    const w = 1.6 + rng() * 1.4, d = 1.0;
+    solid(parent, world, x, 0, z, rng() < .5 ? w : d, 1.1, rng() < .5 ? d : w, MAT.metal, { tag: 'cover' });
+  }
+  // server racks and crates
+  for (let i = 0; i < 18; i++) {
+    const x = (rng() * 2 - 1) * 44, z = (rng() * 2 - 1) * 44;
+    if (world.overlaps(x, .1, z, 1.0, 1.0)) continue;
+    barrelMesh(parent, world, x, z);
+  }
+  container(parent, world, -40, 40, true, 12);
+  container(parent, world, 40, -40, false, 12);
+
+  siteMesh(parent, MAT.siteA, -30, -30, 8);
+  siteMesh(parent, MAT.siteB, 30, 30, 8);
+  MAP.sites = { A: { x: -30, z: -30 }, B: { x: 30, z: 30 } };
+}
+
+/* ============================================================
+   MAP 10 — АРЕНА СМЕРТИ: a circular pit with a ring of pillars
+   ============================================================ */
+function buildMapPit(parent, world) {
+  mapGround(parent, world, { tint: 0x7a6a5a });
+  mapPerimeter(parent, world, MAT.brick);
+
+  // a raised circular arena wall (built from short segments) with four gates
+  const R = 40, H = 5.5;
+  const SEG = 40;
+  for (let i = 0; i < SEG; i++) {
+    const a = (i / SEG) * Math.PI * 2;
+    // leave gaps at the four compass points for entrances
+    const deg = (a * 180 / Math.PI);
+    if (Math.min(Math.abs(deg - 0), Math.abs(deg - 90), Math.abs(deg - 180), Math.abs(deg - 270), Math.abs(deg - 360)) < 9) continue;
+    const x = Math.cos(a) * R, z = Math.sin(a) * R;
+    const w = (2 * Math.PI * R / SEG) * 1.15;
+    solid(parent, world, x, 0, z, w, H, 2.2, MAT.brick, { tag: 'wall', rotY: -a });
+  }
+  // central pit: a sunken floor you can drop into, with ramps out
+  solid(parent, world, 0, 0, 0, 22, .4, 22, MAT.dark, { tag: 'plat' });
+  makeRamp(parent, world, 0, 12, 4, .4, 'south');
+  makeRamp(parent, world, 0, -12, 4, .4, 'north');
+  makeRamp(parent, world, 12, 0, 4, .4, 'east');
+  makeRamp(parent, world, -12, 0, 4, .4, 'west');
+  // ring of tall pillars between pit and wall
+  for (let i = 0; i < 12; i++) {
+    const a = (i / 12) * Math.PI * 2 + Math.PI / 12;
+    const x = Math.cos(a) * 28, z = Math.sin(a) * 28;
+    solid(parent, world, x, 0, z, 2.2, 6.0, 2.2, MAT.concrete, { tag: 'cover' });
+    solid(parent, world, x, 6.0, z, 3.0, .5, 3.0, MAT.dark, { tag: 'cover' });
+  }
+  // scattered cover and hazards
+  const rng = makeRng(31415);
+  for (let i = 0; i < 28; i++) {
+    const x = (rng() * 2 - 1) * 36, z = (rng() * 2 - 1) * 36;
+    if (Math.hypot(x, z) < 14) continue;
+    if (world.overlaps(x, .1, z, 1.4, 1.4)) continue;
+    const s = 1.0 + rng() * .5;
+    solid(parent, world, x, 0, z, s, s, s, MAT.wood, { tag: 'cover' });
+  }
+  for (let i = 0; i < 18; i++) {
+    const x = (rng() * 2 - 1) * 36, z = (rng() * 2 - 1) * 36;
+    if (world.overlaps(x, .1, z, 1.0, 1.0)) continue;
+    barrelMesh(parent, world, x, z);
+  }
+  sandbag(parent, world, 20, 20, 5, false);
+  sandbag(parent, world, -20, -20, 5, false);
+  container(parent, world, -34, 8, true, 11);
+  container(parent, world, 34, -8, false, 11);
+
+  siteMesh(parent, MAT.siteA, -18, 18, 8);
+  siteMesh(parent, MAT.siteB, 18, -18, 8);
+  MAP.sites = { A: { x: -18, z: 18 }, B: { x: 18, z: -18 } };
+}
+
 /* ---------------- registry ---------------- */
 const MAPS = [
   { id: 'arena',     name: 'БАНАНОВАЯ АРЕНА', short: 'АРЕНА',   desc: 'Центральная платформа и четыре здания', build: buildMapArena },
   { id: 'warehouse', name: 'СКЛАД',           short: 'СКЛАД',   desc: 'Стеллажи, пандус и антресоль',          build: buildMapWarehouse },
   { id: 'towers',    name: 'ВЫШКИ',           short: 'ВЫШКИ',   desc: 'Вертикальный бой: вышки и мосты',       build: buildMapTowers },
   { id: 'crates',    name: 'ЯЩИКИ',           short: 'ЯЩИКИ',   desc: 'Лабиринт из ящиков — залезай и стреляй', build: buildMapCrates },
-  { id: 'desert',    name: 'ПУСТЫНЯ',         short: 'ПУСТЫНЯ', desc: 'Дюны, скалы и руины',                   build: buildMapDesert }
+  { id: 'desert',    name: 'ПУСТЫНЯ',         short: 'ПУСТЫНЯ', desc: 'Дюны, скалы и руины',                   build: buildMapDesert },
+  { id: 'city',      name: 'ГОРОД',           short: 'ГОРОД',   desc: 'Улицы между руин — бой в переулках',    build: buildMapCity },
+  { id: 'bunker',    name: 'БУНКЕР',          short: 'БУНКЕР',  desc: 'Тесный лабиринт коридоров и комнат',    build: buildMapBunker },
+  { id: 'rooftops',  name: 'КРЫШИ',           short: 'КРЫШИ',   desc: 'Паркур по крышам над пропастью',        build: buildMapRooftops },
+  { id: 'lab',       name: 'ЛАБОРАТОРИЯ',     short: 'ЛАБА',    desc: 'Стерильные комнаты и реактор в центре', build: buildMapLab },
+  { id: 'pit',       name: 'АРЕНА СМЕРТИ',    short: 'ПИТ',     desc: 'Круглая яма, колонны и проходы',        build: buildMapPit }
 ];
 
 function mapById(id) {

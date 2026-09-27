@@ -1394,9 +1394,53 @@ const Game = {
     UI.toast('Карта: ' + this.mapName() + ' · магазин: B', '#ff9d21');
   },
 
+  /* Offline only: every `CFG.mapRotateEvery` waves the arena is swapped for a
+     different one, so a long survival run keeps changing scenery. The next map
+     is chosen at random but never repeats the current one. */
+  rotateMapIfNeeded(nextWave) {
+    const every = CFG.mapRotateEvery || 10;
+    if (!nextWave || nextWave < 1) return false;
+    if (nextWave % every !== 1) return false;          // waves 1, 11, 21, 31…
+    if (nextWave === 1) return false;                  // wave 1 keeps the chosen map
+    const current = MAP.id;
+    const pool = MAPS.filter(m => m.id !== current);
+    if (!pool.length) return false;
+    const next = U.pick(pool);
+    this.buildArenaOnTheFly(next.id);
+    Store.data.map = next.id;
+    UI.refreshChips();
+    UI.center('НОВАЯ КАРТА', next.name, 2.4);
+    UI.toast('Карта сменилась: ' + next.name, '#4aa3ff');
+    return true;
+  },
+
+  /* Swap the arena mid-run without leaving the match: rebuild the map, then
+     put the player on a fresh spawn (enemies are gone, the wave restarts). */
+  buildArenaOnTheFly(mapId) {
+    // drop everything the old arena was holding BEFORE tearing it down
+    this.clearProjectiles();
+    this.clearDummyProjectiles();
+    this.clearEnemyShots();
+    this.clearDrone();
+    this.clearCrates();
+    this.clearMedboxes();
+    if (this.horde) this.horde.clear();
+    if (this.effects) { this.effects.clear(); }
+
+    buildMap(this.scene, Store.data.quality, mapId);
+    this.world = MAP.world;
+    this.applyQuality();
+    // a fresh horde so the flow field points at the new navigation grid
+    this.horde = new Horde(this.scene, this.world, this);
+    // re-place the player and reset the drop timers
+    this.fxSpawnIndex = (this.fxSpawnIndex || 0) + 1;
+    this.spawnPlayerLocal(this.fxSpawnIndex);
+    this._crateT = CFG.crateInterval;
+    this._medboxT = CFG.medkitFieldInterval;
+  },
+
   /* rebuild the arena when the chosen map differs from the loaded one */
-  ensureMap(mapId) {
-    mapId = mapById(mapId).id;
+  ensureMap(mapId) {    mapId = mapById(mapId).id;
     if (!MAP.group || MAP.id !== mapId) {
       buildMap(this.scene, Store.data.quality, mapId);
       this.world = MAP.world;
@@ -3177,6 +3221,8 @@ const Game = {
     o.wave++;
     o.bosses = 0;
     o.bossPending = 0;
+    // offline: a fresh arena every 10 waves (waves 11, 21, 31 …)
+    if (this.mode === CS.MODE.OFFLINE) this.rotateMapIfNeeded(o.wave);
     let count = Math.round(CFG.zombieStartCount + (o.wave - 1) * 2.4);
     // zombie-count multiplier: custom mode uses its own, else the ×10 preset
     const countMul = (this.offCountMul != null) ? this.offCountMul : (this.hordeMode ? CFG.hordeCountMul : 1);

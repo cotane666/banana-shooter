@@ -69,6 +69,9 @@ const CFG = {
   hordeMaxAlive: 110,   // the usual alive cap would smother a 10× wave
   hordeSpawnInterval: 0.20,  // spawn far faster so the field actually fills
 
+  /* ---- offline map rotation: a fresh arena every N waves ---- */
+  mapRotateEvery: 10,
+
   /* ---- ammo crate (offline): a supply chest that tops up reserves ---- */
   crateInterval: 10,    // seconds between spawns
   crateAmmoFrac: 0.25,  // fraction of the FULL stock restored per crate

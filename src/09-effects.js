@@ -30,7 +30,7 @@ class Effects {
       concrete: new THREE.MeshBasicMaterial({ map: this._holeTexture(0x2a2724), transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4 }),
       metal: new THREE.MeshBasicMaterial({ map: this._holeTexture(0x3a3d40), transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4 }),
       blood: new THREE.MeshBasicMaterial({ map: this._bloodTexture(), transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4 }),
-      scorch: new THREE.MeshBasicMaterial({ map: this._scorchTexture(), transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -5 })
+      scorch: new THREE.MeshBasicMaterial({ map: this._scorchTexture(), transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -5, blending: THREE.AdditiveBlending })
     };
     this.tracerPool = [];
     this.particlePool = [];
@@ -60,33 +60,55 @@ class Effects {
     x.fillStyle = g; x.beginPath(); x.arc(32, 32, 26, 0, 7); x.fill();
     const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
   }
-  /* scorch mark left by a laser: a charred dark core with a smouldering rim */
+  /* a blazing fire streak left by the laser: a white-hot core line wrapped in
+     orange flames and dark smoke, fading out at the ends so tiles blend. */
   _scorchTexture() {
-    const c = makeCanvas(96); const x = c.getContext('2d');
-    x.clearRect(0, 0, 96, 96);
-    // dark burnt core
-    const g = x.createRadialGradient(48, 48, 1, 48, 48, 34);
-    g.addColorStop(0, 'rgba(8,6,5,.95)');
-    g.addColorStop(.45, 'rgba(24,14,8,.85)');
-    g.addColorStop(.75, 'rgba(60,28,10,.45)');
-    g.addColorStop(1, 'rgba(30,16,8,0)');
-    x.fillStyle = g; x.beginPath(); x.arc(48, 48, 34, 0, 7); x.fill();
-    // hot glowing rim (the laser's heat)
-    const rim = x.createRadialGradient(48, 48, 22, 48, 48, 40);
-    rim.addColorStop(0, 'rgba(255,150,40,0)');
-    rim.addColorStop(.55, 'rgba(255,120,30,.55)');
-    rim.addColorStop(.8, 'rgba(180,60,10,.25)');
-    rim.addColorStop(1, 'rgba(120,30,5,0)');
-    x.fillStyle = rim; x.beginPath(); x.arc(48, 48, 40, 0, 7); x.fill();
-    // a few charred streaks radiating out
-    x.strokeStyle = 'rgba(12,8,6,.7)'; x.lineWidth = 3;
-    for (let i = 0; i < 9; i++) {
-      const a = (i / 9) * Math.PI * 2 + 0.3;
-      x.beginPath();
-      x.moveTo(48, 48);
-      x.lineTo(48 + Math.cos(a) * (30 + Math.random() * 8), 48 + Math.sin(a) * (30 + Math.random() * 8));
-      x.stroke();
+    const W = 192, H = 64;
+    const c = makeCanvas(W); c.height = H;
+    const x = c.getContext('2d');
+    x.clearRect(0, 0, W, H);
+    const blob = (cx, cy, r, col, a) => {
+      const g = x.createRadialGradient(cx, cy, 0, cx, cy, r);
+      g.addColorStop(0, 'rgba(' + col + ',' + a + ')');
+      g.addColorStop(1, 'rgba(' + col + ',0)');
+      x.fillStyle = g; x.beginPath(); x.arc(cx, cy, r, 0, 7); x.fill();
+    };
+    // dark red smoke (widest, gives the black charred halo)
+    for (let i = 0; i < 28; i++) {
+      const cx = Math.random() * W, cy = H / 2 + (Math.random() * 2 - 1) * 24;
+      blob(cx, cy, 14 + Math.random() * 16, '110,26,4', .34);
     }
+    // orange flames
+    for (let i = 0; i < 38; i++) {
+      const cx = Math.random() * W, cy = H / 2 + (Math.random() * 2 - 1) * 15;
+      blob(cx, cy, 8 + Math.random() * 13, '255,120,20', .5);
+    }
+    // amber fire
+    for (let i = 0; i < 34; i++) {
+      const cx = Math.random() * W, cy = H / 2 + (Math.random() * 2 - 1) * 9;
+      blob(cx, cy, 6 + Math.random() * 9, '255,165,45', .55);
+    }
+    // yellow inner tongues
+    for (let i = 0; i < 30; i++) {
+      const cx = Math.random() * W, cy = H / 2 + (Math.random() * 2 - 1) * 5;
+      blob(cx, cy, 4 + Math.random() * 7, '255,215,90', .6);
+    }
+    // white-hot core line
+    const core = x.createLinearGradient(0, H / 2 - 5, 0, H / 2 + 5);
+    core.addColorStop(0, 'rgba(255,210,110,0)');
+    core.addColorStop(.5, 'rgba(255,255,240,1)');
+    core.addColorStop(1, 'rgba(255,210,110,0)');
+    x.fillStyle = core; x.fillRect(0, H / 2 - 5, W, 10);
+    x.fillStyle = 'rgba(255,255,255,.98)'; x.fillRect(0, H / 2 - 1, W, 2.4);
+    // erase the left/right ends so consecutive marks join seamlessly
+    const fade = x.createLinearGradient(0, 0, W, 0);
+    fade.addColorStop(0, 'rgba(0,0,0,1)');
+    fade.addColorStop(.12, 'rgba(0,0,0,0)');
+    fade.addColorStop(.88, 'rgba(0,0,0,0)');
+    fade.addColorStop(1, 'rgba(0,0,0,1)');
+    x.globalCompositeOperation = 'destination-out';
+    x.fillStyle = fade; x.fillRect(0, 0, W, H);
+    x.globalCompositeOperation = 'source-over';
     const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
   }
 
@@ -285,44 +307,82 @@ class Effects {
   }
 
   /* ---------- decals ---------- */
-  decal(x, y, z, nx, ny, nz, size, kind) {
+  decal(x, y, z, nx, ny, nz, size, kind, dir) {
     if (this.decals.length >= this.maxDecals) {
       const old = this.decals.shift();
       this.scene.remove(old);
       if (old.material) old.material = null;
     }
     const mat = this.decalMats[kind === 'blood' ? 'blood' : kind === 'metal' ? 'metal' : kind === 'scorch' ? 'scorch' : 'concrete'];
+    const isScorch = kind === 'scorch';
     const m = new THREE.Mesh(this.decalGeo, mat);
-    m.position.set(x + nx * .012, y + ny * .012, z + nz * .012);
-    // orient the plane along the surface normal
-    const up = new THREE.Vector3(0, 1, 0);
-    const nv = new THREE.Vector3(nx, ny, nz);
-    if (Math.abs(ny) > .9) {
-      m.rotation.x = ny > 0 ? -Math.PI / 2 : Math.PI / 2;
-      m.rotation.z = U.rand(0, 6.28);
+    if (isScorch) {
+      /* The fire streak is a long textured strip laid ALONG the beam's travel
+         direction on the surface, so consecutive marks join into a burning line. */
+      const along = this._surfaceAlong(nx, ny, nz, dir);
+      m.position.set(x + nx * .014, y + ny * .014, z + nz * .014);
+      m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), along);
+      const width = size === undefined ? .8 : size;      // across the beam
+      const length = width * 2.6;                        // stretched along it
+      m.scale.set(width, length, 1);
     } else {
-      m.lookAt(new THREE.Vector3(x + nx, y + ny, z + nz));
-      m.rotateZ(U.rand(0, 6.28));
+      m.position.set(x + nx * .012, y + ny * .012, z + nz * .012);
+      // orient the plane along the surface normal
+      const nv = new THREE.Vector3(nx, ny, nz);
+      if (Math.abs(ny) > .9) {
+        m.rotation.x = ny > 0 ? -Math.PI / 2 : Math.PI / 2;
+        m.rotation.z = U.rand(0, 6.28);
+      } else {
+        m.lookAt(new THREE.Vector3(x + nx, y + ny, z + nz));
+        m.rotateZ(U.rand(0, 6.28));
+      }
+      m.rotation.z += U.rand(0, 6.28);
+      m.scale.set(size, size, 1);
     }
-    if (kind !== 'scorch') m.rotation.z += U.rand(0, 6.28);
-    m.scale.set(size, size, 1);
     m.userData.baseSize = size;
-    m.renderOrder = kind === 'scorch' ? 3 : 2;
+    m.renderOrder = isScorch ? 3 : 2;
     this.scene.add(m);
     this.decals.push(m);
     m.userData.birth = this._t;
-    m.userData.ttl = kind === 'blood' ? 22 : kind === 'scorch' ? 30 : 16;
+    m.userData.ttl = kind === 'blood' ? 22 : isScorch ? 30 : 16;
+    // scorch marks fade by scaling X (their length) — see the decal-fade loop
+    if (isScorch) m.userData.fadeAxis = 'y';
   }
 
-  /* a lingering, glowing burn mark where the laser beam met a surface.
-     Rate-limited so a held beam does not spam one every frame; it drifts a
-     little each time so a sweep leaves a continuous scorched line. */
-  scorch(x, y, z, nx, ny, nz, size) {
-    this.decal(x, y, z, nx, ny, nz, size === undefined ? .6 : size, 'scorch');
-    // a brief ember puff at the spot
-    if (Math.random() < .6) {
+  /* Project the beam direction onto the surface plane and return a unit vector
+     to orient the strip along (falls back to any tangent if degenerate). */
+  _surfaceAlong(nx, ny, nz, dir) {
+    // NOTE: must not use `|| default` here — a normal with y === 0 (a wall) is
+    // falsy and would be silently turned into a floor normal.
+    const n = new THREE.Vector3(
+      nx === undefined ? 0 : nx,
+      ny === undefined ? 1 : ny,
+      nz === undefined ? 0 : nz
+    );
+    if (n.lengthSq() < 1e-6) n.set(0, 1, 0);
+    n.normalize();
+    let d = dir ? new THREE.Vector3(dir.x, dir.y, dir.z) : null;
+    if (!d) d = new THREE.Vector3(1, 0, 0);
+    d.normalize();
+    // remove the normal component → the direction lies in the surface plane
+    const proj = d.clone().sub(n.clone().multiplyScalar(d.dot(n)));
+    if (proj.lengthSq() < 1e-4) {
+      // beam hits head-on: pick any tangent
+      const up = Math.abs(n.y) > .9 ? new THREE.Vector3(1, 0, 0) : new THREE.Vector3(0, 1, 0);
+      proj.copy(up).sub(n.clone().multiplyScalar(up.dot(n)));
+    }
+    return proj.normalize();
+  }
+
+  /* a lingering fire streak where the laser beam met a surface. `dir` (the
+     beam's travel direction) stretches the mark into a line along the surface,
+     so a held/swept beam paints a continuous burning trail. */
+  scorch(x, y, z, nx, ny, nz, size, dir) {
+    this.decal(x, y, z, nx, ny, nz, size === undefined ? .6 : size, 'scorch', dir);
+    // embers + a wisp of smoke at the spot
+    if (Math.random() < .7) {
       this.particle(x, y, z,
-        (nx || 0) * U.rand(.5, 2) + U.rand(-1, 1), U.rand(.5, 2.4), (nz || 0) * U.rand(.5, 2) + U.rand(-1, 1),
+        (nx || 0) * U.rand(.5, 2) + U.rand(-1, 1), U.rand(.6, 2.6), (nz || 0) * U.rand(.5, 2) + U.rand(-1, 1),
         U.rand(.04, .10), 'smoke', U.rand(.3, .8));
     }
   }
@@ -640,7 +700,10 @@ class Effects {
       } else if (age > d.userData.ttl - 3) {
         // fade by shrinking slightly (shared materials → avoid per-decal opacity churn)
         const k = (d.userData.ttl - age) / 3;
-        d.scale.x = d.userData.baseSize ? d.userData.baseSize * k : d.scale.x;
+        if (d.userData.baseSize) {
+          if (d.userData.fadeAxis === 'y') d.scale.y = d.userData.baseSize * 2.6 * k;
+          else d.scale.x = d.userData.baseSize * k;
+        }
       }
     }
   }

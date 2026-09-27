@@ -3770,7 +3770,7 @@ const Game = {
         this._scorchT = .05;
         this._lastScorch = { x: beamEnd.x, y: beamEnd.y, z: beamEnd.z };
         const n = wallHits[0].normal || { x: -dir.x, y: -dir.y, z: -dir.z };
-        this.effects.scorch(beamEnd.x, beamEnd.y, beamEnd.z, n.x, n.y, n.z, .5 + Math.random() * .2);
+        this.effects.scorch(beamEnd.x, beamEnd.y, beamEnd.z, n.x, n.y, n.z, .55, dir);
       }
     }
     if (this.effects) this.effects.holdBeam(muzzle, beamEnd, def.beamColor);

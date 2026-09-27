@@ -1553,10 +1553,12 @@ const WEAPONS = {
           sound: 'banana', projectile: 'hive', projSpeed: 24, projGravity: 11,
           hiveCount: 5, splash: .6, splashDmg: 40 },
 
-  /* ЦЕПЬ: tesla — lightning arcs from one enemy to the next */
-  tesla: { name: 'ТЕСЛА-ПУШКА', cat: 'exp', slot: 2, price: 45000, dmg: 95, rpm: 130, mag: 40, reserve: 160,
-          auto: true, spread: .014, moveSpread: .030, recoil: 1.0, falloff: .85, range: 78, headMul: 1.7,
-          sound: 'laser', special: 'tesla', chain: 5, chainRange: 9.5 },
+  /* ЦЕПЬ: tesla — a held "lightning machine gun": a constant electric arc that
+     forks from one enemy to the next while the trigger is down. */
+  tesla: { name: 'ТЕСЛА-ПУШКА', cat: 'exp', slot: 2, price: 45000, dmg: 60, rpm: 60, mag: 60, reserve: 240,
+          auto: true, spread: .014, moveSpread: .030, recoil: .3, falloff: .85, range: 78, headMul: 1.7,
+          sound: 'laser', special: 'tesla', electric: true,
+          beamDps: 210, beamColor: 0x9ad6ff, drainRate: 9, chain: 5, chainRange: 10 },
 
   /* ГРАВИТАЦИЯ: black hole — a sphere that drags the horde in, then implodes */
   blackhole: { name: 'ЧЁРНАЯ ДЫРА', cat: 'exp', slot: 2, price: 65000, dmg: 60, rpm: 30, mag: 1, reserve: 5,
@@ -5390,18 +5392,51 @@ function buildWeaponModel(id) {
       break;
     }
 
-    /* ТЕСЛА-ПУШКА: катушечная с разрядными кольцами */
+    /* ТЕСЛА-ПУШКА: a heavy coil gun — layered copper coils, a forked spark gap
+       at the muzzle and a glowing energy core. Reads as a lightning thrower. */
     case 'tesla': {
-      const ARC = 0x9ad6ff, CU = 0xb5762f;
-      add(B(.09, .10, .34, PAL.gun, 0, .05, -.14));            // корпус
-      add(CYL(.02, .40, PAL.steel, 0, .04, -.46));             // стержень
-      for (let i = 0; i < 6; i++) add(CYL(.055, .02, CU, 0, .04, -.28 - i * .07));  // медные катушки
-      add(B(.02, .12, .06, ARC, .07, .10, -.64, 0, .2));       // рожки
-      add(B(.02, .12, .06, ARC, -.07, .10, -.64, 0, -.2));
-      add(CYL(.05, .06, ARC, 0, .04, -.68, 8));                // дульное кольцо
-      add(B(.055, .13, .07, PAL.black, 0, -.075, .04, .16));   // рукоять
-      add(B(.08, .12, .12, 0x24404f, 0, .02, .20));            // конденсатор
-      add(DOT(.018, ARC, 0, .14, -.06));
+      const ARC = 0x9ad6ff, CU = 0xb5762f, CUD = 0x7a4c18, CORE = 0xdff2ff;
+      // main receiver body
+      add(B(.11, .12, .40, PAL.gun, 0, .05, -.12));            // ствольная коробка
+      add(B(.13, .03, .30, PAL.gunLight, 0, .12, -.12));       // верхняя планка
+      add(B(.09, .05, .16, PAL.black, 0, .05, .06));           // затвор
+      add(MAG(.06, .14, .08, PAL.mag, 0, -.075, .02, .18));    // магазин-катушка
+      // the coil stack: big copper rings shrinking toward the muzzle
+      const coilN = 7;
+      for (let i = 0; i < coilN; i++) {
+        const t = i / (coilN - 1);
+        const r = .085 - t * .028;
+        add(CYL(r, .030, i % 2 ? CU : CUD, 0, .05, -.30 - i * .075, 14));
+      }
+      // inner conducting rod the coils wrap
+      add(CYL(.022, .52, PAL.steel, 0, .05, -.46));
+      // twin prongs forming the spark gap
+      add(B(.022, .16, .07, PAL.steel, .085, .11, -.84, 0, .22));
+      add(B(.022, .16, .07, PAL.steel, -.085, .11, -.84, 0, -.22));
+      add(B(.022, .16, .07, PAL.steel, .085, -.01, -.84, 0, -.22));
+      add(B(.022, .16, .07, PAL.steel, -.085, -.01, -.84, 0, .22));
+      // glowing energy core at the gap
+      const core = new THREE.Mesh(new THREE.SphereGeometry(.05, 12, 10),
+        new THREE.MeshBasicMaterial({ color: CORE }));
+      core.position.set(0, .05, -.86); add(core);
+      // a ring electrode around the gap
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(.075, .014, 8, 20),
+        new THREE.MeshBasicMaterial({ color: ARC }));
+      ring.position.set(0, .05, -.88); add(ring);
+      // side arc-rails (glow) and indicators
+      add(B(.014, .10, .30, ARC, .11, .07, -.30, 0, .1));
+      add(B(.014, .10, .30, ARC, -.11, .07, -.30, 0, -.1));
+      // grip + trigger
+      add(B(.055, .14, .075, PAL.black, 0, -.08, .04, .16));
+      add(B(.02, .03, .06, PAL.steel, 0, -.045, .03));
+      // rear capacitor with glow + vent fins
+      add(CYL(.07, .16, 0x24404f, 0, .05, .19));
+      add(CYL(.075, .02, CU, 0, .05, .12));
+      add(CYL(.075, .02, CU, 0, .05, .26));
+      for (let i = 0; i < 4; i++) add(B(.15, .012, .020, PAL.gunLight, 0, .12 + i * .022, .19));
+      add(DOT(.016, ARC, 0, .14, -.14));
+      add(DOT(.012, ARC, .10, .10, -.42));
+      add(DOT(.012, ARC, -.10, .10, -.42));
       break;
     }
 
@@ -5519,7 +5554,8 @@ const MUZZLE_Z = {
   rocketgun: -0.94, shield: -0.30,
   banana: -0.92,
   acid: -0.76, hive: -0.26, disc: -0.32, freeze: -0.76, tesla: -0.72,
-  portal: -0.48, blackhole: -0.54, turretDrone: -0.28, chrono: -0.48
+  portal: -0.48, blackhole: -0.54, turretDrone: -0.28, chrono: -0.48,
+  tesla: -0.90
 };
 
 /* An RPG rocket: a tube body with a pointed warhead and fins */
@@ -5805,6 +5841,7 @@ function buildDroneModel() {
 
   // arms + rotors
   const rotorMat = new THREE.MeshLambertMaterial({ color: 0x8b939d, emissive: 0x0a0b0d });
+  const blurMat = new THREE.MeshBasicMaterial({ color: 0xb8c0c8, transparent: true, opacity: .16, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
   const rotors = [];
   const ARMS = [[-.24, -.16], [.24, -.16], [-.24, .16], [.24, .16]];
   for (const a of ARMS) {
@@ -5815,13 +5852,19 @@ function buildDroneModel() {
     const hub = new THREE.Mesh(new THREE.CylinderGeometry(.022, .022, .05, 8), darkMat);
     hub.position.set(a[0], .03, a[1]);
     g.add(hub);
-    // a flat disc reads as a spinning rotor at distance
-    const blade = new THREE.Mesh(new THREE.BoxGeometry(.30, .010, .032), rotorMat);
-    blade.position.set(a[0], .06, a[1]);
-    g.add(blade);
-    rotors.push(blade);
+    // a two-blade rotor on its own pivot so it can spin every frame
+    const pivot = new THREE.Group();
+    pivot.position.set(a[0], .06, a[1]);
+    pivot.add(new THREE.Mesh(new THREE.BoxGeometry(.30, .010, .030), rotorMat));
+    pivot.add(new THREE.Mesh(new THREE.BoxGeometry(.030, .010, .30), rotorMat));
+    const blur = new THREE.Mesh(new THREE.CircleGeometry(.17, 18), blurMat);
+    blur.rotation.x = -Math.PI / 2; blur.position.y = .005;
+    pivot.add(blur);
+    g.add(pivot);
+    rotors.push(pivot);
   }
   g.userData.rotors = rotors;
+  g.userData.rotorSpin = 0;
   return g;
 }
 
@@ -8587,6 +8630,102 @@ class Effects {
   }
 
   endBeam() { if (this._beam) this._beam.visible = false; }
+
+  /* ---------- TESLA: a held, constantly-crackling lightning arc ----------
+     Unlike holdBeam (a smooth energy tube), this redraws a jagged, forking
+     electric bolt every few frames, exactly like the reference photo. A bright
+     white core sits inside a wider blue halo, with side branches. */
+  holdLightning(from, to, color) {
+    const c = color === undefined ? 0x9ad6ff : color;
+    if (!this._lightning) {
+      this._lightning = new THREE.Group();
+      const lineMat = (col, op, w) => new THREE.LineBasicMaterial({ color: col, transparent: true, opacity: op, blending: THREE.AdditiveBlending, depthWrite: false });
+      this._ltCore = lineMat(0xffffff, .95);
+      this._ltBody = lineMat(c, .75);
+      this._ltGlow = lineMat(c, .35);
+      this._ltBranch = lineMat(0xcfe8ff, .55);
+      this._ltCoreMesh = new THREE.Line(new THREE.BufferGeometry(), this._ltCore);
+      this._ltBodyMesh = new THREE.Line(new THREE.BufferGeometry(), this._ltBody);
+      this._ltGlowMesh = new THREE.Line(new THREE.BufferGeometry(), this._ltGlow);
+      this._ltBranches = [];
+      for (let i = 0; i < 4; i++) {
+        const l = new THREE.Line(new THREE.BufferGeometry(), this._ltBranch);
+        this._ltBranches.push(l);
+      }
+      this._ltCoreMesh.frustumCulled = false;
+      this._ltBodyMesh.frustumCulled = false;
+      this._ltGlowMesh.frustumCulled = false;
+      [this._ltCoreMesh, this._ltBodyMesh, this._ltGlowMesh].forEach(m => { m.renderOrder = 4; this._lightning.add(m); });
+      this._ltBranches.forEach(l => { l.frustumCulled = false; l.renderOrder = 4; this._lightning.add(l); });
+      // a bright bloom at the muzzle (the "spark gap")
+      this._ltMuzzle = new THREE.Mesh(new THREE.SphereGeometry(1, 12, 10),
+        new THREE.MeshBasicMaterial({ color: 0xe8f4ff, transparent: true, opacity: .95, blending: THREE.AdditiveBlending, depthWrite: false }));
+      this._ltMuzzle.renderOrder = 5;
+      this._lightning.add(this._ltMuzzle);
+      this.scene.add(this._lightning);
+      this._ltRedraw = 0;
+    }
+    const dx = to.x - from.x, dy = to.y - from.y, dz = to.z - from.z;
+    const len = Math.sqrt(dx * dx + dy * dy + dz * dz);
+    if (len < .05) { this._lightning.visible = false; return; }
+    this._lightning.visible = true;
+
+    // rebuild the jagged path only a few times a second so it visibly crackles
+    this._ltRedraw -= 1;
+    if (this._ltRedraw <= 0) {
+      this._ltRedraw = 2 + (Math.random() * 2 | 0);
+      const N = 12;
+      const segs = 3;                                   // three parallel strands
+      for (let s = 0; s < segs; s++) {
+        const pts = [];
+        const amp = (s === 0 ? .05 : .16) * Math.min(1.6, len * .06) + .04;
+        for (let i = 0; i <= N; i++) {
+          const t = i / N;
+          const j = (i === 0 || i === N) ? 0 : 1;
+          const o = t * len;
+          pts.push(new THREE.Vector3(
+            from.x + (dx / len) * o + U.rand(-amp, amp) * j,
+            from.y + (dy / len) * o + U.rand(-amp, amp) * j,
+            from.z + (dz / len) * o + U.rand(-amp, amp) * j));
+        }
+        const mesh = s === 0 ? this._ltCoreMesh : s === 1 ? this._ltBodyMesh : this._ltGlowMesh;
+        mesh.geometry.dispose();
+        mesh.geometry = new THREE.BufferGeometry().setFromPoints(pts);
+      }
+      // side branches: short forks leaving the main bolt at random points
+      for (let b = 0; b < this._ltBranches.length; b++) {
+        const t0 = U.rand(.15, .85);
+        const base = {
+          x: from.x + dx * t0, y: from.y + dy * t0, z: from.z + dz * t0
+        };
+        const fl = len * U.rand(.12, .3);
+        const dir = new THREE.Vector3(dx, dy, dz).normalize();
+        const perp = new THREE.Vector3(U.rand(-1, 1), U.rand(-1, 1), U.rand(-1, 1)).normalize();
+        const pts = [];
+        for (let i = 0; i <= 5; i++) {
+          const t = i / 5;
+          pts.push(new THREE.Vector3(
+            base.x + dir.x * fl * t + perp.x * fl * t * .8 + U.rand(-.1, .1),
+            base.y + dir.y * fl * t + perp.y * fl * t * .8 + U.rand(-.1, .1),
+            base.z + dir.z * fl * t + perp.z * fl * t * .8 + U.rand(-.1, .1)));
+        }
+        const l = this._ltBranches[b];
+        l.geometry.dispose();
+        l.geometry = new THREE.BufferGeometry().setFromPoints(pts);
+        l.visible = true;
+      }
+    }
+    const puls = .5 + .5 * Math.sin(this._t * 42);
+    this._ltMuzzle.position.set(from.x, from.y, from.z);
+    this._ltMuzzle.scale.setScalar(.18 + puls * .10);
+    this._ltMuzzle.material.opacity = .7 + puls * .3;
+    this._ltBody.opacity = .55 + puls * .3;
+    this._ltGlow.opacity = .22 + puls * .2;
+    // crackling sparks at the impact point
+    if (Math.random() < .7) this.particle(to.x, to.y, to.z, U.rand(-4, 4), U.rand(1, 8), U.rand(-4, 4), U.rand(.06, .16), 'spark', U.rand(.1, .3));
+  }
+
+  endLightning() { if (this._lightning) this._lightning.visible = false; }
 
   /* ---------- particles ---------- */
   particle(x, y, z, vx, vy, vz, size, type, life) {
@@ -15019,6 +15158,84 @@ const Game = {
      first wall and burns every enemy along the way (damage per second, not per
      shot). It is drawn by a single persistent mesh in Effects.
      ============================================================ */
+  /* ============================================================
+     TESLA CANNON: a HELD lightning machine-gun
+     While the trigger is down a constant electric arc crackles from the muzzle,
+     hits the nearest target and forks to others in a chain — damage per second,
+     not per shot. It drinks from the magazine, so it eventually runs dry.
+     ============================================================ */
+  updateTeslaBeam(dt) {
+    const p = this.player;
+    const def = p.def;
+    const origin = this.eyePos();
+    const dir = this.cameraDir();
+    const muzzle = this.muzzleWorldPos();
+    const range = def.range || 80;
+
+    // pick the first target along the reticle
+    let hit = null, hitZ = null;
+    if (this.horde) for (const z of this.horde.list) {
+      if (!z.alive || z.dying) continue;
+      const h = rayZombie(origin, dir, z, range);
+      if (h && (!hit || h.t < hit.t)) { hit = h; hitZ = z; }
+    }
+    const wall = this.world.raycast(origin, dir, range, ['ground']);
+    const blocked = wall && (!hit || wall.t < hit.t);
+
+    const dps = (def.beamDps || def.dmg) * dt;
+    let end;
+    if (hit && hitZ && !blocked) {
+      end = { x: origin.x + dir.x * hit.t, y: origin.y + dir.y * hit.t, z: origin.z + dir.z * hit.t };
+      // the primary target takes full damage
+      const hs = hit.part === 'head';
+      const dealt = dps * (hs ? (def.headMul || 1) : hit.part === 'legs' ? CFG.limbMultiplier : 1);
+      hitZ.takeDamage(dealt, hit.part, dir);
+      p.damageDealt += dealt;
+      // then it forks to nearby zombies, decaying
+      let src = hitZ, prev = end, chainDmg = dps * .7;
+      const seen = {}; seen[src.id] = 1;
+      for (let c = 0; c < (def.chain || 4); c++) {
+        let next = null, nd = 1e9, npt = null;
+        for (const z of this.horde.list) {
+          if (!z.alive || z.dying || seen[z.id]) continue;
+          const d = Math.hypot(z.pos.x - src.pos.x, z.pos.z - src.pos.z);
+          if (d < (def.chainRange || 10) && d < nd) { nd = d; next = z; npt = { x: z.pos.x, y: z.pos.y + 1.0 * z.scale, z: z.pos.z }; }
+        }
+        if (!next) break;
+        next.takeDamage(chainDmg, 'body', { x: 0, y: 0, z: 0 });
+        p.damageDealt += chainDmg;
+        this.effects.arc(prev, npt, 0x9ad6ff);
+        prev = npt; seen[next.id] = 1; src = next; chainDmg *= .8;
+      }
+      UI.hitmark(true); this._hitmarkT = U.now();
+    } else {
+      end = blocked ? wall.point
+        : { x: origin.x + dir.x * range, y: origin.y + dir.y * range, z: origin.z + dir.z * range };
+      UI.hitmark(false); this._hitmarkT = U.now();
+    }
+    if (this.mode === CS.MODE.ONLINE && hit && hitZ && !blocked) {
+      for (const rp of this.remotePlayers) {
+        if (!rp.alive) continue;
+        const h = this.rayRemotePlayerFor(rp, origin, dir, range);
+        if (!h) continue;
+        this.sendPvpHit(dps, h.part, h.part === 'head', rp);
+      }
+    }
+    this.effects.holdLightning(muzzle, end, def.beamColor);
+    Audio3D_SFX.laser && Audio3D_SFX.laser(muzzle.x, muzzle.y, muzzle.z);
+    p.bulletsFired += dt * 20;
+    // the arc drinks the magazine, so it eventually runs dry and reloads
+    const w = p.weapon;
+    if (w.mag !== Infinity) {
+      w.mag -= (def.drainRate || 9) * dt;
+      if (w.mag <= 0) { w.mag = 0; this.stopTeslaBeam(); this._teslaOn = false; if (p.def.mag !== Infinity) p.reload(); }
+    }
+  },
+
+  stopTeslaBeam() {
+    if (this.effects) this.effects.endLightning();
+  },
+
   updateBeam(dt) {
     const p = this.player;
     const def = p.def;
@@ -15447,17 +15664,16 @@ const Game = {
          EXPERIMENTAL WEAPONS — bespoke firing behaviours
          ============================================================ */
 
-      /* dispatcher: weapons with a `special` handler never fire a bullet */
+      /* dispatcher: weapons with a `special` handler never fire a bullet.
+         `electric` weapons (tesla) are a HELD continuous beam handled in the
+         game loop, so they must not fire a one-shot here. */
       fireSpecial(def, w) {
+        if (def.electric) return;
         const p = this.player;
-        const muzzle = this.muzzleWorldPos();
-        const origin = this.eyePos();
-        const dir = this.cameraDir();
         if (w.mag !== Infinity) w.mag--;
         p.bulletsFired++;
         p.fireCd = 60 / def.rpm;
         p.flashT = .05;
-        if (def.special === 'tesla') return this.fireTesla(def, muzzle, origin, dir);
       },
 
       /* ДРОН-ТУРЕЛЬ now lives in GEAR: V launches/recalls it */
@@ -15657,6 +15873,10 @@ const Game = {
         td.pos.y = U.lerp(td.pos.y, gy, 1 - Math.pow(.04, dt));
         td.pos.z = U.lerp(td.pos.z, tz, 1 - Math.pow(.02, dt));
         td.mesh.position.set(td.pos.x, td.pos.y, td.pos.z);
+        // spin the rotors fast while hovering
+        td.rotorSpin = (td.rotorSpin || 0) + dt * 40;
+        const rot = td.mesh.userData.rotors || [];
+        for (const r of rot) r.rotation.y = td.rotorSpin;
         // acquire the nearest zombie
         let best = null, bd = 1e9;
         if (this.horde) for (const z of this.horde.list) {
@@ -15748,6 +15968,9 @@ const Game = {
           const vl = Math.hypot(hd.vel.x, hd.vel.y, hd.vel.z) || 1;
           hd.mesh.lookAt(hd.pos.x + hd.vel.x / vl, hd.pos.y + hd.vel.y / vl, hd.pos.z + hd.vel.z / vl);
           hd.mesh.rotateZ(dt * 9);
+          hd.rotorSpin = (hd.rotorSpin || 0) + dt * 55;
+          const hrot = hd.mesh.userData.rotors || [];
+          for (const r of hrot) r.rotation.y = hd.rotorSpin;
           let boom = hd.life <= 0;
           if (hd.target) {
             const dd = Math.hypot(hd.target.pos.x - hd.pos.x, (hd.target.pos.y + 1.0 * hd.target.scale) - hd.pos.y, hd.target.pos.z - hd.pos.z);
@@ -17135,12 +17358,18 @@ const Game = {
     // Firing is only allowed once the match is live: not during the buy phase
     // and not while the buy menu is open.
     const beamReady = p.def && p.def.beam && p.spinT > .85 && p.beamVent <= 0;
+    const teslaHeld = p.def && p.def.electric;
     if (p.alive && !this.buyOpen && this.roundState === 'live') {
       const def = p.def;
-      if (def.beam && p.triggerDown && beamReady) {
+      if (teslaHeld && p.triggerDown && p.weapon.mag > 0 && p.fireCd <= 0) {
+        // held lightning: constant electric damage while the trigger is down
+        this.updateTeslaBeam(dt);
+        this._teslaOn = true;
+      } else if (def.beam && p.triggerDown && beamReady) {
         // held fire: a continuous piercing beam instead of bullets
         this.updateBeam(dt);
       } else {
+        if (this._teslaOn) { this.stopTeslaBeam(); this._teslaOn = false; }
         if (def.beam) this.stopBeam();
         if (def.auto || def.slot === 3 || held) {
           // automatic weapons fire continuously while held; with a continuous
@@ -17155,6 +17384,7 @@ const Game = {
       }
       if (!p.triggerDown) p._semiLatch = false;
     } else {
+      if (this._teslaOn) { this.stopTeslaBeam(); this._teslaOn = false; }
       if (p.def && p.def.beam) this.stopBeam();
       if (!p.triggerDown) p._semiLatch = false;
     }

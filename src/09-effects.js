@@ -345,6 +345,102 @@ class Effects {
 
   endBeam() { if (this._beam) this._beam.visible = false; }
 
+  /* ---------- TESLA: a held, constantly-crackling lightning arc ----------
+     Unlike holdBeam (a smooth energy tube), this redraws a jagged, forking
+     electric bolt every few frames, exactly like the reference photo. A bright
+     white core sits inside a wider blue halo, with side branches. */
+  holdLightning(from, to, color) {
+    const c = color === undefined ? 0x9ad6ff : color;
+    if (!this._lightning) {
+      this._lightning = new THREE.Group();
+      const lineMat = (col, op, w) => new THREE.LineBasicMaterial({ color: col, transparent: true, opacity: op, blending: THREE.AdditiveBlending, depthWrite: false });
+      this._ltCore = lineMat(0xffffff, .95);
+      this._ltBody = lineMat(c, .75);
+      this._ltGlow = lineMat(c, .35);
+      this._ltBranch = lineMat(0xcfe8ff, .55);
+      this._ltCoreMesh = new THREE.Line(new THREE.BufferGeometry(), this._ltCore);
+      this._ltBodyMesh = new THREE.Line(new THREE.BufferGeometry(), this._ltBody);
+      this._ltGlowMesh = new THREE.Line(new THREE.BufferGeometry(), this._ltGlow);
+      this._ltBranches = [];
+      for (let i = 0; i < 4; i++) {
+        const l = new THREE.Line(new THREE.BufferGeometry(), this._ltBranch);
+        this._ltBranches.push(l);
+      }
+      this._ltCoreMesh.frustumCulled = false;
+      this._ltBodyMesh.frustumCulled = false;
+      this._ltGlowMesh.frustumCulled = false;
+      [this._ltCoreMesh, this._ltBodyMesh, this._ltGlowMesh].forEach(m => { m.renderOrder = 4; this._lightning.add(m); });
+      this._ltBranches.forEach(l => { l.frustumCulled = false; l.renderOrder = 4; this._lightning.add(l); });
+      // a bright bloom at the muzzle (the "spark gap")
+      this._ltMuzzle = new THREE.Mesh(new THREE.SphereGeometry(1, 12, 10),
+        new THREE.MeshBasicMaterial({ color: 0xe8f4ff, transparent: true, opacity: .95, blending: THREE.AdditiveBlending, depthWrite: false }));
+      this._ltMuzzle.renderOrder = 5;
+      this._lightning.add(this._ltMuzzle);
+      this.scene.add(this._lightning);
+      this._ltRedraw = 0;
+    }
+    const dx = to.x - from.x, dy = to.y - from.y, dz = to.z - from.z;
+    const len = Math.sqrt(dx * dx + dy * dy + dz * dz);
+    if (len < .05) { this._lightning.visible = false; return; }
+    this._lightning.visible = true;
+
+    // rebuild the jagged path only a few times a second so it visibly crackles
+    this._ltRedraw -= 1;
+    if (this._ltRedraw <= 0) {
+      this._ltRedraw = 2 + (Math.random() * 2 | 0);
+      const N = 12;
+      const segs = 3;                                   // three parallel strands
+      for (let s = 0; s < segs; s++) {
+        const pts = [];
+        const amp = (s === 0 ? .05 : .16) * Math.min(1.6, len * .06) + .04;
+        for (let i = 0; i <= N; i++) {
+          const t = i / N;
+          const j = (i === 0 || i === N) ? 0 : 1;
+          const o = t * len;
+          pts.push(new THREE.Vector3(
+            from.x + (dx / len) * o + U.rand(-amp, amp) * j,
+            from.y + (dy / len) * o + U.rand(-amp, amp) * j,
+            from.z + (dz / len) * o + U.rand(-amp, amp) * j));
+        }
+        const mesh = s === 0 ? this._ltCoreMesh : s === 1 ? this._ltBodyMesh : this._ltGlowMesh;
+        mesh.geometry.dispose();
+        mesh.geometry = new THREE.BufferGeometry().setFromPoints(pts);
+      }
+      // side branches: short forks leaving the main bolt at random points
+      for (let b = 0; b < this._ltBranches.length; b++) {
+        const t0 = U.rand(.15, .85);
+        const base = {
+          x: from.x + dx * t0, y: from.y + dy * t0, z: from.z + dz * t0
+        };
+        const fl = len * U.rand(.12, .3);
+        const dir = new THREE.Vector3(dx, dy, dz).normalize();
+        const perp = new THREE.Vector3(U.rand(-1, 1), U.rand(-1, 1), U.rand(-1, 1)).normalize();
+        const pts = [];
+        for (let i = 0; i <= 5; i++) {
+          const t = i / 5;
+          pts.push(new THREE.Vector3(
+            base.x + dir.x * fl * t + perp.x * fl * t * .8 + U.rand(-.1, .1),
+            base.y + dir.y * fl * t + perp.y * fl * t * .8 + U.rand(-.1, .1),
+            base.z + dir.z * fl * t + perp.z * fl * t * .8 + U.rand(-.1, .1)));
+        }
+        const l = this._ltBranches[b];
+        l.geometry.dispose();
+        l.geometry = new THREE.BufferGeometry().setFromPoints(pts);
+        l.visible = true;
+      }
+    }
+    const puls = .5 + .5 * Math.sin(this._t * 42);
+    this._ltMuzzle.position.set(from.x, from.y, from.z);
+    this._ltMuzzle.scale.setScalar(.18 + puls * .10);
+    this._ltMuzzle.material.opacity = .7 + puls * .3;
+    this._ltBody.opacity = .55 + puls * .3;
+    this._ltGlow.opacity = .22 + puls * .2;
+    // crackling sparks at the impact point
+    if (Math.random() < .7) this.particle(to.x, to.y, to.z, U.rand(-4, 4), U.rand(1, 8), U.rand(-4, 4), U.rand(.06, .16), 'spark', U.rand(.1, .3));
+  }
+
+  endLightning() { if (this._lightning) this._lightning.visible = false; }
+
   /* ---------- particles ---------- */
   particle(x, y, z, vx, vy, vz, size, type, life) {
     if (this.particles.length > this.maxParticles) return null;

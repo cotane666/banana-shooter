@@ -1012,18 +1012,51 @@ function buildWeaponModel(id) {
       break;
     }
 
-    /* ТЕСЛА-ПУШКА: катушечная с разрядными кольцами */
+    /* ТЕСЛА-ПУШКА: a heavy coil gun — layered copper coils, a forked spark gap
+       at the muzzle and a glowing energy core. Reads as a lightning thrower. */
     case 'tesla': {
-      const ARC = 0x9ad6ff, CU = 0xb5762f;
-      add(B(.09, .10, .34, PAL.gun, 0, .05, -.14));            // корпус
-      add(CYL(.02, .40, PAL.steel, 0, .04, -.46));             // стержень
-      for (let i = 0; i < 6; i++) add(CYL(.055, .02, CU, 0, .04, -.28 - i * .07));  // медные катушки
-      add(B(.02, .12, .06, ARC, .07, .10, -.64, 0, .2));       // рожки
-      add(B(.02, .12, .06, ARC, -.07, .10, -.64, 0, -.2));
-      add(CYL(.05, .06, ARC, 0, .04, -.68, 8));                // дульное кольцо
-      add(B(.055, .13, .07, PAL.black, 0, -.075, .04, .16));   // рукоять
-      add(B(.08, .12, .12, 0x24404f, 0, .02, .20));            // конденсатор
-      add(DOT(.018, ARC, 0, .14, -.06));
+      const ARC = 0x9ad6ff, CU = 0xb5762f, CUD = 0x7a4c18, CORE = 0xdff2ff;
+      // main receiver body
+      add(B(.11, .12, .40, PAL.gun, 0, .05, -.12));            // ствольная коробка
+      add(B(.13, .03, .30, PAL.gunLight, 0, .12, -.12));       // верхняя планка
+      add(B(.09, .05, .16, PAL.black, 0, .05, .06));           // затвор
+      add(MAG(.06, .14, .08, PAL.mag, 0, -.075, .02, .18));    // магазин-катушка
+      // the coil stack: big copper rings shrinking toward the muzzle
+      const coilN = 7;
+      for (let i = 0; i < coilN; i++) {
+        const t = i / (coilN - 1);
+        const r = .085 - t * .028;
+        add(CYL(r, .030, i % 2 ? CU : CUD, 0, .05, -.30 - i * .075, 14));
+      }
+      // inner conducting rod the coils wrap
+      add(CYL(.022, .52, PAL.steel, 0, .05, -.46));
+      // twin prongs forming the spark gap
+      add(B(.022, .16, .07, PAL.steel, .085, .11, -.84, 0, .22));
+      add(B(.022, .16, .07, PAL.steel, -.085, .11, -.84, 0, -.22));
+      add(B(.022, .16, .07, PAL.steel, .085, -.01, -.84, 0, -.22));
+      add(B(.022, .16, .07, PAL.steel, -.085, -.01, -.84, 0, .22));
+      // glowing energy core at the gap
+      const core = new THREE.Mesh(new THREE.SphereGeometry(.05, 12, 10),
+        new THREE.MeshBasicMaterial({ color: CORE }));
+      core.position.set(0, .05, -.86); add(core);
+      // a ring electrode around the gap
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(.075, .014, 8, 20),
+        new THREE.MeshBasicMaterial({ color: ARC }));
+      ring.position.set(0, .05, -.88); add(ring);
+      // side arc-rails (glow) and indicators
+      add(B(.014, .10, .30, ARC, .11, .07, -.30, 0, .1));
+      add(B(.014, .10, .30, ARC, -.11, .07, -.30, 0, -.1));
+      // grip + trigger
+      add(B(.055, .14, .075, PAL.black, 0, -.08, .04, .16));
+      add(B(.02, .03, .06, PAL.steel, 0, -.045, .03));
+      // rear capacitor with glow + vent fins
+      add(CYL(.07, .16, 0x24404f, 0, .05, .19));
+      add(CYL(.075, .02, CU, 0, .05, .12));
+      add(CYL(.075, .02, CU, 0, .05, .26));
+      for (let i = 0; i < 4; i++) add(B(.15, .012, .020, PAL.gunLight, 0, .12 + i * .022, .19));
+      add(DOT(.016, ARC, 0, .14, -.14));
+      add(DOT(.012, ARC, .10, .10, -.42));
+      add(DOT(.012, ARC, -.10, .10, -.42));
       break;
     }
 
@@ -1141,7 +1174,8 @@ const MUZZLE_Z = {
   rocketgun: -0.94, shield: -0.30,
   banana: -0.92,
   acid: -0.76, hive: -0.26, disc: -0.32, freeze: -0.76, tesla: -0.72,
-  portal: -0.48, blackhole: -0.54, turretDrone: -0.28, chrono: -0.48
+  portal: -0.48, blackhole: -0.54, turretDrone: -0.28, chrono: -0.48,
+  tesla: -0.90
 };
 
 /* An RPG rocket: a tube body with a pointed warhead and fins */
@@ -1427,6 +1461,7 @@ function buildDroneModel() {
 
   // arms + rotors
   const rotorMat = new THREE.MeshLambertMaterial({ color: 0x8b939d, emissive: 0x0a0b0d });
+  const blurMat = new THREE.MeshBasicMaterial({ color: 0xb8c0c8, transparent: true, opacity: .16, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
   const rotors = [];
   const ARMS = [[-.24, -.16], [.24, -.16], [-.24, .16], [.24, .16]];
   for (const a of ARMS) {
@@ -1437,13 +1472,19 @@ function buildDroneModel() {
     const hub = new THREE.Mesh(new THREE.CylinderGeometry(.022, .022, .05, 8), darkMat);
     hub.position.set(a[0], .03, a[1]);
     g.add(hub);
-    // a flat disc reads as a spinning rotor at distance
-    const blade = new THREE.Mesh(new THREE.BoxGeometry(.30, .010, .032), rotorMat);
-    blade.position.set(a[0], .06, a[1]);
-    g.add(blade);
-    rotors.push(blade);
+    // a two-blade rotor on its own pivot so it can spin every frame
+    const pivot = new THREE.Group();
+    pivot.position.set(a[0], .06, a[1]);
+    pivot.add(new THREE.Mesh(new THREE.BoxGeometry(.30, .010, .030), rotorMat));
+    pivot.add(new THREE.Mesh(new THREE.BoxGeometry(.030, .010, .30), rotorMat));
+    const blur = new THREE.Mesh(new THREE.CircleGeometry(.17, 18), blurMat);
+    blur.rotation.x = -Math.PI / 2; blur.position.y = .005;
+    pivot.add(blur);
+    g.add(pivot);
+    rotors.push(pivot);
   }
   g.userData.rotors = rotors;
+  g.userData.rotorSpin = 0;
   return g;
 }
 

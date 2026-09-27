@@ -21,7 +21,7 @@ const UI = {
       'btnCopy', 'dmgDirs', 'android', 'ios', 'credits', 'crPlayer', 'crStats',
       'matchEnd', 'meTitle', 'meWinner', 'meScore', 'meDetail', 'btnMatchAgain', 'btnMatchMenu',
       'mapChips', 'playerChips', 'hpChips', 'hordeChips', 'lobbyMaps', 'lobbyPlayers', 'lobbyHp', 'lobbyFree', 'lobbyRounds',
-      'offCountChips', 'offHpChips', 'offFreeChips', 'offModeChips', 'offCustomBox', 'offHordeBox', 'offSpecialBox', 'offCpBox', 'offCpInfo', 'btnOffContinue', 'custom', 'lobbyShop', 'lobbyShopItems',
+      'offCountChips', 'offHpChips', 'offFreeChips', 'offModeChips', 'offCustomBox', 'offHordeBox', 'offSpecialBox', 'offCpBox', 'offCpInfo', 'offCpMode', 'offCpList', 'btnOffContinue', 'custom', 'lobbyShop', 'lobbyShopItems',
       'modScreen', 'modGrid', 'modActive',
       'extras', 'achGrid', 'recTable', 'btnExtrasBack', 'weaponWheel', 'wwInner',
       'medkitTag', 'droneTag', 'grenadeTag', 'shieldTag', 'heatTag', 'missileHud', 'mhTime', 'mhReadout',
@@ -272,16 +272,37 @@ const UI = {
     if (this.el.offCustomBox) this.el.offCustomBox.classList.toggle('hidden', mode !== 'custom');
     if (this.el.offHordeBox) this.el.offHordeBox.classList.toggle('hidden', mode !== 'horde' && mode !== 'freehorde');
     if (this.el.offSpecialBox) this.el.offSpecialBox.classList.toggle('hidden', ['bossrush', 'daily', 'endless'].indexOf(mode) < 0);
-    // checkpoint: show "ПРОДОЛЖИТЬ" only when there is one to continue from
-    const cp = (typeof Game !== 'undefined' && Game.loadCheckpoint) ? Game.loadCheckpoint() : null;
-    if (this.el.offCpBox) this.el.offCpBox.classList.toggle('hidden', !cp);
-    if (this.el.offCpInfo) this.el.offCpInfo.textContent = cp ? ('волна ' + cp.wave) : '';
+    // checkpoint: show save info for the SELECTED mode; each mode has its own slot
+    const all = (typeof Game !== 'undefined' && Game.allCheckpoints) ? Game.allCheckpoints() : {};
+    const key = offlineModeKey(mode, mode === 'horde' || mode === 'freehorde', mode === 'freehorde', mode === 'custom');
+    const cp = all[key] || null;
+    if (this.el.offCpBox) this.el.offCpBox.classList.toggle('hidden', Object.keys(all).length === 0);
+    if (this.el.offCpMode) this.el.offCpMode.textContent = offlineModeLabel(key);
+    if (this.el.offCpInfo) this.el.offCpInfo.textContent = cp ? ('волна ' + cp.wave) : 'нет сохранения';
     if (this.el.btnOffContinue) {
       this.el.btnOffContinue.classList.toggle('hidden', !cp);
       const b = this.el.btnOffContinue.querySelector('b');
       const i = this.el.btnOffContinue.querySelector('i');
       if (b) b.textContent = 'ПРОДОЛЖИТЬ' + (cp ? ' · ВОЛНА ' + cp.wave : '');
-      if (i) i.textContent = cp ? ('Оружие и счёт с волны ' + cp.wave) : 'С последнего чекпоинта';
+      if (i) i.textContent = cp ? (offlineModeLabel(key) + ' · оружие и счёт с волны ' + cp.wave) : 'Сохранения нет';
+    }
+    // a list of every saved run; clicking one selects that mode
+    if (this.el.offCpList) {
+      this.el.offCpList.innerHTML = '';
+      const keys = Object.keys(all).sort();
+      keys.forEach(k => {
+        const c = all[k];
+        const chip = document.createElement('button');
+        chip.className = 'cpchip' + (k === key ? ' on' : '');
+        chip.innerHTML = '<b>' + offlineModeLabel(k) + '</b><i>волна ' + c.wave + ' · $' + (c.money | 0) + '</i>';
+        chip.addEventListener('click', () => {
+          Store.data.offMode = k; Store.save();
+          // selecting a save also selects its mode; auto-resume it
+          this.refreshChips();
+          if (typeof Game !== 'undefined') Game.resumeFromCheckpoint(k);
+        });
+        this.el.offCpList.appendChild(chip);
+      });
     }
     // shop toggles: a category is "on" when it is allowed
     if (this.el.lobbyShop) {

@@ -479,6 +479,14 @@ html.touch #rangePanel #rpToggle{display:none !important}
 .modcard i{font-style:normal;font-size:11.5px;color:var(--dim);line-height:1.4}
 .mod-active{margin-top:16px;font-size:12px;letter-spacing:1px;color:var(--dim)}
 .mod-active b{color:#c24bff}
+.cpchips{display:flex;flex-wrap:wrap;gap:8px}
+.cpchip{background:#141a1f;border:1px solid var(--line);border-left:3px solid #39434c;border-radius:3px;
+  color:var(--txt);font-family:inherit;text-align:left;padding:7px 11px;cursor:pointer;transition:.12s}
+.cpchip:hover{background:#1d242b}
+.cpchip.on{border-left-color:var(--or);background:#241d12}
+.cpchip b{display:block;font-size:11.5px;letter-spacing:1.1px;color:#dfe6ee}
+.cpchip.on b{color:var(--or)}
+.cpchip i{font-style:normal;font-size:10.5px;color:var(--dim)}
 .ach-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px;margin-top:6px}
 .achcard{background:linear-gradient(180deg,#151a1f,#0f1317);border:1px solid var(--line);border-left:4px solid #39434c;
   padding:10px 12px;border-radius:4px}

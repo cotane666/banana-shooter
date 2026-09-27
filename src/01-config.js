@@ -332,6 +332,18 @@ const GEAR = {
 function grenadeName(kind) { return kind === 'freeze' ? 'КРИО' : kind === 'napalm' ? 'НАПАЛМ' : 'ГРАНАТА'; }
 function todName(k) { return k === 'night' ? 'НОЧЬ' : 'ДЕНЬ'; }
 function buildableName(k) { return k === 'barricade' ? 'БАРРИКАДА' : k === 'mine' ? 'МИНА' : 'ТУРЕЛЬ'; }
+/* one save slot per offline mode, so each mode keeps its own run */
+function offlineModeKey(modeId, horde, free, custom) {
+  if (custom) return 'custom';
+  if (modeId === 'bossrush' || modeId === 'daily' || modeId === 'endless') return modeId;
+  if (free) return 'freehorde';
+  if (horde) return 'horde';
+  return 'normal';
+}
+function offlineModeLabel(key) {
+  return ({ normal: 'ОБЫЧНЫЙ', horde: 'ОРДА ×10', freehorde: 'БЕСПЛАТНАЯ ОРДА',
+    custom: 'СВОЙ', bossrush: 'БОСС-РАШ', daily: 'ИСПЫТАНИЕ ДНЯ', endless: 'БЕСКОНЕЧНЫЙ' })[key] || key;
+}
 
 const BUY_CATS = [
   { id: 'pistol',  label: 'ПИСТОЛЕТЫ' },
@@ -465,7 +477,9 @@ const Store = {
           map: 'arena', players: 2, maxHP: 100, aimAssist: 1, horde: 0, clears: 0, freeplay: 0, rounds: 3, playTime: 0,
           offCount: 1, offHp: 1, offFree: 0, offMode: 'normal', offMods: {}, offModsRun: 0, offModPick: 0, checkpoint: null, shopAllow: {}, shopItems: {}, music: 1, sfxVol: 100, musicVol: 70,
           grenade: 'frag', buildable: 'turret', weather: 'day', trapsEnabled: 1,
-          ach: {}, runs: [], petOwned: 1 },
+          ach: {}, runs: [], petOwned: 1,
+          /* one saved run per offline mode: { normal|horde|freehorde|custom|bossrush|daily|endless: checkpoint } */
+          checkpoints: {} },
   load() {
     try { const r = localStorage.getItem(this.key); if (r) Object.assign(this.data, JSON.parse(r)); } catch (e) { }
     return this.data;

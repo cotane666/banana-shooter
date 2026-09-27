@@ -472,7 +472,7 @@ class ShooterDummy extends Dummy {
     if (this.flashT > 0) this.flashT -= dt;
     if (this.projCd > 0) this.projCd -= dt;
     if (!this.active || !this.alive || !target || !target.alive) return;
-    if (Game.aim || Game.shooterPickOpen) return;   // never into the aim room / while configuring
+    if (Game.aim || Game.shooterPickOpen || Game.enemySpawnOpen) return;   // never into the aim room / while configuring
     this.fireCd -= dt;
     const def = WEAPONS[this.weaponId] || WEAPONS.ak47;
     // launchers wait out their own cooldown so the smoke can clear
@@ -852,6 +852,8 @@ const Game = {
   online: null,
   buyOpen: false,
   shooterPickOpen: false,
+  enemySpawnOpen: false,
+  _spawnHpMul: 1,
   buyTimer: 0,
   roundState: 'idle',   // buy | live | end
   roundT: 0,
@@ -1038,6 +1040,13 @@ const Game = {
     bindClick('sdToggle2', () => { this.toggleShooterDummy(); this.renderShooterPick(); });
     const sdSearch = document.getElementById('sdSearch');
     if (sdSearch) sdSearch.addEventListener('input', () => this.renderShooterPick());
+    bindClick('esConfig', () => this.toggleEnemySpawn(true));
+    bindClick('esClose', () => this.toggleEnemySpawn(false));
+    bindClick('esClear', () => { this.clearRangeEnemies(); this.renderEnemySpawn(); });
+    const esSearch = document.getElementById('esSearch');
+    if (esSearch) esSearch.addEventListener('input', () => this.renderEnemySpawn());
+    const esCount = document.getElementById('esCount');
+    if (esCount) esCount.parentElement.addEventListener('click', () => this.cycleSpawnHp(1));
     bindClick('btnOnline', () => { UI.show('lobby'); this.resetLobby(); Net.warmup(); });
     bindClick('btnControls', () => { this._prevScreen = 'menu'; UI.show('controls'); });
     bindClick('btnControlsBack', () => UI.show(this._prevScreen || 'menu'));
@@ -1090,7 +1099,7 @@ const Game = {
         Input.consumeMouse();
         UI.el.clickToPlay.classList.add('hidden');
         this.paused = false;
-      } else if (wasLocked && this.mode !== CS.MODE.MENU && !this.buyOpen && !this.shooterPickOpen && !this.paused) {
+      } else if (wasLocked && this.mode !== CS.MODE.MENU && !this.buyOpen && !this.shooterPickOpen && !this.enemySpawnOpen && !this.paused) {
         // lost the lock (Alt+Tab, Esc) → pause. The shop and the dummy weapon
         // picker release the pointer on purpose, so they must not pause.
         this._lockLostAt = U.now();
@@ -1208,6 +1217,7 @@ const Game = {
         // in the same instant.
         if (this._lockLostAt && U.now() - this._lockLostAt < 300) break;
         if (this.shooterPickOpen) { this.toggleShooterPick(false); break; }
+        if (this.enemySpawnOpen) { this.toggleEnemySpawn(false); break; }
         if (UI.current === 'scoreboard') UI.show('hud');
         else if (this.paused) this.togglePause(false);
         else this.togglePause(true);
@@ -1253,6 +1263,13 @@ const Game = {
         break;
       case 'BracketRight':
         if (this.mode === CS.MODE.RANGE && !this.shooterPickOpen) this.cycleShooterWeapon(1);
+        break;
+      // range enemy spawner
+      case 'KeyX':
+        if (this.mode === CS.MODE.RANGE) this.toggleEnemySpawn(!this.enemySpawnOpen);
+        break;
+      case 'KeyZ':
+        if (this.mode === CS.MODE.RANGE && this.enemySpawnOpen) this.cycleSpawnHp(1);
         break;
     }
   },
@@ -1544,6 +1561,119 @@ const Game = {
 
   closeShooterPick() {
     if (this.shooterPickOpen) this.toggleShooterPick(false);
+  },
+
+  /* ============================================================
+     RANGE ENEMY SPAWNER
+     Lets the player drop ANY zombie (including every boss) into the range to
+     fight it in a controlled space. Spawned enemies behave normally, so their
+     ranged attacks, flight and boss abilities all work here too.
+     ============================================================ */
+  allEnemyIds() {
+    const ids = [];
+    for (const id in ZOMBIES) ids.push(id);
+    // normal enemies first, then the mini-boss, then the bosses (weak → strong)
+    const rank = id => (ZOMBIES[id].boss ? 2 : ZOMBIES[id].miniBoss ? 1 : 0);
+    ids.sort((a, b) => rank(a) - rank(b) || ZOMBIES[a].hp - ZOMBIES[b].hp);
+    return ids;
+  },
+
+  toggleEnemySpawn(on) {
+    if (on && this.mode !== CS.MODE.RANGE) return;
+    if (on) {
+      this.enemySpawnOpen = true;
+      this.renderEnemySpawn();
+      UI.show('esScreen');
+      if (!IS_TOUCH) Input.releaseLock();
+      const s = document.getElementById('esSearch');
+      if (s) s.value = '';
+    } else {
+      this.enemySpawnOpen = false;
+      UI.show('hud');
+      if (!IS_TOUCH && this.running) Input.requestLock();
+    }
+    if (IS_TOUCH) TouchUI.update();
+  },
+
+  closeEnemySpawn() { if (this.enemySpawnOpen) this.toggleEnemySpawn(false); },
+
+  renderEnemySpawn() {
+    const grid = document.getElementById('esGrid');
+    if (!grid) return;
+    const q = (document.getElementById('esSearch') ? document.getElementById('esSearch').value : '').trim().toLowerCase();
+    const el = document.getElementById('esCount');
+    if (el) el.textContent = String(this._spawnHpMul || 1);
+    grid.innerHTML = '';
+    let shown = 0;
+    for (const id of this.allEnemyIds()) {
+      const d = ZOMBIES[id];
+      if (q && d.name.toLowerCase().indexOf(q) < 0) continue;
+      shown++;
+      const rank = d.final ? 'ФИНАЛЬНЫЙ' : d.boss ? 'БОСС' : d.miniBoss ? 'МИНИ-БОСС' : '';
+      const card = document.createElement('div');
+      card.className = 'ecard' + (d.boss ? ' boss' : d.miniBoss ? ' mini' : '');
+      card.innerHTML =
+        '<div class="wn">' + U.esc(d.name) + '</div>' +
+        '<div class="wc">' + (rank ? rank : 'ВРАГ') + (d.shoot ? ' · СТРЕЛЯЕТ' : '') + (d.flying ? ' · ЛЕТАЕТ' : '') + '</div>' +
+        '<div class="wst"><span>HP <i>' + d.hp + '</i></span>' +
+        '<span>УРОН <i>' + d.dmg + '</i></span>' +
+        '<span>СКОР <i>' + d.speed + '</i></span></div>' +
+        (rank ? '<div class="tag">' + rank + '</div>' : '');
+      card.addEventListener('click', () => {
+        Audio3D_SFX.uiClick();
+        this.spawnRangeEnemy(id);
+      });
+      grid.appendChild(card);
+    }
+    if (!shown) grid.innerHTML = '<div class="ecard cant">Ничего не найдено</div>';
+  },
+
+  /* Drop one enemy in front of the player, a few metres out. */
+  spawnRangeEnemy(id) {
+    if (this.mode !== CS.MODE.RANGE || !this.horde) return;
+    const p = this.player;
+    const d = ZOMBIES[id];
+    if (!d) return;
+    const fwd = { x: -Math.sin(p.yaw), z: -Math.cos(p.yaw) };
+    const dist = d.boss ? 14 : 11;
+    const x = p.pos.x + fwd.x * dist + U.rand(-2, 2);
+    const z = p.pos.z + fwd.z * dist + U.rand(-2, 2);
+    const y = this.world.groundAt(x, z, 6);
+    const zz = this.horde.spawn(id, x, z, y === null ? 0 : y);
+    const mul = this._spawnHpMul || 1;
+    zz.maxHealth *= mul; zz.health = zz.maxHealth;
+    if (d.boss) zz.isBoss = true;
+    else if (d.miniBoss) zz.isMiniBoss = true;
+    UI.toast('Полигон: ' + d.name + (mul !== 1 ? ' ×' + mul + ' HP' : ''), d.boss ? '#c24bff' : d.miniBoss ? '#4ad6ff' : '#e33a2e');
+    Audio3D_SFX.growl(x, y === null ? 0 : y + 1.2, z, d.boss ? 'brute' : id);
+    // do not let a stray hit on the horde count as a wave clear
+    if (this._panelT <= 0) this.updateRangePanel();
+  },
+
+  /* cycle the spawn HP multiplier (1× → 2× → 5× → 10× → 1×) */
+  cycleSpawnHp(step) {
+    const opts = [1, 2, 5, 10];
+    let i = opts.indexOf(this._spawnHpMul || 1);
+    i = (i + (step || 1) + opts.length) % opts.length;
+    this._spawnHpMul = opts[i];
+    UI.toast('HP врагов на полигоне: ×' + opts[i], '#ff9d21');
+    this.renderEnemySpawn();
+  },
+
+  /* remove every enemy the spawner added (dummies and the shooting dummy stay) */
+  clearRangeEnemies() {
+    if (!this.horde) return;
+    let n = 0;
+    for (let i = this.horde.list.length - 1; i >= 0; i--) {
+      const z = this.horde.list[i];
+      if (z.isDummy) continue;
+      z.dispose(this.scene);
+      this.horde.list.splice(i, 1);
+      n++;
+    }
+    this.clearEnemyShots();
+    UI.toast(n ? 'Убрано врагов: ' + n : 'Врагов нет', '#57d16a');
+    Audio3D_SFX.uiClick();
   },
 
   /* On the range the player can be killed by the shooting dummy. Without this
@@ -2031,7 +2161,8 @@ const Game = {
       streak: document.getElementById('rpStreak'),
       best: document.getElementById('rpBest'),
       toggle: document.getElementById('rpToggle'),
-      sdToggle: document.getElementById('sdToggle')
+      sdToggle: document.getElementById('sdToggle'),
+      esConfig: document.getElementById('esConfig')
     };
     if (!el.panel) return;
     // The range panel (damage / hits / accuracy) is a PC-only readout: on a
@@ -2074,6 +2205,8 @@ const Game = {
         : 'ВКЛЮЧИТЬ (V) · ' + (def ? def.name : '');
       el.sdToggle.classList.toggle('on', on);
     }
+    // range enemy spawner label
+    if (el.esConfig) el.esConfig.textContent = 'СПАВН ВРАГА (X) · ×' + (this._spawnHpMul || 1);
   },
 
   startOnlineHost() { this.startOnline(CS.NETROLE.HOST); },
@@ -2269,6 +2402,7 @@ const Game = {
       this.remotePlayers = []; this.remote = null;
       // a picker left open while the range is torn down must not survive
       this.shooterPickOpen = false;
+      this.enemySpawnOpen = false;
       if (this.player && this.player.vmGroup && this.player.vmGroup.parent) this.player.vmGroup.parent.remove(this.player.vmGroup);
       if (this.effects) { this.effects.clear(); }
     };
@@ -2291,6 +2425,7 @@ const Game = {
     }
     this.buyOpen = false;
     this.shooterPickOpen = false;
+    this.enemySpawnOpen = false;
     this.roundState = 'idle';
     // hide the range scoreboard when we are no longer on the range
     this.updateRangePanel();
@@ -4153,7 +4288,7 @@ const Game = {
   },
 
   playerHurt(dmg, source) {    const p = this.player;
-    if (!p.alive || this.mode !== CS.MODE.OFFLINE) return;
+    if (!p.alive || (this.mode !== CS.MODE.OFFLINE && this.mode !== CS.MODE.RANGE)) return;
     this.applyDamageToSelf(dmg, source ? { x: source.pos.x, y: source.pos.y, z: source.pos.z } : null);
   },
 
@@ -5023,7 +5158,7 @@ const Game = {
     }
 
     // ---- movement is frozen during the buy phase (CS-style freeze time) ----
-    const frozen = this.roundState === 'buy' || this.shooterPickOpen;
+    const frozen = this.roundState === 'buy' || this.shooterPickOpen || this.enemySpawnOpen;
     const pin = frozen ? { f: 0, r: 0, run: false, crouch: p.in.crouch, wantJump: false } : p.in;
 
     // ---- physics ----
@@ -5037,7 +5172,7 @@ const Game = {
 
     // ---- AI ----
     if (this.horde) this.horde.update(dt, p);
-    if (this.mode === CS.MODE.OFFLINE) { this.updateBosses(dt); this.updateBossCharges(dt); }
+    if (this.mode === CS.MODE.OFFLINE || this.mode === CS.MODE.RANGE) { this.updateBosses(dt); this.updateBossCharges(dt); }
 
     // ---- effects ----
     if (this.effects) this.effects.update(dt);
@@ -5045,7 +5180,7 @@ const Game = {
     // ---- flying bananas ----
     this.updateProjectiles(dt);
     if (this.mode === CS.MODE.RANGE) this.updateDummyProjectiles(dt);
-    if (this.mode === CS.MODE.OFFLINE) this.updateEnemyShots(dt);
+    if (this.mode === CS.MODE.OFFLINE || this.mode === CS.MODE.RANGE) this.updateEnemyShots(dt);
     if (this.mode === CS.MODE.ONLINE) this.updateRemoteProjectiles(dt);
 
     // ---- networking ----
@@ -5350,7 +5485,7 @@ const Game = {
     const el = UI.el.bossBar;
     if (!el) return;
     let boss = null;
-    if (this.mode === CS.MODE.OFFLINE && this.horde) {
+    if ((this.mode === CS.MODE.OFFLINE || this.mode === CS.MODE.RANGE) && this.horde) {
       for (const z of this.horde.list) {
         if (z.alive && !z.dying && (z.isBoss || z.isMiniBoss)) { if (!boss || z.health > boss.health) boss = z; }
       }

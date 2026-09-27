@@ -305,6 +305,8 @@
     <div class="rp-sub">МАНЕКЕН-СТРЕЛОК</div>
     <button id="sdConfig">ОРУЖИЕ (C)</button>
     <button id="sdToggle">ВКЛЮЧИТЬ (V)</button>
+    <div class="rp-sub">ВРАГИ</div>
+    <button id="esConfig">СПАВН ВРАГА (X)</button>
   </div>
   <div id="dmgDirs"></div>
   <div id="dmgFlash"></div>
@@ -365,6 +367,22 @@
     <div class="sd-grid" id="sdGrid"></div>
     <div class="btnrow">
       <button class="mbtn" id="sdClose">ЗАКРЫТЬ (C / Esc)</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ ENEMY SPAWNER (range) ============ -->
+<div id="esScreen" class="screen hidden">
+  <div class="panel wide">
+    <h2>СПАВН ВРАГА</h2>
+    <div class="sd-tools">
+      <input type="text" id="esSearch" placeholder="Поиск врага…" autocomplete="off">
+      <div class="es-count">Сложность: <b id="esCount">1</b>× HP</div>
+      <button class="mbtn small primary" id="esClear">УБРАТЬ ВСЕХ</button>
+    </div>
+    <div class="sd-grid" id="esGrid"></div>
+    <div class="btnrow">
+      <button class="mbtn" id="esClose">ЗАКРЫТЬ (X / Esc)</button>
     </div>
   </div>
 </div>

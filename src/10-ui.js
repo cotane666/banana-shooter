@@ -23,7 +23,8 @@ const UI = {
       'mapChips', 'playerChips', 'hpChips', 'hordeChips', 'lobbyMaps', 'lobbyPlayers', 'lobbyHp', 'lobbyFree', 'lobbyRounds',
       'offCountChips', 'offHpChips', 'offFreeChips', 'custom', 'lobbyShop', 'lobbyShopItems',
       'medkitTag', 'droneTag', 'shieldTag', 'heatTag', 'missileHud', 'mhTime', 'mhReadout',
-      'sdScreen', 'sdGrid', 'sdSearch', 'sdToggle2', 'sdClose', 'sdConfig'];
+      'sdScreen', 'sdGrid', 'sdSearch', 'sdToggle2', 'sdClose', 'sdConfig',
+      'esScreen', 'esGrid', 'esSearch', 'esCount', 'esClear', 'esClose', 'esConfig'];
     ids.forEach(i => this.el[i] = $(i));
     this.buildBuyCats();
     this.buildChips();
@@ -31,7 +32,7 @@ const UI = {
 
   /* ---------------- screens ---------------- */
   show(name) {
-    ['loading', 'menu', 'controls', 'lobby', 'hud', 'buy', 'scoreboard', 'pause', 'connect', 'android', 'ios', 'credits', 'matchEnd', 'custom', 'clickToPlay', 'sdScreen'].forEach(s => {
+    ['loading', 'menu', 'controls', 'lobby', 'hud', 'buy', 'scoreboard', 'pause', 'connect', 'android', 'ios', 'credits', 'matchEnd', 'custom', 'clickToPlay', 'sdScreen', 'esScreen'].forEach(s => {
       const e = this.el[s];
       if (!e) return;
       const on = s === name;
@@ -40,12 +41,12 @@ const UI = {
     this.current = name;
   },
   hideOverlays() {
-    ['buy', 'scoreboard', 'pause', 'controls', 'lobby', 'menu', 'connect', 'android', 'ios', 'credits', 'matchEnd', 'custom', 'sdScreen'].forEach(s => {
+    ['buy', 'scoreboard', 'pause', 'controls', 'lobby', 'menu', 'connect', 'android', 'ios', 'credits', 'matchEnd', 'custom', 'sdScreen', 'esScreen'].forEach(s => {
       if (this.el[s]) this.el[s].classList.add('hidden');
     });
   },
   overlayOpen() {
-    return ['buy', 'scoreboard', 'pause', 'controls', 'lobby', 'menu', 'connect', 'android', 'ios', 'credits', 'matchEnd', 'custom', 'sdScreen'].some(s => this.el[s] && !this.el[s].classList.contains('hidden'));
+    return ['buy', 'scoreboard', 'pause', 'controls', 'lobby', 'menu', 'connect', 'android', 'ios', 'credits', 'matchEnd', 'custom', 'sdScreen', 'esScreen'].some(s => this.el[s] && !this.el[s].classList.contains('hidden'));
   },
 
   /* ============================================================

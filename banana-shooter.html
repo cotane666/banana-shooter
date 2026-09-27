@@ -8391,6 +8391,7 @@ class ShooterDummy extends Dummy {
   shoot(target) {
     const def = WEAPONS[this.weaponId] || WEAPONS.ak47;
     const from = { x: this.pos.x - Math.sin(this.yaw) * .6, y: this.pos.y + 1.35 * this.scale, z: this.pos.z - Math.cos(this.yaw) * .6 };
+    this.isMeleeShot = false;
 
     // ---- shield: carries it, never attacks; a little glow so it is not idle --
     if (def.shield) {
@@ -8406,8 +8407,9 @@ class ShooterDummy extends Dummy {
     if (def.slot === 3) {
       this.fireCd = Math.max(.7, 60 / (def.rpm || 120));
       this.flashT = .1;
+      this.isMeleeShot = true;
       Audio3D_SFX.shot('knife', from.x, from.y, from.z);
-      if (d.dist <= 3.0) Game.applyDamageToSelf(Math.min(50, Math.max(4, def.dmg * .5)), from);
+      if (d.dist <= 3.0) Game.damageFromDummy(Math.min(50, Math.max(4, def.dmg * .5)), from, this);
       return;
     }
 
@@ -8440,7 +8442,7 @@ class ShooterDummy extends Dummy {
     const perp2 = (oc.x * oc.x + oc.y * oc.y + oc.z * oc.z) - tca * tca;
     if (perp2 > .55 * .55) return;
     // reduced damage so the player can trade fire instead of dropping at once
-    Game.applyDamageToSelf(Math.min(50, Math.max(4, def.dmg * .22)), from);
+    Game.damageFromDummy(Math.min(50, Math.max(4, def.dmg * .22)), from, this);
   }
 
   /* Launch a physical round that Game flies and detonates (rockets, the guided
@@ -9499,8 +9501,11 @@ const Game = {
         : (wall ? wall.point : null);
       if (impact) {
         if (pr.splash > 0) this.explodeDummy(impact, pr);
-        else { this.effects.bananaSplat(impact.x, impact.y, impact.z); Audio3D_SFX.bananaSplat(impact.x, impact.y, impact.z); }
-        if (!pr.splash && hitP && p.alive) this.applyDamageToSelf(pr.dmg * .25, impact);
+        else {
+          this.effects.bananaSplat(impact.x, impact.y, impact.z);
+          Audio3D_SFX.bananaSplat(impact.x, impact.y, impact.z);
+          if (hitP && p.alive) this.damageFromDummy(pr.dmg * .25, impact, null);
+        }
         this.removeDummyProjectile(i);
         continue;
       }
@@ -9527,7 +9532,10 @@ const Game = {
     const p = this.player;
     if (!p || !p.alive) return;
     const ds = Math.hypot(p.pos.x - center.x, (p.pos.y + 1) - center.y, p.pos.z - center.z);
-    if (ds <= R) this.applyDamageToSelf(Math.max(4, dmg * (1 - ds / R)), center);
+    if (ds > R) return;
+    // a blast that would hurt us is thrown back while the field is up
+    if (this.playerShieldUp()) { this.reflectAtDummy(center, dmg, false); return; }
+    this.applyDamageToSelf(Math.max(4, dmg * (1 - ds / R)), center);
   },
 
   removeDummyProjectile(i) {
@@ -11749,6 +11757,42 @@ const Game = {
   playerHurt(dmg, source) {    const p = this.player;
     if (!p.alive || this.mode !== CS.MODE.OFFLINE) return;
     this.applyDamageToSelf(dmg, source ? { x: source.pos.x, y: source.pos.y, z: source.pos.z } : null);
+  },
+
+  /* Damage aimed at us by the shooting dummy. While our shield is up the hit is
+     caught and thrown straight back at the dummy instead — the local mirror of
+     `onRemoteHit`'s reflect, so the range behaves like an online duel. */
+  damageFromDummy(dmg, from, dummy) {
+    const p = this.player;
+    if (this.playerShieldUp()) {
+      this.reflectAtDummy(from, dmg, !!dummy && !!dummy.isMeleeShot);
+      return;
+    }
+    this.applyDamageToSelf(dmg, from);
+  },
+
+  /* Is the energy shield currently raised? Kept in one place so both the online
+     reflect path and the range dummy agree on what counts as "blocking". */
+  playerShieldUp() {
+    const p = this.player;
+    return !!(p && p.alive && p.shieldActive);
+  },
+
+  /* The shield caught a hit: the damage is thrown back at the shooter. On the
+     range the shooter is the dummy, which is invulnerable, so the reward is the
+     feedback plus a visible retaliation burst. */
+  reflectAtDummy(from, dmg, isMelee) {
+    UI.hitmark(false); this._hitmarkT = U.now();
+    Audio3D_SFX.pickup();
+    UI.feed('<span class="z">Щит отразил удар</span>');
+    UI.toast(isMelee ? 'Щит отразил удар!' : 'Щит отразил выстрел!', '#4aa3ff');
+    const d = this.shooterDummy;
+    if (d && this.effects && from) {
+      this.effects.laser({ x: d.pos.x, y: d.pos.y + 1.3, z: d.pos.z },
+        { x: from.x, y: from.y, z: from.z });
+      // let the readout react, as if the reflected round really struck it
+      d.hitFlash = .1;
+    }
   },
 
   applyDamageToSelf(dmg, fromPos) {

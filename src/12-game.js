@@ -578,6 +578,7 @@ class RemotePlayer {
   constructor(name, team, peerId) {
     this.id = peerId || ('remote' + (REMOTE_SKIN + 1));
     this.peerId = peerId || this.id;
+    this.isRemotePlayer = true;        // lets targeting code tell peers from zombies
     this.name = name || 'Игрок';
     this.team = team || 't';
     this.pos = { x: 0, y: 0, z: 0 };
@@ -4522,6 +4523,21 @@ const Game = {
         if (z.alive && !z.dying && def.burnT) { z.burnT = Math.max(z.burnT || 0, def.burnT); z.burnDps = def.burnDps || 100; }
       }
     }
+    /* ---- opponents in an online duel ---- */
+    if (this.mode === CS.MODE.ONLINE && this.remotePlayers.length) {
+      const pvpDps = (def.flamePvpDps || def.dmg) * dt;
+      for (const rp of this.remotePlayers) {
+        if (!rp.alive) continue;
+        const dx = rp.pos.x - origin.x, dy = (rp.pos.y + 1 * (rp.mech ? 2 : 1)) - origin.y, dz = rp.pos.z - origin.z;
+        const d = Math.hypot(dx, dy, dz);
+        const reach = range + 1.0 + extraR;
+        if (d > reach) continue;
+        const nd = Math.max(d, .001);
+        const dot = (dx / nd) * dir.x + (dy / nd) * dir.y + (dz / nd) * dir.z;
+        if (d > 4.0 && dot < cosCone) continue;
+        this.sendPvpHit(pvpDps, 'body', false, rp, 'flame');
+      }
+    }
     // wall: stop the flame visual a bit short of a wall
     const wall = this.world.raycast(origin, dir, range, ['ground']);
     const span = wall ? Math.min(range, wall.t) : range;
@@ -4875,9 +4891,9 @@ const Game = {
       /* ЧЁРНАЯ ДЫРА: drag the horde toward the singularity while it flies */
       if (pr.kind === 'blackhole') {
         if (pr.mesh.userData.ring) pr.mesh.userData.ring.rotation.z += dt * 3.2;
-        if (this.horde && pr.wellArmed) {
+        if (pr.wellArmed) {
           const R = pr.wellR || 9;
-          for (const z of this.horde.list) {
+          if (this.horde) for (const z of this.horde.list) {
             if (!z.alive || z.dying) continue;
             const dx = pr.pos.x - z.pos.x, dz = pr.pos.z - z.pos.z;
             const d = Math.hypot(dx, dz);
@@ -4885,6 +4901,23 @@ const Game = {
               const pull = (pr.wellPull || 10) * (1 - d / R);
               z.pos.x += (dx / d) * pull * dt;
               z.pos.z += (dz / d) * pull * dt;
+            }
+          }
+          // opponents are dragged in and take the well's damage over time
+          if (this.mode === CS.MODE.ONLINE) {
+            pr._wellTick = (pr._wellTick || 0) - dt;
+            const tick = pr._wellTick <= 0;
+            if (tick) pr._wellTick = .5;
+            for (const rp of this.remotePlayers) {
+              if (!rp.alive) continue;
+              const dx = pr.pos.x - rp.pos.x, dz = pr.pos.z - rp.pos.z;
+              const d = Math.hypot(dx, dz);
+              if (d < R && d > .4) {
+                const pull = (pr.wellPull || 10) * (1 - d / R);
+                rp.pos.x += (dx / d) * pull * dt;
+                rp.pos.z += (dz / d) * pull * dt;
+                if (tick) this.sendPvpHit((pr.wellDps || 45) * .5, 'body', false, rp, 'blackhole');
+              }
             }
           }
         }
@@ -4962,6 +4995,13 @@ const Game = {
             if (!z.alive || z.dying) continue;
             const d = Math.hypot(z.pos.x - impactPoint.x, z.pos.z - impactPoint.z);
             if (d < R) { z.takeDamage(pr.dmg, 'body', dir); this.player.damageDealt += pr.dmg; }
+          }
+          if (this.mode === CS.MODE.ONLINE) {
+            for (const rp of this.remotePlayers) {
+              if (!rp.alive) continue;
+              const d = Math.hypot(rp.pos.x - impactPoint.x, rp.pos.z - impactPoint.z);
+              if (d < R) this.sendPvpHit(pr.dmg * (1 - d / R), 'body', false, rp, 'acid');
+            }
           }
           this.removeProjectile(i);
           continue;
@@ -5193,12 +5233,20 @@ const Game = {
         this._mechMissileAt = now;
         this.mechMissiles = this.mechMissiles || [];
         const dir = this.cameraDir();
-        // pick up to 4 nearest zombies as targets
+        // pick up to 4 nearest enemies: zombies, plus opponents in an online duel
         let targets = [];
         if (this.horde) {
           targets = this.horde.list.filter(z => z.alive && !z.dying)
             .map(z => ({ z: z, d: Math.hypot(z.pos.x - p.pos.x, z.pos.z - p.pos.z) }))
             .sort((a, b) => a.d - b.d).slice(0, 4).map(o => o.z);
+        }
+        if (this.mode === CS.MODE.ONLINE) {
+          const remotes = this.remotePlayers.filter(rp => rp.alive)
+            .map(rp => ({ z: rp, d: Math.hypot(rp.pos.x - p.pos.x, rp.pos.z - p.pos.z) }))
+            .sort((a, b) => a.d - b.d).slice(0, 4).map(o => o.z);
+          targets = targets.concat(remotes)
+            .sort((a, b) => Math.hypot(a.pos.x - p.pos.x, a.pos.z - p.pos.z) - Math.hypot(b.pos.x - p.pos.x, b.pos.z - p.pos.z))
+            .slice(0, 4);
         }
         for (let i = 0; i < 4; i++) {
           // launch from the left shoulder pod (where the red tubes are)
@@ -5211,7 +5259,8 @@ const Game = {
           this.mechMissiles.push({
             mesh: mesh, pos: { x: mesh.position.x, y: mesh.position.y, z: mesh.position.z },
             vel: { x: dir.x * 8, y: 4, z: dir.z * 8 }, life: 8,
-            target: targets[i % Math.max(1, targets.length)] || null, dmg: 420
+            target: targets[i % Math.max(1, targets.length)] || null, dmg: 420,
+            targetIsRemote: !!(targets[i % Math.max(1, targets.length)] && targets[i % Math.max(1, targets.length)].isRemotePlayer)
           });
         }
         const snd = this.mechMuzzleWorldPos('left');
@@ -5227,11 +5276,19 @@ const Game = {
           m.life -= dt;
           // (re)acquire a target if ours died
           if (!m.target || !m.target.alive || m.target.dying) {
-            m.target = this.nearestZombie(m.pos.x, m.pos.z, 40);
+            if (this.mode === CS.MODE.ONLINE) {
+              m.target = this.nearestEnemy(m.pos.x, m.pos.z, 40);
+              m.targetIsRemote = !!(m.target && m.target.isRemotePlayer);
+            } else {
+              m.target = this.nearestZombie(m.pos.x, m.pos.z, 40);
+              m.targetIsRemote = false;
+            }
           }
+          const tgtRemote = m.targetIsRemote || !!(m.target && m.target.isRemotePlayer);
+          const tgtH = m.target ? (tgtRemote ? 1.2 : 1.1 * m.target.scale) : 1;
           const sp = 34;
           if (m.target) {
-            const to = { x: m.target.pos.x - m.pos.x, y: (m.target.pos.y + 1.1 * m.target.scale) - m.pos.y, z: m.target.pos.z - m.pos.z };
+            const to = { x: m.target.pos.x - m.pos.x, y: (m.target.pos.y + tgtH) - m.pos.y, z: m.target.pos.z - m.pos.z };
             const l = Math.hypot(to.x, to.y, to.z) || 1;
             const k = 1 - Math.pow(.02, dt);
             m.vel.x = U.lerp(m.vel.x, to.x / l * sp, k);
@@ -5246,7 +5303,7 @@ const Game = {
           if (Math.random() < .8) this.effects.particle(m.pos.x, m.pos.y, m.pos.z, U.rand(-.5, .5), U.rand(-.2, .8), U.rand(-.5, .5), U.rand(.06, .16), 'smoke', U.rand(.3, .7));
           let boom = m.life <= 0;
           if (m.target) {
-            const dd = Math.hypot(m.target.pos.x - m.pos.x, (m.target.pos.y + 1.1 * m.target.scale) - m.pos.y, m.target.pos.z - m.pos.z);
+            const dd = Math.hypot(m.target.pos.x - m.pos.x, (m.target.pos.y + tgtH) - m.pos.y, m.target.pos.z - m.pos.z);
             if (dd < 1.2) boom = true;
           }
           if (boom) {
@@ -5504,9 +5561,41 @@ const Game = {
           const h = rayZombie(origin, dir, z, range);
           if (h && (!hit || h.t < hit.t)) { hit = h; hitZ = z; }
         }
+        // opponents along the same bolt (online)
+        let hitP = null;
+        if (this.mode === CS.MODE.ONLINE) {
+          const hp = this.rayRemoteAny(origin, dir, range);
+          if (hp) hitP = hp;
+        }
         const wall = this.world.raycast(origin, dir, range, ['ground']);
+        const wallT = wall ? wall.t : Infinity;
+        const zt = hit ? hit.t : Infinity;
+        const pt = hitP ? hitP.t : Infinity;
+        // is a player the closest thing in front of the wall?
+        const playerFirst = hitP && pt < zt && pt < wallT;
         let end;
-        if (hit && hitZ && (!wall || hit.t < wall.t)) {
+        if (playerFirst) {
+          end = { x: origin.x + dir.x * pt, y: origin.y + dir.y * pt, z: origin.z + dir.z * pt };
+          const hs = hitP.part === 'head';
+          this.sendPvpHit(def.dmg, hitP.part, hs, hitP.rp, 'tesla');
+          // fork to any other opponents nearby, decaying, mirroring the zombie chain
+          let src = hitP, prevPoint = end, dmg = def.dmg * .7;
+          const hitIds = {}; hitIds[hitP.rp.peerId] = 1;
+          for (let c = 0; c < (def.chain || 4); c++) {
+            let next = null, nd = 1e9, npt = null;
+            for (const rp of this.remotePlayers) {
+              if (!rp.alive || hitIds[rp.peerId]) continue;
+              const d = Math.hypot(rp.pos.x - src.point.x, rp.pos.z - src.point.z);
+              if (d < (def.chainRange || 10) && d < nd) { nd = d; next = rp; npt = { x: rp.pos.x, y: rp.pos.y + 1.2, z: rp.pos.z }; }
+            }
+            if (!next) break;
+            this.sendPvpHit(dmg, 'body', false, next, 'tesla');
+            this.effects.bolt(prevPoint, npt, 0x39e6ff);
+            prevPoint = npt; hitIds[next.peerId] = 1; src = { point: npt }; dmg *= .8;
+          }
+          this.effects.bolt(muzzle, end, 0x39e6ff);
+          UI.hitmark(true);
+        } else if (hit && hitZ && hit.t < wallT) {
           end = { x: origin.x + dir.x * hit.t, y: origin.y + dir.y * hit.t, z: origin.z + dir.z * hit.t };
           let src = hitZ, prevPoint = end, dmg = def.dmg;
           const hitIds = { };
@@ -5682,21 +5771,30 @@ const Game = {
         td.rotorSpin = (td.rotorSpin || 0) + dt * 40;
         const rot = td.mesh.userData.rotors || [];
         for (const r of rot) r.rotation.y = td.rotorSpin;
-        // acquire the nearest zombie
-        let best = null, bd = 1e9;
+        // acquire the nearest enemy (zombie or, online, an opponent)
+        let best = null, bd = 1e9, bestRemote = false;
         if (this.horde) for (const z of this.horde.list) {
           if (!z.alive || z.dying) continue;
           const d = Math.hypot(z.pos.x - td.pos.x, z.pos.z - td.pos.z);
-          if (d < td.range && d < bd) { bd = d; best = z; }
+          if (d < td.range && d < bd) { bd = d; best = z; bestRemote = false; }
+        }
+        if (this.mode === CS.MODE.ONLINE) for (const rp of this.remotePlayers) {
+          if (!rp.alive) continue;
+          const d = Math.hypot(rp.pos.x - td.pos.x, rp.pos.z - td.pos.z);
+          if (d < td.range && d < bd) { bd = d; best = rp; bestRemote = true; }
         }
         if (!best) { td.fireCd = 0; return; }
-        const to = { x: best.pos.x, y: best.pos.y + 1.0 * best.scale, z: best.pos.z };
+        const to = { x: best.pos.x, y: best.pos.y + (bestRemote ? 1.2 : 1.0 * best.scale), z: best.pos.z };
         td.mesh.lookAt(to.x, to.y, to.z);
         td.fireCd -= dt;
         if (td.fireCd <= 0) {
           td.fireCd = td.cd;
-          best.takeDamage(td.dmg, 'body', { x: 0, y: 0, z: 0 });
-          this.player.damageDealt += td.dmg;
+          if (bestRemote) {
+            this.sendPvpHit(td.dmg, 'body', false, best, 'turret');
+          } else {
+            best.takeDamage(td.dmg, 'body', { x: 0, y: 0, z: 0 });
+            this.player.damageDealt += td.dmg;
+          }
           this.effects.tracer({ x: td.pos.x, y: td.pos.y, z: td.pos.z }, to, true, .6);
           Audio3D_SFX.shot('smg', td.pos.x, td.pos.y, td.pos.z);
         }
@@ -5704,8 +5802,8 @@ const Game = {
 
       /* АБСОЛЮТНЫЙ НОЛЬ: chills everything in the blast; chilled bodies shatter. */
       freezeAt(center, R, seconds, dmg) {
-        if (!this.horde) return;
-        for (const z of this.horde.list) {
+        if (!this.horde) { /* still affect online opponents below */ }
+        else for (const z of this.horde.list) {
           if (!z.alive || z.dying || z.isBoss) continue;     // bosses shrug it off
           const d = Math.hypot(z.pos.x - center.x, z.pos.z - center.z);
           if (d > R) continue;
@@ -5713,6 +5811,13 @@ const Game = {
           if (z.alive && !z.dying) {
             if (typeof z.freeze === 'function') z.freeze(seconds);
             else { z.frozen = true; z.freezeT = Math.max(z.freezeT || 0, seconds); }
+          }
+        }
+        if (this.mode === CS.MODE.ONLINE) {
+          for (const rp of this.remotePlayers) {
+            if (!rp.alive) continue;
+            const d = Math.hypot(rp.pos.x - center.x, rp.pos.z - center.z);
+            if (d <= R) this.sendPvpHit(dmg * (1 - (d / R) * .5), 'body', false, rp, 'freeze');
           }
         }
       },
@@ -5755,14 +5860,32 @@ const Game = {
         return best;
       },
 
+      /* nearest enemy for the hive drones: a zombie, or an opponent online */
+      nearestEnemy(x, z, r) {
+        let best = null, bd = r * r;
+        if (this.horde) for (const zz of this.horde.list) {
+          if (!zz.alive || zz.dying) continue;
+          const d = (zz.pos.x - x) * (zz.pos.x - x) + (zz.pos.z - z) * (zz.pos.z - z);
+          if (d < bd) { bd = d; best = zz; }
+        }
+        if (this.mode === CS.MODE.ONLINE) for (const rp of this.remotePlayers) {
+          if (!rp.alive) continue;
+          const d = (rp.pos.x - x) * (rp.pos.x - x) + (rp.pos.z - z) * (rp.pos.z - z);
+          if (d < bd) { bd = d; best = rp; }
+        }
+        return best;
+      },
+
       updateHives(dt) {
         if (!this.hiveDrones || !this.hiveDrones.length) return;
         for (let i = this.hiveDrones.length - 1; i >= 0; i--) {
           const hd = this.hiveDrones[i];
           hd.life -= dt;
-          if (!hd.target || !hd.target.alive || hd.target.dying) hd.target = this.nearestZombie(hd.pos.x, hd.pos.z, 32);
+          if (!hd.target || !hd.target.alive || hd.target.dying) { hd.target = this.nearestEnemy(hd.pos.x, hd.pos.z, 32); hd.targetIsRemote = !!(hd.target && hd.target.isRemotePlayer); }
+          const tgtIsRemote = hd.targetIsRemote || !!(hd.target && hd.target.isRemotePlayer);
           if (hd.target) {
-            const to = { x: hd.target.pos.x - hd.pos.x, y: (hd.target.pos.y + 1.0 * hd.target.scale) - hd.pos.y, z: hd.target.pos.z - hd.pos.z };
+            const ty = hd.target.pos.y + (tgtIsRemote ? 1.2 : 1.0 * hd.target.scale);
+            const to = { x: hd.target.pos.x - hd.pos.x, y: ty - hd.pos.y, z: hd.target.pos.z - hd.pos.z };
             const l = Math.hypot(to.x, to.y, to.z) || 1, sp = 24;
             hd.vel.x = U.lerp(hd.vel.x, to.x / l * sp, 1 - Math.pow(.05, dt));
             hd.vel.y = U.lerp(hd.vel.y, to.y / l * sp, 1 - Math.pow(.05, dt));
@@ -5778,13 +5901,23 @@ const Game = {
           for (const r of hrot) r.rotation.y = hd.rotorSpin;
           let boom = hd.life <= 0;
           if (hd.target) {
-            const dd = Math.hypot(hd.target.pos.x - hd.pos.x, (hd.target.pos.y + 1.0 * hd.target.scale) - hd.pos.y, hd.target.pos.z - hd.pos.z);
+            const ty = hd.target.pos.y + (tgtIsRemote ? 1.2 : 1.0 * hd.target.scale);
+            const dd = Math.hypot(hd.target.pos.x - hd.pos.x, ty - hd.pos.y, hd.target.pos.z - hd.pos.z);
             if (dd < 1.1) boom = true;
           }
           if (boom) {
-            if (hd.target && hd.target.alive) { hd.target.takeDamage(hd.dmg, 'body', { x: 0, y: 0, z: 0 }); this.player.damageDealt += hd.dmg; }
+            if (tgtIsRemote) {
+              // a hive drone that caught an opponent: damage + a visible blast
+              if (hd.target.alive) this.sendPvpHit(hd.dmg, 'body', false, hd.target, 'hive');
+            } else if (hd.target && hd.target.alive) {
+              hd.target.takeDamage(hd.dmg, 'body', { x: 0, y: 0, z: 0 });
+              this.player.damageDealt += hd.dmg;
+            }
             this.effects.explosion(hd.pos.x, hd.pos.y, hd.pos.z, 2.2, [0xffc94a, 0x2a1a05]);
             Audio3D_SFX.explosionAt(hd.pos.x, hd.pos.y, hd.pos.z);
+            if (this.mode === CS.MODE.ONLINE && Net.connected) {
+              Net.send({ t: 'boom', from: Net.selfId(), x: +hd.pos.x.toFixed(2), y: +hd.pos.y.toFixed(2), z: +hd.pos.z.toFixed(2), r: 2.2, c: [0xffc94a, 0x2a1a05] });
+            }
             if (hd.mesh.parent) hd.mesh.parent.remove(hd.mesh);
             hd.mesh.traverse(o => { if (o.geometry) o.geometry.dispose(); });
             this.hiveDrones.splice(i, 1);
@@ -5848,8 +5981,8 @@ const Game = {
           fd.tick -= dt;
           if (fd.tick > 0) continue;
           fd.tick = .5;
-          if (!this.horde) continue;
-          for (const z of this.horde.list) {
+          if (!this.horde) { /* still hurt online opponents below */ }
+          else for (const z of this.horde.list) {
             if (!z.alive || z.dying) continue;
             const d = Math.hypot(z.pos.x - fd.pos.x, z.pos.z - fd.pos.z);
             if (d > fd.radius) continue;
@@ -5860,6 +5993,15 @@ const Game = {
             } else if (fd.kind === 'frost' && !z.isBoss) {
               if (typeof z.freeze === 'function') z.freeze(1.0);
               else { z.frozen = true; z.freezeT = Math.max(z.freezeT || 0, 1.0); }
+            }
+          }
+          /* ---- opponents standing in the pool (online) ---- */
+          if (this.mode === CS.MODE.ONLINE && fd.kind === 'acid') {
+            const dealt = (fd.dps || 55) * .5;
+            for (const rp of this.remotePlayers) {
+              if (!rp.alive) continue;
+              const d = Math.hypot(rp.pos.x - fd.pos.x, rp.pos.z - fd.pos.z);
+              if (d <= fd.radius) this.sendPvpHit(dealt, 'body', false, rp, 'acid');
             }
           }
         }

@@ -1676,11 +1676,15 @@ const Game = {
       this.hordeMode = false;                       // custom replaces the fixed ×10 preset
       this.offCountMul = U.clamp(parseFloat(Store.data.offCount) || 1, 0.1, 50);
       this.offHpMul = U.clamp(parseFloat(Store.data.offHp) || 1, 0.05, 20);
+      // exact per-wave count: when set, every wave spawns exactly this many
+      this.offCountExact = (Store.data.offCountFixed === 1)
+        ? U.clamp(Math.round(parseFloat(Store.data.offCountExact) || 10), 1, 1000) : null;
     } else {
       // fixed presets: the "БЕСПЛАТНАЯ ОРДА" button (or a restart of it) sets free
       this.freePlay = free === true;
       this.offCountMul = null;
       this.offHpMul = null;
+      this.offCountExact = null;
     }
     this._freeHorde = this.freePlay;
     /* ---- special offline modes (boss-rush / daily / endless) ---- */
@@ -3157,7 +3161,7 @@ const Game = {
     const free = this.isFreeShop();
 
     /* Consumables: ammo refill, kamikaze drone, grenades and the medkit upgrade. */
-    if (g.ammo || g.medkit || g.medkitBox || g.drone || g.grenade || g.buildable || g.turretGear) {
+    if (g.ammo || g.medkit || g.medkitBox || g.drone || g.grenade || g.buildable || g.turretGear || g.mechSuit) {
       if (!free && this.player.money < g.price) { Audio3D_SFX.deny(); UI.toast('Не хватает денег'); return; }
       // the field kit is limited unless the medkit-box upgrade was bought
       if (g.medkit && !this.player.medkitUnlimited && (this.player.medkits || 0) >= CFG.medkitMax) {
@@ -3191,13 +3195,17 @@ const Game = {
       else if (g.turretGear) {
         this.player.turretDrone = (this.player.turretDrone || 0) + 1;
       }
+      else if (g.mechSuit) {
+        this.equipMechSuit();
+      }
       Audio3D_SFX.buy();
       const extra = g.medkitBox ? ' — лимит аптечек снят'
         : g.medkit ? ' (' + this.player.medkits + ' в запасе)'
           : g.drone ? ' (' + this.player.drone + ' в запасе)'
             : g.turretGear ? ' (' + this.player.turretDrone + ' заряд · V — вылет)'
-              : g.grenade ? ' (' + this.player.grenades[g.grenade] + ' шт · G — бросок)'
-                : g.buildable ? ' (' + this.player.builds[g.buildable] + ' шт · K — поставить)' : '';
+              : g.mechSuit ? ' — наденьте (слоты 1/2)'
+                : g.grenade ? ' (' + this.player.grenades[g.grenade] + ' шт · G — бросок)'
+                  : g.buildable ? ' (' + this.player.builds[g.buildable] + ' шт · K — поставить)' : '';
       UI.toast('Куплено: ' + g.name + extra, '#57d16a');
       UI.renderBuy(this.player, this.buyTimer);
       if (this.mode === CS.MODE.ONLINE) this.broadcastScore();
@@ -3752,6 +3760,8 @@ const Game = {
     // zombie-count multiplier: custom mode uses its own, else the ×10 preset
     const countMul = (this.offCountMul != null) ? this.offCountMul : (this.hordeMode ? CFG.hordeCountMul : 1);
     count = Math.round(count * countMul * (this.modState ? this.modState.count : 1));
+    // custom "exact" count: every wave is exactly this many zombies
+    if (this.offCountExact != null) count = this.offCountExact;
 
     /* ---- BOSS-RUSH: every wave is a boss, escalating with each one ---- */
     if (this.isBossRush) {
@@ -4327,6 +4337,65 @@ const Game = {
      hits the nearest target and forks to others in a chain — damage per second,
      not per shot. It drinks from the magazine, so it eventually runs dry.
      ============================================================ */
+  /* ============================================================
+     FLAMETHROWER: a held cone of fire
+     Every frame the trigger is down, everything within the cone in front is set
+     alight (damage per second), and the flame visual streams from the muzzle.
+     ============================================================ */
+  updateFlamer(dt) {
+    const p = this.player;
+    const def = p.def;
+    const origin = this.eyePos();
+    const dir = this.cameraDir();
+    const muzzle = this.muzzleWorldPos();
+    const range = def.flameRange || 13;
+    const cone = def.flameCone || .42;
+    const dps = (def.flameDps || def.dmg) * dt;
+    if (this.horde) {
+      for (const z of this.horde.list) {
+        if (!z.alive || z.dying) continue;
+        // distance + angle test (a cone, not a ray)
+        const dx = z.pos.x - origin.x, dy = (z.pos.y + 1 * z.scale) - origin.y, dz = z.pos.z - origin.z;
+        const d = Math.hypot(dx, dy, dz);
+        if (d > range + z.radius) continue;
+        const nd = Math.max(d, .001);
+        const dot = (dx / nd) * dir.x + (dy / nd) * dir.y + (dz / nd) * dir.z;
+        if (dot < Math.cos(cone)) continue;
+        z.takeDamage(dps, 'body', dir);
+        p.damageDealt += dps;
+        if (z.alive && !z.dying && def.burnT) { z.burnT = Math.max(z.burnT || 0, def.burnT); z.burnDps = def.burnDps || 100; }
+      }
+    }
+    // wall: stop the flame visual a bit short of a wall
+    const wall = this.world.raycast(origin, dir, range, ['ground']);
+    const span = wall ? Math.min(range, wall.t) : range;
+    this.effects.holdFlame(muzzle, dir, span, U.now() / 1000);
+    Audio3D_SFX && Audio3D_SFX.flame && Audio3D_SFX.flame(muzzle.x, muzzle.y, muzzle.z);
+    p.bulletsFired += dt * 30;
+    // the tank drains
+    const w = p.weapon;
+    if (w.mag !== Infinity) {
+      w.mag -= (def.rpm / 60) * dt;             // rpm=60 → 1 unit per second
+      if (w.mag <= 0) { w.mag = 0; this.effects.endFlame(); if (def.mag !== Infinity) p.reload(); }
+    }
+    UI.hitmark(false); this._hitmarkT = U.now();
+  },
+
+  /* burning zombies keep taking fire damage after they leave the cone */
+  updateBurning(dt) {
+    if (!this.horde) return;
+    for (const z of this.horde.list) {
+      if (!z.alive || z.dying || !z.burnT || z.burnT <= 0) continue;
+      z.burnT -= dt;
+      const dealt = (z.burnDps || 100) * dt;
+      z.takeDamage(dealt, 'body', { x: 0, y: 0, z: 0 });
+      this.player.damageDealt += dealt;
+      if (Math.random() < .25) {
+        this.effects.particle(z.pos.x, z.pos.y + 1, z.pos.z, U.rand(-1, 1), U.rand(1.5, 3), U.rand(-1, 1), U.rand(.06, .14), 'spark', U.rand(.2, .5));
+      }
+    }
+  },
+
   updateTeslaBeam(dt) {
     const p = this.player;
     const def = p.def;
@@ -4853,6 +4922,78 @@ const Game = {
         return true;
       },
 
+      /* МЕХАКОСТЮМ: grants the mech minigun (slot 2) + hyper laser (slot 1).
+         They are equipped like normal weapons because they use the standard
+         slots, so 1/2 switch between them and reloading works as usual. */
+      equipMechSuit() {
+        const p = this.player;
+        p.give('mechMinigun');
+        p.give('mechLaser');
+        p.mechSuit = true;
+        p.slot = 2;
+        p.deployT = .6;
+        p.buildViewModel(); this.attachViewModel();
+        UI.center('МЕХАКОСТЮМ', 'ЛКМ — миниган · ПКМ — гипер-лазер', 2.4);
+        UI.toast('Мехакостюм надет: миниган (ЛКМ) + гипер-лазер (ПКМ)', '#4ad6ff');
+      },
+      /* the suit is "active" while its two weapons are still owned */
+      isMechActive() {
+        const p = this.player;
+        return !!(p && p.mechSuit && p.inv[2] && p.inv[2].id === 'mechMinigun' && p.inv[1] && p.inv[1].id === 'mechLaser');
+      },
+      /* ЛКМ fires the minigun, ПКМ fires the laser, both independent and held */
+      updateMech(dt, lmb, rmb) {
+        const p = this.player;
+        // --- minigun (slot 2) ---
+        const mg = p.inv[2];
+        if (mg && mg.id === 'mechMinigun' && lmb) {
+          const def = WEAPONS.mechMinigun;
+          if (p.spinT < 1) { p.spinT = Math.min(1, (p.spinT || 0) + dt / (def.spinUp || .55)); }
+          p.applyBarrelSpin();
+          if (p.spinT >= 1 && mg.mag > 0) {
+            p.fireCd = p.fireCd || 0;
+            if (p.fireCd <= 0 && p.deployT <= 0 && p.reloadT <= 0) {
+              this.fireWeaponAt('mechMinigun', def, mg);
+              p.fireCd = 60 / def.rpm;
+            }
+          }
+        } else if (mg && mg.id === 'mechMinigun') {
+          p.spinT = Math.max(0, (p.spinT || 0) - dt / ((WEAPONS.mechMinigun.spinUp || .55) * 1.4));
+        }
+        // --- hyper laser (slot 1) ---
+        const lz = p.inv[1];
+        if (lz && lz.id === 'mechLaser' && rmb) {
+          const def = WEAPONS.mechLaser;
+          if (p.fireCd2 === undefined) p.fireCd2 = 0;
+          p.fireCd2 -= dt;
+          if (p.fireCd2 <= 0 && lz.mag > 0 && p.deployT <= 0) {
+            this.fireWeaponAt('mechLaser', def, lz);
+            p.fireCd2 = 60 / def.rpm;
+          }
+        }
+      },
+      /* fire a specific weapon (by id) without switching the held slot */
+      fireWeaponAt(id, def, w) {
+        const p = this.player;
+        if (w.mag !== Infinity) w.mag--;
+        p.bulletsFired++;
+        const origin = this.eyePos();
+        const baseDir = this.cameraDir();
+        const spread = (def.spread || 0) + (p.spread || 0) * .5;
+        const pellets = def.pellets || 1;
+        const muzzleWorld = this.muzzleWorldPos();
+        p.flashT = .05;
+        for (let i = 0; i < pellets; i++) {
+          const dir = this.spreadDirection(baseDir, spread, pellets > 1);
+          this.traceShot(origin, dir, def, false, muzzleWorld);
+        }
+        p.spread = Math.min(.09, p.spread + (def.recoil || 0) * .0055);
+        p.recoil += (def.recoil || 0) * .0042;
+        p.viewPunchP += (def.recoil || 0) * .0028;
+        Audio3D_SFX.shot(def.sound || 'rifle');
+        if (this.effects) this.effects.muzzleSmoke(muzzleWorld.x, muzzleWorld.y, muzzleWorld.z, baseDir);
+      },
+
       /* ТЕСЛА-ПУШКА: hits the first target, then arcs from it to the nearest
        * other zombies, damage decaying with every jump. */
       fireTesla(def, muzzle, origin, dir) {
@@ -4885,14 +5026,14 @@ const Game = {
               }
             }
             if (!next) break;
-            this.effects.bolt(prevPoint, npt, 0x9ad6ff);
+            this.effects.bolt(prevPoint, npt, 0x39e6ff);
             prevPoint = npt; hitIds[next.id] = 1; src = next; dmg *= .82;
           }
-          this.effects.bolt(muzzle, end, 0x9ad6ff);
+          this.effects.bolt(muzzle, end, 0x39e6ff);
           UI.hitmark(true);
         } else {
           end = wall ? wall.point : { x: origin.x + dir.x * range, y: origin.y + dir.y * range, z: origin.z + dir.z * range };
-          this.effects.bolt(muzzle, end, 0x9ad6ff);
+          this.effects.bolt(muzzle, end, 0x39e6ff);
           UI.hitmark(false);
         }
         Audio3D_SFX.laser(muzzle.x, muzzle.y, muzzle.z);
@@ -6524,7 +6665,15 @@ const Game = {
     const beamReady = p.def && p.def.beam && p.spinT > .85 && p.beamVent <= 0;
     if (p.alive && !this.buyOpen && this.roundState === 'live') {
       const def = p.def;
-      if (def.beam && p.triggerDown && beamReady) {
+      /* ---- МЕХАКОСТЮМ: ЛКМ — гигантский миниган, ПКМ — гипер-лазер ---- */
+      if (this.isMechActive()) {
+        if (p.def && p.def.beam) this.stopBeam();
+        const rmb = Input.aimDown() && canLook && !IS_TOUCH;
+        this.updateMech(dt, p.triggerDown, rmb || (IS_TOUCH && TouchUI.aimPressed));
+      } else if (def.flame && p.triggerDown && p.weapon.mag > 0 && p.fireCd <= 0) {
+        // held fire: a cone of flame that burns everything in front
+        this.updateFlamer(dt);
+      } else if (def.beam && p.triggerDown && beamReady) {
         // held fire: a continuous piercing beam instead of bullets
         this.updateBeam(dt);
       } else {
@@ -6571,6 +6720,7 @@ const Game = {
       this.updateChronoFields(dt);   // time-dilation bubbles
       this.updateHives(dt);          // hives hatching their swarm
       this.updatePortals(dt);        // mirror-gate teleport + lifetime
+      this.updateBurning(dt);        // lingering fire damage from the flamethrower
       this.updateTurretDrone(dt);    // companion turret auto-fire
     }
 

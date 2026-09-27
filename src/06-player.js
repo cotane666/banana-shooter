@@ -1132,6 +1132,75 @@ function buildWeaponModel(id) {
       break;
     }
 
+    /* ---------------- ОГНЕМЁТ: flamethrower ---------------- */
+    case 'flamer': {
+      const TANK = 0x9a3b1a, TANK2 = 0x6f2a12, NOZ = 0x3a3f45;
+      add(B(.10, .11, .30, PAL.gun, 0, .04, -.12));                    // ствольная коробка
+      add(B(.11, .12, .16, NOZ, 0, .05, .04));                         // бак-камера
+      add(CYL(.045, .52, PAL.steel, 0, .02, -.44));                    // ствол-труба
+      add(CYL(.06, .07, NOZ, 0, .02, -.70));                           // сопло
+      add(CYL(.075, .05, 0xff8a2a, 0, .02, -.735, 12));                // раскалённый срез
+      for (let i = 0; i < 3; i++) add(B(.11, .010, .020, PAL.steel, 0, .09, -.22 - i * .14));  // кожух
+      add(B(.05, .12, .07, PAL.black, 0, -.075, .03, .16));            // рукоять
+      add(CYL(.07, .22, TANK, 0, -.02, .22));                          // баллон
+      add(CYL(.066, .03, TANK2, 0, -.02, .11));
+      add(CYL(.066, .03, TANK2, 0, -.02, .33));
+      add(CYL(.03, .10, PAL.black, 0, .08, .22));                      // вентиль
+      add(B(.028, .028, .028, 0xffd24a, 0, .14, .22));                 // индикатор
+      break;
+    }
+
+    /* ---------------- МЕХА-МИНИГАН: giant 6-barrel spinning cannon (mech suit) ---------------- */
+    case 'mechMinigun': {
+      const GLOW = 0x4ad6ff;
+      add(B(.12, .14, .40, PAL.gun, 0, 0, -.14));                      // giant housing
+      add(B(.13, .020, .40, PAL.black, 0, .072, -.14));
+      for (let i = 0; i < 5; i++) add(B(.122, .010, .016, PAL.black, 0, -.05 + i * .026, -.14));
+      add(B(.13, .15, .16, PAL.black, 0, 0, .07));                     // gearbox
+      add(CYL(.075, .06, PAL.steel, 0, 0, .14, 16));
+      const barrels = new THREE.Group();
+      for (let i = 0; i < 6; i++) {
+        const a = (i / 6) * Math.PI * 2;
+        barrels.add(CYL(.020, .95, PAL.steel, Math.cos(a) * .075, Math.sin(a) * .075, -.85, 6));
+        barrels.add(CYL(.024, .06, PAL.black, Math.cos(a) * .075, Math.sin(a) * .075, -.42, 8));
+        barrels.add(CYL(.024, .06, PAL.black, Math.cos(a) * .075, Math.sin(a) * .075, -1.16, 8));
+      }
+      barrels.add(CYL(.088, .09, PAL.black, 0, 0, -.42, 14));
+      barrels.add(CYL(.086, .08, PAL.black, 0, 0, -.78, 14));
+      barrels.add(CYL(.080, .06, GLOW, 0, 0, -1.22, 14));              // hot muzzle ring
+      barrels.add(CYL(.062, .03, PAL.steel, 0, 0, -1.26, 14));
+      barrels.name = 'barrels';
+      g.add(barrels);
+      // glowing mech brace + drum
+      add(B(.20, .022, .40, GLOW, 0, -.085, -.20));
+      add(B(.19, .20, .22, PAL.oliv, 0, -.21, .0));                    // ammo drum
+      add(CYL(.10, .12, PAL.oliv, 0, -.21, .13, 16));
+      add(B(.05, .05, .06, GLOW, 0, .10, .0));                         // core light
+      break;
+    }
+
+    /* ---------------- ГИПЕР-ЛАЗЕР: heavy piercing laser (mech suit) ---------------- */
+    case 'mechLaser': {
+      const GLOW = 0x39ff6a;
+      add(B(.10, .12, .46, PAL.gun, 0, 0, -.16));                      // long body
+      add(B(.11, .020, .40, PAL.gunLight, 0, .075, -.16));
+      const barrels = new THREE.Group();
+      for (let i = 0; i < 3; i++) {
+        const a = (i / 3) * Math.PI * 2;
+        barrels.add(CYL(.016, .70, PAL.steel, Math.cos(a) * .045, Math.sin(a) * .045, -.70, 8));
+      }
+      barrels.add(CYL(.024, .76, GLOW, 0, 0, -.72, 12));               // glowing core rod
+      barrels.add(CYL(.05, .05, GLOW, 0, 0, -1.08, 12));               // emitter ring
+      for (let i = 0; i < 5; i++) barrels.add(CYL(.05, .016, GLOW, 0, 0, -.30 - i * .12, 12));  // coils
+      barrels.name = 'barrels';
+      g.add(barrels);
+      add(B(.06, .14, .09, PAL.black, 0, -.085, .04, .16));            // grip
+      add(B(.09, .14, .16, 0x2a3a2e, 0, .02, .2));                     // power cell
+      add(CYL(.028, .10, PAL.black, 0, .1, .2));                       // cell cap
+      add(B(.03, .03, .04, GLOW, 0, .12, -.10));                       // core light
+      break;
+    }
+
     /* ---------------- Knife ---------------- */
     default:
     case 'knife': {

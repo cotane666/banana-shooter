@@ -278,6 +278,19 @@ const WEAPONS = {
           auto: true, spread: .020, moveSpread: .030, recoil: .18, falloff: .85, range: 78, headMul: 1.5,
           sound: 'laser', special: 'tesla', chain: 4, chainRange: 10 },
 
+  /* ОГОНЬ: flamethrower — a held cone of fire that burns everything in front */
+  flamer: { name: 'ОГНЕМЁТ', cat: 'exp', slot: 2, price: 20000, dmg: 22, rpm: 60, mag: 200, reserve: 400,
+          auto: true, spread: .07, moveSpread: .030, recoil: 0, falloff: .6, range: 14, headMul: 1.2,
+          sound: 'shotgun', flame: true, flameDps: 900, flameRange: 13, flameCone: .42, burnT: 3.5, burnDps: 120 },
+
+  /* ---------- МЕХАКОСТЮМ: giant 6-barrel minigun (primary) + hyper laser (secondary) ---------- */
+  mechMinigun: { name: 'МЕХА-МИНИГАН', cat: 'exp', slot: 2, price: 0, dmg: 55, rpm: 1600, mag: 600, reserve: 1200,
+          auto: true, spread: .030, moveSpread: .020, recoil: .55, falloff: .70, range: 130, headMul: 2.0,
+          sound: 'rifle', spinUp: .55, mechWeapon: true },
+  mechLaser: { name: 'ГИПЕР-ЛАЗЕР', cat: 'exp', slot: 1, price: 0, dmg: 320, rpm: 420, mag: 2000, reserve: 0,
+          auto: true, spread: .006, moveSpread: .020, recoil: .5, falloff: .98, range: 220, headMul: 1.8,
+          sound: 'laser', pierce: true, mechWeapon: true },
+
   /* ГРАВИТАЦИЯ: black hole — a sphere that drags the horde in, then implodes */
   blackhole: { name: 'ЧЁРНАЯ ДЫРА', cat: 'exp', slot: 2, price: 65000, dmg: 60, rpm: 30, mag: 1, reserve: 5,
           auto: false, spread: .004, moveSpread: .050, recoil: 5.0, falloff: .99, range: 240, headMul: 1.2,
@@ -298,6 +311,7 @@ const GEAR = {
   medkitBox:    { name: 'ЯЩИК АПТЕЧЕК',   price: 10000, medkitBox: true, desc: 'Навсегда снимает лимит на аптечки' },
   drone:        { name: 'ДРОН-КАМИКАДЗЕ', price: 10000, drone: true, desc: 'Управляемый · F — запуск, враг может сбить' },
   turretGear:   { name: 'ДРОН-ТУРЕЛЬ',    price: 12000, turretGear: true, desc: 'V — вылетает и стреляет сам' },
+  mechSuit:     { name: 'МЕХАКОСТЮМ',      price: 30000, mechSuit: true, desc: 'Мех-миниган (6 стволов) + гипер-лазер · 1/2 — переключить' },
   frag:         { name: 'ГРАНАТА',         price: 100,  grenade: 'frag',   desc: 'Осколочная · G — бросок' },
   freezeNade:   { name: 'КРИО-ГРАНАТА',    price: 120,  grenade: 'freeze', desc: 'Замораживает зомби в области' },
   napalmNade:   { name: 'НАПАЛМ',          price: 150,  grenade: 'napalm', desc: 'Оставляет горящую лужу' }
@@ -447,7 +461,7 @@ const Store = {
   data: { sens: 2.2, fov: 80, vol: 60, quality: 1, touchSens: 1.5, name: '', best: 0, bestWave: 0, killsTotal: 0, matches: 0, wins: 0, signalSrv: 0, aimBest: 0, aimAutoFire: 1,
           map: 'arena', players: 2, maxHP: 100, aimAssist: 1, horde: 0, clears: 0, freeplay: 0, rounds: 3, playTime: 0,
           offCount: 1, offHp: 1, offFree: 0, offMode: 'normal', offMods: {}, offModsRun: 0, offModPick: 0, checkpoint: null, shopAllow: {}, shopItems: {}, music: 1, sfxVol: 100, musicVol: 70,
-          grenade: 'frag', buildable: 'turret', weather: 'day', trapsEnabled: 1,
+          grenade: 'frag', buildable: 'turret', weather: 'day', trapsEnabled: 1, offCountExact: 10, offCountFixed: 0,
           ach: {}, runs: [],
           /* one saved run per offline mode: { normal|horde|freehorde|custom|bossrush|daily|endless: checkpoint } */
           checkpoints: {} },

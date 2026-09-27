@@ -488,7 +488,12 @@ html.touch #rangePanel #rpToggle{display:none !important}
 .cpchip.on b{color:var(--or)}
 .cpchip i{font-style:normal;font-size:10.5px;color:var(--dim)}
 .ach-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px;margin-top:6px}
-.achcard{background:linear-gradient(180deg,#151a1f,#0f1317);border:1px solid var(--line);border-left:4px solid #39434c;
+.numrow{display:flex;align-items:center;gap:10px;margin-top:9px;font-size:12px;color:var(--dim);letter-spacing:.6px;flex-wrap:wrap}
+.numin{width:90px;background:#12171c;color:#fff;border:1px solid var(--line);border-radius:3px;padding:7px 9px;
+  font-family:inherit;font-size:13px;outline:none}
+.numin:focus{border-color:var(--or)}
+.exacttoggle{display:flex;align-items:center;gap:6px;cursor:pointer;color:var(--txt)}
+.exacttoggle input{accent-color:var(--or)}.achcard{background:linear-gradient(180deg,#151a1f,#0f1317);border:1px solid var(--line);border-left:4px solid #39434c;
   padding:10px 12px;border-radius:4px}
 .achcard.on{border-left-color:#ffd24a;background:linear-gradient(180deg,#221c10,#151109)}
 .achcard b{display:block;font-size:12.5px;letter-spacing:1.2px;color:#dfe6ee;margin-bottom:5px}

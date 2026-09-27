@@ -227,38 +227,40 @@ class Effects {
     (this.arcs || (this.arcs = [])).push({ mesh: line, life: .12, max: .12 });
   }
 
-  /* a fat, forking electric bolt for tesla shots: a white core inside a coloured
-     halo plus a couple of side branches (matches the reference lightning look) */
+  /* a fat, forking electric bolt for tesla shots: a bright neon-blue core inside a
+     wider glow, with mild jaggedness (less shake) and one short side-branch. */
   bolt(from, to, color) {
-    const c = color === undefined ? 0x9ad6ff : color;
+    const c = color === undefined ? 0x39e6ff : color;      // neon blue
     this.arcs = this.arcs || [];
     const strands = [
-      { col: 0xffffff, op: .95, w: 1, amp: .10 },
-      { col: c, op: .7, w: 1, amp: .22 },
-      { col: c, op: .35, w: 1, amp: .40 }
+      { col: 0xeaffff, op: .95, amp: .030 },               // white-hot core
+      { col: c, op: .80, amp: .075 },                      // neon-blue body
+      { col: c, op: .40, amp: .15 }                        // wide soft glow
     ];
     const dx = to.x - from.x, dy = to.y - from.y, dz = to.z - from.z;
     const len = Math.hypot(dx, dy, dz) || 1;
     for (const s of strands) {
-      const N = 7, pts = [];
+      const N = 8, pts = [];
+      const seed = [];
+      for (let i = 0; i <= N; i++) seed.push([U.rand(-1, 1), U.rand(-1, 1), U.rand(-1, 1)]);
       for (let i = 0; i <= N; i++) {
         const t = i / N;
-        const j = (i === 0 || i === N) ? 0 : s.amp;
+        const j = (i === 0 || i === N) ? 0 : s.amp * len;
         pts.push(new THREE.Vector3(
-          from.x + dx * t + U.rand(-j, j) * len * .3,
-          from.y + dy * t + U.rand(-j, j) * len * .3,
-          from.z + dz * t + U.rand(-j, j) * len * .3));
+          from.x + dx * t + seed[i][0] * j,
+          from.y + dy * t + seed[i][1] * j,
+          from.z + dz * t + seed[i][2] * j));
       }
       const mat = new THREE.LineBasicMaterial({ color: s.col, transparent: true, opacity: s.op, blending: THREE.AdditiveBlending, depthWrite: false });
       const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), mat);
       line.frustumCulled = false; line.renderOrder = 4;
       this.scene.add(line);
-      this.arcs.push({ mesh: line, life: .07, max: .07 });
+      this.arcs.push({ mesh: line, life: .06, max: .06 });
     }
     // one short side-branch
     const t0 = U.rand(.3, .7);
     const bx = from.x + dx * t0, by = from.y + dy * t0, bz = from.z + dz * t0;
-    const per = new THREE.Vector3(U.rand(-1, 1), U.rand(-1, 1), U.rand(-1, 1)).normalize().multiplyScalar(len * .22);
+    const per = new THREE.Vector3(U.rand(-1, 1), U.rand(-1, 1), U.rand(-1, 1)).normalize().multiplyScalar(len * .10);
     const bts = [
       new THREE.Vector3(bx, by, bz),
       new THREE.Vector3(bx + per.x * .5, by + per.y * .5, bz + per.z * .5),
@@ -268,8 +270,61 @@ class Effects {
     const bline = new THREE.Line(new THREE.BufferGeometry().setFromPoints(bts), bmat);
     bline.frustumCulled = false; bline.renderOrder = 4;
     this.scene.add(bline);
-    this.arcs.push({ mesh: bline, life: .07, max: .07 });
+    this.arcs.push({ mesh: bline, life: .06, max: .06 });
   }
+
+  /* ---------- FLAMETHROWER: a held cone of fire ----------
+     A jittering cone of overlapping additive blobs from the muzzle, growing as
+     it travels, with a hot core near the nozzle and smoke at the tip. */
+  holdFlame(from, dir, range, t) {
+    if (!this._flame) {
+      this._flame = new THREE.Group();
+      this._flameBlobs = [];
+      for (let i = 0; i < 16; i++) {
+        const m = new THREE.Mesh(new THREE.SphereGeometry(1, 8, 6),
+          new THREE.MeshBasicMaterial({ color: 0xff8a2a, transparent: true, opacity: .5, blending: THREE.AdditiveBlending, depthWrite: false }));
+        m.renderOrder = 4;
+        this._flame.add(m);
+        this._flameBlobs.push({ mesh: m, seed: Math.random(), r: .5 + Math.random() * .9, off: Math.random() * 6.28 });
+      }
+      this._flameMuzzle = new THREE.Mesh(new THREE.SphereGeometry(1, 10, 8),
+        new THREE.MeshBasicMaterial({ color: 0xfff2c0, transparent: true, opacity: .9, blending: THREE.AdditiveBlending, depthWrite: false }));
+      this._flameMuzzle.renderOrder = 5;
+      this._flame.add(this._flameMuzzle);
+      this.scene.add(this._flame);
+    }
+    this._flame.visible = true;
+    const puls = .5 + .5 * Math.sin(t * 40);
+    for (let i = 0; i < this._flameBlobs.length; i++) {
+      const b = this._flameBlobs[i];
+      const f = ((b.seed + t * 1.7) % 1);              // 0..1 along the cone
+      const dist = f * range;
+      const spread = f * .9 + .12;
+      const jx = Math.sin(t * 22 + b.off) * spread * .5, jy = Math.cos(t * 19 + b.off * 2) * spread * .4, jz = Math.cos(t * 24 + b.off) * spread * .5;
+      b.mesh.position.set(from.x + dir.x * dist + jx, from.y + dir.y * dist + .1 + jy, from.z + dir.z * dist + jz);
+      const s = (.10 + f * .28) * b.r;
+      b.mesh.scale.setScalar(s);
+      // hot white-yellow near the nozzle → orange → fading at the tip
+      b.mesh.material.color.setHex(f < .25 ? 0xfff0b0 : f < .6 ? 0xff8a2a : 0xd0442a);
+      b.mesh.material.opacity = (.7 - f * .5) * (.7 + puls * .3);
+    }
+    this._flameMuzzle.position.set(from.x + dir.x * .25, from.y + dir.y * .25, from.z + dir.z * .25);
+    this._flameMuzzle.scale.setScalar(.14 + puls * .06);
+    this._flameMuzzle.material.opacity = .7 + puls * .3;
+    // embers + smoke thrown forward
+    if (Math.random() < .9) {
+      const d = U.rand(.3, 1) * range;
+      this.particle(from.x + dir.x * d, from.y + dir.y * d, from.z + dir.z * d,
+        dir.x * U.rand(1, 5) + U.rand(-1, 1), U.rand(.5, 3), dir.z * U.rand(1, 5) + U.rand(-1, 1),
+        U.rand(.08, .20), 'spark', U.rand(.2, .5));
+    }
+    if (Math.random() < .5) {
+      const d = U.rand(.5, 1) * range;
+      this.particle(from.x + dir.x * d, from.y + dir.y * d + .3, from.z + dir.z * d,
+        dir.x * U.rand(.5, 2), U.rand(1, 2.5), dir.z * U.rand(.5, 2), U.rand(.2, .5), 'smoke', U.rand(.4, 1.0));
+    }
+  }
+  endFlame() { if (this._flame) this._flame.visible = false; }
 
   /* ---------- laser beam: a bright green core with a soft outer glow ---------- */
   laser(from, to) {

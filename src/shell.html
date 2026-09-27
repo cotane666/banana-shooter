@@ -63,6 +63,12 @@
       </div>
       <div class="fld">Зомби за волну
         <div class="chips" id="offCountChips"></div>
+        <div class="numrow">
+          <span>Точно, штук за волну:</span>
+          <input type="number" id="offCountExact" min="1" max="1000" step="1" value="10" class="numin">
+          <label class="exacttoggle"><input type="checkbox" id="offCountFixed"> фиксировать</label>
+        </div>
+        <div class="hintbox" style="margin-top:6px">Галочка «фиксировать» — каждая волна будет ровно столько зомби, без роста с номером волны.</div>
       </div>
       <div class="fld">Здоровье зомби
         <div class="chips" id="offHpChips"></div>
@@ -122,6 +128,7 @@
       <div class="krow"><kbd>O</kbd><span>День / ночь</span></div>
       <div class="krow"><kbd>M</kbd><span>Сохранить игру в любой момент</span></div>
       <div class="krow"><kbd>Y</kbd><span>Сбросить зомби на спавн (раз в 2 мин)</span></div>
+      <div class="krow"><kbd>ЛКМ/ПКМ</kbd><span>Мехакостюм: миниган / гипер-лазер</span></div>
       <div class="krow"><kbd>F</kbd><span>Дрон-камикадзе</span></div>
       <div class="krow"><kbd>V</kbd><span>Дрон-турель (снаряжение)</span></div>
       <div class="krow"><kbd>1 2 3</kbd><span>Пистолет / Основное / Нож</span></div>

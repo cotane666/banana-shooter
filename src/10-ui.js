@@ -21,7 +21,7 @@ const UI = {
       'btnCopy', 'dmgDirs', 'android', 'ios', 'credits', 'crPlayer', 'crStats',
       'matchEnd', 'meTitle', 'meWinner', 'meScore', 'meDetail', 'btnMatchAgain', 'btnMatchMenu',
       'mapChips', 'playerChips', 'hpChips', 'hordeChips', 'lobbyMaps', 'lobbyPlayers', 'lobbyHp', 'lobbyFree', 'lobbyRounds',
-      'offCountChips', 'offHpChips', 'offFreeChips', 'offModeChips', 'offCustomBox', 'offHordeBox', 'offSpecialBox', 'offCpBox', 'offCpInfo', 'offCpMode', 'offCpList', 'btnOffContinue', 'custom', 'lobbyShop', 'lobbyShopItems',
+      'offCountChips', 'offHpChips', 'offFreeChips', 'offModeChips', 'offCustomBox', 'offHordeBox', 'offSpecialBox', 'offCpBox', 'offCpInfo', 'offCpMode', 'offCpList', 'offCountExact', 'offCountFixed', 'btnOffContinue', 'custom', 'lobbyShop', 'lobbyShopItems',
       'modScreen', 'modGrid', 'modActive',
       'extras', 'achGrid', 'recTable', 'btnExtrasBack', 'weaponWheel', 'wwInner',
       'medkitTag', 'droneTag', 'grenadeTag', 'zResetTag', 'shieldTag', 'heatTag', 'missileHud', 'mhTime', 'mhReadout',
@@ -170,6 +170,22 @@ const UI = {
     };
     fillOff(this.el.offCountChips, 'offCount', MATCH.countOptions, v => '<b>' + (v === 1 ? '×1' : '×' + v) + '</b><i>зомби</i>');
     fillOff(this.el.offHpChips, 'offHp', MATCH.hpOptionsOff, v => '<b>' + (v === 1 ? '×1' : '×' + v) + '</b><i>HP</i>');
+    /* exact zombie count per wave + a "fixed" toggle (no growth with the wave) */
+    if (this.el.offCountExact) {
+      const inp = this.el.offCountExact;
+      inp.value = Math.max(1, Math.round(parseFloat(Store.data.offCountExact) || 10));
+      inp.addEventListener('input', () => {
+        Store.data.offCountExact = U.clamp(Math.round(parseFloat(inp.value) || 10), 1, 1000);
+        Store.data.offCountFixed = 1;
+        if (this.el.offCountFixed) this.el.offCountFixed.checked = true;
+        saveOff();
+      });
+    }
+    if (this.el.offCountFixed) {
+      const cb = this.el.offCountFixed;
+      cb.checked = Store.data.offCountFixed === 1;
+      cb.addEventListener('change', () => { Store.data.offCountFixed = cb.checked ? 1 : 0; saveOff(); });
+    }
     if (this.el.offFreeChips) {
       this.el.offFreeChips.innerHTML = '';
       [{ v: 0, b: 'ПЛАТНЫЙ', i: 'деньги и закупка' }, { v: 1, b: 'БЕСПЛАТНЫЙ', i: 'без экономики' }].forEach(o => {

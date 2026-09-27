@@ -1592,18 +1592,22 @@ function buildMechChassis() {
   // ------- right arm: the actual MECH-MINIGUN model, mounted on the arm -------
   const mgArm = new THREE.Group();
   const mgGun = buildWeaponModel('mechMinigun');
-  mgGun.scale.setScalar(1.0);
+  mgGun.scale.setScalar(1.18);
   mgArm.add(mgGun);
-  mgArm.position.set(1.30, 2.52, -.05);
+  mgArm.position.set(1.34, 2.50, .04);
+  mgArm.userData.baseYaw = -CFG.mechArmToe;            // toe-in toward the crosshair (right arm points left)
+  mgArm.rotation.y = mgArm.userData.baseYaw;
   g.add(mgArm);
   box(.40, .38, .58, matB2, 1.30, 2.90, .12);          // right shoulder housing
   const cluster = mgGun.getObjectByName('barrels');    // spin this
   // ------- left arm: the actual HYPER-LASER model + red missile tubes -------
   const lzArm = new THREE.Group();
   const lzGun = buildWeaponModel('mechLaser');
-  lzGun.scale.setScalar(1.0);
+  lzGun.scale.setScalar(1.18);
   lzArm.add(lzGun);
-  lzArm.position.set(-1.30, 2.52, -.05);
+  lzArm.position.set(-1.34, 2.50, .04);
+  lzArm.userData.baseYaw = CFG.mechArmToe;             // toe-in toward the crosshair (left arm points right)
+  lzArm.rotation.y = lzArm.userData.baseYaw;
   g.add(lzArm);
   // a shoulder pod with red missile tubes above the laser
   const pod = new THREE.Group();
@@ -1617,6 +1621,8 @@ function buildMechChassis() {
     pod.add(tube);
   }
   pod.position.set(-1.30, 3.00, .05);
+  pod.userData.baseYaw = CFG.mechArmToe * .6;
+  pod.rotation.y = pod.userData.baseYaw;
   g.add(pod);
   // ------- pelvis + legs -------
   box(.88, .40, .62, matB2, 0, 1.90, -.02);

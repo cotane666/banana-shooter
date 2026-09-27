@@ -5192,8 +5192,21 @@ const Game = {
         const t = this._mechT;
         const hspeed = Math.hypot(p.vel.x, p.vel.z);
         const walk = U.clamp(hspeed / CFG.walkSpeed, 0, 1.4);
-        // pitch the whole mech slightly with the aim (arms follow the look)
-        const aimPitch = U.clamp(p.pitch, -1, 1);
+        // aim: arms follow BOTH axes of the look. + pitch = look up, + yaw = look
+        // right; the arms swing with it (non-inverted), plus a left/right traverse.
+        const aimPitch = U.clamp(p.pitch, -1.2, 1.2);
+        // lateral swing: how fast the view is turning (decays), plus strafing.
+        // Tracking a wrapped DELTA avoids the ±π snap of an absolute yaw.
+        const prevYaw = (this._mechPrevYaw === undefined) ? p.yaw : this._mechPrevYaw;
+        let dyaw = p.yaw - prevYaw;
+        while (dyaw > Math.PI) dyaw -= Math.PI * 2;
+        while (dyaw < -Math.PI) dyaw += Math.PI * 2;
+        this._mechPrevYaw = p.yaw;
+        this._mechSwing = (this._mechSwing || 0) * Math.pow(.004, dt) + dyaw * 60;
+        const swing = U.clamp(this._mechSwing, -.6, .6);
+        // lateral traverse from turning + strafing (guns slide/swing sideways)
+        const strafe = U.clamp(p.in.r || 0, -1, 1);
+        const lateral = U.clamp(swing + strafe * .10, -.6, .6);
         // walking bob + idle sway
         const bob = Math.sin(t * (4 + walk * 5)) * (.012 + walk * .022);
         const sway = Math.cos(t * 2.1) * .010;
@@ -5207,24 +5220,29 @@ const Game = {
 
         if (ud.mgArm) {
           const b = ud.mgArm.userData.basePos;
+          const by = ud.mgArm.userData.baseYaw || 0;
           ud.mgArm.position.set(
-            b.x + sway * .5,
+            b.x + sway * .5 - lateral * .30,
             b.y + bob + aimPitch * .12 + mgKick * .05,
             b.z + mgKick * .16);
-          ud.mgArm.rotation.x = -aimPitch * .5 - mgKick * .12;
+          ud.mgArm.rotation.x = aimPitch * .55 - mgKick * .12;
+          ud.mgArm.rotation.y = by + swing * .18 - lateral * .10;
         }
         if (ud.lzArm) {
           const b = ud.lzArm.userData.basePos;
+          const by = ud.lzArm.userData.baseYaw || 0;
           ud.lzArm.position.set(
-            b.x - sway * .5,
+            b.x - sway * .5 - lateral * .30,
             b.y + bob * .8 + aimPitch * .12 + lzKick * .05 + podKick * .10,
             b.z + lzKick * .14);
-          ud.lzArm.rotation.x = -aimPitch * .5 - lzKick * .10;
+          ud.lzArm.rotation.x = aimPitch * .55 - lzKick * .10;
+          ud.lzArm.rotation.y = by + swing * .18 - lateral * .10;
         }
         if (ud.pod) {
           const b = ud.pod.userData.basePos || ud.pod.position;
           ud.pod.position.y = 3.00 + podKick * .16 + bob;
-          ud.pod.rotation.x = -aimPitch * .4;
+          ud.pod.rotation.x = aimPitch * .45;
+          ud.pod.rotation.y = (ud.pod.userData.baseYaw || 0) + swing * .14;
         }
         /* ---- jetpack flames ---- */
         const on = p.jetActive === true;

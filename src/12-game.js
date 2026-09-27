@@ -405,16 +405,17 @@ class Dummy extends Zombie {
 
 /* ---------------- shooting dummy (test range) ----------------
    A dummy that stands still and shoots back at the player once it is switched
-   on. Its weapon can be chosen from the range panel (V toggles it and [ / ]
-   cycle the weapon on PC; the panel itself is tappable on a phone). It reports
-   damage per second exactly like a normal dummy because it IS one. */
+   on. ANY weapon in the game can be given to it — pistols, rifles, launchers,
+   the banana, even the knife and the shield — so every gun can be tested
+   against. It reports damage per second exactly like a normal dummy because it
+   IS one. On PC the range panel is the control (V toggles it, [ / ] cycle the
+   weapon); on a phone the same panel is tappable. */
 function shooterWeaponIds() {
   const ids = [];
-  for (const id in WEAPONS) {
-    const w = WEAPONS[id];
-    if (!w || id === 'knife' || w.shield || w.projectile || w.dmg <= 0) continue;
-    ids.push(id);
-  }
+  for (const id in WEAPONS) if (WEAPONS[id]) ids.push(id);
+  // a readable order: sidearms, then primaries, then the exotics, knife last
+  const order = ['pistol', 'smg', 'shotgun', 'rifle', 'sniper', 'lmg', 'heavy', 'banana', 'melee'];
+  ids.sort((a, b) => order.indexOf(WEAPONS[a].cat) - order.indexOf(WEAPONS[b].cat));
   return ids;
 }
 
@@ -426,6 +427,7 @@ class ShooterDummy extends Dummy {
     this.active = false;               // fires only when the player turns it on
     this.weaponId = 'ak47';
     this.fireCd = 1.4;                 // grace period after switching on
+    this.projCd = 0;                   // extra spacing between launcher rounds
     this.flashT = 0;
     this.weaponGroup = null;
     // gunmetal blue paint so it is never mistaken for an ordinary target
@@ -443,11 +445,10 @@ class ShooterDummy extends Dummy {
     this.setWeapon(this.weaponId);
   }
 
-  /* Attach (or swap) the weapon model in the right hand. Launchers and the
-     shield are left out: this dummy fires hitscan rounds only. */
+  /* Attach (or swap) the weapon model in the right hand. Every weapon is
+     accepted, including launchers, the banana, the knife and the shield. */
   setWeapon(id) {
-    const def = WEAPONS[id];
-    if (!def || def.projectile || def.shield || id === 'knife' || def.dmg <= 0) id = 'ak47';
+    if (!WEAPONS[id]) id = 'ak47';
     this.weaponId = id;
     const armR = this.parts.armR;
     if (this.weaponGroup) { armR.remove(this.weaponGroup); this.weaponGroup = null; }
@@ -469,20 +470,48 @@ class ShooterDummy extends Dummy {
     p.armL.rotation.x = 1.15; p.armL.rotation.z = .14;
     p.armR.rotation.x = 1.30; p.armR.rotation.z = -.14;
     if (this.flashT > 0) this.flashT -= dt;
+    if (this.projCd > 0) this.projCd -= dt;
     if (!this.active || !this.alive || !target || !target.alive) return;
-    if (Game.aim) return;                          // never fire into the aim room
+    if (Game.aim || Game.shooterPickOpen) return;   // never into the aim room / while configuring
     this.fireCd -= dt;
+    const def = WEAPONS[this.weaponId] || WEAPONS.ak47;
+    // launchers wait out their own cooldown so the smoke can clear
+    if (def.projectile && this.projCd > 0) return;
     if (this.fireCd <= 0) this.shoot(target);
   }
 
   shoot(target) {
     const def = WEAPONS[this.weaponId] || WEAPONS.ak47;
-    // A deliberate, beatable cadence — never faster than ~3 shots a second —
-    // and reduced damage so the player can trade fire instead of dying at once.
-    this.fireCd = Math.max(.34, 60 / (def.rpm || 300));
     const from = { x: this.pos.x - Math.sin(this.yaw) * .6, y: this.pos.y + 1.35 * this.scale, z: this.pos.z - Math.cos(this.yaw) * .6 };
+
+    // ---- shield: carries it, never attacks; a little glow so it is not idle --
+    if (def.shield) {
+      this.fireCd = 1.2;
+      this.flashT = .2;
+      return;
+    }
+
     const aim = { x: target.pos.x, y: target.pos.y + 1.05, z: target.pos.z };
     const d = dirTo(from, aim);
+
+    // ---- knife: a lunge that only lands at close range ----
+    if (def.slot === 3) {
+      this.fireCd = Math.max(.7, 60 / (def.rpm || 120));
+      this.flashT = .1;
+      Audio3D_SFX.shot('knife', from.x, from.y, from.z);
+      if (d.dist <= 3.0) Game.applyDamageToSelf(Math.min(50, Math.max(4, def.dmg * .5)), from);
+      return;
+    }
+
+    // ---- launchers and the banana: fly a real projectile ----
+    if (def.projectile) {
+      const dir = Game.spreadDirection(d.dir, Math.max(def.spread || .01, .008), false);
+      this.fireCd = Math.max(.5, 60 / (def.rpm || 60));
+      this.launchProjectile(def, from, dir);
+      return;
+    }
+
+    // ---- hitscan: a tracer along the real bullet path ----
     const dir = Game.spreadDirection(d.dir, Math.max(def.spread || .02, .012) * 2.6, false);
     const maxDist = Math.max(30, def.range || 100);
     const walls = Game.world.raycastAll(from, dir, maxDist);
@@ -493,6 +522,8 @@ class ShooterDummy extends Dummy {
     if (wallHit) Game.effects.impact(wallHit.point, wallHit.normal, 'concrete');
     Audio3D_SFX.shot(def.sound || 'rifle', from.x, from.y, from.z);
     this.flashT = .05;
+    // a deliberate, beatable cadence — never faster than ~3 shots a second
+    this.fireCd = Math.max(.34, 60 / (def.rpm || 300));
     // did the shot pass through the player's body before reaching a wall?
     const oc = { x: target.pos.x - from.x, y: (target.pos.y + 1.0) - from.y, z: target.pos.z - from.z };
     const tca = oc.x * dir.x + oc.y * dir.y + oc.z * dir.z;
@@ -500,7 +531,42 @@ class ShooterDummy extends Dummy {
     if (wallHit && tca >= wallHit.t) return;
     const perp2 = (oc.x * oc.x + oc.y * oc.y + oc.z * oc.z) - tca * tca;
     if (perp2 > .55 * .55) return;
-    Game.applyDamageToSelf(Math.max(4, def.dmg * .22), from);
+    // reduced damage so the player can trade fire instead of dropping at once
+    Game.applyDamageToSelf(Math.min(50, Math.max(4, def.dmg * .22)), from);
+  }
+
+  /* Launch a physical round that Game flies and detonates (rockets, the guided
+     missile and bananas). The guided missile is NOT steered here — the dummy
+     simply fires it straight at the player. */
+  launchProjectile(def, from, dir) {
+    const isRocket = def.projectile === 'rocket';
+    const isGuided = def.projectile === 'guided';
+    const mesh = isGuided ? buildGuidedMissile() : (isRocket ? buildRocketProjectile() : buildBananaProjectile());
+    mesh.position.set(from.x, from.y, from.z);
+    if (!isRocket && !isGuided) mesh.rotation.x = Math.PI / 2;
+    Game.scene.add(mesh);
+    const speed = def.projSpeed || 30;
+    const R = def.splash || 0;
+    this.projCd = R >= 6 ? 3.2 : (R > 0 ? 1.8 : 1.0);
+    Game.dummyProjectiles.push({
+      mesh: mesh, kind: def.projectile,
+      life: 6, prev: { x: from.x, y: from.y, z: from.z },
+      pos: { x: from.x, y: from.y, z: from.z },
+      vel: { x: dir.x * speed, y: dir.y * speed, z: dir.z * speed },
+      grav: def.projGravity || 12,
+      dmg: def.dmg, headMul: def.headMul || 1.6,
+      splash: def.splash || 0, splashDmg: def.splashDmg || 0,
+      explosionColor: def.explosionColor || null,
+      nuke: !!def.nuke
+    });
+    if (isRocket) Audio3D_SFX.rocketShot(from.x, from.y, from.z);
+    else Audio3D_SFX.bananaShot(from.x, from.y, from.z);
+    Game.effects.muzzleSmoke(from.x, from.y, from.z, dir);
+    this.flashT = .08;
+    if (Game.dummyProjectiles.length > 14) {
+      const old = Game.dummyProjectiles.shift();
+      if (old.mesh.parent) old.mesh.parent.remove(old.mesh);
+    }
   }
 }
 
@@ -774,6 +840,7 @@ const Game = {
   /* ---- engine ---- */
   renderer: null, scene: null, camera: null, vmScene: null, vmCamera: null,
   world: null, effects: null, horde: null, player: null, dummies: [], targets: [], aim: null,
+  dummyProjectiles: [],
   running: false, mode: CS.MODE.MENU, paused: false,
   baseFov: 80, _last: 0, _loopBound: null, _acc: 0,
   remotePlayers: [], remote: null,
@@ -962,13 +1029,11 @@ const Game = {
       this.toggleAimTrain(!this.aim);
     });
     bindClick('sdToggle', () => this.toggleShooterDummy());
-    const sdSel = document.getElementById('sdWeapon');
-    if (sdSel) sdSel.addEventListener('change', () => {
-      if (this.mode !== CS.MODE.RANGE || !this.shooterDummy) return;
-      this.shooterDummy.setWeapon(sdSel.value);
-      const def = WEAPONS[sdSel.value];
-      UI.toast('Манекен: ' + (def ? def.name : sdSel.value), '#4aa3ff');
-    });
+    bindClick('sdConfig', () => this.toggleShooterPick(true));
+    bindClick('sdClose', () => this.toggleShooterPick(false));
+    bindClick('sdToggle2', () => { this.toggleShooterDummy(); this.renderShooterPick(); });
+    const sdSearch = document.getElementById('sdSearch');
+    if (sdSearch) sdSearch.addEventListener('input', () => this.renderShooterPick());
     bindClick('btnOnline', () => { UI.show('lobby'); this.resetLobby(); Net.warmup(); });
     bindClick('btnControls', () => { this._prevScreen = 'menu'; UI.show('controls'); });
     bindClick('btnControlsBack', () => UI.show(this._prevScreen || 'menu'));
@@ -1136,6 +1201,7 @@ const Game = {
         // us. Ignore the keydown that immediately follows, or we would unpause
         // in the same instant.
         if (this._lockLostAt && U.now() - this._lockLostAt < 300) break;
+        if (this.shooterPickOpen) { this.toggleShooterPick(false); break; }
         if (UI.current === 'scoreboard') UI.show('hud');
         else if (this.paused) this.togglePause(false);
         else this.togglePause(true);
@@ -1168,15 +1234,19 @@ const Game = {
       case 'KeyT':
         if (this.mode === CS.MODE.RANGE && !IS_TOUCH) this.toggleAimTrain(!this.aim);
         break;
-      // shooting dummy: V turns it on/off, [ and ] pick its weapon
+      // shooting dummy: V turns it on/off, C opens the weapon picker,
+      // [ and ] cycle the weapon without opening anything
       case 'KeyV':
         if (this.mode === CS.MODE.RANGE) this.toggleShooterDummy();
         break;
+      case 'KeyC':
+        if (this.mode === CS.MODE.RANGE) this.toggleShooterPick(!this.shooterPickOpen);
+        break;
       case 'BracketLeft':
-        if (this.mode === CS.MODE.RANGE) this.cycleShooterWeapon(-1);
+        if (this.mode === CS.MODE.RANGE && !this.shooterPickOpen) this.cycleShooterWeapon(-1);
         break;
       case 'BracketRight':
-        if (this.mode === CS.MODE.RANGE) this.cycleShooterWeapon(1);
+        if (this.mode === CS.MODE.RANGE && !this.shooterPickOpen) this.cycleShooterWeapon(1);
         break;
     }
   },
@@ -1401,6 +1471,75 @@ const Game = {
     this.updateRangePanel();
   },
 
+  /* Weapon picker for the shooting dummy. It is a full screen with its own
+     free mouse cursor: on PC the pointer is locked during play, so a plain
+     drop-down could never be clicked. Opening it releases the lock exactly the
+     way the shop does. */
+  toggleShooterPick(on) {
+    if (on && this.mode !== CS.MODE.RANGE) return;
+    if (on) {
+      this.shooterPickOpen = true;
+      this.renderShooterPick();
+      UI.show('sdScreen');
+      if (!IS_TOUCH) Input.releaseLock();
+      const s = document.getElementById('sdSearch');
+      if (s) s.value = '';
+    } else {
+      this.shooterPickOpen = false;
+      UI.show('hud');
+      if (!IS_TOUCH && this.running) Input.requestLock();
+    }
+    if (IS_TOUCH) TouchUI.update();
+  },
+
+  renderShooterPick() {
+    const grid = document.getElementById('sdGrid');
+    if (!grid) return;
+    const d = this.shooterDummy;
+    const q = (document.getElementById('sdSearch') ? document.getElementById('sdSearch').value : '').trim().toLowerCase();
+    const catName = { pistol: 'ПИСТОЛЕТ', smg: 'ПП', shotgun: 'ДРОБОВИК', rifle: 'ВИНТОВКА', sniper: 'СНАЙПЕРКА',
+      lmg: 'ПУЛЕМЁТ', heavy: 'ТЯЖЁЛОЕ', banana: 'БАНАН', melee: 'БЛИЖНИЙ БОЙ' };
+    grid.innerHTML = '';
+    let shown = 0;
+    for (const id of shooterWeaponIds()) {
+      const w = WEAPONS[id];
+      if (q && w.name.toLowerCase().indexOf(q) < 0) continue;
+      shown++;
+      const card = document.createElement('div');
+      card.className = 'sdcard' + (d && d.weaponId === id ? ' on' : '');
+      const mag = w.mag === Infinity ? '∞' : w.mag;
+      const kind = w.projectile ? 'СНАРЯД' : (w.shield ? 'ЩИТ' : (w.slot === 3 ? 'НОЖ' : 'ПУЛИ'));
+      card.innerHTML =
+        '<div class="wn">' + U.esc(w.name) + '</div>' +
+        '<div class="wc">' + (catName[w.cat] || w.cat) + '</div>' +
+        '<div class="wst"><span>УРОН <i>' + w.dmg + '</i></span>' +
+        '<span>ТЕМП <i>' + w.rpm + '</i></span>' +
+        '<span>МАГ <i>' + mag + '</i></span>' +
+        '<span><i>' + kind + '</i></span></div>' +
+        (d && d.weaponId === id ? '<div class="picked">ВЫБРАНО</div>' : '');
+      card.addEventListener('click', () => {
+        const sd = this.shooterDummy;
+        if (!sd) return;
+        sd.setWeapon(id);
+        Audio3D_SFX.uiClick();
+        UI.toast('Манекен: ' + w.name, '#4aa3ff');
+        this.renderShooterPick();
+        this.updateRangePanel();
+      });
+      grid.appendChild(card);
+    }
+    if (!shown) grid.innerHTML = '<div class="sdcard cant">Ничего не найдено</div>';
+    const t2 = UI.el && UI.el.sdToggle2;
+    if (t2) {
+      const on = !!(d && d.active);
+      t2.textContent = on ? 'ВЫКЛЮЧИТЬ БОЙ' : 'ВКЛЮЧИТЬ БОЙ';
+    }
+  },
+
+  closeShooterPick() {
+    if (this.shooterPickOpen) this.toggleShooterPick(false);
+  },
+
   /* On the range the player can be killed by the shooting dummy. Without this
      they would be stuck dead, because no round flow runs there to respawn. */
   updateRangeRespawn(dt) {
@@ -1414,6 +1553,85 @@ const Game = {
       this.player.money = 999999;
       UI.center('ВОЗРОЖДЕНИЕ', 'Манекен-стрелок продолжает огонь', 1.6);
     }
+  },
+
+  /* Rounds fired by the shooting dummy (rockets, the guided missile, bananas).
+     They fly like the player's projectiles but only ever hurt the player, so
+     the dummy's launchers are usable on the range without any networking. */
+  updateDummyProjectiles(dt) {
+    const list = this.dummyProjectiles;
+    if (!list || !list.length) return;
+    const world = this.world;
+    const p = this.player;
+    for (let i = list.length - 1; i >= 0; i--) {
+      const pr = list[i];
+      pr.life -= dt;
+      pr.prev.x = pr.pos.x; pr.prev.y = pr.pos.y; pr.prev.z = pr.pos.z;
+      pr.vel.y -= pr.grav * dt;
+      const nx = pr.pos.x + pr.vel.x * dt, ny = pr.pos.y + pr.vel.y * dt, nz = pr.pos.z + pr.vel.z * dt;
+      const segLen = Math.hypot(nx - pr.pos.x, ny - pr.pos.y, nz - pr.pos.z);
+      const dir = segLen > 1e-6
+        ? { x: (nx - pr.pos.x) / segLen, y: (ny - pr.pos.y) / segLen, z: (nz - pr.pos.z) / segLen }
+        : { x: 0, y: -1, z: 0 };
+      // ---- the player ----
+      let hitP = false;
+      if (p && p.alive) {
+        const oc = { x: p.pos.x - pr.pos.x, y: (p.pos.y + 1.0) - pr.pos.y, z: p.pos.z - pr.pos.z };
+        const tca = oc.x * dir.x + oc.y * dir.y + oc.z * dir.z;
+        if (tca > 0 && tca <= segLen + .5) {
+          const perp2 = (oc.x * oc.x + oc.y * oc.y + oc.z * oc.z) - tca * tca;
+          if (perp2 < .55 * .55) hitP = true;
+        }
+      }
+      // ---- the world ----
+      const wallHits = world.raycastAll(pr.pos, dir, segLen + .1);
+      const wall = wallHits.length ? wallHits[0] : null;
+      const impact = (hitP && (!wall || segLen <= wall.t))
+        ? { x: pr.pos.x + dir.x * segLen, y: pr.pos.y + dir.y * segLen, z: pr.pos.z + dir.z * segLen }
+        : (wall ? wall.point : null);
+      if (impact) {
+        if (pr.splash > 0) this.explodeDummy(impact, pr);
+        else { this.effects.bananaSplat(impact.x, impact.y, impact.z); Audio3D_SFX.bananaSplat(impact.x, impact.y, impact.z); }
+        if (!pr.splash && hitP && p.alive) this.applyDamageToSelf(pr.dmg * .25, impact);
+        this.removeDummyProjectile(i);
+        continue;
+      }
+      if (pr.life <= 0 || pr.pos.y < -3) {
+        if (pr.splash > 0) this.explodeDummy({ x: pr.pos.x, y: pr.pos.y, z: pr.pos.z }, pr);
+        this.removeDummyProjectile(i);
+        continue;
+      }
+      pr.pos.x = nx; pr.pos.y = ny; pr.pos.z = nz;
+      pr.mesh.position.set(pr.pos.x, pr.pos.y, pr.pos.z);
+      const vl = Math.hypot(pr.vel.x, pr.vel.y, pr.vel.z) || 1;
+      pr.mesh.lookAt(pr.pos.x + pr.vel.x / vl, pr.pos.y + pr.vel.y / vl, pr.pos.z + pr.vel.z / vl);
+      if (pr.kind !== 'rocket' && pr.kind !== 'guided') pr.mesh.rotateZ(Math.PI / 2);
+    }
+  },
+
+  /* Blast from a dummy round: the visual/FX, plus reduced damage to the player
+     (never to the dummy itself). */
+  explodeDummy(center, pr) {
+    const R = pr.splash, dmg = (pr.splashDmg || pr.dmg) * .22;
+    this.effects.explosion(center.x, center.y, center.z, R, pr.explosionColor, pr.nuke);
+    Audio3D_SFX.explosionAt(center.x, center.y, center.z);
+    UI.hitmark(false);
+    const p = this.player;
+    if (!p || !p.alive) return;
+    const ds = Math.hypot(p.pos.x - center.x, (p.pos.y + 1) - center.y, p.pos.z - center.z);
+    if (ds <= R) this.applyDamageToSelf(Math.max(4, dmg * (1 - ds / R)), center);
+  },
+
+  removeDummyProjectile(i) {
+    const pr = this.dummyProjectiles[i];
+    if (pr && pr.mesh.parent) pr.mesh.parent.remove(pr.mesh);
+    this.dummyProjectiles.splice(i, 1);
+  },
+
+  clearDummyProjectiles() {
+    if (!this.dummyProjectiles) return;
+    for (const pr of this.dummyProjectiles) { if (pr.mesh.parent) pr.mesh.parent.remove(pr.mesh); }
+    this.dummyProjectiles.length = 0;
   },
 
   clearDummies() {
@@ -1579,7 +1797,6 @@ const Game = {
       streak: document.getElementById('rpStreak'),
       best: document.getElementById('rpBest'),
       toggle: document.getElementById('rpToggle'),
-      sdWeapon: document.getElementById('sdWeapon'),
       sdToggle: document.getElementById('sdToggle')
     };
     if (!el.panel) return;
@@ -1614,25 +1831,13 @@ const Game = {
       el.toggle.classList.remove('on');
     }
     // shooting-dummy controls
-    if (el.sdWeapon) {
-      if (el.sdWeapon.options.length === 0) {
-        for (const id of shooterWeaponIds()) {
-          const o = document.createElement('option');
-          o.value = id; o.textContent = WEAPONS[id].name;
-          el.sdWeapon.appendChild(o);
-        }
-      }
-      const d = this.shooterDummy;
-      if (d) {
-        if (el.sdWeapon.value !== d.weaponId) el.sdWeapon.value = d.weaponId;
-        el.sdWeapon.disabled = false;
-      } else {
-        el.sdWeapon.disabled = true;
-      }
-    }
     if (el.sdToggle) {
-      const on = !!(this.shooterDummy && this.shooterDummy.active);
-      el.sdToggle.textContent = on ? 'ВЫКЛЮЧИТЬ (V)' : 'ВКЛЮЧИТЬ (V)';
+      const d = this.shooterDummy;
+      const on = !!(d && d.active);
+      const def = d ? WEAPONS[d.weaponId] : null;
+      el.sdToggle.textContent = on
+        ? 'ВЫКЛЮЧИТЬ (V) · ' + (def ? def.name : '')
+        : 'ВКЛЮЧИТЬ (V) · ' + (def ? def.name : '');
       el.sdToggle.classList.toggle('on', on);
     }
   },
@@ -1814,6 +2019,7 @@ const Game = {
   stopToMenu(keepRunning) {
     const clearWorld = () => {
       this.clearProjectiles();
+      this.clearDummyProjectiles();
       this.clearDummies();
       this.clearTargets();
       this.clearDrone();
@@ -1826,6 +2032,8 @@ const Game = {
         rp.mesh.traverse(o => { if (o.geometry) o.geometry.dispose(); });
       }
       this.remotePlayers = []; this.remote = null;
+      // a picker left open while the range is torn down must not survive
+      this.shooterPickOpen = false;
       if (this.player && this.player.vmGroup && this.player.vmGroup.parent) this.player.vmGroup.parent.remove(this.player.vmGroup);
       if (this.effects) { this.effects.clear(); }
     };
@@ -1847,6 +2055,7 @@ const Game = {
       clearWorld();
     }
     this.buyOpen = false;
+    this.shooterPickOpen = false;
     this.roundState = 'idle';
     // hide the range scoreboard when we are no longer on the range
     this.updateRangePanel();
@@ -4456,7 +4665,7 @@ const Game = {
     }
 
     // ---- movement is frozen during the buy phase (CS-style freeze time) ----
-    const frozen = this.roundState === 'buy';
+    const frozen = this.roundState === 'buy' || this.shooterPickOpen;
     const pin = frozen ? { f: 0, r: 0, run: false, crouch: p.in.crouch, wantJump: false } : p.in;
 
     // ---- physics ----
@@ -4476,6 +4685,7 @@ const Game = {
 
     // ---- flying bananas ----
     this.updateProjectiles(dt);
+    if (this.mode === CS.MODE.RANGE) this.updateDummyProjectiles(dt);
     if (this.mode === CS.MODE.ONLINE) this.updateRemoteProjectiles(dt);
 
     // ---- networking ----

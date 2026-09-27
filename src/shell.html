@@ -302,7 +302,7 @@
     <div class="rp-row"><span>РЕКОРД</span><b id="rpBest">0</b></div>
     <button id="rpToggle">АИМ-ТРЕНИРОВКА</button>
     <div class="rp-sub">МАНЕКЕН-СТРЕЛОК</div>
-    <select id="sdWeapon" title="Оружие манекена"></select>
+    <button id="sdConfig">ОРУЖИЕ (C)</button>
     <button id="sdToggle">ВКЛЮЧИТЬ (V)</button>
   </div>
   <div id="dmgDirs"></div>
@@ -349,6 +349,21 @@
       <button class="mbtn primary" id="btnResume">ПРОДОЛЖИТЬ</button>
       <button class="mbtn" id="btnPauseControls">УПРАВЛЕНИЕ И НАСТРОЙКИ</button>
       <button class="mbtn" id="btnLeave">ВЫЙТИ В МЕНЮ</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ SHOOTING DUMMY WEAPON ============ -->
+<div id="sdScreen" class="screen hidden">
+  <div class="panel wide">
+    <h2>ОРУЖИЕ МАНЕКЕНА</h2>
+    <div class="sd-tools">
+      <input type="text" id="sdSearch" placeholder="Поиск по названию…" autocomplete="off">
+      <button class="mbtn small primary" id="sdToggle2">ВКЛЮЧИТЬ БОЙ</button>
+    </div>
+    <div class="sd-grid" id="sdGrid"></div>
+    <div class="btnrow">
+      <button class="mbtn" id="sdClose">ЗАКРЫТЬ (C / Esc)</button>
     </div>
   </div>
 </div>

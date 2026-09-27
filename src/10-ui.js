@@ -555,6 +555,13 @@ const UI = {
           cant = (!free && player.money < g.price) || n >= 4;
           stats = [['В ЗАПАСЕ', n + '/4'], ['КЛАВИША', 'G'], ['СМЕНА', 'J']];
           desc = g.desc;
+        } else if (g.buildable) {
+          player.builds = player.builds || { turret: 0, barricade: 0, mine: 0 };
+          const n = player.builds[g.buildable] || 0;
+          owned = false;
+          cant = (!free && player.money < g.price) || n >= 3;
+          stats = [['В ЗАПАСЕ', n + '/3'], ['КЛАВИША', 'K'], ['СМЕНА', 'L']];
+          desc = g.desc;
         } else if (g.ammo) {
           owned = false;
           cant = !free && player.money < g.price;

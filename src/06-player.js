@@ -1310,6 +1310,51 @@ function addGlowSphere(g, r, color, opacity) {
   return halo;
 }
 
+/* ---------- environment props: player turret / barricade / mine ---------- */
+function buildPlayerTurret() {
+  const g = new THREE.Group();
+  const base = new THREE.Mesh(new THREE.CylinderGeometry(.24, .30, .16, 12), gunMat(0x3a4149));
+  base.position.y = .08; g.add(base);
+  const post = new THREE.Mesh(new THREE.CylinderGeometry(.07, .08, .62, 10), gunMat(0x2b3038));
+  post.position.y = .48; g.add(post);
+  const head = new THREE.Mesh(new THREE.BoxGeometry(.42, .30, .46), gunMat(0x4a525c));
+  head.position.y = .95; g.add(head);
+  const barrel = new THREE.Mesh(new THREE.CylinderGeometry(.035, .035, .55, 8), gunMat(0x22262b));
+  barrel.rotation.x = Math.PI / 2; barrel.position.set(.12, .98, -.30); g.add(barrel);
+  const barrel2 = barrel.clone(); barrel2.position.set(-.12, .98, -.30); g.add(barrel2);
+  const eye = new THREE.Mesh(new THREE.SphereGeometry(.05, 8, 6), new THREE.MeshBasicMaterial({ color: 0x4ad6ff }));
+  eye.position.set(0, 1.12, -.16); g.add(eye);
+  return g;
+}
+function buildBarricade() {
+  const g = new THREE.Group();
+  const mat = gunMat(0x6b5a3a);
+  const mat2 = gunMat(0x4a3f28);
+  for (let i = 0; i < 5; i++) {
+    const log = new THREE.Mesh(new THREE.CylinderGeometry(.14, .14, 2.1, 8), i % 2 ? mat : mat2);
+    log.rotation.z = Math.PI / 2;
+    log.position.set(0, .18 + i * .26, 0);
+    g.add(log);
+  }
+  [-.85, .85].forEach(ox => {
+    const post = new THREE.Mesh(new THREE.BoxGeometry(.16, 1.35, .20), mat2);
+    post.position.set(ox, .67, 0); g.add(post);
+  });
+  return g;
+}
+function buildMine() {
+  const g = new THREE.Group();
+  const body = new THREE.Mesh(new THREE.CylinderGeometry(.26, .30, .12, 14), gunMat(0x3a4139));
+  body.position.y = .06; g.add(body);
+  for (let i = 0; i < 3; i++) {
+    const spike = new THREE.Mesh(new THREE.CylinderGeometry(.015, .015, .07, 6), gunMat(0x1e231e));
+    spike.position.y = .14; spike.rotation.z = i * 2.1; g.add(spike);
+  }
+  const led = new THREE.Mesh(new THREE.SphereGeometry(.05, 8, 6), new THREE.MeshBasicMaterial({ color: 0xff3a2a }));
+  led.position.y = .14; g.add(led);
+  return g;
+}
+
 /* A grenade: a small round body with a lever, coloured by kind */
 function buildGrenadeModel(kind) {
   const col = kind === 'freeze' ? 0x8fe6ff : kind === 'napalm' ? 0xd8641a : 0x4a5a3a;
@@ -1509,6 +1554,7 @@ class Player {
     this.drone = 0;           // kamikaze drones ready to launch, with F
     this.droneOwned = false;  // has bought the drone: it recharges every online round
     this.grenades = { frag: 0, freeze: 0, napalm: 0 };   // thrown with G
+    this.builds = { turret: 0, barricade: 0, mine: 0 };  // placed with K
     // energy shield (active shield): raised by LMB for a few seconds, then cools
     this.shieldActive = false;
     this.shieldT = 0;         // seconds left while the field is up

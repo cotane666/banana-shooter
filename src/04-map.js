@@ -6,7 +6,7 @@
    ============================================================ */
 
 const MAP = {
-  size: 104,          // arena is size x size
+  size: 104,          // arena is size x square
   wallH: 9,
   ground: 0,
   spawns: [],
@@ -19,7 +19,8 @@ const MAP = {
   sites: {},
   id: 'arena',
   def: null,
-  aimRoom: null
+  aimRoom: null,
+  hazards: []         // lava pools / spike strips / presses (rebuilt per map)
 };
 
 /* ---------------- material cache ---------------- */
@@ -107,6 +108,83 @@ function decor(parent, x, y, z, w, h, d, mat, rotY) {
   mesh.castShadow = true; mesh.receiveShadow = true;
   parent.add(mesh);
   return mesh;
+}
+
+/* ============================================================
+   ENVIRONMENTAL HAZARDS
+   Lava pools (burn), spike strips (chill) and presses (slam). They sit inside
+   MAP.hazards and are ticked by Game.updateHazards. Geometry is purely visual;
+   the damage check is a circle test in the game loop.
+   ============================================================ */
+function hazardLava(parent, x, z, r) {
+  const g = new THREE.Group();
+  const pool = new THREE.Mesh(new THREE.CircleGeometry(r, 22),
+    new THREE.MeshBasicMaterial({ color: 0xff5a1a, transparent: true, opacity: .9 }));
+  pool.rotation.x = -Math.PI / 2; pool.position.y = .03; g.add(pool);
+  const rim = new THREE.Mesh(new THREE.RingGeometry(r, r + .35, 24),
+    new THREE.MeshBasicMaterial({ color: 0x2a1408, transparent: true, opacity: .7 }));
+  rim.rotation.x = -Math.PI / 2; rim.position.y = .02; g.add(rim);
+  const glow = new THREE.PointLight(0xff6a2a, 30, r * 3, 2);
+  glow.position.set(0, 1, 0); g.add(glow);
+  g.position.set(x, 0, z);
+  parent.add(g);
+  MAP.hazards.push({ kind: 'lava', x: x, z: z, r: r, dps: 26, mesh: g, light: glow });
+}
+function hazardSpikes(parent, x, z, r) {
+  const g = new THREE.Group();
+  const base = new THREE.Mesh(new THREE.CircleGeometry(r, 18),
+    new THREE.MeshLambertMaterial({ color: 0x2a2e33 }));
+  base.rotation.x = -Math.PI / 2; base.position.y = .02; g.add(base);
+  for (let i = 0; i < 7; i++) {
+    const a = i / 7 * Math.PI * 2, rr = r * .55;
+    const spike = new THREE.Mesh(new THREE.ConeGeometry(.09, .42, 6),
+      new THREE.MeshLambertMaterial({ color: 0xb9c2cc }));
+    spike.position.set(Math.cos(a) * rr, .21, Math.sin(a) * rr);
+    g.add(spike);
+  }
+  g.position.set(x, 0, z);
+  parent.add(g);
+  MAP.hazards.push({ kind: 'spikes', x: x, z: z, r: r * .85, dps: 34, slow: .45, mesh: g });
+}
+function hazardPress(parent, x, z, r) {
+  const g = new THREE.Group();
+  const frame = new THREE.Mesh(new THREE.BoxGeometry(r * 2.2, .3, r * 2.2),
+    new THREE.MeshLambertMaterial({ color: 0x3a4149 }));
+  frame.position.y = .12; g.add(frame);
+  const plate = new THREE.Mesh(new THREE.BoxGeometry(r * 1.9, .45, r * 1.9),
+    new THREE.MeshLambertMaterial({ color: 0x6b7480 }));
+  plate.position.y = 4.2; g.add(plate);
+  for (const s of [-1, 1]) {
+    const rail = new THREE.Mesh(new THREE.BoxGeometry(.22, 4.6, .22),
+      new THREE.MeshLambertMaterial({ color: 0x2b3038 }));
+    rail.position.set(s * r * .95, 2.3, -r * .95); g.add(rail);
+    const rail2 = rail.clone(); rail2.position.z = r * .95; g.add(rail2);
+  }
+  g.position.set(x, 0, z);
+  parent.add(g);
+  MAP.hazards.push({ kind: 'press', x: x, z: z, r: r, dps: 70, mesh: g, plate: plate, phase: 0 });
+}
+/* scatter a handful of hazards on the open floor (avoiding the map centre) */
+function buildHazards(parent, world) {
+  MAP.hazards = [];
+  if (Store.data.trapsEnabled === 0) return;
+  const S = MAP.size;
+  const spots = [];
+  for (let i = 0; i < 5; i++) {
+    const a = (i / 5) * Math.PI * 2 + U.rand(-.3, .3);
+    const rr = 16 + U.rand(0, 18);
+    const x = Math.cos(a) * rr, z = Math.sin(a) * rr;
+    const gy = world.groundAt(x, z, 3);
+    if (gy === null || Math.abs(gy) > .3) continue;                // keep them on the flat arena floor
+    if (Math.hypot(x, z) < 10) continue;
+    spots.push({ x: x, z: z });
+  }
+  spots.forEach((s, i) => {
+    const kind = ['lava', 'spikes', 'press'][i % 3];
+    if (kind === 'lava') hazardLava(parent, s.x, s.z, 2.6);
+    else if (kind === 'spikes') hazardSpikes(parent, s.x, s.z, 2.2);
+    else hazardPress(parent, s.x, s.z, 1.8);
+  });
 }
 
 /* ============================================================
@@ -887,6 +965,7 @@ function buildMap(scene, quality, mapId) {
 
   MAP.def.build(group, world);
 
+  buildHazards(group, world);
   buildAimRoom(group, world);
   buildLighting(group, quality);
   buildSky(group);
@@ -896,6 +975,7 @@ function buildMap(scene, quality, mapId) {
   scene.fog = new THREE.FogExp2(MAP.def.fog || 0xbcc6cf, MAP.def.fogDensity || 0.0055);
 
   computeSpawns(world);
+  if (typeof Game !== 'undefined' && Game.applyTimeOfDay) { try { Game.applyTimeOfDay(); } catch (e) { } }
   return MAP;
 }
 
@@ -1078,6 +1158,9 @@ function buildLighting(parent, quality) {
   sun.target.position.set(0, 0, 0);
   parent.add(sun.target);
   parent.add(sun);
+  // tagged so the day/night toggle can dim and cool it
+  sun.userData.dayLight = true;
+  sun.userData.dayIntensity = 2.0;
 
   const shadowSize = quality === 0 ? 1024 : quality === 1 ? 2048 : 4096;
   sun.castShadow = true;

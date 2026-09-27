@@ -324,9 +324,14 @@ const GEAR = {
   drone:        { name: 'ДРОН-КАМИКАДЗЕ', price: 10000, drone: true, desc: 'Управляемый · враг может сбить' },
   frag:         { name: 'ГРАНАТА',         price: 300,  grenade: 'frag',   desc: 'Осколочная · G — бросок' },
   freezeNade:   { name: 'КРИО-ГРАНАТА',    price: 500,  grenade: 'freeze', desc: 'Замораживает зомби в области' },
-  napalmNade:   { name: 'НАПАЛМ',          price: 700,  grenade: 'napalm', desc: 'Оставляет горящую лужу' }
+  napalmNade:   { name: 'НАПАЛМ',          price: 700,  grenade: 'napalm', desc: 'Оставляет горящую лужу' },
+  turretBuild:  { name: 'ТУРЕЛЬ',          price: 2500, buildable: 'turret',    desc: 'Стреляет сама · K — поставить' },
+  barricade:    { name: 'БАРРИКАДА',       price: 900,  buildable: 'barricade', desc: 'Укрытие · K — поставить' },
+  mine:         { name: 'МИНА',            price: 1200, buildable: 'mine',      desc: 'Взрывается при враге · K — поставить' }
 };
 function grenadeName(kind) { return kind === 'freeze' ? 'КРИО' : kind === 'napalm' ? 'НАПАЛМ' : 'ГРАНАТА'; }
+function todName(k) { return k === 'night' ? 'НОЧЬ' : 'ДЕНЬ'; }
+function buildableName(k) { return k === 'barricade' ? 'БАРРИКАДА' : k === 'mine' ? 'МИНА' : 'ТУРЕЛЬ'; }
 
 const BUY_CATS = [
   { id: 'pistol',  label: 'ПИСТОЛЕТЫ' },
@@ -441,7 +446,8 @@ const Store = {
   key: 'cs3d.save.v1',
   data: { sens: 2.2, fov: 80, vol: 60, quality: 1, touchSens: 1.5, name: '', best: 0, bestWave: 0, killsTotal: 0, matches: 0, wins: 0, signalSrv: 0, aimBest: 0, aimAutoFire: 1,
           map: 'arena', players: 2, maxHP: 100, aimAssist: 1, horde: 0, clears: 0, freeplay: 0, rounds: 3, playTime: 0,
-          offCount: 1, offHp: 1, offFree: 0, offMode: 'normal', offMods: {}, offModsRun: 0, offModPick: 0, checkpoint: null, shopAllow: {}, shopItems: {}, music: 1, sfxVol: 100, musicVol: 70 },
+          offCount: 1, offHp: 1, offFree: 0, offMode: 'normal', offMods: {}, offModsRun: 0, offModPick: 0, checkpoint: null, shopAllow: {}, shopItems: {}, music: 1, sfxVol: 100, musicVol: 70,
+          grenade: 'frag', buildable: 'turret', weather: 'day', trapsEnabled: 1 },
   load() {
     try { const r = localStorage.getItem(this.key); if (r) Object.assign(this.data, JSON.parse(r)); } catch (e) { }
     return this.data;

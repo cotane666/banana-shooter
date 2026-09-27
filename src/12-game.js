@@ -1296,12 +1296,228 @@ const Game = {
       case 'KeyZ':
         if (this.mode === CS.MODE.RANGE && this.enemySpawnOpen) this.cycleSpawnHp(1);
         break;
+      /* ---- environment: place the selected buildable ---- */
+      case 'KeyK':
+        if (this.mode !== CS.MODE.RANGE && !this.paused) this.placeBuildable();
+        break;
+      case 'KeyL':
+        if (!this.paused) this.cycleBuildable();
+        break;
+      case 'KeyO':
+        if (!this.paused) this.cycleTimeOfDay();
+        break;
     }
   },
 
   invertY() {
     Input.invertY *= -1;
     UI.toast('Инверсия мыши: ' + (Input.invertY < 0 ? 'вкл' : 'выкл'));
+  },
+
+  /* ============================================================
+     ENVIRONMENT: time of day + placeables
+     ============================================================ */
+  cycleTimeOfDay() {
+    const order = ['day', 'night'];
+    const cur = Store.data.weather || 'day';
+    const next = order[(order.indexOf(cur) + 1) % order.length];
+    Store.data.weather = next; Store.save();
+    this.applyTimeOfDay();
+    UI.toast('Время суток: ' + todName(next), next === 'night' ? '#4aa3ff' : '#ffd24a');
+    Audio3D_SFX.uiClick();
+  },
+  applyTimeOfDay() {
+    const night = (Store.data.weather || 'day') === 'night';
+    const g = MAP.group;
+    const sky = g && g.userData && g.userData.sky;
+    if (sky) { sky.material.color.setHex(night ? 0x080c18 : 0xbcc6cf); sky.material.needsUpdate = true; }
+    if (this.scene) {
+      if (!this._dayFog) {
+        this._dayFog = { color: this.scene.fog ? this.scene.fog.color.getHex() : 0xbcc6cf, density: this.scene.fog ? this.scene.fog.density : .0055 };
+      }
+      if (this.scene.fog) {
+        this.scene.fog.color.setHex(night ? 0x0a1020 : this._dayFog.color);
+        this.scene.fog.density = night ? this._dayFog.density * 1.7 : this._dayFog.density;
+      }
+      this.scene.traverse(o => {
+        if (o.isLight && o.type === 'DirectionalLight' && o.userData && o.userData.dayLight) {
+          o.intensity = night ? o.userData.dayIntensity * .25 : o.userData.dayIntensity;
+          o.color.setHex(night ? 0x8090c0 : 0xffffff);
+        }
+      });
+      if (!this._ambient) {
+        this._ambient = new THREE.AmbientLight(0xffffff, 0.25);
+        this.scene.add(this._ambient);
+      }
+      this._ambient.visible = night;
+      this._ambient.intensity = .45;
+    }
+  },
+
+  /* ---- placeables: turret / barricade / mine ---- */
+  cycleBuildable() {
+    const order = ['turret', 'barricade', 'mine'];
+    const cur = Store.data.buildable || 'turret';
+    const next = order[(order.indexOf(cur) + 1) % order.length];
+    Store.data.buildable = next; Store.save();
+    const p = this.player;
+    UI.toast('Постройка: ' + buildableName(next) + ' (' + ((p && p.builds[next]) || 0) + ' шт)', '#4ad6ff');
+    Audio3D_SFX.uiClick();
+  },
+  placeBuildable() {
+    const p = this.player;
+    if (!p || !p.alive) return false;
+    if (this.mode === CS.MODE.MENU || this.paused) return false;
+    const kind = Store.data.buildable || 'turret';
+    const n = (p.builds && p.builds[kind]) || 0;
+    if (n <= 0) { UI.toast('Нет построек — купите в магазине (B)', '#f5d33c'); Audio3D_SFX.deny(); return false; }
+    p.builds[kind] = n - 1;
+    const eye = this.eyePos();
+    const d = this.cameraDir();
+    const bx = eye.x + d.x * 3.0, bz = eye.z + d.z * 3.0;
+    const by = (this.world.groundAt(bx, bz, eye.y + 3) || 0);
+    if (kind === 'turret') this.spawnPlayerTurret(bx, by, bz);
+    else if (kind === 'barricade') this.spawnBarricade(bx, by, bz, p.yaw);
+    else this.spawnMine(bx, by, bz);
+    UI.toast(buildableName(kind) + ' установлена', '#57d16a');
+    Audio3D_SFX.buy();
+    return true;
+  },
+  spawnPlayerTurret(x, y, z) {
+    const mesh = buildPlayerTurret();
+    mesh.position.set(x, y, z);
+    this.scene.add(mesh);
+    this._turrets = this._turrets || [];
+    this._turrets.push({ mesh: mesh, pos: { x: x, y: y, z: z }, fireCd: 0, life: 60, dmg: 42, range: 34 });
+  },
+  spawnBarricade(x, y, z, yaw) {
+    const mesh = buildBarricade();
+    mesh.position.set(x, y, z);
+    mesh.rotation.y = yaw;
+    this.scene.add(mesh);
+    const box = aabbFromBase(x, y, z, 2.2, 1.3, .5);
+    box.tag = 'cover';
+    this.world.addBox(box);
+    this._barricades = this._barricades || [];
+    this._barricades.push({ mesh: mesh, box: box, x: x, y: y, z: z, life: 75 });
+  },
+  spawnMine(x, y, z) {
+    const mesh = buildMine();
+    mesh.position.set(x, y, z);
+    this.scene.add(mesh);
+    this._mines = this._mines || [];
+    this._mines.push({ mesh: mesh, pos: { x: x, y: y, z: z }, armed: 1.0 });
+  },
+  clearBuildables() {
+    ['_turrets', '_barricades', '_mines'].forEach(k => {
+      const arr = this[k];
+      if (!arr) return;
+      for (const b of arr) {
+        if (b.mesh && b.mesh.parent) b.mesh.parent.remove(b.mesh);
+        if (b.mesh && b.mesh.traverse) b.mesh.traverse(o => { if (o.geometry) o.geometry.dispose(); });
+        if (b.box) { const idx = this.world.boxes.indexOf(b.box); if (idx >= 0) this.world.boxes.splice(idx, 1); }
+      }
+      arr.length = 0;
+    });
+  },
+  /* ---- environmental hazards: lava burns, spikes chill, presses slam ---- */
+  updateHazards(dt) {
+    const hz = MAP.hazards;
+    if (!hz || !hz.length) return;
+    const p = this.player;
+    for (const h of hz) {
+      if (h.kind === 'press') {
+        h.phase += dt;
+        const cyc = h.phase % 3.2;
+        const down = cyc < .5 ? cyc / .5 : cyc < 1.2 ? 1 : cyc < 1.7 ? 1 - (cyc - 1.2) / .5 : 0;
+        h.plate.position.y = 4.2 - down * 3.7;
+        h.slam = down > .9;
+      }
+      // player inside the hazard
+      const d = Math.hypot(p.pos.x - h.x, p.pos.z - h.z);
+      if (d < h.r && Math.abs(p.pos.y) < 2.5) {
+        if (h.kind === 'lava') this.applyDamageToSelf(h.dps * dt * 3, { x: h.x, y: 0, z: h.z });
+        else if (h.kind === 'spikes' && p.onGround) this.applyDamageToSelf(h.dps * dt, { x: h.x, y: 0, z: h.z });
+        else if (h.kind === 'press' && h.slam) this.playerHurt(h.dps, null);
+      }
+      // zombies too (the environment is on your side)
+      if (this.horde) for (const z of this.horde.list) {
+        if (!z.alive || z.dying || z.isBoss) continue;
+        const dz = Math.hypot(z.pos.x - h.x, z.pos.z - h.z);
+        if (dz > h.r) continue;
+        if (h.kind === 'lava') z.takeDamage(h.dps * dt * 2, 'body', { x: 0, y: 0, z: 0 });
+        else if (h.kind === 'spikes') { if (typeof z.freeze === 'function') z.freeze(.8); else z.frozen = true; }
+        else if (h.kind === 'press' && h.slam && !z._slamCd) { z._slamCd = .5; z.takeDamage(h.dps, 'body', { x: 0, y: 0, z: 0 }); }
+      }
+      if (this.horde) for (const z of this.horde.list) if (z._slamCd > 0) z._slamCd -= dt;
+    }
+  },
+
+  updateBuildables(dt) {
+    // ---- turrets ----
+    if (this._turrets) for (let i = this._turrets.length - 1; i >= 0; i--) {
+      const t = this._turrets[i];
+      t.life -= dt;
+      if (t.life <= 0) { if (t.mesh.parent) t.mesh.parent.remove(t.mesh); t.mesh.traverse(o => { if (o.geometry) o.geometry.dispose(); }); this._turrets.splice(i, 1); continue; }
+      let best = null, bd = t.range * t.range;
+      if (this.horde) for (const z of this.horde.list) {
+        if (!z.alive || z.dying) continue;
+        const dd = (z.pos.x - t.pos.x) * (z.pos.x - t.pos.x) + (z.pos.z - t.pos.z) * (z.pos.z - t.pos.z);
+        if (dd < bd) { bd = dd; best = z; }
+      }
+      if (best) {
+        const to = { x: best.pos.x, y: best.pos.y + 1.0 * best.scale, z: best.pos.z };
+        t.mesh.lookAt(to.x, to.y, to.z);
+        t.fireCd -= dt;
+        if (t.fireCd <= 0) {
+          t.fireCd = .2;
+          best.takeDamage(t.dmg, 'body', { x: 0, y: 0, z: 0 });
+          this.player.damageDealt += t.dmg;
+          this.effects.tracer({ x: t.pos.x, y: t.pos.y + 1.1, z: t.pos.z }, to, true, .6);
+          Audio3D_SFX.shot('smg', t.pos.x, t.pos.y, t.pos.z);
+        }
+      }
+    }
+    // ---- barricades ----
+    if (this._barricades) for (let i = this._barricades.length - 1; i >= 0; i--) {
+      const b = this._barricades[i];
+      b.life -= dt;
+      if (b.life <= 0) {
+        if (b.mesh.parent) b.mesh.parent.remove(b.mesh);
+        b.mesh.traverse(o => { if (o.geometry) o.geometry.dispose(); });
+        const idx = this.world.boxes.indexOf(b.box);
+        if (idx >= 0) this.world.boxes.splice(idx, 1);
+        this._barricades.splice(i, 1);
+      }
+    }
+    // ---- mines ----
+    if (this._mines) for (let i = this._mines.length - 1; i >= 0; i--) {
+      const m = this._mines[i];
+      m.armed -= dt;
+      let trigger = false;
+      if (m.armed <= 0 && this.horde) {
+        for (const z of this.horde.list) {
+          if (!z.alive || z.dying) continue;
+          if (Math.hypot(z.pos.x - m.pos.x, z.pos.z - m.pos.z) < 1.6 && Math.abs(z.pos.y - m.pos.y) < 2) { trigger = true; break; }
+        }
+      }
+      if (trigger) {
+        const R = 4.4, dmg = 260;
+        this.effects.explosion(m.pos.x, m.pos.y + .2, m.pos.z, R, [0xffb060, 0x151210]);
+        Audio3D_SFX.explosionAt(m.pos.x, m.pos.y, m.pos.z);
+        for (const z of this.horde.list) {
+          if (!z.alive || z.dying) continue;
+          const dd = Math.hypot(z.pos.x - m.pos.x, (z.pos.y + 1) - m.pos.y, z.pos.z - m.pos.z);
+          if (dd > R) continue;
+          const dealt = dmg * (1 - dd / R);
+          z.takeDamage(dealt, 'body', { x: 0, y: 0, z: 0 });
+          this.player.damageDealt += dealt;
+        }
+        if (m.mesh.parent) m.mesh.parent.remove(m.mesh);
+        m.mesh.traverse(o => { if (o.geometry) o.geometry.dispose(); });
+        this._mines.splice(i, 1);
+      }
+    }
   },
 
   onMouseDown(btn, e) {
@@ -1481,6 +1697,8 @@ const Game = {
     this.clearDummyProjectiles();
     this.clearEnemyShots();
     this.clearDrone();
+    this.clearBuildables();
+    this.clearGrenades();
     this.clearCrates();
     this.clearMedboxes();
     if (this.horde) this.horde.clear();
@@ -2838,7 +3056,7 @@ const Game = {
     const free = this.isFreeShop();
 
     /* Consumables: ammo refill, kamikaze drone, grenades and the medkit upgrade. */
-    if (g.ammo || g.medkit || g.medkitBox || g.drone || g.grenade) {
+    if (g.ammo || g.medkit || g.medkitBox || g.drone || g.grenade || g.buildable) {
       if (!free && this.player.money < g.price) { Audio3D_SFX.deny(); UI.toast('Не хватает денег'); return; }
       // the field kit is limited unless the medkit-box upgrade was bought
       if (g.medkit && !this.player.medkitUnlimited && (this.player.medkits || 0) >= CFG.medkitMax) {
@@ -2861,11 +3079,20 @@ const Game = {
         this.player.grenades[g.grenade] = cur + 1;
         Store.data.grenade = g.grenade; Store.save();
       }
+      else if (g.buildable) {
+        const cap = 3;
+        this.player.builds = this.player.builds || { turret: 0, barricade: 0, mine: 0 };
+        const cur = this.player.builds[g.buildable] || 0;
+        if (cur >= cap) { Audio3D_SFX.deny(); UI.toast('Построек максимум: ' + cap); if (!free) this.player.money += g.price; return; }
+        this.player.builds[g.buildable] = cur + 1;
+        Store.data.buildable = g.buildable; Store.save();
+      }
       Audio3D_SFX.buy();
       const extra = g.medkitBox ? ' — лимит аптечек снят'
         : g.medkit ? ' (' + this.player.medkits + ' в запасе)'
           : g.drone ? ' (' + this.player.drone + ' в запасе)'
-            : g.grenade ? ' (' + this.player.grenades[g.grenade] + ' шт · G — бросок)' : '';
+            : g.grenade ? ' (' + this.player.grenades[g.grenade] + ' шт · G — бросок)'
+              : g.buildable ? ' (' + this.player.builds[g.buildable] + ' шт · K — поставить)' : '';
       UI.toast('Куплено: ' + g.name + extra, '#57d16a');
       UI.renderBuy(this.player, this.buyTimer);
       if (this.mode === CS.MODE.ONLINE) this.broadcastScore();
@@ -6137,6 +6364,8 @@ const Game = {
       this.updateChronoFields(dt);   // time-dilation bubbles
       this.updateHives(dt);          // hives hatching their swarm
       this.updatePortals(dt);        // mirror-gate teleport + lifetime
+      this.updateHazards(dt);        // lava / spikes / presses
+      this.updateBuildables(dt);     // placed turrets / barricades / mines
       this.updateTurretDrone(dt);    // companion turret auto-fire
     }
 

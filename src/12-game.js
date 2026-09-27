@@ -4278,6 +4278,16 @@ const Game = {
     if (IS_TOUCH) TouchUI.update();
   },
 
+  /* The guided missile the local player is currently steering, if any. */
+  localGuidedMissile() {
+    if (!this.projectiles || !this.projectiles.length) return null;
+    for (let i = this.projectiles.length - 1; i >= 0; i--) {
+      const pr = this.projectiles[i];
+      if (pr.guided && pr.ownerIsLocal) return pr;
+    }
+    return null;
+  },
+
   restartOfflineOffer() {
     if (this._offeredRestart) return;
     this._offeredRestart = true;
@@ -4291,6 +4301,35 @@ const Game = {
 
   cameraUpdate(dt) {
     const p = this.player;
+
+    /* While a guided missile is in the air we look THROUGH it: first-person view
+       from the rocket, steering with the same look input. The missile HUD frame
+       (green brackets + reticle) is shown in its place. */
+    const missile = this.localGuidedMissile();
+    if (missile) {
+      const pr = missile;
+      const vl = Math.hypot(pr.vel.x, pr.vel.y, pr.vel.z) || 1;
+      const yaw = Math.atan2(-pr.vel.x, -pr.vel.z);
+      const pitch = Math.asin(U.clamp(pr.vel.y / vl, -1, 1));
+      this.camera.position.set(pr.pos.x, pr.pos.y, pr.pos.z);
+      this.camera.rotation.order = 'YXZ';
+      this.camera.rotation.y = yaw;
+      this.camera.rotation.x = pitch;
+      this.camera.rotation.z = 0;
+      if (Math.abs(this.camera.fov - this.baseFov) > .01) { this.camera.fov = this.baseFov; this.camera.updateProjectionMatrix(); }
+      // hide the rocket's own mesh so it does not fill the view
+      if (pr.mesh) pr.mesh.visible = false;
+      // normal crosshair off; missile HUD on
+      UI.el.crosshair.classList.add('hide');
+      UI.scope(false);
+      UI.el.hitmark && UI.el.hitmark.classList.remove('on');
+      UI.el.missileHud && UI.el.missileHud.classList.remove('hidden');
+      if (UI.el.mhTime) UI.el.mhTime.textContent = Math.max(0, pr.life).toFixed(1) + 'C';
+      const fx = -Math.sin(yaw), fz = -Math.cos(yaw);
+      Audio3D_SFX.setListener(pr.pos.x, pr.pos.y, pr.pos.z, fx, fz);
+      return;
+    }
+    UI.el.missileHud && UI.el.missileHud.classList.add('hidden');
 
     /* While the drone is airborne the camera follows it from behind, so the
        player sees where they are flying. */
@@ -4432,7 +4471,7 @@ const Game = {
     this.renderer.render(this.scene, this.camera);
     // first-person weapon on top, in its own scene → never clips through walls
     // (hidden while the player is flying the drone)
-    if (this.running && this.mode !== CS.MODE.MENU && !this.drone && this.player && this.player.alive && this.vmScene.children.length) {
+    if (this.running && this.mode !== CS.MODE.MENU && !this.drone && !this.localGuidedMissile() && this.player && this.player.alive && this.vmScene.children.length) {
       this.renderer.clearDepth();
       this.renderer.render(this.vmScene, this.vmCamera);
     }

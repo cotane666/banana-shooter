@@ -293,6 +293,43 @@ html.touch #reloadTag{top:calc(50% + 27px);font-size:11px;letter-spacing:2px}
 html.touch .credits-inner{padding:28px 16px 48px}
 html.touch .cr-block{margin-bottom:20px}
 
+/* ---------- missile camera HUD (view from the guided rocket) ---------- */
+#missileHud{position:absolute;inset:0;pointer-events:none;z-index:24}
+#missileHud.hidden{display:none}
+/* frame brackets around the aim box */
+#missileHud .mh-bracket{position:absolute;left:50%;top:50%;width:150px;height:150px;
+  transform:translate(-50%,-50%);border:3px solid #28e04a;
+  box-shadow:0 0 6px rgba(40,224,74,.6),inset 0 0 6px rgba(40,224,74,.35)}
+#missileHud .mh-cross{position:absolute;left:50%;top:50%;width:0;height:0}
+#missileHud .mh-cross span{position:absolute;background:#28e04a;box-shadow:0 0 4px rgba(40,224,74,.7)}
+#missileHud .mh-cross .mh-l,#missileHud .mh-cross .mh-r{width:26px;height:3px;top:-1px}
+#missileHud .mh-cross .mh-l{left:-95px}
+#missileHud .mh-cross .mh-r{left:69px}
+#missileHud .mh-cross .mh-t,#missileHud .mh-cross .mh-b{width:3px;height:26px;left:-1px}
+#missileHud .mh-cross .mh-t{top:-95px}
+#missileHud .mh-cross .mh-b{top:69px}
+#missileHud .mh-dot{width:3px;height:3px;left:-1px;top:-1px}
+/* the rotating target reticle in the corner */
+#missileHud .mh-reticle{position:absolute;right:6%;bottom:6%;width:150px;height:150px;
+  border:4px solid #28e04a;border-radius:50%;animation:mhSpin 2.4s linear infinite}
+#missileHud .mh-reticle:before,#missileHud .mh-reticle:after{content:"";position:absolute;background:#28e04a}
+#missileHud .mh-reticle:before{left:50%;top:12px;bottom:12px;width:3px;transform:translateX(-50%)}
+#missileHud .mh-reticle:after{top:50%;left:12px;right:12px;height:3px;transform:translateY(-50%)}
+#missileHud .mh-retic-dot{position:absolute;left:50%;top:50%;width:14px;height:14px;
+  transform:translate(-50%,-50%);border:2px solid #28e04a;border-radius:50%}
+@keyframes mhSpin{to{transform:rotate(360deg)}}
+/* left scale ruler */
+#missileHud .mh-scale{position:absolute;left:18px;top:8%;bottom:8%;width:14px;
+  background:repeating-linear-gradient(180deg,#28e04a 0 2px,transparent 2px 8px);
+  border-left:2px solid #28e04a;opacity:.85}
+#missileHud .mh-top{position:absolute;left:0;right:0;top:16px;text-align:center;color:#28e04a;
+  font-family:Consolas,monospace}
+#missileHud .mh-time{font-size:20px;letter-spacing:4px;text-shadow:0 0 8px rgba(40,224,74,.7)}
+#missileHud .mh-readout{position:absolute;left:0;right:0;bottom:16px;text-align:center;color:#28e04a;
+  font-family:Consolas,monospace;font-size:13px;letter-spacing:3px;text-shadow:0 0 8px rgba(40,224,74,.7)}
+html.touch #missileHud .mh-reticle{width:110px;height:110px;right:4%;bottom:14%}
+html.touch #missileHud .mh-bracket{width:110px;height:110px}
+
 /* ---------- match end (online) ---------- */
 .me-winner{text-align:center;background:rgba(255,157,33,.08);border:1px solid rgba(255,157,33,.35);
   border-radius:4px;padding:16px;margin-bottom:14px}
@@ -867,6 +904,19 @@ html.touch .fld input{padding:10px;font-size:15px}
   </div>
 
   <canvas id="minimap" width="180" height="180"></canvas>
+  <div id="missileHud" class="hidden">
+    <div class="mh-bracket"></div>
+    <div class="mh-cross">
+      <span class="mh-l"></span><span class="mh-r"></span><span class="mh-t"></span><span class="mh-b"></span>
+      <span class="mh-dot"></span>
+    </div>
+    <div class="mh-reticle">
+      <span class="mh-retic-dot"></span>
+    </div>
+    <div class="mh-scale"></div>
+    <div class="mh-top"><span class="mh-time" id="mhTime">0.0C</span></div>
+    <div class="mh-readout" id="mhReadout">РАКЕТА · ВЕДЕНИЕ</div>
+  </div>
   <div id="feed"></div>
   <div id="centerMsg"></div>
   <div id="bossBar" class="hidden">
@@ -6380,7 +6430,7 @@ const UI = {
       'matchEnd', 'meTitle', 'meWinner', 'meScore', 'meDetail', 'btnMatchAgain', 'btnMatchMenu',
       'mapChips', 'playerChips', 'hpChips', 'hordeChips', 'lobbyMaps', 'lobbyPlayers', 'lobbyHp', 'lobbyFree', 'lobbyRounds',
       'offCountChips', 'offHpChips', 'offFreeChips', 'custom', 'lobbyShop', 'lobbyShopItems',
-      'medkitTag', 'droneTag', 'shieldTag'];
+      'medkitTag', 'droneTag', 'shieldTag', 'missileHud', 'mhTime', 'mhReadout'];
     ids.forEach(i => this.el[i] = $(i));
     this.buildBuyCats();
     this.buildChips();
@@ -12038,6 +12088,16 @@ const Game = {
     if (IS_TOUCH) TouchUI.update();
   },
 
+  /* The guided missile the local player is currently steering, if any. */
+  localGuidedMissile() {
+    if (!this.projectiles || !this.projectiles.length) return null;
+    for (let i = this.projectiles.length - 1; i >= 0; i--) {
+      const pr = this.projectiles[i];
+      if (pr.guided && pr.ownerIsLocal) return pr;
+    }
+    return null;
+  },
+
   restartOfflineOffer() {
     if (this._offeredRestart) return;
     this._offeredRestart = true;
@@ -12051,6 +12111,35 @@ const Game = {
 
   cameraUpdate(dt) {
     const p = this.player;
+
+    /* While a guided missile is in the air we look THROUGH it: first-person view
+       from the rocket, steering with the same look input. The missile HUD frame
+       (green brackets + reticle) is shown in its place. */
+    const missile = this.localGuidedMissile();
+    if (missile) {
+      const pr = missile;
+      const vl = Math.hypot(pr.vel.x, pr.vel.y, pr.vel.z) || 1;
+      const yaw = Math.atan2(-pr.vel.x, -pr.vel.z);
+      const pitch = Math.asin(U.clamp(pr.vel.y / vl, -1, 1));
+      this.camera.position.set(pr.pos.x, pr.pos.y, pr.pos.z);
+      this.camera.rotation.order = 'YXZ';
+      this.camera.rotation.y = yaw;
+      this.camera.rotation.x = pitch;
+      this.camera.rotation.z = 0;
+      if (Math.abs(this.camera.fov - this.baseFov) > .01) { this.camera.fov = this.baseFov; this.camera.updateProjectionMatrix(); }
+      // hide the rocket's own mesh so it does not fill the view
+      if (pr.mesh) pr.mesh.visible = false;
+      // normal crosshair off; missile HUD on
+      UI.el.crosshair.classList.add('hide');
+      UI.scope(false);
+      UI.el.hitmark && UI.el.hitmark.classList.remove('on');
+      UI.el.missileHud && UI.el.missileHud.classList.remove('hidden');
+      if (UI.el.mhTime) UI.el.mhTime.textContent = Math.max(0, pr.life).toFixed(1) + 'C';
+      const fx = -Math.sin(yaw), fz = -Math.cos(yaw);
+      Audio3D_SFX.setListener(pr.pos.x, pr.pos.y, pr.pos.z, fx, fz);
+      return;
+    }
+    UI.el.missileHud && UI.el.missileHud.classList.add('hidden');
 
     /* While the drone is airborne the camera follows it from behind, so the
        player sees where they are flying. */
@@ -12192,7 +12281,7 @@ const Game = {
     this.renderer.render(this.scene, this.camera);
     // first-person weapon on top, in its own scene → never clips through walls
     // (hidden while the player is flying the drone)
-    if (this.running && this.mode !== CS.MODE.MENU && !this.drone && this.player && this.player.alive && this.vmScene.children.length) {
+    if (this.running && this.mode !== CS.MODE.MENU && !this.drone && !this.localGuidedMissile() && this.player && this.player.alive && this.vmScene.children.length) {
       this.renderer.clearDepth();
       this.renderer.render(this.vmScene, this.vmCamera);
     }

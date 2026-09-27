@@ -850,6 +850,7 @@ const Game = {
   offline: null,
   online: null,
   buyOpen: false,
+  shooterPickOpen: false,
   buyTimer: 0,
   roundState: 'idle',   // buy | live | end
   roundT: 0,
@@ -1088,8 +1089,9 @@ const Game = {
         Input.consumeMouse();
         UI.el.clickToPlay.classList.add('hidden');
         this.paused = false;
-      } else if (wasLocked && this.mode !== CS.MODE.MENU && !this.buyOpen && !this.paused) {
-        // lost the lock (Alt+Tab, Esc) → pause
+      } else if (wasLocked && this.mode !== CS.MODE.MENU && !this.buyOpen && !this.shooterPickOpen && !this.paused) {
+        // lost the lock (Alt+Tab, Esc) → pause. The shop and the dummy weapon
+        // picker release the pointer on purpose, so they must not pause.
         this._lockLostAt = U.now();
         this.togglePause(true);
       }

@@ -317,14 +317,23 @@ class Effects {
     const isScorch = kind === 'scorch';
     const m = new THREE.Mesh(this.decalGeo, mat);
     if (isScorch) {
-      /* The fire streak is a long textured strip laid ALONG the beam's travel
-         direction on the surface, so consecutive marks join into a burning line. */
-      const along = this._surfaceAlong(nx, ny, nz, dir);
-      m.position.set(x + nx * .014, y + ny * .014, z + nz * .014);
-      m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), along);
-      const width = size === undefined ? .8 : size;      // across the beam
-      const length = width * 2.6;                        // stretched along it
-      m.scale.set(width, length, 1);
+      /* The fire streak is a long textured strip lying FLAT on the surface,
+         running ALONG the beam's travel direction. The plane's local +Z is its
+         normal (so it faces out of the surface) and its local +X is the long
+         axis of the fire line in the texture. */
+      const along = this._surfaceAlong(nx, ny, nz, dir);   // in-surface direction
+      const zAxis = new THREE.Vector3(nx || 0, ny === undefined ? 1 : ny, nz || 0);
+      if (zAxis.lengthSq() < 1e-6) zAxis.set(0, 1, 0);
+      zAxis.normalize();
+      const xAxis = along.clone();
+      const yAxis = new THREE.Vector3().crossVectors(zAxis, xAxis).normalize();
+      xAxis.crossVectors(yAxis, zAxis).normalize();        // re-orthogonalise
+      const basis = new THREE.Matrix4().makeBasis(xAxis, yAxis, zAxis);
+      m.quaternion.setFromRotationMatrix(basis);
+      m.position.set(x + zAxis.x * .014, y + zAxis.y * .014, z + zAxis.z * .014);
+      const width = size === undefined ? .8 : size;        // across the beam
+      const length = width * 2.6;                          // stretched along it
+      m.scale.set(length, width, 1);
     } else {
       m.position.set(x + nx * .012, y + ny * .012, z + nz * .012);
       // orient the plane along the surface normal
@@ -345,8 +354,9 @@ class Effects {
     this.decals.push(m);
     m.userData.birth = this._t;
     m.userData.ttl = kind === 'blood' ? 22 : isScorch ? 30 : 16;
-    // scorch marks fade by scaling X (their length) — see the decal-fade loop
-    if (isScorch) m.userData.fadeAxis = 'y';
+    // the fire streak fades by shrinking along its length (local X) — see the
+    // decal-fade loop
+    if (isScorch) m.userData.fadeAxis = 'x';
   }
 
   /* Project the beam direction onto the surface plane and return a unit vector
@@ -701,7 +711,7 @@ class Effects {
         // fade by shrinking slightly (shared materials → avoid per-decal opacity churn)
         const k = (d.userData.ttl - age) / 3;
         if (d.userData.baseSize) {
-          if (d.userData.fadeAxis === 'y') d.scale.y = d.userData.baseSize * 2.6 * k;
+          if (d.userData.fadeAxis === 'x') d.scale.x = d.userData.baseSize * 2.6 * k;
           else d.scale.x = d.userData.baseSize * k;
         }
       }

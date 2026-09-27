@@ -1269,11 +1269,15 @@ const Game = {
       case 'KeyH': if (!this.paused) this.useMedkit(); break;
       case 'KeyG':
         if (!this.paused) {
-          // in the mech G leaves the cockpit; if the suit is owned, G re-enters it;
-          // otherwise G throws a grenade
+          // in the mech G leaves the cockpit; if the suit is owned and you are
+          // near the parked mech, G re-enters; otherwise G throws a grenade
           const pp = this.player;
           if (this.isMechActive()) this.exitMechSuit();
-          else if (pp && pp.mechOwned) this.equipMechSuit();
+          else if (pp && pp.mechOwned) {
+            const d = this.parkedMechDist();
+            if (d < 0 || d <= 6) this.equipMechSuit();
+            else { UI.toast('Подойдите к меху, чтобы сесть в него', '#f5d33c'); Audio3D_SFX.deny(); }
+          }
           else this.throwGrenade();
         }
         break;
@@ -4965,11 +4969,12 @@ const Game = {
         return true;
       },
 
-      /* leave the mech: back to the normal body, keep the suit owned so it can be
-         re-entered with the gear (or the same key) */
+      /* leave the mech: back to the normal body. The chassis STAYS STANDING where
+         you left it (parked) so you can walk around it and climb back in. */
       exitMechSuit() {
         const p = this.player;
         if (!p || !p.mechSuit) return false;
+        const mx = p.pos.x, my = p.pos.y, mz = p.pos.z, myaw = p.yaw;
         p.mechSuit = false;
         p.height = CFG.playerHeight;
         p.radius = CFG.playerRadius;
@@ -4978,12 +4983,43 @@ const Game = {
         p.slot = 3;
         p.deployT = .5;
         p.buildViewModel(); this.attachViewModel();
-        this.removeMechBody();
+        // park the chassis: stop following the player, keep it in the world
+        this.parkMechBody(mx, my, mz, myaw);
+        // step the player OUT of the cockpit (a bit backward so they are clear)
+        const bx = Math.sin(myaw), bz = Math.cos(myaw);      // backward
+        p.pos.x = mx + bx * 1.6; p.pos.z = mz + bz * 1.6;
+        p.pos.y = this.world.groundAt(p.pos.x, p.pos.z, my + 3) || my;
+        p.vel.x = p.vel.y = p.vel.z = 0;
         this.clearMechMissiles();
         if (this.effects) { this.effects.endFlame(); }
-        UI.center('МЕХ ОСТАВЛЕН', 'G — снова войти в мех', 2.0);
-        UI.toast('Вы вышли из меха: рост и обзор обычные', '#ff9d21');
+        UI.center('МЕХ ОСТАВЛЕН', 'G рядом с мехом — снова сесть', 2.2);
+        UI.toast('Вы вышли: рост и обзор обычные. Мех стоит на месте', '#ff9d21');
         return true;
+      },
+      /* stop the chassis following the player and leave it standing at x,y,z */
+      parkMechBody(x, y, z, yaw) {
+        const mesh = this.mechBody;
+        if (!mesh) return;
+        // the view model follows the player again, not the mech
+        if (this.player.vmGroup) this.player.vmGroup.visible = true;
+        mesh.visible = true;
+        mesh.position.set(x, y, z);
+        mesh.rotation.y = yaw;
+        this.mechBody = null;                 // no longer the active cockpit shell
+        this.parkedMech = { mesh: mesh, x: x, y: y, z: z, yaw: yaw };
+      },
+      /* how far the parked mech is from the player (-1 if none parked) */
+      parkedMechDist() {
+        if (!this.parkedMech || !this.player) return -1;
+        const m = this.parkedMech, p = this.player;
+        return Math.hypot(m.x - p.pos.x, m.z - p.pos.z);
+      },
+      clearParkedMech() {
+        const m = this.parkedMech;
+        if (!m) return;
+        if (m.mesh.parent) m.mesh.parent.remove(m.mesh);
+        m.mesh.traverse(o => { if (o.geometry) o.geometry.dispose(); });
+        this.parkedMech = null;
       },
       /* toggle in/out of the suit (used by the G key and the shop card) */
       toggleMechSuit() {
@@ -4997,6 +5033,13 @@ const Game = {
       equipMechSuit() {
         const p = this.player;
         p.mechOwned = true;
+        // re-entering a parked mech: move the player onto it and reuse the chassis
+        if (this.parkedMech) {
+          const m = this.parkedMech;
+          p.pos.x = m.x; p.pos.z = m.z; p.pos.y = m.y;
+          p.vel.x = p.vel.y = p.vel.z = 0;
+          this.mechBody = m.mesh; this.parkedMech = null;
+        }
         p.give('mechMinigun');
         p.give('mechLaser');
         p.mechSuit = true;
@@ -5632,6 +5675,7 @@ const Game = {
     this.clearGrenades();
     this.clearMechMissiles();
     this.removeMechBody();
+    this.clearParkedMech();
   },
 
   clearDrone() {
@@ -6037,6 +6081,8 @@ const Game = {
     const p = this.player;
     if (!p.alive) return;
     let actual = dmg;
+    // the mech chassis soaks HALF of every hit before armour
+    if (this.isMechActive()) actual *= .5;
     if (p.armor > 0) {
       // reinforced armour soaks a larger share of the hit; the energy suit is best
       const absorbFrac = p.energyArmor ? .88 : p.heavyArmor ? .75 : .5;

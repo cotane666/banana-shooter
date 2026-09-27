@@ -3456,6 +3456,81 @@ const Audio3D_SFX = {
     o.start(t); o.stop(t + .2);
   },
 
+  /* ---------- laser cannon ---------- */
+  /* charging whirr as the barrel winds up */
+  cannonSpin(x, y, z) {
+    if (!this.ctx || this.muted) return;
+    const sp = this._spatial(x, y, z, 3, 130);
+    if (sp.gain <= .002) return;
+    const t = this.ctx.currentTime;
+    const out = this.ctx.createGain(); out.gain.value = sp.gain * .55;
+    const pan = this.ctx.createStereoPanner ? this.ctx.createStereoPanner() : null;
+    if (pan) { pan.pan.value = sp.pan; out.connect(pan); pan.connect(this.master); } else out.connect(this.master);
+    const o = this.ctx.createOscillator();
+    o.type = 'sawtooth';
+    o.frequency.setValueAtTime(90, t);
+    o.frequency.exponentialRampToValueAtTime(520, t + .45);
+    const lp = this.ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 1600;
+    const g = this.ctx.createGain();
+    g.gain.setValueAtTime(.14, t);
+    g.gain.linearRampToValueAtTime(.24, t + .38);
+    g.gain.exponentialRampToValueAtTime(.001, t + .55);
+    o.connect(lp); lp.connect(g); g.connect(out);
+    o.start(t); o.stop(t + .58);
+  },
+  /* the beam itself: a sustained, crackling roar that loops while it is up */
+  cannonBeamStart(x, y, z) {
+    if (!this.ctx || this.muted || this._beamSnd) return;
+    const sp = this._spatial(x, y, z, 3, 160);
+    const t = this.ctx.currentTime;
+    const out = this.ctx.createGain(); out.gain.value = Math.max(sp.gain, .25);
+    const pan = this.ctx.createStereoPanner ? this.ctx.createStereoPanner() : null;
+    if (pan) { pan.pan.value = sp.pan; out.connect(pan); pan.connect(this.master); } else out.connect(this.master);
+    // low saw rumble
+    const o = this.ctx.createOscillator(); o.type = 'sawtooth';
+    o.frequency.setValueAtTime(140, t);
+    o.frequency.linearRampToValueAtTime(96, t + .6);
+    const olp = this.ctx.createBiquadFilter(); olp.type = 'lowpass'; olp.frequency.value = 700;
+    const og = this.ctx.createGain(); og.gain.value = .12;
+    o.connect(olp); olp.connect(og); og.connect(out);
+    // hissing noise bed with a bandpass that sweeps a little
+    const src = this.ctx.createBufferSource(); src.buffer = this.noiseBuf; src.loop = true;
+    const bp = this.ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 2200; bp.Q.value = .8;
+    const ng = this.ctx.createGain(); ng.gain.value = .10;
+    src.connect(bp); bp.connect(ng); ng.connect(out);
+    o.start(); src.start();
+    // a sharp ignition crack on top of the sustained roar
+    const zap = this.ctx.createOscillator(); zap.type = 'triangle';
+    zap.frequency.setValueAtTime(2400, t);
+    zap.frequency.exponentialRampToValueAtTime(500, t + .18);
+    const zg = this.ctx.createGain();
+    zg.gain.setValueAtTime(.16, t);
+    zg.gain.exponentialRampToValueAtTime(.001, t + .2);
+    zap.connect(zg); zg.connect(out);
+    zap.start(t); zap.stop(t + .22);
+    this._beamSnd = { o, src, out };
+  },
+  cannonBeamStop() {
+    if (!this._beamSnd) return;
+    const s = this._beamSnd; this._beamSnd = null;
+    try { s.o.stop(); s.src.stop(); } catch (e) { }
+    try { s.out.disconnect(); } catch (e) { }
+  },
+  /* overheat: a descending vent hiss */
+  cannonOverheat() {
+    this.cannonBeamStop();
+    if (!this.ctx || this.muted) return;
+    const t = this.ctx.currentTime;
+    const src = this.ctx.createBufferSource(); src.buffer = this.noiseBuf;
+    const bp = this.ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.setValueAtTime(1600, t);
+    bp.frequency.exponentialRampToValueAtTime(300, t + .5); bp.Q.value = .9;
+    const g = this.ctx.createGain();
+    g.gain.setValueAtTime(.22, t);
+    g.gain.exponentialRampToValueAtTime(.001, t + .55);
+    src.connect(bp); bp.connect(g); g.connect(this.master);
+    src.start(t); src.stop(t + .58);
+  },
+
   /* rising whine when the drone launches, then a low motor hum */
   droneLaunch() {
     this.tone(300, .18, 'sawtooth', .1, undefined, undefined, undefined, 900);
@@ -3981,51 +4056,81 @@ function buildWeaponModel(id) {
       break;
     }
 
-    /* ---------------- ЛАЗЕРНАЯ ПУШКА: spinning continuous-beam cannon ----------------
-       A long olive-grey frame with a red-hot barrel cluster on a spinning hub,
-       a glowing core and a big rear heat-sink. The cluster is its own named group
-       so it can whir up while the trigger is held (see applyBarrelSpin). */
+    /* ---------------- ЛАЗЕРНАЯ ПУШКА: divided-barrel laser cannon ----------------
+       Matches the reference: a long olive-grey slab frame, a big red generator
+       drum, a rear grille and a scope. The barrel is SPLIT lengthwise into two
+       long half-shells that orbit a glowing red-hot core — that divided part is
+       the one that spins (its group is named `barrels`, see applyBarrelSpin). */
     case 'laserCannon': {
-      const OLIV = 0xa7ac96, OLIV2 = 0x8a8f78, DARK = 0x2a2e26, HOT = 0xff5a2a, GLOW = 0xffb060;
-      add(B(.130, .115, .96, OLIV, 0, .010, -.36));                 // long slab body
-      add(B(.105, .070, .34, OLIV2, 0, .072, -.30));                // top housing
-      add(B(.120, .090, .12, OLIV2, 0, -.040, -.66));               // front block
-      add(B(.126, .020, .74, OLIV2, 0, -.050, -.30));               // under-rail
-      // the glowing heat channel that runs down the body
-      add(B(.070, .042, .60, HOT, 0, .010, -.40));
-      add(B(.050, .026, .52, GLOW, 0, .010, -.36));
-      // barrel cluster on its own spinning hub
-      const barrels = new THREE.Group();
+      const OLIV = 0xa7ac96, OLIV2 = 0x8a8f78, DARK = 0x2a2e26,
+            HOT = 0xff5a2a, GLOW = 0xffb060, RED = 0xd83424, BLUE = 0x8fd8ff;
+      // a basic-material (self-lit) cylinder, used for all the glowing parts
+      const glowCyl = (r, len, color, z, seg) => {
+        const geo = new THREE.CylinderGeometry(r, r, len, seg || 12);
+        geo.rotateX(Math.PI / 2);
+        const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color }));
+        m.position.set(0, 0, z);
+        return m;
+      };
+      /* ---- static frame ---- */
+      add(B(.160, .145, .46, OLIV, 0, .005, -.10));                 // rear receiver housing
+      add(B(.128, .070, .32, OLIV2, 0, .092, -.12));                // top deck
+      add(B(.176, .110, .16, OLIV2, 0, -.006, -.36));               // mid collar
+      add(B(.150, .026, .62, OLIV2, 0, -.088, -.60));               // under-rail
+      // scope / sight block with a glowing screen
+      add(B(.078, .058, .13, OLIV2, 0, .152, -.06));
+      add(B(.062, .040, .012, BLUE, 0, .154, -.128));               // glowing screen
+      add(B(.030, .030, .05, DARK, 0, .152, .02));
+      add(B(.026, .026, .026, HOT, 0, .176, .02));
+      // rear heat-sink with a grille
+      add(B(.152, .170, .13, DARK, 0, .000, .19));
+      add(B(.152, .150, .05, OLIV2, 0, .000, .258));
+      for (let i = 0; i < 4; i++) add(B(.142, .012, .014, 0x14171a, 0, -.052 + i * .038, .132));
+      // support rod running back to the heat-sink
+      add(CYL(.019, .30, OLIV2, 0, .062, .07, 8));
+      // front muzzle block + sight
+      add(B(.156, .140, .15, OLIV2, 0, .006, -1.16));
+      add(B(.032, .085, .028, DARK, 0, .122, -1.14));
+      add(B(.026, .026, .026, HOT, 0, .154, -1.14));
+      // retaining rings that hold the rotating barrel
+      add(CYL(.107, .050, OLIV2, 0, 0, -.38, 16));
+      add(CYL(.107, .050, OLIV2, 0, 0, -1.08, 16));
+      // the big red generator drum just behind the barrel
+      add(CYL(.098, .075, DARK, 0, 0, -.28, 18));
+      add(glowCyl(.082, .014, RED, -.322, 18));
+      add(glowCyl(.060, .016, 0xff8a6a, -.328, 18));
       for (let i = 0; i < 6; i++) {
         const a = (i / 6) * Math.PI * 2;
-        barrels.add(CYL(.017, .70, PAL.steel, Math.cos(a) * .042, Math.sin(a) * .042, -.88, 8));
-        barrels.add(CYL(.022, .06, HOT, Math.cos(a) * .042, Math.sin(a) * .042, -1.18, 8));
+        add(B(.030, .010, .010, GLOW, Math.cos(a) * .045, Math.sin(a) * .045, -.330));
       }
-      barrels.add(CYL(.058, .10, PAL.black, 0, 0, -.58, 12));       // hub
-      barrels.add(CYL(.062, .07, HOT, 0, 0, -1.22, 12));            // muzzle ring
+      // cooling fins under the receiver
+      for (let i = 0; i < 5; i++) add(B(.100, .020, .014, DARK, 0, -.062, -.46 - i * .050));
+      // pistol grip + trigger guard
+      add(B(.054, .155, .064, DARK, 0, -.118, -.05, .16));
+      add(B(.042, .016, .11, DARK, 0, -.064, -.09));
+      /* ---- ROTATING split barrel: two half-shells orbiting a hot core ---- */
+      const barrels = new THREE.Group();
+      barrels.add(glowCyl(.028, .78, RED, -.73, 14));               // core rod
+      barrels.add(glowCyl(.019, .76, GLOW, -.73, 14));              // brighter inner
+      // segmented rings around the core (the ribbed teeth from the reference)
+      for (let i = 0; i < 12; i++) {
+        const z = -.40 - i * .060;
+        barrels.add(CYL(.047, .017, HOT, 0, 0, z, 12));
+        barrels.add(B(.100, .013, .015, GLOW, 0, 0, z));
+        barrels.add(B(.015, .100, .013, GLOW, 0, 0, z));
+      }
+      // the two long half-shells (they spin around the core as one divided part)
+      const halfShell = (sgn) => {
+        const s = new THREE.Group();
+        s.add(B(.156, .058, .78, OLIV, 0, sgn * .086, 0));
+        s.add(B(.150, .020, .80, OLIV2, 0, sgn * .052, 0));
+        for (let i = 0; i < 10; i++) s.add(B(.150, .018, .015, HOT, 0, sgn * .038, -.36 + i * .080));
+        s.position.z = -.73;
+        return s;
+      };
+      barrels.add(halfShell(1), halfShell(-1));
       barrels.name = 'barrels';
       g.add(barrels);
-      // cooling fins along the barrel shroud
-      for (let i = 0; i < 7; i++) add(B(.100, .020, .016, DARK, 0, .048, -.62 - i * .055));
-      // the big red lens at the receiver
-      const lensHub = new THREE.Group();
-      lensHub.add(CYL(.085, .05, DARK, 0, .012, -.30, 14));
-      const lens = new THREE.Mesh(new THREE.SphereGeometry(.052, 10, 8),
-        new THREE.MeshBasicMaterial({ color: 0xff3a2a }));
-      lens.position.set(0, .012, -.315);
-      lensHub.add(lens);
-      const lensRing = new THREE.Mesh(new THREE.TorusGeometry(.078, .012, 8, 16),
-        new THREE.MeshBasicMaterial({ color: 0xffd0a0 }));
-      lensRing.position.set(0, .012, -.29);
-      lensHub.add(lensRing);
-      g.add(lensHub);
-      // front sight + rear heat-sink
-      add(B(.022, .060, .024, DARK, 0, .108, -.78));
-      add(B(.026, .026, .026, HOT, 0, .118, -.74));
-      add(B(.135, .150, .10, DARK, 0, .000, .14));                  // rear heat-sink block
-      add(B(.100, .110, .06, OLIV2, 0, .000, .22));
-      // grip + trigger
-      add(B(.048, .130, .058, DARK, 0, -.095, -.08, .18));
       break;
     }
 
@@ -4251,7 +4356,7 @@ const MUZZLE_Z = {
   negev: -0.86,
   minigun: -0.98, rpg: -1.20,
   laser: -0.98, atomicRpg: -1.06, yhs: -1.16,
-  laserCannon: -1.24,
+  laserCannon: -1.20,
   rocketgun: -0.94, shield: -0.30,
   banana: -0.92
 };
@@ -4951,17 +5056,22 @@ class Player {
     this.isAiming = this._wantAim && canZoom;
     this.zoom = U.lerp(this.zoom, this.isAiming ? 1 : 0, 1 - Math.pow(0.0000015, dt));
 
-    // minigun spin-up: the barrels must wind up before it can fire, and they
+    // spin-up: the barrels must wind up before the weapon can fire, and they
     // wind back down when the trigger is released
     if (def.spinUp) {
       const want = this.triggerDown && this.reloadT <= 0 && this.deployT <= 0 && this.weapon.mag > 0;
       const rate = want ? 1 / def.spinUp : 1 / (def.spinUp * 1.4);
+      const was = this.spinT;
       this.spinT = U.clamp(this.spinT + (want ? rate : -rate) * dt, 0, 1);
       if (!this.isLocal && this.spinT > .05 && !this._spinSnd) {
         Audio3D_SFX.minigunSpin(this.pos.x, this.pos.y + 1.2, this.pos.z);
         this._spinSnd = true;
       }
       if (this.spinT <= .05) this._spinSnd = false;
+      // local laser cannon: a dedicated charging whirr the first time it spins up
+      if (this.isLocal && def.beam && was < .05 && this.spinT > .05) {
+        Audio3D_SFX.cannonSpin(this.pos.x, this.pos.y + 1.2, this.pos.z);
+      }
       // Visible spin: the barrel cluster turns steadily while winding up, then
       // very fast once it is up to speed. The rotation keeps its own phase so
       // stopping and restarting does not snap the barrels to a new angle.
@@ -4975,18 +5085,22 @@ class Player {
       if (this.beamVent > 0) {
         this.beamVent = Math.max(0, this.beamVent - dt);
         this.beamHeat = 0;
-      } else if (this.triggerDown && this.spinT > .85 && this.reloadT <= 0 && this.deployT <= 0 && this.weapon.mag > 0) {
+      } else if (this.alive && this.triggerDown && this.spinT > .85 && this.reloadT <= 0 && this.deployT <= 0 && this.weapon.mag > 0) {
+        if (this.isLocal && !this._beamSnd) Audio3D_SFX.cannonBeamStart(this.pos.x, this.pos.y + 1.2, this.pos.z);
         this.beamHeat += dt;
         if (this.beamHeat >= (def.beamMax || 10)) {
           this.beamHeat = 0;                       // overheat — forced vent
           this.beamVent = def.beamVent || 3.5;
-          if (this.isLocal) { Audio3D_SFX.deny(); UI.toast('ПЕРЕГРЕВ · остывает', '#e33a2e'); }
+          if (this.isLocal) { Audio3D_SFX.cannonOverheat(); UI.toast('ПЕРЕГРЕВ · остывает', '#e33a2e'); }
+          Audio3D_SFX.deny();
         }
       } else {
         this.beamHeat = Math.max(0, this.beamHeat - dt * 2.5);   // cools off fast between bursts
+        if (this.isLocal) Audio3D_SFX.cannonBeamStop();
       }
     } else {
       this.beamHeat = 0; this.beamVent = 0;
+      if (this.isLocal) Audio3D_SFX.cannonBeamStop();
     }
 
     if (this.flashT > 0) {
@@ -10663,6 +10777,7 @@ const Game = {
       Input.enabled = false;
       Input.releaseLock();
       Audio3D_SFX.ambientStop();
+      Audio3D_SFX.cannonBeamStop();
       this.mode = CS.MODE.MENU;
       clearWorld();
       this.offline = null; this.online = null;

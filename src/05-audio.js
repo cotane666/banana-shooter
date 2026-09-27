@@ -301,6 +301,81 @@ const Audio3D_SFX = {
     o.start(t); o.stop(t + .2);
   },
 
+  /* ---------- laser cannon ---------- */
+  /* charging whirr as the barrel winds up */
+  cannonSpin(x, y, z) {
+    if (!this.ctx || this.muted) return;
+    const sp = this._spatial(x, y, z, 3, 130);
+    if (sp.gain <= .002) return;
+    const t = this.ctx.currentTime;
+    const out = this.ctx.createGain(); out.gain.value = sp.gain * .55;
+    const pan = this.ctx.createStereoPanner ? this.ctx.createStereoPanner() : null;
+    if (pan) { pan.pan.value = sp.pan; out.connect(pan); pan.connect(this.master); } else out.connect(this.master);
+    const o = this.ctx.createOscillator();
+    o.type = 'sawtooth';
+    o.frequency.setValueAtTime(90, t);
+    o.frequency.exponentialRampToValueAtTime(520, t + .45);
+    const lp = this.ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 1600;
+    const g = this.ctx.createGain();
+    g.gain.setValueAtTime(.14, t);
+    g.gain.linearRampToValueAtTime(.24, t + .38);
+    g.gain.exponentialRampToValueAtTime(.001, t + .55);
+    o.connect(lp); lp.connect(g); g.connect(out);
+    o.start(t); o.stop(t + .58);
+  },
+  /* the beam itself: a sustained, crackling roar that loops while it is up */
+  cannonBeamStart(x, y, z) {
+    if (!this.ctx || this.muted || this._beamSnd) return;
+    const sp = this._spatial(x, y, z, 3, 160);
+    const t = this.ctx.currentTime;
+    const out = this.ctx.createGain(); out.gain.value = Math.max(sp.gain, .25);
+    const pan = this.ctx.createStereoPanner ? this.ctx.createStereoPanner() : null;
+    if (pan) { pan.pan.value = sp.pan; out.connect(pan); pan.connect(this.master); } else out.connect(this.master);
+    // low saw rumble
+    const o = this.ctx.createOscillator(); o.type = 'sawtooth';
+    o.frequency.setValueAtTime(140, t);
+    o.frequency.linearRampToValueAtTime(96, t + .6);
+    const olp = this.ctx.createBiquadFilter(); olp.type = 'lowpass'; olp.frequency.value = 700;
+    const og = this.ctx.createGain(); og.gain.value = .12;
+    o.connect(olp); olp.connect(og); og.connect(out);
+    // hissing noise bed with a bandpass that sweeps a little
+    const src = this.ctx.createBufferSource(); src.buffer = this.noiseBuf; src.loop = true;
+    const bp = this.ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 2200; bp.Q.value = .8;
+    const ng = this.ctx.createGain(); ng.gain.value = .10;
+    src.connect(bp); bp.connect(ng); ng.connect(out);
+    o.start(); src.start();
+    // a sharp ignition crack on top of the sustained roar
+    const zap = this.ctx.createOscillator(); zap.type = 'triangle';
+    zap.frequency.setValueAtTime(2400, t);
+    zap.frequency.exponentialRampToValueAtTime(500, t + .18);
+    const zg = this.ctx.createGain();
+    zg.gain.setValueAtTime(.16, t);
+    zg.gain.exponentialRampToValueAtTime(.001, t + .2);
+    zap.connect(zg); zg.connect(out);
+    zap.start(t); zap.stop(t + .22);
+    this._beamSnd = { o, src, out };
+  },
+  cannonBeamStop() {
+    if (!this._beamSnd) return;
+    const s = this._beamSnd; this._beamSnd = null;
+    try { s.o.stop(); s.src.stop(); } catch (e) { }
+    try { s.out.disconnect(); } catch (e) { }
+  },
+  /* overheat: a descending vent hiss */
+  cannonOverheat() {
+    this.cannonBeamStop();
+    if (!this.ctx || this.muted) return;
+    const t = this.ctx.currentTime;
+    const src = this.ctx.createBufferSource(); src.buffer = this.noiseBuf;
+    const bp = this.ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.setValueAtTime(1600, t);
+    bp.frequency.exponentialRampToValueAtTime(300, t + .5); bp.Q.value = .9;
+    const g = this.ctx.createGain();
+    g.gain.setValueAtTime(.22, t);
+    g.gain.exponentialRampToValueAtTime(.001, t + .55);
+    src.connect(bp); bp.connect(g); g.connect(this.master);
+    src.start(t); src.stop(t + .58);
+  },
+
   /* rising whine when the drone launches, then a low motor hum */
   droneLaunch() {
     this.tone(300, .18, 'sawtooth', .1, undefined, undefined, undefined, 900);

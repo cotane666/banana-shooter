@@ -2411,6 +2411,7 @@ const Game = {
       Input.enabled = false;
       Input.releaseLock();
       Audio3D_SFX.ambientStop();
+      Audio3D_SFX.cannonBeamStop();
       this.mode = CS.MODE.MENU;
       clearWorld();
       this.offline = null; this.online = null;

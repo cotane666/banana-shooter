@@ -546,6 +546,16 @@ const UI = {
       wrap.appendChild(b);
     });
   },
+  /* per-frame timer tick only (the grid is NOT rebuilt, so clicks land) */
+  tickBuyTimer(secondsLeft) {
+    if (!this.el.buyTimer) return;
+    const endless = typeof Game !== 'undefined' && Game.mode === CS.MODE.RANGE;
+    this.el.buyTimer.textContent = endless ? '∞' : Math.max(0, Math.ceil(secondsLeft));
+    // keep the money readout live (it changes when the round timer refunds)
+    if (this.el.buyMoney && typeof Game !== 'undefined' && Game.isFreeShop && !Game.isFreeShop()) {
+      this.el.buyMoney.textContent = U.money(Game.player.money);
+    }
+  },
   renderBuy(player, secondsLeft) {
     const wrap = this.el.buyGrid;
     if (!wrap) return;

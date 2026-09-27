@@ -1119,7 +1119,7 @@ html.touch .fld input{padding:10px;font-size:15px}
     <div class="buy-cats" id="buyCats"></div>
     <div class="buy-grid" id="buyGrid"></div>
     <div class="buy-foot">
-      <span id="buyHint">Выберите оружие. «ГОТОВ» — начать бой · 1–9 — быстрая покупка</span>
+      <span id="buyHint">Кликните по оружию, чтобы купить · 1–9 — быстрая покупка · «ГОТОВ» — начать бой</span>
       <span id="buyOwned"></span>
       <button class="mbtn small buy-skip" id="btnBuySkip">ГОТОВ</button>
       <button class="mbtn small primary buy-close" id="btnBuyClose">ЗАКРЫТЬ</button>
@@ -10419,6 +10419,16 @@ const UI = {
       wrap.appendChild(b);
     });
   },
+  /* per-frame timer tick only (the grid is NOT rebuilt, so clicks land) */
+  tickBuyTimer(secondsLeft) {
+    if (!this.el.buyTimer) return;
+    const endless = typeof Game !== 'undefined' && Game.mode === CS.MODE.RANGE;
+    this.el.buyTimer.textContent = endless ? '∞' : Math.max(0, Math.ceil(secondsLeft));
+    // keep the money readout live (it changes when the round timer refunds)
+    if (this.el.buyMoney && typeof Game !== 'undefined' && Game.isFreeShop && !Game.isFreeShop()) {
+      this.el.buyMoney.textContent = U.money(Game.player.money);
+    }
+  },
   renderBuy(player, secondsLeft) {
     const wrap = this.el.buyGrid;
     if (!wrap) return;
@@ -15055,7 +15065,11 @@ const Game = {
       if (this.mode === CS.MODE.RANGE) { this.roundT = 0; return; }
       this.buyTimer -= dt;
       this.roundT = this.buyTimer;
-      if (this.buyOpen) UI.renderBuy(this.player, this.buyTimer);
+      // Only tick the timer text here. Rebuilding the whole grid every frame
+      // destroyed the card under the cursor between mousedown and mouseup, so a
+      // real mouse click never produced a 'click' event (keyboard digits still
+      // worked). The grid is rebuilt on demand by tryBuy/refunds/category change.
+      if (this.buyOpen) UI.tickBuyTimer(this.buyTimer);
       if (this.buyTimer <= 0) {
         if (this.buyOpen) this.toggleBuy(false);
         this.startLive();

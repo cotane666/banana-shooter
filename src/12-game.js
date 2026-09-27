@@ -3587,7 +3587,11 @@ const Game = {
       if (this.mode === CS.MODE.RANGE) { this.roundT = 0; return; }
       this.buyTimer -= dt;
       this.roundT = this.buyTimer;
-      if (this.buyOpen) UI.renderBuy(this.player, this.buyTimer);
+      // Only tick the timer text here. Rebuilding the whole grid every frame
+      // destroyed the card under the cursor between mousedown and mouseup, so a
+      // real mouse click never produced a 'click' event (keyboard digits still
+      // worked). The grid is rebuilt on demand by tryBuy/refunds/category change.
+      if (this.buyOpen) UI.tickBuyTimer(this.buyTimer);
       if (this.buyTimer <= 0) {
         if (this.buyOpen) this.toggleBuy(false);
         this.startLive();

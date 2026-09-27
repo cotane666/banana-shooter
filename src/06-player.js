@@ -57,6 +57,44 @@ function MAG(w, h, d, color, x, y, z, tiltZ) {
   return m;
 }
 
+/* ---- small detail helpers used to dress up the weapon models ---- */
+/* a Picatinny rail: a base bar topped by evenly spaced teeth */
+function RAIL(len, color, x, y, z, rotZ) {
+  const g = new THREE.Group();
+  const base = new THREE.Mesh(new THREE.BoxGeometry(.030, .012, len), gunMat(color || 0x22262b));
+  g.add(base);
+  const n = Math.max(3, Math.round(len / .034));
+  for (let i = 0; i < n; i++) {
+    const t = new THREE.Mesh(new THREE.BoxGeometry(.034, .010, .016), gunMat(color || 0x22262b));
+    t.position.set(0, .010, -len / 2 + .017 + i * (len / n));
+    g.add(t);
+  }
+  g.position.set(x, y, z);
+  if (rotZ) g.rotation.z = rotZ;
+  return g;
+}
+/* a line of small bolts / rivets along a surface */
+function BOLTS(count, spacing, r, color, x, y, z, axis) {
+  const g = new THREE.Group();
+  for (let i = 0; i < count; i++) {
+    const geo = new THREE.CylinderGeometry(r, r, .012, 8);
+    if (axis === 'x') geo.rotateZ(Math.PI / 2);
+    else geo.rotateX(Math.PI / 2);
+    const m = new THREE.Mesh(geo, gunMat(color || 0x2a2f34));
+    if (axis === 'x') m.position.set(0, (i - (count - 1) / 2) * spacing, 0);
+    else m.position.set(0, 0, (i - (count - 1) / 2) * spacing);
+    g.add(m);
+  }
+  g.position.set(x, y, z);
+  return g;
+}
+/* a small self-lit indicator light */
+function DOT(r, color, x, y, z) {
+  const m = new THREE.Mesh(new THREE.SphereGeometry(r, 8, 6), new THREE.MeshBasicMaterial({ color }));
+  m.position.set(x, y, z);
+  return m;
+}
+
 function buildWeaponModel(id) {
   const g = new THREE.Group();
   const add = (...ms) => { for (const m of ms) g.add(m); return ms[0]; };
@@ -66,126 +104,191 @@ function buildWeaponModel(id) {
     /* ---------------- GLOCK-18: compact polymer pistol ---------------- */
     case 'glock': {
       add(B(.052, .052, .17, PAL.poly, 0, 0, -.075));                 // slide
+      add(B(.044, .014, .17, PAL.black, 0, .026, -.075));             // slide top bevel
+      // slide serrations
+      for (let i = 0; i < 5; i++) add(B(.054, .036, .008, PAL.poly, 0, -.002, -.14 + i * .016));
       add(B(.046, .030, .155, PAL.gun, 0, -.038, -.07));              // frame
       add(CYL(.011, .06, PAL.steel, 0, .004, -.19, 8));               // barrel
       add(B(.040, .020, .022, PAL.black, 0, -.004, -.165));           // muzzle block
+      add(B(.030, .008, .012, PAL.steel, 0, .030, -.19));             // front cocking step
       add(B(.044, .105, .052, PAL.poly, 0, -.085, .005, .16));        // grip
+      for (let i = 0; i < 4; i++) add(B(.046, .008, .036, PAL.black, 0, -.060 + i * .022, .006, .16));   // grip texture
       add(B(.048, .026, .050, PAL.mag, 0, -.11, .004, .16));          // mag floorplate
       add(B(.020, .012, .012, PAL.steel, 0, .032, -.145));            // front sight
+      add(DOT(.006, 0x8affa0, 0, .038, -.145));                       // front sight dot
       add(B(.030, .014, .014, PAL.steel, 0, .032, -.005));            // rear sight
       add(B(.026, .022, .028, PAL.black, 0, -.048, -.036));           // trigger guard
+      add(B(.011, .020, .010, PAL.steel, 0, -.040, -.030));           // trigger
+      add(B(.010, .014, .030, PAL.black, 0, -.020, -.085));           // takedown lever
       break;
     }
 
     /* ---------------- USP-S: silenced pistol ---------------- */
     case 'usp': {
       add(B(.050, .054, .185, PAL.black, 0, 0, -.08));
+      add(B(.042, .014, .185, PAL.gun, 0, .027, -.08));                // slide top
+      for (let i = 0; i < 5; i++) add(B(.052, .038, .008, PAL.gun, 0, -.002, -.15 + i * .015));
       add(B(.044, .030, .16, PAL.gun, 0, -.040, -.075));
       add(CYL(.017, .20, PAL.poly, 0, .004, -.255, 10));              // long suppressor
-      add(CYL(.019, .012, PAL.steel, 0, .004, -.158, 10));            // thread collar
+      add(CYL(.020, .020, PAL.steel, 0, .004, -.16, 10));             // thread collar
+      // suppressor ribs
+      for (let i = 0; i < 4; i++) add(CYL(.0185, .012, PAL.steel, 0, .004, -.20 - i * .045, 10));
       add(B(.042, .105, .050, PAL.black, 0, -.088, .008, .15));
       add(B(.020, .012, .012, PAL.steel, 0, .034, -.155));
+      add(DOT(.006, 0x8affa0, 0, .040, -.155));
       add(B(.028, .013, .014, PAL.steel, 0, .034, -.012));
       add(B(.024, .020, .026, PAL.black, 0, -.050, -.038));
+      add(B(.010, .018, .010, PAL.steel, 0, -.042, -.032));           // trigger
       break;
     }
 
     /* ---------------- P250: compact duty pistol ---------------- */
     case 'p250': {
       add(B(.054, .050, .165, PAL.gunLight, 0, 0, -.072));
+      add(B(.044, .012, .165, PAL.gun, 0, .025, -.072));
+      // slide serrations + a slide-stop lever
+      for (let i = 0; i < 5; i++) add(B(.056, .034, .008, PAL.gun, 0, -.002, -.13 + i * .015));
+      add(B(.010, .016, .028, PAL.black, 0, -.014, -.09));
       add(B(.046, .032, .15, PAL.poly, 0, -.038, -.068));
       add(CYL(.012, .05, PAL.steel, 0, .002, -.178, 8));
+      add(B(.030, .008, .014, PAL.steel, 0, .028, -.18));             // muzzle step
       add(B(.046, .10, .052, PAL.poly, 0, -.082, .006, .14));
+      for (let i = 0; i < 3; i++) add(B(.048, .008, .038, PAL.black, 0, -.058 + i * .022, .006, .14));
       add(B(.050, .024, .052, PAL.mag, 0, -.106, .005, .14));         // wide floorplate
       add(B(.020, .011, .012, PAL.steel, 0, .030, -.135));
+      add(DOT(.005, 0xffd06a, 0, .035, -.135));
       add(B(.028, .013, .013, PAL.steel, 0, .030, -.008));
       add(B(.024, .020, .026, PAL.black, 0, -.046, -.036));
+      add(B(.010, .017, .010, PAL.steel, 0, -.039, -.030));           // trigger
       break;
     }
 
     /* ---------------- Desert Eagle: huge silver hand cannon ---------------- */
     case 'deagle': {
       add(B(.062, .070, .215, PAL.steel, 0, 0, -.095));               // massive slide
+      // deep slide serrations
+      for (let i = 0; i < 6; i++) add(B(.064, .050, .009, PAL.gun, 0, -.004, -.16 + i * .016));
       add(B(.056, .038, .18, PAL.gun, 0, -.052, -.085));
       add(B(.048, .036, .20, PAL.steel, 0, .020, -.115));             // full-length top rib
+      for (let i = 0; i < 6; i++) add(B(.050, .010, .012, PAL.black, 0, .042, -.19 + i * .030));   // rib vents
       add(CYL(.014, .05, PAL.black, 0, .004, -.225, 8));
+      add(B(.026, .014, .022, PAL.steel, 0, .004, -.24));             // muzzle crown
       add(B(.052, .115, .058, PAL.poly, 0, -.098, .010, .17));        // grip
+      for (let i = 0; i < 4; i++) add(B(.054, .009, .040, PAL.black, 0, -.066 + i * .024, .011, .17));
       add(B(.020, .016, .014, PAL.black, 0, .044, -.20));             // front sight
+      add(DOT(.007, 0xff5a3a, 0, .052, -.20));
       add(B(.032, .016, .016, PAL.black, 0, .044, -.005));            // rear sight
       add(B(.028, .022, .030, PAL.black, 0, -.058, -.046));
+      add(B(.011, .020, .010, PAL.steel, 0, -.050, -.040));           // trigger
       break;
     }
 
     /* ---------------- R8 Revolver: swinging cylinder ---------------- */
     case 'revolver': {
       add(B(.048, .054, .19, PAL.gun, 0, 0, -.085));
+      add(B(.038, .012, .19, PAL.steel, 0, .026, -.085));             // top strap
       add(B(.042, .028, .16, PAL.black, 0, -.036, -.08));
       const cyl = CYL(.036, .085, PAL.steel, 0, 0, -.105, 12);        // the cylinder
       add(cyl);
+      // fluted cylinder chambers
+      for (let i = 0; i < 6; i++) {
+        const a = (i / 6) * Math.PI * 2;
+        add(CYL(.008, .088, PAL.black, Math.cos(a) * .022, Math.sin(a) * .022, -.105, 6));
+      }
       add(CYL(.014, .13, PAL.steel, 0, .002, -.215, 8));              // barrel
+      add(B(.030, .020, .030, PAL.steel, 0, .014, -.255));            // underlug
       add(B(.046, .115, .055, PAL.wood, 0, -.095, .012, .19));        // wooden grip
+      for (let i = 0; i < 3; i++) add(B(.048, .010, .044, PAL.black, 0, -.066 + i * .024, .012, .19));
       add(B(.020, .014, .014, PAL.black, 0, .040, -.19));
+      add(DOT(.006, 0xff5a3a, 0, .046, -.19));
       add(B(.030, .014, .015, PAL.black, 0, .038, -.015));
       add(B(.022, .032, .022, PAL.steel, 0, -.045, -.03));            // hammer area
+      add(CYL(.013, .022, PAL.steel, 0, -.028, -.045, 8));            // hammer spur
+      add(B(.010, .020, .012, PAL.steel, 0, -.036, -.036));           // trigger
+      add(B(.006, .014, .050, PAL.steel, 0, -.006, -.14));            // ejector rod
       break;
     }
 
     /* ---------------- MP5-SD: integrally suppressed SMG ---------------- */
     case 'mp5': {
       add(B(.052, .075, .30, PAL.black, 0, 0, -.14));                 // receiver
+      add(B(.046, .014, .30, PAL.gun, 0, .034, -.14));                // receiver top
       add(CYL(.021, .28, PAL.gun, 0, .006, -.43, 12));                // fat suppressor
       add(CYL(.024, .015, PAL.steel, 0, .006, -.295, 12));
+      for (let i = 0; i < 5; i++) add(CYL(.0225, .010, PAL.steel, 0, .006, -.33 - i * .045, 12));   // suppressor ribs
+      add(B(.020, .016, .26, PAL.steel, 0, .040, -.44));              // top rail on suppressor shroud
       add(B(.048, .060, .20, PAL.poly, 0, -.008, -.30));              // slim handguard
       add(B(.040, .150, .055, PAL.black, 0, -.115, -.06));            // curved mag
       add(B(.044, .028, .058, PAL.mag, 0, -.185, -.06));              // mag floor
       add(B(.042, .115, .058, PAL.poly, 0, -.085, .015, .18));        // pistol grip
+      for (let i = 0; i < 3; i++) add(B(.044, .008, .042, PAL.black, 0, -.055 + i * .022, .016, .18));
       add(B(.050, .060, .13, PAL.black, 0, -.004, .085));             // stock body
       add(B(.040, .050, .10, PAL.poly, 0, -.004, .20));               // sliding stock
       add(B(.030, .034, .09, PAL.black, 0, .052, -.13));              // optic hood
       add(CYL(.013, .05, PAL.steel, 0, .052, -.20, 8));               // optic tube
+      add(DOT(.006, 0xff5a3a, 0, .052, -.225));                       // dot
       add(B(.024, .020, .026, PAL.black, 0, -.058, -.10));
+      add(B(.011, .018, .010, PAL.steel, 0, -.050, -.096));           // trigger
+      add(B(.012, .026, .030, PAL.black, 0, -.014, -.16));            // mag release / paddle
       break;
     }
 
     /* ---------------- P90: bullpup with a top magazine ---------------- */
     case 'p90': {
       add(B(.075, .105, .34, PAL.oliv, 0, 0, -.14));                  // chunky shell
+      add(B(.070, .014, .34, PAL.poly, 0, .056, -.14));               // shell top seam
       add(B(.058, .072, .10, PAL.poly, 0, -.005, .05));               // rear
       add(CYL(.014, .11, PAL.steel, 0, .004, -.345, 8));              // stubby barrel
       add(B(.070, .040, .13, PAL.poly, 0, .070, -.13));               // TOP magazine
       add(B(.066, .020, .12, PAL.mag, 0, .095, -.13));
+      for (let i = 0; i < 4; i++) add(B(.064, .038, .006, PAL.mag, 0, .070, -.175 + i * .028));   // mag witness slots
       add(B(.030, .110, .050, PAL.poly, 0, -.075, .01, .10));         // grip
       add(B(.052, .058, .06, PAL.black, 0, -.008, -.045));            // trigger housing
       add(B(.026, .030, .11, PAL.black, 0, .048, -.02));              // built-in optic
+      add(CYL(.010, .026, PAL.glass, 0, .052, -.075, 8));             // optic lens
       add(B(.020, .014, .016, PAL.steel, 0, .035, -.045));
+      add(B(.010, .016, .010, PAL.steel, 0, -.030, -.040));           // trigger
+      add(CYL(.010, .026, PAL.steel, 0, .004, -.30, 8));              // barrel shroud
+      add(B(.014, .014, .030, PAL.steel, 0, -.006, .05));             // charging handle
       break;
     }
 
     /* ---------------- UMP-45: angular polymer SMG ---------------- */
     case 'ump': {
       add(B(.058, .072, .30, PAL.poly, 0, 0, -.135));
+      add(B(.052, .014, .30, PAL.black, 0, .032, -.135));             // receiver top
+      add(RAIL(.22, PAL.black, 0, .042, -.24));                       // top rail
       add(B(.046, .062, .22, PAL.black, 0, -.006, -.30));             // squared handguard
+      add(B(.034, .010, .18, PAL.poly, 0, .026, -.30));               // handguard rib
       add(CYL(.016, .11, PAL.steel, 0, .004, -.41, 8));
+      add(B(.028, .030, .04, PAL.black, 0, .004, -.45));              // muzzle device
       add(B(.044, .135, .055, PAL.mag, 0, -.105, -.075));             // thick .45 mag
       add(B(.048, .024, .060, PAL.black, 0, -.175, -.075));
       add(B(.044, .115, .058, PAL.poly, 0, -.085, .015, .22));
+      for (let i = 0; i < 3; i++) add(B(.046, .008, .042, PAL.black, 0, -.055 + i * .022, .016, .22));
       add(B(.048, .058, .14, PAL.poly, 0, -.006, .09));               // folding stock
       add(B(.040, .058, .06, PAL.black, 0, -.006, .17));
-      add(B(.025, .028, .11, PAL.black, 0, .050, -.10));              // rail
+      add(B(.025, .028, .11, PAL.black, 0, .050, -.10));              // rail riser
       add(B(.024, .020, .026, PAL.black, 0, -.058, -.105));
+      add(B(.011, .018, .010, PAL.steel, 0, -.050, -.10));            // trigger
       break;
     }
 
     /* ---------------- Nova: pump-action shotgun ---------------- */
     case 'nova': {
       add(B(.050, .075, .17, PAL.gun, 0, 0, -.08));                   // receiver
+      add(B(.044, .014, .17, PAL.black, 0, .032, -.08));              // receiver top
       add(CYL(.017, .42, PAL.steel, 0, .030, -.375, 10));             // barrel
+      add(CYL(.019, .05, PAL.black, 0, .030, -.58, 10));              // muzzle
       add(CYL(.016, .32, PAL.black, 0, .000, -.32, 10));              // mag tube
+      add(CYL(.010, .30, PAL.steel, 0, .030, -.375, 8));              // barrel rib
       add(B(.058, .046, .13, PAL.wood, 0, .002, -.28));               // pump forend
+      for (let i = 0; i < 5; i++) add(B(.060, .008, .010, PAL.wood, 0, .002, -.33 + i * .024));   // forend grooves
       add(B(.048, .115, .055, PAL.wood, 0, -.085, .015, .20));
       add(B(.052, .085, .20, PAL.wood, 0, -.012, .11));               // stock
       add(B(.044, .075, .05, PAL.gun, 0, -.012, .215));               // recoil pad
       add(B(.020, .014, .014, PAL.steel, 0, .062, -.55));
+      add(B(.014, .012, .012, PAL.steel, 0, .062, -.62));             // front bead
       add(B(.024, .020, .026, PAL.black, 0, -.055, -.06));
       break;
     }
@@ -193,12 +296,18 @@ function buildWeaponModel(id) {
     /* ---------------- XM1014: semi-auto shotgun ---------------- */
     case 'xm': {
       add(B(.058, .085, .28, PAL.black, 0, 0, -.135));                // bulky receiver
+      add(B(.052, .012, .28, PAL.gun, 0, .040, -.135));               // receiver top
       add(CYL(.019, .40, PAL.steel, 0, .028, -.38, 10));
+      add(CYL(.022, .06, PAL.black, 0, .028, -.57, 10));              // muzzle brake
       add(CYL(.018, .34, PAL.gun, 0, -.002, -.35, 10));               // gas tube
       add(B(.056, .048, .16, PAL.poly, 0, .000, -.30));               // broad forend
+      for (let i = 0; i < 4; i++) add(B(.058, .008, .012, PAL.black, 0, .000, -.26 + i * .036));
       add(B(.050, .115, .058, PAL.black, 0, -.088, .015, .20));
       add(B(.052, .075, .18, PAL.poly, 0, -.008, .10));               // stock
+      add(B(.046, .070, .05, PAL.black, 0, -.008, .20));              // recoil pad
       add(B(.058, .028, .055, PAL.mag, 0, .075, -.20));               // shell holder
+      for (let i = 0; i < 3; i++) add(CYL(.010, .020, 0xb03020, 0, .075, -.185 + i * .020, 8));   // spare shells
+      add(RAIL(.16, PAL.black, 0, .052, -.135));                      // optic rail
       add(B(.024, .020, .026, PAL.black, 0, -.058, -.055));
       break;
     }
@@ -206,33 +315,45 @@ function buildWeaponModel(id) {
     /* ---------------- Galil AR: utilitarian assault rifle ---------------- */
     case 'galil': {
       add(B(.060, .080, .40, PAL.poly, 0, 0, -.19));                  // slab receiver
+      add(B(.054, .014, .40, PAL.black, 0, .034, -.19));              // receiver top
       add(B(.046, .060, .26, PAL.black, 0, -.006, -.43));             // handguard
+      for (let i = 0; i < 4; i++) add(B(.048, .008, .012, PAL.poly, 0, -.006, -.37 + i * .036));
       add(B(.020, .020, .10, PAL.steel, 0, .032, -.52));              // gas block
       add(CYL(.015, .16, PAL.steel, 0, .008, -.62, 8));               // barrel
       add(B(.030, .026, .045, PAL.black, 0, .008, -.70));             // birdcage flash hider
+      for (let i = 0; i < 4; i++) { const a = (i / 4) * Math.PI * 2; add(B(.046, .008, .008, PAL.black, Math.cos(a) * .014, .008 + Math.sin(a) * .014, -.70)); }
       add(B(.046, .175, .070, PAL.mag, 0, -.125, -.16, -.06));        // long curved mag
       add(B(.046, .130, .058, PAL.poly, 0, -.092, .015, .22));
+      for (let i = 0; i < 3; i++) add(B(.048, .008, .042, PAL.black, 0, -.062 + i * .022, .016, .22));
       add(B(.048, .070, .16, PAL.poly, 0, .004, .10));                // folding stock
       add(B(.044, .062, .05, PAL.black, 0, .004, .19));
       add(B(.022, .030, .12, PAL.black, 0, .058, -.10));              // rail
       add(B(.030, .030, .012, PAL.glass, 0, .062, -.05));             // rear peep
       add(B(.024, .020, .026, PAL.black, 0, -.060, -.13));
+      add(B(.011, .020, .010, PAL.steel, 0, -.052, -.126));           // trigger
+      add(B(.014, .030, .034, PAL.black, 0, -.030, -.24));            // charging handle knob
       break;
     }
 
     /* ---------------- FAMAS: bullpup, carry handle ---------------- */
     case 'famas': {
       add(B(.058, .095, .50, PAL.poly, 0, 0, -.19));                  // long single shell
+      add(B(.052, .014, .50, PAL.black, 0, .040, -.19));              // shell top seam
       add(B(.030, .030, .30, PAL.black, 0, .088, -.20));              // tall carry handle
       add(B(.026, .028, .30, PAL.poly, 0, .060, -.20));
       add(B(.020, .026, .06, PAL.steel, 0, .088, -.03));              // rear sight notch
       add(B(.018, .030, .04, PAL.steel, 0, .088, -.37));              // front post
       add(CYL(.013, .13, PAL.steel, 0, .010, -.47, 8));               // barrel
+      add(B(.026, .028, .05, PAL.black, 0, .010, -.52));              // muzzle
       add(B(.046, .150, .070, PAL.mag, 0, -.120, .02));               // rear mag (bullpup)
+      for (let i = 0; i < 3; i++) add(B(.048, .010, .068, PAL.black, 0, -.08 - i * .030, .02));   // mag ribs
       add(B(.044, .115, .056, PAL.poly, 0, -.085, -.08, .18));
       add(B(.052, .045, .24, PAL.black, 0, -.020, -.42));             // handguard/bipod rail
       add(B(.020, .050, .10, PAL.poly, 0, -.062, -.44));              // folded bipod
       add(B(.024, .020, .026, PAL.black, 0, -.055, -.20));
+      add(B(.010, .018, .010, PAL.steel, 0, -.049, -.196));           // trigger
+      add(B(.016, .020, .040, PAL.steel, 0, .040, -.30));             // charging handle
+      add(DOT(.006, 0xffd06a, 0, .100, -.36));                        // front sight dot
       break;
     }
 
@@ -241,18 +362,24 @@ function buildWeaponModel(id) {
       add(B(.056, .078, .34, PAL.gun, 0, 0, -.16));                   // stamped receiver
       add(B(.024, .026, .30, PAL.black, 0, .052, -.17));              // dust-cover rail
       add(B(.052, .062, .22, PAL.wood, 0, -.004, -.35));              // wooden handguard
+      for (let i = 0; i < 4; i++) add(B(.054, .008, .012, PAL.wood, 0, -.004, -.30 + i * .034));   // handguard grooves
       add(B(.020, .020, .09, PAL.steel, 0, .030, -.44));              // gas block
+      add(B(.016, .016, .05, PAL.black, 0, .030, -.48));              // gas tube front
       add(CYL(.014, .20, PAL.steel, 0, .008, -.56, 8));
       add(B(.026, .024, .05, PAL.black, 0, .008, -.67));              // slant brake
       // the signature curved magazine (three stacked segments)
       add(B(.044, .080, .070, PAL.mag, 0, -.085, -.13, -.05));
       add(B(.044, .080, .072, PAL.mag, 0, -.155, -.155, -.16));
       add(B(.044, .070, .074, PAL.mag, 0, -.215, -.195, -.30));
+      for (let i = 0; i < 3; i++) add(B(.046, .010, .072, PAL.black, 0, -.12 - i * .055, -.15 - i * .03, -.18));   // mag ribs
       add(B(.046, .120, .056, PAL.wood, 0, -.082, .025, .20));        // wooden grip
       add(B(.050, .100, .17, PAL.wood, 0, -.005, .14));               // wooden stock
       add(B(.036, .070, .05, PAL.gun, 0, -.048, .215, -.10));         // stock comb
       add(B(.022, .026, .10, PAL.black, 0, .060, -.06));
       add(B(.024, .020, .028, PAL.black, 0, -.056, -.09));
+      add(B(.011, .020, .010, PAL.steel, 0, -.048, -.086));           // trigger
+      add(B(.014, .034, .036, PAL.black, 0, -.010, .035));            // safety lever
+      add(B(.016, .016, .020, PAL.steel, .036, .004, -.16));          // charging handle
       break;
     }
 
@@ -260,46 +387,66 @@ function buildWeaponModel(id) {
     case 'm4a4': {
       add(B(.054, .072, .38, PAL.black, 0, 0, -.18));
       add(B(.030, .020, .30, PAL.steel, 0, .048, -.19));              // flat-top rail
+      for (let i = 0; i < 8; i++) add(B(.034, .010, .014, PAL.steel, 0, .052, -.33 + i * .036));   // rail teeth
       add(B(.032, .034, .035, PAL.black, 0, .042, -.02));             // rear sight block
       add(B(.050, .058, .26, PAL.poly, 0, -.004, -.42));              // round handguard
+      for (let i = 0; i < 5; i++) add(B(.052, .008, .010, PAL.black, 0, -.004, -.34 + i * .038));   // heat-shield vents
       add(CYL(.014, .17, PAL.steel, 0, .006, -.60, 8));
       add(B(.028, .028, .05, PAL.black, 0, .006, -.70));              // A2 flash hider
       add(B(.030, .030, .10, PAL.gun, 0, .040, -.34));                // carry handle / optic
+      add(CYL(.011, .05, PAL.glass, 0, .040, -.34, 8));
       add(B(.046, .140, .068, PAL.mag, 0, -.100, -.16, .02));         // straight STANAG mag
+      add(B(.048, .012, .070, PAL.black, 0, -.055, -.16, .02));       // mag catch line
       add(B(.044, .115, .056, PAL.poly, 0, -.082, .015, .20));
+      for (let i = 0; i < 3; i++) add(B(.046, .008, .040, PAL.black, 0, -.052 + i * .022, .016, .20));
       add(B(.048, .078, .16, PAL.poly, 0, -.004, .10));               // buffer tube
       add(B(.052, .080, .07, PAL.black, 0, -.004, .19));              // collapsible stock
       add(B(.024, .020, .026, PAL.black, 0, -.056, -.12));
+      add(B(.011, .020, .010, PAL.steel, 0, -.048, -.116));           // trigger
+      add(B(.014, .030, .030, PAL.black, 0, -.030, .02));             // bolt catch
       break;
     }
 
     /* ---------------- SG 553: heavy rifle with a scope ---------------- */
     case 'sg553': {
       add(B(.062, .085, .40, PAL.oliv, 0, 0, -.19));
+      add(B(.056, .014, .40, PAL.black, 0, .036, -.19));              // receiver top
       add(B(.060, .062, .24, PAL.black, 0, -.004, -.43));
+      for (let i = 0; i < 4; i++) add(B(.062, .008, .012, PAL.oliv, 0, -.004, -.37 + i * .036));
       add(CYL(.016, .15, PAL.steel, 0, .006, -.60, 8));
       add(B(.030, .028, .05, PAL.black, 0, .006, -.69));
+      add(B(.026, .026, .03, PAL.steel, 0, .006, -.72));              // muzzle cap
       add(CYL(.026, .19, PAL.black, 0, .080, -.20, 12));              // big scope tube
       add(CYL(.030, .035, PAL.gun, 0, .080, -.10, 12));               // eyepiece
       add(CYL(.031, .030, PAL.gun, 0, .080, -.30, 12));               // objective
+      add(CYL(.028, .012, PAL.glass, 0, .080, -.315, 12));            // objective lens
       add(B(.026, .070, .022, PAL.black, 0, .050, -.16));             // scope mount
+      add(B(.026, .070, .022, PAL.black, 0, .050, -.26));             // scope mount (front)
       add(B(.046, .150, .068, PAL.mag, 0, -.105, -.16, .04));         // translucent mag
+      add(B(.048, .012, .070, PAL.black, 0, -.06, -.16, .04));        // mag bands
       add(B(.046, .115, .058, PAL.poly, 0, -.082, .015, .20));
       add(B(.050, .080, .17, PAL.poly, 0, -.004, .10));
       add(B(.054, .085, .075, PAL.black, 0, -.006, .20));
       add(B(.024, .020, .026, PAL.black, 0, -.056, -.13));
+      add(B(.011, .020, .010, PAL.steel, 0, -.048, -.126));           // trigger
       break;
     }
 
     /* ---------------- AWP: bolt-action sniper ---------------- */
     case 'awp': {
       add(B(.056, .082, .48, PAL.oliv, 0, 0, -.23));                  // long receiver
+      add(B(.050, .012, .48, PAL.black, 0, .034, -.23));              // receiver top
       add(B(.044, .060, .30, PAL.oliv, 0, -.004, -.52));              // handguard
+      for (let i = 0; i < 5; i++) add(B(.046, .008, .010, PAL.black, 0, -.004, -.44 + i * .036));
       add(CYL(.016, .34, PAL.steel, 0, .008, -.80, 8));               // long barrel
+      for (let i = 0; i < 6; i++) add(CYL(.019, .010, PAL.black, 0, .008, -.66 - i * .045, 8));   // barrel flutes
       add(CYL(.021, .09, PAL.black, 0, .008, -.99, 8));               // muzzle brake
       add(CYL(.032, .30, PAL.black, 0, .090, -.28, 12));              // LONG scope
       add(CYL(.037, .05, PAL.gun, 0, .090, -.10, 12));                // eyepiece
       add(CYL(.039, .045, PAL.gun, 0, .090, -.45, 12));               // objective
+      add(CYL(.036, .014, PAL.glass, 0, .090, -.468, 12));            // objective lens
+      add(CYL(.010, .05, PAL.steel, 0, .126, -.20, 8));               // elevation turret
+      add(B(.020, .020, .020, PAL.steel, .034, .090, -.20));          // windage turret
       add(B(.028, .080, .024, PAL.black, 0, .052, -.22));             // scope mount
       add(B(.028, .080, .024, PAL.black, 0, .052, -.35));
       add(B(.022, .040, .13, PAL.steel, 0, -.004, -.22));             // bolt body
@@ -309,17 +456,23 @@ function buildWeaponModel(id) {
       add(B(.052, .115, .22, PAL.oliv, 0, -.005, .14));               // thumbhole stock
       add(B(.046, .088, .06, PAL.black, 0, -.012, .26));              // butt pad
       add(B(.030, .046, .10, PAL.steel, 0, -.040, .08));              // cheek riser
+      add(B(.011, .020, .010, PAL.steel, 0, -.048, .04));             // trigger
       break;
     }
 
     /* ---------------- SSG 08 (Scout): light bolt-action ---------------- */
     case 'scout': {
       add(B(.048, .070, .42, PAL.black, 0, 0, -.20));
+      add(B(.042, .012, .42, PAL.gun, 0, .030, -.20));                // receiver top
       add(B(.042, .054, .24, PAL.poly, 0, -.004, -.46));
+      for (let i = 0; i < 4; i++) add(B(.044, .008, .010, PAL.black, 0, -.004, -.40 + i * .034));
       add(CYL(.013, .26, PAL.steel, 0, .006, -.68, 8));
+      add(B(.024, .024, .04, PAL.black, 0, .006, -.81));              // muzzle
       add(CYL(.024, .22, PAL.black, 0, .080, -.26, 12));              // smaller scope
       add(CYL(.029, .04, PAL.gun, 0, .080, -.12, 12));
       add(CYL(.030, .038, PAL.gun, 0, .080, -.39, 12));
+      add(CYL(.027, .010, PAL.glass, 0, .080, -.402, 12));            // lens
+      add(CYL(.009, .04, PAL.steel, 0, .108, -.20, 8));               // turret
       add(B(.026, .068, .022, PAL.black, 0, .046, -.20));
       add(B(.024, .020, .09, PAL.steel, 0, -.002, -.20));             // bolt
       add(CYL(.010, .05, PAL.steel, .030, .004, -.19, 8));
@@ -327,32 +480,40 @@ function buildWeaponModel(id) {
       add(B(.044, .110, .055, PAL.poly, 0, -.078, .015, .20));
       add(B(.048, .088, .19, PAL.poly, 0, -.006, .12));
       add(B(.046, .080, .05, PAL.black, 0, -.010, .22));
+      add(B(.011, .020, .010, PAL.steel, 0, -.046, .04));             // trigger
       break;
     }
 
     /* ---------------- Negev: heavy machine gun ---------------- */
     case 'negev': {
       add(B(.075, .100, .46, PAL.gun, 0, 0, -.22));                   // huge receiver
+      add(B(.068, .014, .46, PAL.black, 0, .040, -.22));              // receiver top
       add(B(.070, .080, .26, PAL.black, 0, -.004, -.47));
+      for (let i = 0; i < 4; i++) add(B(.072, .008, .012, PAL.gun, 0, -.004, -.40 + i * .040));
       add(CYL(.019, .22, PAL.steel, 0, .008, -.70, 8));
       add(B(.034, .034, .06, PAL.black, 0, .008, -.82));
       add(B(.170, .185, .190, PAL.oliv, 0, -.150, -.20));             // big ammo box
       add(B(.150, .020, .170, PAL.gun, 0, -.055, -.20));              // box lid
+      add(B(.014, .020, .170, PAL.black, 0, -.098, -.20));            // box latch strip
+      add(RAIL(.30, PAL.black, 0, .062, -.15));                       // top rail
       add(B(.030, .120, .10, PAL.black, 0, -.075, -.05));             // belt feed
       add(B(.056, .120, .060, PAL.poly, 0, -.088, .035, .20));
       add(B(.052, .090, .17, PAL.gun, 0, -.004, .12));                // stock
       add(B(.048, .080, .05, PAL.black, 0, -.010, .21));
-      add(B(.028, .034, .30, PAL.black, 0, .062, -.15));              // top rail
       add(B(.034, .040, .05, PAL.steel, 0, .066, -.02));              // rear sight
       add(CYL(.022, .05, PAL.steel, 0, .066, -.32, 10));              // front sight
       add(B(.024, .026, .10, PAL.black, 0, -.070, -.60));             // foregrip
+      add(B(.011, .020, .010, PAL.steel, 0, -.052, .02));             // trigger
       break;
     }
 
     /* ---------------- M134 Minigun: rotating multi-barrel ---------------- */
     case 'minigun': {
       add(B(.090, .110, .34, PAL.gun, 0, 0, -.16));                   // motor housing
+      add(B(.084, .014, .34, PAL.black, 0, .050, -.16));              // housing top
+      for (let i = 0; i < 4; i++) add(B(.092, .010, .014, PAL.black, 0, -.030 + i * .028, -.16));   // housing ribs
       add(B(.100, .120, .14, PAL.black, 0, 0, .01));                  // gearbox
+      add(CYL(.056, .05, PAL.steel, 0, 0, .07, 14));                  // gearbox cap
       // The barrel cluster is its own group so the barrels can visibly spin up
       // before firing (and coast down after). Everything that turns rides in
       // here: six barrels, their clamps and the muzzle ring.
@@ -361,20 +522,24 @@ function buildWeaponModel(id) {
         const a = (i / 6) * Math.PI * 2;
         const b = CYL(.014, .62, PAL.steel, Math.cos(a) * .052, Math.sin(a) * .052, -.62, 6);
         barrels.add(b);
+        barrels.add(CYL(.017, .05, PAL.black, Math.cos(a) * .052, Math.sin(a) * .052, -.36, 8));   // muzzle collar
       }
       barrels.add(CYL(.060, .07, PAL.black, 0, 0, -.30, 12));          // barrel clamp front
       barrels.add(CYL(.058, .06, PAL.black, 0, 0, -.52, 12));          // barrel clamp rear
       barrels.add(CYL(.056, .05, PAL.gun, 0, 0, -.94, 12));            // muzzle ring
+      barrels.add(CYL(.048, .03, PAL.steel, 0, 0, -.97, 12));          // muzzle face
       barrels.name = 'barrels';                                        // found by name (clone-safe)
       g.add(barrels);
       add(B(.150, .170, .170, PAL.oliv, 0, -.165, -.02));             // ammo drum
       add(CYL(.085, .10, PAL.oliv, 0, -.165, .085, 14));              // drum body
+      add(CYL(.050, .012, PAL.black, 0, -.165, .14, 14));             // drum hub
       add(B(.034, .120, .11, PAL.black, 0, -.070, -.14));             // feed chute
-      add(B(.026, .034, .28, PAL.black, 0, .078, -.14));              // top rail
+      add(RAIL(.28, PAL.black, 0, .078, -.14));                       // top rail
       add(B(.034, .044, .05, PAL.steel, 0, .082, -.02));              // rear sight
       add(CYL(.020, .045, PAL.steel, 0, .082, -.36, 8));              // front sight
       add(B(.040, .105, .26, PAL.poly, 0, -.020, .16));               // rear grip
-      add(B(.026, .070, .09, PAL.black, 0, -.075, -.48));             // foregrip
+      add(B(.026, .070, .09, PAL.black, 0, -.075, -.44));             // foregrip
+      add(B(.012, .030, .030, PAL.steel, 0, -.030, .02));             // spade grip
       break;
     }
 
@@ -383,7 +548,9 @@ function buildWeaponModel(id) {
       add(CYL(.052, 1.02, PAL.oliv, 0, .020, -.40, 14));              // long launch tube
       add(CYL(.060, .10, PAL.black, 0, .020, .08, 14));               // rear flare
       add(CYL(.086, .14, PAL.oliv, 0, .020, -.92, 14));               // muzzle bell
+      add(CYL(.074, .03, PAL.black, 0, .020, -.985, 14));             // muzzle rim
       add(B(.055, .062, .20, PAL.black, 0, .020, -.14));              // heat shield band
+      for (let i = 0; i < 4; i++) add(B(.057, .010, .012, PAL.gun, 0, .020, -.22 + i * .05));   // wood grips on band
       add(B(.048, .054, .18, PAL.wood, 0, .020, .16));                // wooden rear grip
       add(B(.048, .054, .14, PAL.wood, 0, .020, -.44));               // wooden foregrip
       add(CYL(.030, .24, PAL.steel, 0, .098, -.46, 10));              // optic tube
@@ -397,6 +564,9 @@ function buildWeaponModel(id) {
       add(cone);                                                      // warhead
       add(B(.028, .040, .12, PAL.black, 0, -.030, -.06));             // trigger group
       add(B(.030, .050, .07, PAL.black, 0, -.060, -.02));             // pistol grip
+      add(B(.012, .022, .012, PAL.steel, 0, -.046, -.05));            // trigger
+      add(CYL(.014, .06, PAL.steel, 0, .078, .10, 8));                // rear iron sight
+      add(B(.024, .030, .024, PAL.black, 0, .078, -.02));             // front iron sight
       break;
     }
 
@@ -540,15 +710,21 @@ function buildWeaponModel(id) {
       add(CYL(.070, .16, GREEN2, 0, .030, -.72, 12));               // muzzle bell
       add(CYL(.066, .12, GREEN2, 0, .030, .14, 12));                // rear bell
       add(CYL(.062, .06, GLOW, 0, .030, -.80, 12));                 // glowing muzzle ring
+      for (let i = 0; i < 4; i++) add(CYL(.060, .012, GREEN2, 0, .030, -.50 - i * .06, 12));   // hazard rings
       // warhead poking out front
       add(CYL(.040, .16, PAL.black, 0, .030, -.90, 10));
       add(B(.050, .050, .05, GLOW, 0, .030, -.99));
+      add(CYL(.024, .05, 0x39ff5a, 0, .030, -1.03, 10));            // glowing tip
       // grips and sight
       add(B(.046, .120, .060, DARK, 0, -.078, -.14, .12));          // pistol grip
       add(B(.040, .110, .055, DARK, 0, -.075, -.44, -.05));         // foregrip
       add(B(.028, .070, .12, DARK, 0, .098, -.20));                 // optic
+      add(CYL(.014, .04, 0x39ff5a, 0, .098, -.28, 8));              // optic glow
       add(B(.026, .026, .05, GLOW, 0, .135, -.24));
       add(B(.030, .030, .10, GREEN2, 0, .105, -.50));               // front sight block
+      add(CYL(.014, .020, GLOW, 0, .030, -.20, 8));                 // glowing indicator
+      add(B(.024, .030, .024, DARK, 0, .095, -.34));                // rear sight
+      add(B(.016, .020, .016, DARK, 0, .100, -.62));                // front sight post
       break;
     }
 
@@ -556,15 +732,21 @@ function buildWeaponModel(id) {
     case 'yhs': {
       const BODY = 0x3a2f4a, TRIM = 0x5a4a72, HOT = 0xff9d21;
       add(B(.110, .130, .40, BODY, 0, 0, -.20));                    // massive housing
+      add(B(.104, .014, .40, PAL.black, 0, .060, -.20));            // housing top
+      for (let i = 0; i < 4; i++) add(B(.112, .010, .014, PAL.black, 0, -.042 + i * .030, -.20));   // housing ribs
       add(B(.120, .140, .16, PAL.black, 0, 0, .01));                 // gearbox
+      add(CYL(.070, .05, TRIM, 0, 0, .085, 16));                     // gearbox cap
+      add(CYL(.030, .03, HOT, 0, 0, .105, 12));                      // rear glowing hub
       const barrels = new THREE.Group();
       for (let i = 0; i < 8; i++) {
         const a = (i / 8) * Math.PI * 2;
         barrels.add(CYL(.016, .74, PAL.steel, Math.cos(a) * .062, Math.sin(a) * .062, -.72, 6));
+        barrels.add(CYL(.019, .05, PAL.black, Math.cos(a) * .062, Math.sin(a) * .062, -.44, 8));   // front collars
       }
       barrels.add(CYL(.072, .08, PAL.black, 0, 0, -.34, 12));
       barrels.add(CYL(.070, .07, TRIM, 0, 0, -.62, 12));
       barrels.add(CYL(.066, .06, HOT, 0, 0, -1.10, 12));             // hot muzzle ring
+      barrels.add(CYL(.056, .03, PAL.steel, 0, 0, -1.14, 12));       // muzzle face
       barrels.name = 'barrels';
       g.add(barrels);
 
@@ -588,12 +770,14 @@ function buildWeaponModel(id) {
 
       add(B(.180, .220, .220, PAL.oliv, 0, -.205, -.02));           // giant ammo drum
       add(CYL(.105, .12, PAL.oliv, 0, -.205, .11, 16));
+      add(CYL(.060, .016, PAL.black, 0, -.205, .175, 16));          // drum hub
       add(B(.046, .140, .12, PAL.black, 0, -.085, -.18));           // feed chute
-      add(B(.032, .040, .34, PAL.black, 0, .092, -.18));            // top rail
-      add(B(.040, .052, .06, PAL.steel, 0, .098, -.02));
-      add(CYL(.022, .05, TRIM, 0, .098, -.44, 8));
+      add(RAIL(.34, PAL.black, 0, .092, -.18));                     // top rail
+      add(B(.040, .052, .06, PAL.steel, 0, .098, -.02));            // rear sight
+      add(CYL(.022, .05, TRIM, 0, .098, -.44, 8));                  // front sight
       add(B(.050, .120, .28, PAL.poly, 0, -.025, .18));             // rear grip
       add(B(.030, .080, .10, PAL.black, 0, -.085, -.56));           // foregrip
+      add(B(.012, .030, .030, PAL.steel, 0, -.020, .04));           // trigger
       break;
     }
 
@@ -601,18 +785,25 @@ function buildWeaponModel(id) {
     case 'rocketgun': {
       const BODY = 0x39424d, TRIM = 0x59657a, HOT = 0xff8a3a, GLOW = 0xffb060;
       add(B(.110, .120, .52, BODY, 0, 0, -.22));                    // boxy launcher body
+      add(B(.102, .014, .52, PAL.black, 0, .055, -.22));            // body top
       add(CYL(.060, .68, TRIM, 0, .040, -.44, 12));                 // launch tube
       add(CYL(.074, .10, PAL.black, 0, .040, -.80, 12));            // muzzle ring
       add(CYL(.066, .07, HOT, 0, .040, -.86, 12));                  // glowing muzzle
+      add(CYL(.050, .03, PAL.steel, 0, .040, -.895, 12));           // muzzle face
       add(B(.060, .050, .16, PAL.black, 0, .040, -.72));            // tube clamp
+      add(B(.060, .050, .16, PAL.black, 0, .040, -.18));            // rear tube clamp
       // targeting pod on top (the guided sight)
       add(B(.056, .060, .20, PAL.black, 0, .098, -.20));
       add(CYL(.020, .08, GLOW, 0, .098, -.32, 8));                  // lens glow
+      add(CYL(.024, .02, PAL.black, 0, .098, -.36, 10));            // lens hood
       // grips + shoulder rest
       add(B(.048, .130, .062, PAL.poly, 0, -.082, -.10, .14));      // pistol grip
       add(B(.044, .115, .058, PAL.poly, 0, -.078, -.40, -.05));     // foregrip
       add(B(.058, .070, .16, BODY, 0, -.010, .16));                 // shoulder stock
       add(B(.052, .058, .05, PAL.black, 0, -.010, .255));
+      add(B(.012, .024, .012, PAL.steel, 0, -.048, -.13));          // trigger
+      add(B(.030, .030, .028, PAL.black, 0, .070, -.06));           // rear sight
+      add(CYL(.014, .03, PAL.steel, 0, .078, -.60, 8));             // front sight
       break;
     }
 
@@ -721,18 +912,27 @@ function buildWeaponModel(id) {
         seg.rotation.x = i * .12;
         add(seg);
       }
+      // a leaf sight and a ripe-brown tip on the front banana
+      add(B(.024, .010, .030, GREEN, 0, .072, -.30, 0, .30));
+      add(B(.018, .018, .020, BROWN, 0, -.030, -.72));
+      add(B(.140, .014, .030, PAL.black, .050, -.045, -.30));   // extra tape band
       break;
     }
 
     /* ---------------- Knife ---------------- */
     default:
     case 'knife': {
-      add(B(.012, .048, .26, PAL.steel, 0, .014, -.16));              // blade
+      add(B(.012, .050, .27, PAL.steel, 0, .014, -.16));              // blade
+      add(B(.014, .010, .24, PAL.black, 0, .014, -.15));              // fuller (blood groove)
+      add(B(.004, .040, .14, PAL.gunLight, 0, .014, -.20, .20));      // clip-point bevel
+      // serrations on the spine
+      for (let i = 0; i < 5; i++) add(B(.016, .010, .012, PAL.black, 0, .036, -.075 + i * .016));
       add(B(.014, .030, .06, PAL.steel, 0, -.010, -.03));             // choil
-      add(B(.010, .058, .02, PAL.black, 0, .002, -.028));             // guard
-      add(B(.030, .040, .13, PAL.poly, 0, -.004, .07));               // handle
-      add(B(.032, .012, .02, PAL.black, 0, .006, .135));              // pommel
-      add(B(.006, .014, .006, PAL.steel, 0, .006, .14));
+      add(B(.010, .060, .022, PAL.black, 0, .002, -.028));            // guard
+      add(B(.030, .044, .13, PAL.poly, 0, -.004, .07));               // handle
+      for (let i = 0; i < 4; i++) add(B(.033, .012, .014, PAL.black, 0, -.004, .025 + i * .028));   // grip rings
+      add(B(.034, .014, .022, PAL.black, 0, .006, .135));             // pommel
+      add(B(.007, .016, .007, PAL.steel, 0, .006, .142));
       break;
     }
   }

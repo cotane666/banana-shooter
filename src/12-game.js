@@ -618,6 +618,14 @@ class RemotePlayer {
     this._weaponSlot = -1;
     this._weaponId = null;
     this.heldGroups = [];           // ids sent by the peer, once they are known
+
+    /* МЕХАКОСТЮМ: when the peer is inside their mech we show the chassis instead
+       of the soldier. Built lazily the first time the flag arrives. */
+    this.mech = false;
+    this.mechMesh = null;
+    this.mechPlate = null;
+    this._mechSpin = 0;
+    this.mechRecoil = 0;
   }
 
   /* Attach (or swap) the weapon model in the right hand for this slot.
@@ -644,6 +652,33 @@ class RemotePlayer {
     armR.add(w);
     this.weaponGroup = w;
   }
+
+  /* МЕХАКОСТЮМ: swap the soldier for a mech chassis. `on` comes from the peer's
+     state packet; the mesh is built once and reused. The nameplate moves onto
+     the mech so it stays readable over the taller silhouette. */
+  setMech(on) {
+    on = !!on;
+    if (on === this.mech && (!on || this.mechMesh)) return;
+    this.mech = on;
+    if (on) {
+      if (!this.mechMesh) this.mechMesh = buildMechChassis();
+      if (this.mesh.parent) this.mesh.parent.add(this.mechMesh);
+      if (this.plate) {
+        if (this.plate.parent) this.plate.parent.remove(this.plate);
+        this.plate.position.set(0, 4.40, 0);
+        this.mechMesh.add(this.plate);
+      }
+    } else if (this.mechMesh && this.mechMesh.parent) {
+      if (this.plate && this.plate.parent === this.mechMesh) {
+        this.mechMesh.remove(this.plate);
+        this.plate.position.set(0, 2.05, 0);
+        this.mesh.add(this.plate);
+      }
+      // leaving the mech: the soldier must reappear
+      this.mesh.visible = this.alive;
+    }
+  }
+
   /* Snapshots are stamped with the LOCAL ARRIVAL time. That is monotonic by
      construction, so the interpolation search can never be confused by a moving
      clock offset (the previous min-filter kept rewriting the mapping, so old and
@@ -651,8 +686,7 @@ class RemotePlayer {
      onto a stale entry → the model froze).
      Jitter and packet bursts are absorbed by a separate playout clock
      (`playT`) advanced in advance(), which never runs backwards. */
-  pushSnapshot(s) {
-    s.lt = U.now();
+  pushSnapshot(s) {    s.lt = U.now();
     this.buf.push(s);
     if (this.buf.length > 40) this.buf.shift();
     this.lastPacket = s.lt;
@@ -743,6 +777,24 @@ class RemotePlayer {
     this.mesh.position.set(this.pos.x, this.pos.y, this.pos.z);
     this.mesh.rotation.y = this.yaw;
 
+    /* ---- МЕХАКОСТЮМ: the peer rides a chassis instead of a soldier ---- */
+    if (this.mechMesh) {
+      // the chassis mirrors the soldier transform, so it walks/turns identically
+      this.mechMesh.position.set(this.pos.x, this.pos.y, this.pos.z);
+      this.mechMesh.rotation.y = this.yaw;
+      this.mechMesh.visible = !!this.mech && this.alive;
+      if (this.mech) {
+        // soldier hidden while inside the mech (the open cockpit would show it)
+        this.mesh.visible = false;
+        // spin the barrels while the peer is firing the minigun
+        const ud = this.mechMesh.userData;
+        if (ud.barrels) {
+          this._mechSpin = (this._mechSpin || 0) + dt * (this.spinT > .1 ? 34 : 0);
+          ud.barrels.rotation.z = this._mechSpin;
+        }
+      }
+    }
+
     /* ---- death: topple the model instead of hiding it ---- */
     if (!this.alive) {
       if (!this.deathActive) {
@@ -752,6 +804,8 @@ class RemotePlayer {
         this.mesh.visible = true;
         this.mesh.rotation.order = 'YXZ';
       }
+      // a destroyed mech is hidden; the pilot's body topples instead
+      if (this.mechMesh) this.mechMesh.visible = false;
       this.deathT += dt;
       const k = U.clamp(this.deathT / .55, 0, 1);
       const fall = Math.sin(k * Math.PI * .5);
@@ -768,7 +822,7 @@ class RemotePlayer {
       this.deathActive = false;
       this.deathT = 0;
       this.mesh.rotation.x = 0; this.mesh.rotation.z = 0;
-      this.mesh.visible = true;
+      this.mesh.visible = !this.mech;      // stay hidden if still inside the mech
     }
 
     const p = this.mesh.userData.parts;
@@ -2821,6 +2875,11 @@ const Game = {
       if (!seen[rp.peerId]) {
         this.scene.remove(rp.mesh);
         rp.mesh.traverse(o => { if (o.geometry) o.geometry.dispose(); });
+        if (rp.mechMesh) {
+          if (rp.mechMesh.parent) rp.mechMesh.parent.remove(rp.mechMesh);
+          rp.mechMesh.traverse(o => { if (o.geometry) o.geometry.dispose(); });
+          rp.mechMesh = null;
+        }
         this.remotePlayers.splice(i, 1);
         if (this.remote === rp) this.remote = null;
       }
@@ -2901,6 +2960,11 @@ const Game = {
         this.clearRemoteDrone(rp);
         this.scene.remove(rp.mesh);
         rp.mesh.traverse(o => { if (o.geometry) o.geometry.dispose(); });
+        if (rp.mechMesh) {
+          if (rp.mechMesh.parent) rp.mechMesh.parent.remove(rp.mechMesh);
+          rp.mechMesh.traverse(o => { if (o.geometry) o.geometry.dispose(); });
+          rp.mechMesh = null;
+        }
       }
       this.remotePlayers = []; this.remote = null;
       // a picker left open while the range is torn down must not survive
@@ -3368,6 +3432,16 @@ const Game = {
 
   detonateGrenade(g) {
     const kind = g.kind;
+    // tell the room so everyone sees and hears the blast, not just the thrower
+    if (this.mode === CS.MODE.ONLINE && Net.connected) {
+      Net.send({
+        t: 'boom', from: Net.selfId(),
+        x: +g.pos.x.toFixed(2), y: +g.pos.y.toFixed(2), z: +g.pos.z.toFixed(2),
+        r: kind === 'frag' ? 5.2 : kind === 'freeze' ? 5.5 : 6.4,
+        c: kind === 'frag' ? [0xffb060, 0x151210] : undefined,
+        g: kind === 'frag' ? undefined : kind
+      });
+    }
     if (kind === 'frag') {
       const R = 5.2, dmg = 190;
       this.effects.explosion(g.pos.x, g.pos.y, g.pos.z, R, [0xffb060, 0x151210]);
@@ -3383,6 +3457,14 @@ const Game = {
       const p = this.player;
       const ds = Math.hypot(p.pos.x - g.pos.x, (p.pos.y + 1) - g.pos.y, p.pos.z - g.pos.z);
       if (ds < R * .9) this.applyDamageToSelf(dmg * (1 - ds / (R * .9)) * .3, g.pos);
+      // opponents in an online duel take the same blast
+      if (this.mode === CS.MODE.ONLINE) {
+        for (const rp of this.remotePlayers) {
+          if (!rp.alive) continue;
+          const dr = Math.hypot(rp.pos.x - g.pos.x, (rp.pos.y + 1) - g.pos.y, rp.pos.z - g.pos.z);
+          if (dr <= R) this.sendPvpHit(dmg * (1 - dr / R), 'body', false, rp, 'grenade');
+        }
+      }
     } else if (kind === 'freeze') {
       const R = 5.5;
       this.effects.frostBurst(g.pos.x, g.pos.y, g.pos.z, R);
@@ -3397,6 +3479,13 @@ const Game = {
         if (!z.alive || z.dying) continue;
         const d = Math.hypot(z.pos.x - g.pos.x, z.pos.z - g.pos.z);
         if (d < R) { z.takeDamage(dmg, 'body', { x: 0, y: 0, z: 0 }); this.player.damageDealt += dmg; }
+      }
+      if (this.mode === CS.MODE.ONLINE) {
+        for (const rp of this.remotePlayers) {
+          if (!rp.alive) continue;
+          const dr = Math.hypot(rp.pos.x - g.pos.x, rp.pos.z - g.pos.z);
+          if (dr <= R) this.sendPvpHit(dmg * (1 - dr / R), 'body', false, rp, 'grenade');
+        }
       }
       // a burning ground pool that keeps damaging (re-use the acid field)
       this.effects.decal(g.pos.x, g.pos.y + .02, g.pos.z, 0, 1, 0, R, 'acid', null, null, R, g.pos);
@@ -5161,6 +5250,9 @@ const Game = {
             const px = m.pos.x, py = m.pos.y, pz = m.pos.z;
             this.effects.explosion(px, py, pz, 4.0, [0x4ad6ff, 0x100608]);
             Audio3D_SFX.explosionAt(px, py, pz);
+            if (this.mode === CS.MODE.ONLINE && Net.connected) {
+              Net.send({ t: 'boom', from: Net.selfId(), x: +px.toFixed(2), y: +py.toFixed(2), z: +pz.toFixed(2), r: 4.0, c: [0x4ad6ff, 0x100608] });
+            }
             if (this.horde) for (const z of this.horde.list) {
               if (!z.alive || z.dying) continue;
               const dd = Math.hypot(z.pos.x - px, (z.pos.y + 1) - py, z.pos.z - pz);
@@ -5168,6 +5260,13 @@ const Game = {
               const dealt = m.dmg * (1 - dd / 4.0);
               z.takeDamage(dealt, 'body', { x: 0, y: 0, z: 0 });
               this.player.damageDealt += dealt;
+            }
+            if (this.mode === CS.MODE.ONLINE) {
+              for (const rp of this.remotePlayers) {
+                if (!rp.alive) continue;
+                const dd = Math.hypot(rp.pos.x - px, (rp.pos.y + 1) - py, rp.pos.z - pz);
+                if (dd <= 4.0) this.sendPvpHit(m.dmg * (1 - dd / 4.0), 'body', false, rp, 'rocket');
+              }
             }
             if (m.mesh.parent) m.mesh.parent.remove(m.mesh);
             m.mesh.traverse(o => { if (o.geometry) o.geometry.dispose(); });
@@ -5372,8 +5471,10 @@ const Game = {
         const pellets = def.pellets || 1;
         const muzzleWorld = mechSide ? this.mechMuzzleWorldPos(mechSide) : this.muzzleWorldPos();
         p.flashT = .05;
+        const pelletDirs = [];
         for (let i = 0; i < pellets; i++) {
           const dir = this.spreadDirection(baseDir, spread, pellets > 1);
+          pelletDirs.push(dir);
           this.traceShot(origin, dir, def, false, muzzleWorld);
         }
         p.spread = Math.min(.09, p.spread + (def.recoil || 0) * .0055);
@@ -5381,6 +5482,13 @@ const Game = {
         p.viewPunchP += (def.recoil || 0) * .0028;
         Audio3D_SFX.shot(def.sound || 'rifle');
         if (this.effects) this.effects.muzzleSmoke(muzzleWorld.x, muzzleWorld.y, muzzleWorld.z, baseDir);
+        // third-person: let the peer draw the mech's tracers/muzzle flashes too
+        if (this.mode === CS.MODE.ONLINE && Net.connected) {
+          Net.send({
+            t: 'shot', wid: id, dirs: pelletDirs, ox: origin.x, oy: origin.y, oz: origin.z,
+            dx: baseDir.x, dy: baseDir.y, dz: baseDir.z, sp: spread, mech: 1
+          });
+        }
       },
 
       /* ТЕСЛА-ПУШКА: hits the first target, then arcs from it to the nearest
@@ -6082,10 +6190,13 @@ const Game = {
   rayRemotePlayerFor(rp, origin, dir, maxDist) {
     if (!rp || !rp.alive) return null;
     const base = { x: rp.pos.x, y: rp.pos.y, z: rp.pos.z };
+    // in the mech the silhouette is much taller/wider, so the hitboxes grow
+    const H = rp.mech ? CFG.mechHeight : rp.height;
+    const W = rp.mech ? CFG.mechRadius : 1;
     const parts = [
-      { part: 'head', y0: rp.height * .78, y1: rp.height * 1.02, r: .19 },
-      { part: 'body', y0: rp.height * .42, y1: rp.height * .80, r: .30 },
-      { part: 'legs', y0: 0, y1: rp.height * .44, r: .24 }
+      { part: 'head', y0: H * .78, y1: H * 1.02, r: .19 * W },
+      { part: 'body', y0: H * .42, y1: H * .80, r: .30 * W },
+      { part: 'legs', y0: 0, y1: H * .44, r: .24 * W }
     ];
     let best = null;
     for (const pt of parts) {
@@ -6503,6 +6614,7 @@ const Game = {
       wi: wpn ? wpn.id : null,                 // held weapon, so the model can show it
       mg: wpn && wpn.mag !== Infinity ? wpn.mag : null,
       sp: +(p.spinT || 0).toFixed(2),           // minigun spin-up, for the barrels
+      mc: p.mechSuit ? 1 : 0,                   // in the mech: show the chassis remotely
       k: p.kills, d: p.deaths, sc: p.score
     });
   },
@@ -6531,6 +6643,9 @@ const Game = {
     // show the weapon the peer is actually holding (including the minigun spin)
     rp.setWeapon(s.wi);
     rp.spinT = (s.sp !== undefined) ? s.sp : 0;
+    // in the mech: hide the soldier and show the chassis instead
+    rp.setMech(s.mc);
+    if (rp.mech && rp._mechFired === undefined) rp._mechFired = false;
   },
 
   onRemoteShot(s) {
@@ -6539,7 +6654,9 @@ const Game = {
     const def = WEAPONS[s.wid] || WEAPONS.ak47;
     const from = { x: s.ox, y: s.oy, z: s.oz };
     const baseDir = { x: s.dx, y: s.dy, z: s.dz };
-    const muzzle = { x: rp.pos.x, y: rp.pos.y + 1.35, z: rp.pos.z };
+    // the muzzle sits at eye height; in the mech that is much higher
+    const my = rp.mech ? CFG.mechEyeHeight - .6 : 1.35;
+    const muzzle = { x: rp.pos.x, y: rp.pos.y + my, z: rp.pos.z };
 
     /* A launcher round (RPG rocket / banana) is a physical object, so fly a
        visible copy here too. The owner resolves the damage and broadcasts the
@@ -6696,10 +6813,13 @@ const Game = {
      authoritative for the flight, this side just mirrors it. */
   onRemoteBoom(b) {
     if (this.mode !== CS.MODE.ONLINE) return;
-    // an enemy rocket detonated somewhere on the map — show the same blast the
-    // shooter saw, so a rocket is never a private event
+    // an enemy rocket / grenade detonated somewhere on the map — show the same
+    // blast the thrower saw, so it is never a private event
     const R = b.r || 6;
-    if (this.effects) this.effects.explosion(b.x, b.y, b.z, R, b.c || null, !!b.nk);
+    if (this.effects) {
+      if (b.g === 'freeze') this.effects.frostBurst(b.x, b.y, b.z, R);
+      else this.effects.explosion(b.x, b.y, b.z, R, b.c || null, !!b.nk);
+    }
     Audio3D_SFX.explosionAt(b.x, b.y, b.z);
     // drop the cosmetic copy so it does not fly on and detonate again
     this.removeRemoteProjectileNear(b.x, b.y, b.z);
@@ -6781,7 +6901,7 @@ const Game = {
       x.maxHealth = r.hp || this.matchHP;
       x.applySnap({ x: r.x, y: r.y, z: r.z, yw: r.yaw, pt: 0, alive: 1, cr: 0 });
       x.buf.length = 0;
-      x.mesh.visible = true;
+      x.mesh.visible = !x.mech;      // soldier stays hidden if still in the mech
       x.mesh.scale.y = 1;
       // stand the model back up after a previous death
       x.deathActive = false; x.deathT = 0;

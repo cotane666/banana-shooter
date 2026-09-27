@@ -221,6 +221,7 @@ const TouchUI = {
   aimPressed: false,
   autoFire: false,        // double-tap locked: keep firing like a held LMB
   jumpQueued: false,
+  jumpHeld: false,
   reloadQueued: false,
   switchQueued: 0,
   climbQueued: false,
@@ -315,7 +316,9 @@ const TouchUI = {
       el.addEventListener('touchcancel', e => { swallow(e); el.classList.remove('down'); off(); }, { passive: false });
     };
     holdBtn(E.crouch, () => { this.crouchHeld = true; }, () => { this.crouchHeld = false; });
-    holdBtn(E.jump, () => { this.jumpQueued = true; }, () => { });
+    // ПРЫЖОК is HELD: the mech jetpack thrusts while the thumb is down, and a
+    // tap still queues a normal jump (jumpQueued) for the ground.
+    holdBtn(E.jump, () => { this.jumpQueued = true; this.jumpHeld = true; }, () => { this.jumpHeld = false; });
     // Dedicated automatic-fire button (a toggle). It replaced the old
     // double-tap gesture, which conflicted with normal aiming taps.
     E.auto.addEventListener('touchstart', e => {

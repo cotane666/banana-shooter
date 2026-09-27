@@ -806,6 +806,8 @@ html.touch .fld input{padding:10px;font-size:15px}
       <input type="range" id="sFov" min="60" max="110" step="1" value="80"></label>
     <label class="slider">Громкость <output id="oVol">60</output>
       <input type="range" id="sVol" min="0" max="100" step="1" value="60"></label>
+    <label class="slider">Музыка <output id="oMusic">Вкл</output>
+      <input type="range" id="sMusic" min="0" max="1" step="1" value="1"></label>
     <label class="slider">Качество теней <output id="oQual">Среднее</output>
       <input type="range" id="sQual" min="0" max="2" step="1" value="1"></label>
     <label class="slider">Автоприцел (телефон) <output id="oAim">Вкл</output>
@@ -1048,6 +1050,8 @@ html.touch .fld input{padding:10px;font-size:15px}
       <input type="range" id="sSens2" min="0.3" max="8" step="0.05" value="2.2"></label>
     <label class="slider">Громкость <output id="oVol2">60</output>
       <input type="range" id="sVol2" min="0" max="100" step="1" value="60"></label>
+    <label class="slider">Музыка <output id="oMusic2">Вкл</output>
+      <input type="range" id="sMusic2" min="0" max="1" step="1" value="1"></label>
     <div class="btnrow">
       <button class="mbtn primary" id="btnResume">ПРОДОЛЖИТЬ</button>
       <button class="mbtn" id="btnPauseControls">УПРАВЛЕНИЕ И НАСТРОЙКИ</button>
@@ -1525,7 +1529,7 @@ const Store = {
   key: 'cs3d.save.v1',
   data: { sens: 2.2, fov: 80, vol: 60, quality: 1, touchSens: 1.5, name: '', best: 0, bestWave: 0, killsTotal: 0, matches: 0, wins: 0, signalSrv: 0, aimBest: 0, aimAutoFire: 1,
           map: 'arena', players: 2, maxHP: 100, aimAssist: 1, horde: 0, clears: 0, freeplay: 0, rounds: 3, playTime: 0,
-          offCount: 1, offHp: 1, offFree: 0, shopAllow: {}, shopItems: {} },
+          offCount: 1, offHp: 1, offFree: 0, shopAllow: {}, shopItems: {}, music: 1 },
   load() {
     try { const r = localStorage.getItem(this.key); if (r) Object.assign(this.data, JSON.parse(r)); } catch (e) { }
     return this.data;
@@ -3617,43 +3621,64 @@ const Audio3D_SFX = {
   uiClick() { this.tone(1100, .025, 'square', .05); },
 
   /* ============================================================
-     BOSS MUSIC — each boss plays its own looping theme
-     Themes are built from a chord progression that a scheduler re-triggers
-     every few seconds (bass line + arpeggio + a sustained pad), so no audio
-     files are needed. Only one theme can play at a time.
+     MUSIC — menu / in-game / boss themes
+     Each theme is a chord progression the scheduler re-triggers (bass line +
+     arpeggio + pad), so no audio files are needed. Tracks can loop and only
+     one can play at a time. `musicOff` mutes everything (settings toggle).
      ============================================================ */
-  bossThemes: {
-    bossWarden: { root: 110.0,  scale: [0, 3, 5, 7, 10], prog: [0, -2, -4, -5], bpm: 96,  wave: 'sawtooth', bright: 1200 },
-    bossBrute:  { root: 87.31,  scale: [0, 2, 3, 7, 8],  prog: [0, -3, -1, -5], bpm: 132, wave: 'square',   bright: 1500 },
-    bossTitan:  { root: 65.41,  scale: [0, 2, 5, 7, 10], prog: [0, -5, -3, -7], bpm: 84,  wave: 'sawtooth', bright: 900 },
-    bossFinal:  { root: 55.0,   scale: [0, 1, 5, 6, 10], prog: [0, -1, -6, -4], bpm: 150, wave: 'square',   bright: 1800 }
+  musicOff: false,
+  music: {
+    menu:    { root: 98.0,  scale: [0, 4, 7, 11, 14], prog: [0, -3, 5, -5], bpm: 76,  wave: 'sawtooth', bright: 1100, loop: true,  gain: .34, pad: true, drums: false },
+    game:    { root: 82.41, scale: [0, 3, 5, 7, 10],  prog: [0, -2, -4, -1], bpm: 112, wave: 'sawtooth', bright: 1400, loop: true,  gain: .40, pad: true, drums: true },
+    boss:    { root: 73.42, scale: [0, 2, 3, 6, 10],  prog: [0, -1, -5, -3], bpm: 138, wave: 'square',   bright: 1600, loop: true,  gain: .5,  pad: false, drums: true },
+    bossWarden: { root: 110.0,  scale: [0, 3, 5, 7, 10], prog: [0, -2, -4, -5], bpm: 96,  wave: 'sawtooth', bright: 1200, loop: true, gain: .5, pad: true, drums: false },
+    bossBrute:  { root: 87.31,  scale: [0, 2, 3, 7, 8],  prog: [0, -3, -1, -5], bpm: 132, wave: 'square',   bright: 1500, loop: true, gain: .5, pad: false, drums: true },
+    bossTitan:  { root: 65.41,  scale: [0, 2, 5, 7, 10], prog: [0, -5, -3, -7], bpm: 84,  wave: 'sawtooth', bright: 900,  loop: true, gain: .5, pad: true, drums: false },
+    bossFinal:  { root: 55.0,   scale: [0, 1, 5, 6, 10], prog: [0, -1, -6, -4], bpm: 150, wave: 'square',   bright: 1800, loop: true, gain: .55, pad: false, drums: true }
   },
-  bossMusicStart(type) {
-    if (!this.ctx || this.muted) return;
-    if (this._music && this._music.type === type) return;   // already playing
-    this.bossMusicStop();
-    const th = this.bossThemes[type];
+  /* play a track by name (idempotent); no-op if music is disabled */
+  musicStart(name) {
+    if (!this.ctx || this.muted || this.musicOff) return;
+    if (this._music && this._music.name === name) return;
+    const th = this.music[name];
     if (!th) return;
+    this.musicStop();
     const out = this.ctx.createGain(); out.gain.value = .0001;
     out.connect(this.master);
-    // fade in
     const t0 = this.ctx.currentTime;
-    out.gain.linearRampToValueAtTime(.5, t0 + 1.2);
-    this._music = { type, out, th, step: 0, timer: null, next: t0 + .1 };
+    out.gain.linearRampToValueAtTime(th.gain || .45, t0 + (name === 'menu' ? 1.6 : .8));
+    this._music = { name, out, th, step: 0, timer: null, next: t0 + .1 };
     const beat = 60 / th.bpm;
     const schedule = () => {
       if (!this._music || !this.ctx) return;
       const m = this._music;
       const now = this.ctx.currentTime;
-      // schedule a couple of steps ahead
-      while (m.next < now + .4) {
-        this._musicStep(m, m.next, beat);
-        m.next += beat * .5;    // eighth notes
-      }
+      while (m.next < now + .4) { this._musicStep(m, m.next, beat); m.next += beat * .5; }
       m.timer = setTimeout(schedule, 120);
     };
     schedule();
   },
+  musicStop() {
+    if (!this._music) return;
+    const m = this._music; this._music = null;
+    if (m.timer) clearTimeout(m.timer);
+    try {
+      const t = this.ctx.currentTime;
+      m.out.gain.cancelScheduledValues(t);
+      m.out.gain.setValueAtTime(m.out.gain.value, t);
+      m.out.gain.linearRampToValueAtTime(.0001, t + .5);
+      setTimeout(() => { try { m.out.disconnect(); } catch (e) { } }, 700);
+    } catch (e) { }
+  },
+  /* settings toggle: remembers the choice and picks the right track back up */
+  setMusicEnabled(on) {
+    this.musicOff = !on;
+    if (!on) this.musicStop();
+    else if (typeof Game !== 'undefined') Game.refreshMusic();
+  },
+  /* backwards-compatible alias used when a boss appears */
+  bossMusicStart(type) { this._bossTheme = type; this.musicStart(type); },
+  bossMusicStop() { this._bossTheme = null; if (typeof Game !== 'undefined') Game.refreshMusic(); else this.musicStop(); },
   _musicStep(m, t, beat) {
     const th = m.th, i = m.step++;
     const chord = th.prog[Math.floor(i / 8) % th.prog.length];
@@ -3668,6 +3693,23 @@ const Audio3D_SFX = {
       g.gain.exponentialRampToValueAtTime(.001, t + beat * .9);
       o.connect(lp); lp.connect(g); g.connect(m.out);
       o.start(t); o.stop(t + beat);
+    }
+    // a soft kick + hat for the driving tracks
+    if (th.drums) {
+      if (i % 2 === 0) {
+        const k = this.ctx.createOscillator(); k.type = 'sine';
+        k.frequency.setValueAtTime(120, t); k.frequency.exponentialRampToValueAtTime(45, t + .12);
+        const kg = this.ctx.createGain();
+        kg.gain.setValueAtTime(.22, t); kg.gain.exponentialRampToValueAtTime(.001, t + .16);
+        k.connect(kg); kg.connect(m.out); k.start(t); k.stop(t + .18);
+      }
+      if (i % 2 === 1) {
+        const src = this.ctx.createBufferSource(); src.buffer = this.noiseBuf;
+        const hp = this.ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 6000;
+        const hg = this.ctx.createGain();
+        hg.gain.setValueAtTime(.05, t); hg.gain.exponentialRampToValueAtTime(.001, t + .06);
+        src.connect(hp); hp.connect(hg); hg.connect(m.out); src.start(t); src.stop(t + .08);
+      }
     }
     // arpeggio note (higher)
     const deg = th.scale[(i * 3) % th.scale.length];
@@ -3691,17 +3733,6 @@ const Audio3D_SFX = {
       p.connect(pg); pg.connect(m.out);
       p.start(t); p.stop(t + beat * 4);
     }
-  },
-  bossMusicStop() {
-    if (!this._music) return;
-    const m = this._music; this._music = null;
-    if (m.timer) clearTimeout(m.timer);
-    try {
-      const t = this.ctx.currentTime;
-      m.out.gain.cancelScheduledValues(t);
-      m.out.gain.linearRampToValueAtTime(.0001, t + .6);
-      setTimeout(() => { try { m.out.disconnect(); } catch (e) { } }, 800);
-    } catch (e) { }
   },
 
   ambientStart() {
@@ -6681,9 +6712,32 @@ function initSettings() {
     });
   }
 
+  // music on/off — mirrored in the settings panel and the pause menu
+  const musicNames = ['Выкл', 'Вкл'];
+  const mEls = [document.getElementById('sMusic'), document.getElementById('sMusic2')];
+  const mOuts = [document.getElementById('oMusic'), document.getElementById('oMusic2')];
+  const applyMusic = (v) => {
+    S.music = v;
+    mOuts.forEach(o => { if (o) o.textContent = musicNames[v]; });
+    if (typeof Audio3D_SFX !== 'undefined') Audio3D_SFX.setMusicEnabled(!!v);
+    Store.save();
+  };
+  mEls.forEach(e => {
+    if (!e) return;
+    e.value = S.music === 0 ? 0 : 1;
+    e.addEventListener('input', () => {
+      const v = parseInt(e.value, 10);
+      mEls.forEach(x => { if (x && x !== e) x.value = e.value; });
+      applyMusic(v);
+    });
+  });
+  if (mOuts[0]) mOuts[0].textContent = musicNames[S.music === 0 ? 0 : 1];
+  if (mOuts[1]) mOuts[1].textContent = musicNames[S.music === 0 ? 0 : 1];
+
   applySetting('sens', S.sens);
   applySetting('fov', S.fov);
   applySetting('vol', S.vol);
+  if (typeof Audio3D_SFX !== 'undefined') Audio3D_SFX.musicOff = S.music === 0;
 }
 
 function applySetting(key, v) {
@@ -9706,7 +9760,7 @@ const Game = {
     bindClick('btnLeave', () => this.stopToMenu());
     bindClick('btnReset', () => {
       if (confirm('Сбросить весь прогресс и настройки?')) {
-        Store.data = { sens: 2.2, fov: 80, vol: 60, quality: 1, touchSens: 1.5, name: '', best: 0, bestWave: 0, killsTotal: 0, matches: 0, wins: 0, signalSrv: 0, aimBest: 0, aimAutoFire: 1, map: 'arena', players: 2, maxHP: 100, aimAssist: 1, horde: 0, clears: 0, freeplay: 0, rounds: 3, playTime: 0, offCount: 1, offHp: 1, offFree: 0, shopAllow: {} };
+        Store.data = { sens: 2.2, fov: 80, vol: 60, quality: 1, touchSens: 1.5, name: '', best: 0, bestWave: 0, killsTotal: 0, matches: 0, wins: 0, signalSrv: 0, aimBest: 0, aimAutoFire: 1, map: 'arena', players: 2, maxHP: 100, aimAssist: 1, horde: 0, clears: 0, freeplay: 0, rounds: 3, playTime: 0, offCount: 1, offHp: 1, offFree: 0, shopAllow: {}, shopItems: {}, music: 1 };
         this.shopAllow = MATCH.defaultShopAllow();
         Store.save();
         UI.refreshChips(); UI.renderMenuStats(); UI.toast('Прогресс сброшен');
@@ -11051,6 +11105,24 @@ const Game = {
     }
     UI.el.netInfo.classList.toggle('hidden', this.mode !== CS.MODE.ONLINE);
     Audio3D_SFX.init(); Audio3D_SFX.resume(); Audio3D_SFX.ambientStart();
+    this.refreshMusic();
+  },
+
+  /* Pick the music that fits the current state: a boss theme while a boss is
+     alive, otherwise the battle track in a match, otherwise the menu theme. */
+  refreshMusic() {
+    if (typeof Audio3D_SFX === 'undefined') return;
+    if (Audio3D_SFX.musicOff) { Audio3D_SFX.musicStop(); return; }
+    let want = 'menu';
+    if (this.running && this.mode !== CS.MODE.MENU) {
+      want = 'game';
+      if (this.horde) {
+        const boss = this.horde.list.find(z => (z.isBoss || z.isMiniBoss) && z.alive && !z.dying);
+        if (boss && boss.isBoss && ZOMBIES[boss.type] && Audio3D_SFX.music[boss.type]) want = boss.type;
+        else if (boss && boss.isBoss) want = 'boss';
+      }
+    }
+    Audio3D_SFX.musicStart(want);
   },
 
   stopToMenu(keepRunning) {
@@ -11843,7 +11915,7 @@ const Game = {
     this.effects.explosion(b.pos.x, gy + 1.2, b.pos.z, 5.5, [ZOMBIES[type].aura || 0xff5a2a, 0x100608], ZOMBIES[type].final);
     Audio3D_SFX.explosionAt(b.pos.x, gy + 1, b.pos.z);
     Audio3D_SFX.growl(b.pos.x, gy + 1.5, b.pos.z, 'brute');
-    if (this.mode === CS.MODE.OFFLINE) Audio3D_SFX.bossMusicStart(type);
+    if (this.mode === CS.MODE.OFFLINE) this.refreshMusic();
     return b;
   },
 
@@ -13084,9 +13156,9 @@ const Game = {
       Audio3D_SFX.explosionAt(z.pos.x, z.pos.y + 1, z.pos.z);
       UI.center(z.isBoss ? 'БОСС ПОВЕРЖЕН' : 'МИНИ-БОСС ПОВЕРЖЕН', def.name, 2.4);
       Audio3D_SFX.roundEnd(true);
-      // no boss left alive → fade the music out
+      // no boss left alive → back to the battle track (or menu)
       const anyLeft = this.horde && this.horde.list.some(o => o !== z && (o.isBoss || o.isMiniBoss) && o.alive && !o.dying);
-      if (!anyLeft) Audio3D_SFX.bossMusicStop();
+      if (!anyLeft) this.refreshMusic();
     }
     UI.feed('<b>' + U.esc(p.name) + '</b> <span class="z">✖ ' + def.name + (headshot ? ' (в голову)' : '') + '</span> +$' + def.money);
     if (headshot) UI.toast('В ГОЛОВУ! +$' + def.money + ' +' + Math.round(def.score * 1.5) + ' очков', '#ff9d21');
@@ -14074,6 +14146,10 @@ const Game = {
 
   renderMenu() {
     if (this.headless) return;
+    // the menu has its own calm theme (only once, and only if audio is live)
+    if (Audio3D_SFX.ctx && !Audio3D_SFX.musicOff && (!Audio3D_SFX._music || Audio3D_SFX._music.name !== 'menu')) {
+      this.refreshMusic();
+    }
     // idle menu backdrop: slow orbit around the arena
     const t = U.now() * .00006;
     this.camera.position.set(Math.cos(t) * 62, 26, Math.sin(t) * 62);

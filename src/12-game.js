@@ -1056,7 +1056,7 @@ const Game = {
     bindClick('btnLeave', () => this.stopToMenu());
     bindClick('btnReset', () => {
       if (confirm('Сбросить весь прогресс и настройки?')) {
-        Store.data = { sens: 2.2, fov: 80, vol: 60, quality: 1, touchSens: 1.5, name: '', best: 0, bestWave: 0, killsTotal: 0, matches: 0, wins: 0, signalSrv: 0, aimBest: 0, aimAutoFire: 1, map: 'arena', players: 2, maxHP: 100, aimAssist: 1, horde: 0, clears: 0, freeplay: 0, rounds: 3, playTime: 0, offCount: 1, offHp: 1, offFree: 0, shopAllow: {} };
+        Store.data = { sens: 2.2, fov: 80, vol: 60, quality: 1, touchSens: 1.5, name: '', best: 0, bestWave: 0, killsTotal: 0, matches: 0, wins: 0, signalSrv: 0, aimBest: 0, aimAutoFire: 1, map: 'arena', players: 2, maxHP: 100, aimAssist: 1, horde: 0, clears: 0, freeplay: 0, rounds: 3, playTime: 0, offCount: 1, offHp: 1, offFree: 0, shopAllow: {}, shopItems: {}, music: 1 };
         this.shopAllow = MATCH.defaultShopAllow();
         Store.save();
         UI.refreshChips(); UI.renderMenuStats(); UI.toast('Прогресс сброшен');
@@ -2401,6 +2401,24 @@ const Game = {
     }
     UI.el.netInfo.classList.toggle('hidden', this.mode !== CS.MODE.ONLINE);
     Audio3D_SFX.init(); Audio3D_SFX.resume(); Audio3D_SFX.ambientStart();
+    this.refreshMusic();
+  },
+
+  /* Pick the music that fits the current state: a boss theme while a boss is
+     alive, otherwise the battle track in a match, otherwise the menu theme. */
+  refreshMusic() {
+    if (typeof Audio3D_SFX === 'undefined') return;
+    if (Audio3D_SFX.musicOff) { Audio3D_SFX.musicStop(); return; }
+    let want = 'menu';
+    if (this.running && this.mode !== CS.MODE.MENU) {
+      want = 'game';
+      if (this.horde) {
+        const boss = this.horde.list.find(z => (z.isBoss || z.isMiniBoss) && z.alive && !z.dying);
+        if (boss && boss.isBoss && ZOMBIES[boss.type] && Audio3D_SFX.music[boss.type]) want = boss.type;
+        else if (boss && boss.isBoss) want = 'boss';
+      }
+    }
+    Audio3D_SFX.musicStart(want);
   },
 
   stopToMenu(keepRunning) {
@@ -3193,7 +3211,7 @@ const Game = {
     this.effects.explosion(b.pos.x, gy + 1.2, b.pos.z, 5.5, [ZOMBIES[type].aura || 0xff5a2a, 0x100608], ZOMBIES[type].final);
     Audio3D_SFX.explosionAt(b.pos.x, gy + 1, b.pos.z);
     Audio3D_SFX.growl(b.pos.x, gy + 1.5, b.pos.z, 'brute');
-    if (this.mode === CS.MODE.OFFLINE) Audio3D_SFX.bossMusicStart(type);
+    if (this.mode === CS.MODE.OFFLINE) this.refreshMusic();
     return b;
   },
 
@@ -4434,9 +4452,9 @@ const Game = {
       Audio3D_SFX.explosionAt(z.pos.x, z.pos.y + 1, z.pos.z);
       UI.center(z.isBoss ? 'БОСС ПОВЕРЖЕН' : 'МИНИ-БОСС ПОВЕРЖЕН', def.name, 2.4);
       Audio3D_SFX.roundEnd(true);
-      // no boss left alive → fade the music out
+      // no boss left alive → back to the battle track (or menu)
       const anyLeft = this.horde && this.horde.list.some(o => o !== z && (o.isBoss || o.isMiniBoss) && o.alive && !o.dying);
-      if (!anyLeft) Audio3D_SFX.bossMusicStop();
+      if (!anyLeft) this.refreshMusic();
     }
     UI.feed('<b>' + U.esc(p.name) + '</b> <span class="z">✖ ' + def.name + (headshot ? ' (в голову)' : '') + '</span> +$' + def.money);
     if (headshot) UI.toast('В ГОЛОВУ! +$' + def.money + ' +' + Math.round(def.score * 1.5) + ' очков', '#ff9d21');
@@ -5424,6 +5442,10 @@ const Game = {
 
   renderMenu() {
     if (this.headless) return;
+    // the menu has its own calm theme (only once, and only if audio is live)
+    if (Audio3D_SFX.ctx && !Audio3D_SFX.musicOff && (!Audio3D_SFX._music || Audio3D_SFX._music.name !== 'menu')) {
+      this.refreshMusic();
+    }
     // idle menu backdrop: slow orbit around the arena
     const t = U.now() * .00006;
     this.camera.position.set(Math.cos(t) * 62, 26, Math.sin(t) * 62);

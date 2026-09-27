@@ -460,43 +460,64 @@ const Audio3D_SFX = {
   uiClick() { this.tone(1100, .025, 'square', .05); },
 
   /* ============================================================
-     BOSS MUSIC — each boss plays its own looping theme
-     Themes are built from a chord progression that a scheduler re-triggers
-     every few seconds (bass line + arpeggio + a sustained pad), so no audio
-     files are needed. Only one theme can play at a time.
+     MUSIC — menu / in-game / boss themes
+     Each theme is a chord progression the scheduler re-triggers (bass line +
+     arpeggio + pad), so no audio files are needed. Tracks can loop and only
+     one can play at a time. `musicOff` mutes everything (settings toggle).
      ============================================================ */
-  bossThemes: {
-    bossWarden: { root: 110.0,  scale: [0, 3, 5, 7, 10], prog: [0, -2, -4, -5], bpm: 96,  wave: 'sawtooth', bright: 1200 },
-    bossBrute:  { root: 87.31,  scale: [0, 2, 3, 7, 8],  prog: [0, -3, -1, -5], bpm: 132, wave: 'square',   bright: 1500 },
-    bossTitan:  { root: 65.41,  scale: [0, 2, 5, 7, 10], prog: [0, -5, -3, -7], bpm: 84,  wave: 'sawtooth', bright: 900 },
-    bossFinal:  { root: 55.0,   scale: [0, 1, 5, 6, 10], prog: [0, -1, -6, -4], bpm: 150, wave: 'square',   bright: 1800 }
+  musicOff: false,
+  music: {
+    menu:    { root: 98.0,  scale: [0, 4, 7, 11, 14], prog: [0, -3, 5, -5], bpm: 76,  wave: 'sawtooth', bright: 1100, loop: true,  gain: .34, pad: true, drums: false },
+    game:    { root: 82.41, scale: [0, 3, 5, 7, 10],  prog: [0, -2, -4, -1], bpm: 112, wave: 'sawtooth', bright: 1400, loop: true,  gain: .40, pad: true, drums: true },
+    boss:    { root: 73.42, scale: [0, 2, 3, 6, 10],  prog: [0, -1, -5, -3], bpm: 138, wave: 'square',   bright: 1600, loop: true,  gain: .5,  pad: false, drums: true },
+    bossWarden: { root: 110.0,  scale: [0, 3, 5, 7, 10], prog: [0, -2, -4, -5], bpm: 96,  wave: 'sawtooth', bright: 1200, loop: true, gain: .5, pad: true, drums: false },
+    bossBrute:  { root: 87.31,  scale: [0, 2, 3, 7, 8],  prog: [0, -3, -1, -5], bpm: 132, wave: 'square',   bright: 1500, loop: true, gain: .5, pad: false, drums: true },
+    bossTitan:  { root: 65.41,  scale: [0, 2, 5, 7, 10], prog: [0, -5, -3, -7], bpm: 84,  wave: 'sawtooth', bright: 900,  loop: true, gain: .5, pad: true, drums: false },
+    bossFinal:  { root: 55.0,   scale: [0, 1, 5, 6, 10], prog: [0, -1, -6, -4], bpm: 150, wave: 'square',   bright: 1800, loop: true, gain: .55, pad: false, drums: true }
   },
-  bossMusicStart(type) {
-    if (!this.ctx || this.muted) return;
-    if (this._music && this._music.type === type) return;   // already playing
-    this.bossMusicStop();
-    const th = this.bossThemes[type];
+  /* play a track by name (idempotent); no-op if music is disabled */
+  musicStart(name) {
+    if (!this.ctx || this.muted || this.musicOff) return;
+    if (this._music && this._music.name === name) return;
+    const th = this.music[name];
     if (!th) return;
+    this.musicStop();
     const out = this.ctx.createGain(); out.gain.value = .0001;
     out.connect(this.master);
-    // fade in
     const t0 = this.ctx.currentTime;
-    out.gain.linearRampToValueAtTime(.5, t0 + 1.2);
-    this._music = { type, out, th, step: 0, timer: null, next: t0 + .1 };
+    out.gain.linearRampToValueAtTime(th.gain || .45, t0 + (name === 'menu' ? 1.6 : .8));
+    this._music = { name, out, th, step: 0, timer: null, next: t0 + .1 };
     const beat = 60 / th.bpm;
     const schedule = () => {
       if (!this._music || !this.ctx) return;
       const m = this._music;
       const now = this.ctx.currentTime;
-      // schedule a couple of steps ahead
-      while (m.next < now + .4) {
-        this._musicStep(m, m.next, beat);
-        m.next += beat * .5;    // eighth notes
-      }
+      while (m.next < now + .4) { this._musicStep(m, m.next, beat); m.next += beat * .5; }
       m.timer = setTimeout(schedule, 120);
     };
     schedule();
   },
+  musicStop() {
+    if (!this._music) return;
+    const m = this._music; this._music = null;
+    if (m.timer) clearTimeout(m.timer);
+    try {
+      const t = this.ctx.currentTime;
+      m.out.gain.cancelScheduledValues(t);
+      m.out.gain.setValueAtTime(m.out.gain.value, t);
+      m.out.gain.linearRampToValueAtTime(.0001, t + .5);
+      setTimeout(() => { try { m.out.disconnect(); } catch (e) { } }, 700);
+    } catch (e) { }
+  },
+  /* settings toggle: remembers the choice and picks the right track back up */
+  setMusicEnabled(on) {
+    this.musicOff = !on;
+    if (!on) this.musicStop();
+    else if (typeof Game !== 'undefined') Game.refreshMusic();
+  },
+  /* backwards-compatible alias used when a boss appears */
+  bossMusicStart(type) { this._bossTheme = type; this.musicStart(type); },
+  bossMusicStop() { this._bossTheme = null; if (typeof Game !== 'undefined') Game.refreshMusic(); else this.musicStop(); },
   _musicStep(m, t, beat) {
     const th = m.th, i = m.step++;
     const chord = th.prog[Math.floor(i / 8) % th.prog.length];
@@ -511,6 +532,23 @@ const Audio3D_SFX = {
       g.gain.exponentialRampToValueAtTime(.001, t + beat * .9);
       o.connect(lp); lp.connect(g); g.connect(m.out);
       o.start(t); o.stop(t + beat);
+    }
+    // a soft kick + hat for the driving tracks
+    if (th.drums) {
+      if (i % 2 === 0) {
+        const k = this.ctx.createOscillator(); k.type = 'sine';
+        k.frequency.setValueAtTime(120, t); k.frequency.exponentialRampToValueAtTime(45, t + .12);
+        const kg = this.ctx.createGain();
+        kg.gain.setValueAtTime(.22, t); kg.gain.exponentialRampToValueAtTime(.001, t + .16);
+        k.connect(kg); kg.connect(m.out); k.start(t); k.stop(t + .18);
+      }
+      if (i % 2 === 1) {
+        const src = this.ctx.createBufferSource(); src.buffer = this.noiseBuf;
+        const hp = this.ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 6000;
+        const hg = this.ctx.createGain();
+        hg.gain.setValueAtTime(.05, t); hg.gain.exponentialRampToValueAtTime(.001, t + .06);
+        src.connect(hp); hp.connect(hg); hg.connect(m.out); src.start(t); src.stop(t + .08);
+      }
     }
     // arpeggio note (higher)
     const deg = th.scale[(i * 3) % th.scale.length];
@@ -534,17 +572,6 @@ const Audio3D_SFX = {
       p.connect(pg); pg.connect(m.out);
       p.start(t); p.stop(t + beat * 4);
     }
-  },
-  bossMusicStop() {
-    if (!this._music) return;
-    const m = this._music; this._music = null;
-    if (m.timer) clearTimeout(m.timer);
-    try {
-      const t = this.ctx.currentTime;
-      m.out.gain.cancelScheduledValues(t);
-      m.out.gain.linearRampToValueAtTime(.0001, t + .6);
-      setTimeout(() => { try { m.out.disconnect(); } catch (e) { } }, 800);
-    } catch (e) { }
   },
 
   ambientStart() {

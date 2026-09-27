@@ -511,9 +511,32 @@ function initSettings() {
     });
   }
 
+  // music on/off — mirrored in the settings panel and the pause menu
+  const musicNames = ['Выкл', 'Вкл'];
+  const mEls = [document.getElementById('sMusic'), document.getElementById('sMusic2')];
+  const mOuts = [document.getElementById('oMusic'), document.getElementById('oMusic2')];
+  const applyMusic = (v) => {
+    S.music = v;
+    mOuts.forEach(o => { if (o) o.textContent = musicNames[v]; });
+    if (typeof Audio3D_SFX !== 'undefined') Audio3D_SFX.setMusicEnabled(!!v);
+    Store.save();
+  };
+  mEls.forEach(e => {
+    if (!e) return;
+    e.value = S.music === 0 ? 0 : 1;
+    e.addEventListener('input', () => {
+      const v = parseInt(e.value, 10);
+      mEls.forEach(x => { if (x && x !== e) x.value = e.value; });
+      applyMusic(v);
+    });
+  });
+  if (mOuts[0]) mOuts[0].textContent = musicNames[S.music === 0 ? 0 : 1];
+  if (mOuts[1]) mOuts[1].textContent = musicNames[S.music === 0 ? 0 : 1];
+
   applySetting('sens', S.sens);
   applySetting('fov', S.fov);
   applySetting('vol', S.vol);
+  if (typeof Audio3D_SFX !== 'undefined') Audio3D_SFX.musicOff = S.music === 0;
 }
 
 function applySetting(key, v) {

@@ -273,58 +273,89 @@ class Effects {
     this.arcs.push({ mesh: bline, life: .06, max: .06 });
   }
 
-  /* ---------- FLAMETHROWER: a held cone of fire ----------
-     A jittering cone of overlapping additive blobs from the muzzle, growing as
-     it travels, with a hot core near the nozzle and smoke at the tip. */
+  /* ---------- FLAMETHROWER: a held jet of fire ----------
+     A dense stream of small stretched flame tongues that race from the nozzle to
+     the tip, growing and turning from white-hot to orange to dark smoke. Reads
+     as a continuous jet, not a row of separate balls. */
   holdFlame(from, dir, range, t) {
     if (!this._flame) {
       this._flame = new THREE.Group();
       this._flameBlobs = [];
-      for (let i = 0; i < 16; i++) {
-        const m = new THREE.Mesh(new THREE.SphereGeometry(1, 8, 6),
-          new THREE.MeshBasicMaterial({ color: 0xff8a2a, transparent: true, opacity: .5, blending: THREE.AdditiveBlending, depthWrite: false }));
+      const N = 30;
+      for (let i = 0; i < N; i++) {
+        const m = new THREE.Mesh(new THREE.SphereGeometry(1, 7, 6),
+          new THREE.MeshBasicMaterial({ color: 0xff8a2a, transparent: true, opacity: .45, blending: THREE.AdditiveBlending, depthWrite: false }));
         m.renderOrder = 4;
         this._flame.add(m);
-        this._flameBlobs.push({ mesh: m, seed: Math.random(), r: .5 + Math.random() * .9, off: Math.random() * 6.28 });
+        this._flameBlobs.push({ mesh: m, seed: i / N, r: .55 + Math.random() * .55, off: Math.random() * 6.28, spin: (Math.random() - .5) * 2 });
       }
-      this._flameMuzzle = new THREE.Mesh(new THREE.SphereGeometry(1, 10, 8),
-        new THREE.MeshBasicMaterial({ color: 0xfff2c0, transparent: true, opacity: .9, blending: THREE.AdditiveBlending, depthWrite: false }));
+      // a small hot cone right at the nozzle
+      this._flameMuzzle = new THREE.Mesh(new THREE.ConeGeometry(1, 1, 10),
+        new THREE.MeshBasicMaterial({ color: 0xfff6d0, transparent: true, opacity: .9, blending: THREE.AdditiveBlending, depthWrite: false }));
       this._flameMuzzle.renderOrder = 5;
       this._flame.add(this._flameMuzzle);
+      // a warm light that flickers with the jet
+      this._flameLight = new THREE.PointLight(0xff7a2a, 0, 9, 2);
+      this._flame.add(this._flameLight);
       this.scene.add(this._flame);
     }
     this._flame.visible = true;
-    const puls = .5 + .5 * Math.sin(t * 40);
+    const puls = .5 + .5 * Math.sin(t * 46);
+    // local basis so the jet can stretch along its flow
+    const fwd = new THREE.Vector3(dir.x, dir.y, dir.z);
+    if (fwd.lengthSq() < 1e-6) fwd.set(0, 0, -1);
+    fwd.normalize();
     for (let i = 0; i < this._flameBlobs.length; i++) {
       const b = this._flameBlobs[i];
-      const f = ((b.seed + t * 1.7) % 1);              // 0..1 along the cone
+      const f = ((b.seed + t * 2.1) % 1);              // 0..1 along the jet
       const dist = f * range;
-      const spread = f * .9 + .12;
-      const jx = Math.sin(t * 22 + b.off) * spread * .5, jy = Math.cos(t * 19 + b.off * 2) * spread * .4, jz = Math.cos(t * 24 + b.off) * spread * .5;
-      b.mesh.position.set(from.x + dir.x * dist + jx, from.y + dir.y * dist + .1 + jy, from.z + dir.z * dist + jz);
-      const s = (.10 + f * .28) * b.r;
-      b.mesh.scale.setScalar(s);
-      // hot white-yellow near the nozzle → orange → fading at the tip
-      b.mesh.material.color.setHex(f < .25 ? 0xfff0b0 : f < .6 ? 0xff8a2a : 0xd0442a);
-      b.mesh.material.opacity = (.7 - f * .5) * (.7 + puls * .3);
+      // the jet expands gently as it travels
+      const spread = .06 + f * .55;
+      const jx = Math.sin(t * 26 + b.off) * spread * .5;
+      const jy = Math.cos(t * 21 + b.off * 1.7) * spread * .42;
+      const jz = Math.cos(t * 28 + b.off) * spread * .5;
+      b.mesh.position.set(
+        from.x + fwd.x * dist + jx,
+        from.y + fwd.y * dist + jy,
+        from.z + fwd.z * dist + jz);
+      // small, stretched along the flow (long tongue, not a ball)
+      const s = (.05 + f * .13) * b.r * (1 + puls * .12);
+      b.mesh.scale.set(s, s, s * (2.0 + f * 1.4));
+      b.mesh.lookAt(b.mesh.position.x + fwd.x, b.mesh.position.y + fwd.y, b.mesh.position.z + fwd.z);
+      // hot white-yellow near the nozzle → orange → fading red at the tip
+      b.mesh.material.color.setHex(f < .18 ? 0xfff4c4 : f < .45 ? 0xffb03a : f < .75 ? 0xff6a1e : 0x8a3010);
+      b.mesh.material.opacity = (.62 - f * .5) * (.75 + puls * .25);
     }
-    this._flameMuzzle.position.set(from.x + dir.x * .25, from.y + dir.y * .25, from.z + dir.z * .25);
-    this._flameMuzzle.scale.setScalar(.14 + puls * .06);
-    this._flameMuzzle.material.opacity = .7 + puls * .3;
+    const mz = { x: from.x + fwd.x * .18, y: from.y + fwd.y * .18, z: from.z + fwd.z * .18 };
+    this._flameMuzzle.position.set(mz.x, mz.y, mz.z);
+    this._flameMuzzle.scale.set(.075 + puls * .02, .28 + puls * .06, .075 + puls * .02);
+    this._flameMuzzle.lookAt(mz.x + fwd.x, mz.y + fwd.y, mz.z + fwd.z);
+    this._flameMuzzle.rotateX(Math.PI / 2);
+    this._flameMuzzle.material.opacity = .75 + puls * .25;
+    // flickering light at the nozzle
+    const lx = from.x + fwd.x * 1.4, ly = from.y + fwd.y * 1.4, lz = from.z + fwd.z * 1.4;
+    this._flameLight.position.set(lx, ly, lz);
+    this._flameLight.intensity = 5 + puls * 4;
     // embers + smoke thrown forward
     if (Math.random() < .9) {
       const d = U.rand(.3, 1) * range;
-      this.particle(from.x + dir.x * d, from.y + dir.y * d, from.z + dir.z * d,
-        dir.x * U.rand(1, 5) + U.rand(-1, 1), U.rand(.5, 3), dir.z * U.rand(1, 5) + U.rand(-1, 1),
-        U.rand(.08, .20), 'spark', U.rand(.2, .5));
+      this.particle(from.x + fwd.x * d, from.y + fwd.y * d, from.z + fwd.z * d,
+        fwd.x * U.rand(1, 5) + U.rand(-1, 1), U.rand(.5, 3), fwd.z * U.rand(1, 5) + U.rand(-1, 1),
+        U.rand(.06, .16), 'spark', U.rand(.2, .45));
     }
     if (Math.random() < .5) {
       const d = U.rand(.5, 1) * range;
-      this.particle(from.x + dir.x * d, from.y + dir.y * d + .3, from.z + dir.z * d,
-        dir.x * U.rand(.5, 2), U.rand(1, 2.5), dir.z * U.rand(.5, 2), U.rand(.2, .5), 'smoke', U.rand(.4, 1.0));
+      this.particle(from.x + fwd.x * d, from.y + fwd.y * d + .3, from.z + fwd.z * d,
+        fwd.x * U.rand(.5, 2), U.rand(1, 2.5), fwd.z * U.rand(.5, 2), U.rand(.2, .5), 'smoke', U.rand(.4, 1.0));
     }
   }
-  endFlame() { if (this._flame) this._flame.visible = false; }
+  endFlame() {
+    if (!this._flame) return;
+    this._flame.visible = false;
+    if (this._flameLight) this._flameLight.intensity = 0;
+    // hide any lingering child meshes so nothing stays hanging in the air
+    for (const b of (this._flameBlobs || [])) b.mesh.visible = true;
+  }
 
   /* ---------- laser beam: a bright green core with a soft outer glow ---------- */
   laser(from, to) {

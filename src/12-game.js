@@ -6794,20 +6794,24 @@ const Game = {
     // Firing is only allowed once the match is live: not during the buy phase
     // and not while the buy menu is open.
     const beamReady = p.def && p.def.beam && p.spinT > .85 && p.beamVent <= 0;
+    const flameFiring = p.def && p.def.flame && p.triggerDown && p.weapon.mag > 0 && p.fireCd <= 0;
     if (p.alive && !this.buyOpen && this.roundState === 'live') {
       const def = p.def;
       /* ---- МЕХАКОСТЮМ: ЛКМ — гигантский миниган, ПКМ — гипер-лазер ---- */
       if (this.isMechActive()) {
         if (p.def && p.def.beam) this.stopBeam();
+        if (this.effects) this.effects.endFlame();
         const rmb = Input.aimDown() && canLook && !IS_TOUCH;
         this.updateMech(dt, p.triggerDown, rmb || (IS_TOUCH && TouchUI.aimPressed));
-      } else if (def.flame && p.triggerDown && p.weapon.mag > 0 && p.fireCd <= 0) {
+      } else if (flameFiring) {
         // held fire: a cone of flame that burns everything in front
         this.updateFlamer(dt);
       } else if (def.beam && p.triggerDown && beamReady) {
         // held fire: a continuous piercing beam instead of bullets
         this.updateBeam(dt);
       } else {
+        // the flame must go out the instant the trigger is released
+        if (this.effects) this.effects.endFlame();
         if (def.beam) this.stopBeam();
         if (def.auto || def.slot === 3 || held) {
           // automatic weapons fire continuously while held; with a continuous
@@ -6822,6 +6826,7 @@ const Game = {
       }
       if (!p.triggerDown) p._semiLatch = false;
     } else {
+      if (this.effects) this.effects.endFlame();
       if (p.def && p.def.beam) this.stopBeam();
       if (!p.triggerDown) p._semiLatch = false;
     }

@@ -472,6 +472,14 @@ html.touch #rangePanel #rpToggle{display:none !important}
 #sdScreen #sdSearch:focus{border-color:var(--or)}
 #sdGrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;
   max-height:56vh;overflow:auto;padding-right:4px}
+#modScreen .sd-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;margin-top:6px}
+.modcard{background:linear-gradient(180deg,#1a1430,#120d22);border:1px solid #4a3a7a;border-top:3px solid #9a3aff;
+  color:var(--txt);font-family:inherit;text-align:left;padding:14px 16px;border-radius:4px;cursor:pointer;transition:.12s}
+.modcard:hover{background:#241a44;transform:translateY(-2px);border-top-color:#c24bff}
+.modcard b{display:block;font-size:14px;letter-spacing:1.5px;color:#d9b6ff;margin-bottom:6px}
+.modcard i{font-style:normal;font-size:11.5px;color:var(--dim);line-height:1.4}
+.mod-active{margin-top:16px;font-size:12px;letter-spacing:1px;color:var(--dim)}
+.mod-active b{color:#c24bff}
 .sdcard{background:linear-gradient(180deg,#161b20,#11151a);border:1px solid var(--line);border-top:2px solid #39434c;
   border-radius:3px;padding:11px 13px;cursor:pointer;transition:.12s;position:relative}
 .sdcard:hover{border-top-color:var(--or);background:#1d242b;transform:translateY(-2px)}

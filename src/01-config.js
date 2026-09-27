@@ -383,6 +383,22 @@ const ZOMBIES = {
                 abilities: ['barrage', 'summon', 'shockwave', 'summonMinions'], abilityCd: 5.5, aura: 0x9a3aff }
 };
 
+/* ---------------- endless-mode modifiers ----------------
+   Picked one at a time every 10 waves; they stack for the whole run. Each one
+   makes the fight harder but pays more, so the curve keeps climbing. */
+const MODIFIERS = [
+  { id: 'fast',     name: 'СПРИНТЕРЫ',   desc: 'Зомби быстрее на 30%',            apply(m) { m.speed *= 1.30; } },
+  { id: 'tough',    name: 'БРОНЯ',       desc: 'Зомби прочнее на 40%',            apply(m) { m.hp *= 1.40; } },
+  { id: 'deadly',   name: 'ЯРОСТЬ',      desc: 'Зомби бьют на 35% сильнее',       apply(m) { m.dmg *= 1.35; } },
+  { id: 'many',     name: 'ПОЛЧИЩА',     desc: 'Зомби на 50% больше',             apply(m) { m.count *= 1.50; } },
+  { id: 'armored',  name: 'БРОНЕЖИЛЕТЫ', desc: 'У зомби +15% брони',              apply(m) { m.armor += .15; } },
+  { id: 'swift',    name: 'РЫВОК',       desc: 'Зомби спавнятся быстрее',         apply(m) { m.spawn *= .75; } },
+  { id: 'glass',    name: 'СТЕКЛЯННЫЙ',  desc: 'Вы бьёте на 25% сильнее, но и вам больнее', apply(m) { m.playerDmg *= 1.25; m.playerHurt *= 1.25; } },
+  { id: 'swarm',    name: 'РОЙ',         desc: 'Мини-босс каждые 2 волны',        apply(m) { m.miniEvery = 2; } }
+];
+const MOD_BASE = { speed: 1, hp: 1, dmg: 1, count: 1, armor: 0, spawn: 1, playerDmg: 1, playerHurt: 1, miniEvery: 3 };
+function makeModState() { return Object.assign({}, MOD_BASE); }
+
 /* ---------------- utils ---------------- */
 const U = {
   clamp: (v, a, b) => v < a ? a : v > b ? b : v,
@@ -421,7 +437,7 @@ const Store = {
   key: 'cs3d.save.v1',
   data: { sens: 2.2, fov: 80, vol: 60, quality: 1, touchSens: 1.5, name: '', best: 0, bestWave: 0, killsTotal: 0, matches: 0, wins: 0, signalSrv: 0, aimBest: 0, aimAutoFire: 1,
           map: 'arena', players: 2, maxHP: 100, aimAssist: 1, horde: 0, clears: 0, freeplay: 0, rounds: 3, playTime: 0,
-          offCount: 1, offHp: 1, offFree: 0, offMode: 'normal', checkpoint: null, shopAllow: {}, shopItems: {}, music: 1, sfxVol: 100, musicVol: 70 },
+          offCount: 1, offHp: 1, offFree: 0, offMode: 'normal', offMods: {}, offModsRun: 0, offModPick: 0, checkpoint: null, shopAllow: {}, shopItems: {}, music: 1, sfxVol: 100, musicVol: 70 },
   load() {
     try { const r = localStorage.getItem(this.key); if (r) Object.assign(this.data, JSON.parse(r)); } catch (e) { }
     return this.data;

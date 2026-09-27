@@ -21,7 +21,8 @@ const UI = {
       'btnCopy', 'dmgDirs', 'android', 'ios', 'credits', 'crPlayer', 'crStats',
       'matchEnd', 'meTitle', 'meWinner', 'meScore', 'meDetail', 'btnMatchAgain', 'btnMatchMenu',
       'mapChips', 'playerChips', 'hpChips', 'hordeChips', 'lobbyMaps', 'lobbyPlayers', 'lobbyHp', 'lobbyFree', 'lobbyRounds',
-      'offCountChips', 'offHpChips', 'offFreeChips', 'offModeChips', 'offCustomBox', 'offHordeBox', 'offCpBox', 'offCpInfo', 'btnOffContinue', 'custom', 'lobbyShop', 'lobbyShopItems',
+      'offCountChips', 'offHpChips', 'offFreeChips', 'offModeChips', 'offCustomBox', 'offHordeBox', 'offSpecialBox', 'offCpBox', 'offCpInfo', 'btnOffContinue', 'custom', 'lobbyShop', 'lobbyShopItems',
+      'modScreen', 'modGrid', 'modActive',
       'medkitTag', 'droneTag', 'shieldTag', 'heatTag', 'missileHud', 'mhTime', 'mhReadout',
       'sdScreen', 'sdGrid', 'sdSearch', 'sdToggle2', 'sdClose', 'sdConfig',
       'esScreen', 'esGrid', 'esSearch', 'esCount', 'esClear', 'esClose', 'esConfig'];
@@ -32,7 +33,7 @@ const UI = {
 
   /* ---------------- screens ---------------- */
   show(name) {
-    ['loading', 'menu', 'controls', 'lobby', 'hud', 'buy', 'scoreboard', 'pause', 'connect', 'android', 'ios', 'credits', 'matchEnd', 'custom', 'clickToPlay', 'sdScreen', 'esScreen'].forEach(s => {
+    ['loading', 'menu', 'controls', 'lobby', 'hud', 'buy', 'scoreboard', 'pause', 'connect', 'android', 'ios', 'credits', 'matchEnd', 'custom', 'clickToPlay', 'sdScreen', 'esScreen', 'modScreen'].forEach(s => {
       const e = this.el[s];
       if (!e) return;
       const on = s === name;
@@ -41,12 +42,12 @@ const UI = {
     this.current = name;
   },
   hideOverlays() {
-    ['buy', 'scoreboard', 'pause', 'controls', 'lobby', 'menu', 'connect', 'android', 'ios', 'credits', 'matchEnd', 'custom', 'sdScreen', 'esScreen'].forEach(s => {
+    ['buy', 'scoreboard', 'pause', 'controls', 'lobby', 'menu', 'connect', 'android', 'ios', 'credits', 'matchEnd', 'custom', 'sdScreen', 'esScreen', 'modScreen'].forEach(s => {
       if (this.el[s]) this.el[s].classList.add('hidden');
     });
   },
   overlayOpen() {
-    return ['buy', 'scoreboard', 'pause', 'controls', 'lobby', 'menu', 'connect', 'android', 'ios', 'credits', 'matchEnd', 'custom', 'sdScreen', 'esScreen'].some(s => this.el[s] && !this.el[s].classList.contains('hidden'));
+    return ['buy', 'scoreboard', 'pause', 'controls', 'lobby', 'menu', 'connect', 'android', 'ios', 'credits', 'matchEnd', 'custom', 'sdScreen', 'esScreen', 'modScreen'].some(s => this.el[s] && !this.el[s].classList.contains('hidden'));
   },
 
   /* ============================================================
@@ -184,6 +185,9 @@ const UI = {
         { id: 'normal', b: 'ОБЫЧНЫЙ', i: 'классические волны' },
         { id: 'horde', b: 'ОРДА ×10', i: 'много, но хилые' },
         { id: 'freehorde', b: 'БЕСПЛАТНАЯ ОРДА', i: 'орда ×10 + всё бесплатно' },
+        { id: 'bossrush', b: 'БОСС-РАШ', i: 'только боссы подряд' },
+        { id: 'daily', b: 'ИСПЫТАНИЕ ДНЯ', i: 'общий сид и модификаторы' },
+        { id: 'endless', b: 'БЕСКОНЕЧНЫЙ', i: 'модификатор каждые 10 волн' },
         { id: 'custom', b: 'СВОЙ', i: 'свои множители' }
       ];
       this.el.offModeChips.innerHTML = '';
@@ -266,6 +270,7 @@ const UI = {
     }
     if (this.el.offCustomBox) this.el.offCustomBox.classList.toggle('hidden', mode !== 'custom');
     if (this.el.offHordeBox) this.el.offHordeBox.classList.toggle('hidden', mode !== 'horde' && mode !== 'freehorde');
+    if (this.el.offSpecialBox) this.el.offSpecialBox.classList.toggle('hidden', ['bossrush', 'daily', 'endless'].indexOf(mode) < 0);
     // checkpoint: show "ПРОДОЛЖИТЬ" only when there is one to continue from
     const cp = (typeof Game !== 'undefined' && Game.loadCheckpoint) ? Game.loadCheckpoint() : null;
     if (this.el.offCpBox) this.el.offCpBox.classList.toggle('hidden', !cp);

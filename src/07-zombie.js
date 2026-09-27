@@ -502,7 +502,7 @@ class Zombie {
     let mul = 1;
     if (part === 'head') mul = CFG.headshotMultiplier;
     else if (part === 'legs') mul = CFG.limbMultiplier;
-    let dmg = amount * mul;
+    let dmg = amount * mul * (this.dmgTakenMul || 1);
     // armoured enemies (the robot zombie) soak a share of every hit
     if (this.armor > 0) dmg *= (1 - this.armor);
     /* ЩИТОНОСЕЦ: a bolt from the front is almost entirely deflected by the plate */

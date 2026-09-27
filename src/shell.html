@@ -76,6 +76,13 @@
         но всё оружие в магазине бесплатно.
       </div>
     </div>
+    <div id="offSpecialBox" class="hidden">
+      <div class="hintbox" style="margin-top:0">
+        <b>БОСС-РАШ</b> — только боссы, один за другим, без обычных волн.
+        <b>ИСПЫТАНИЕ ДНЯ</b> — фиксированный сид и модификаторы, у всех одинаковые.
+        <b>БЕСКОНЕЧНЫЙ</b> — каждые 10 волн вы выбираете модификатор (сильнее враги, но и награды больше).
+      </div>
+    </div>
     <div id="offCpBox" class="hidden">
       <div class="hintbox" style="margin-top:0">
         Есть сохранённый чекпоинт: <b id="offCpInfo">волна 20</b>.
@@ -411,6 +418,17 @@
     <div class="btnrow">
       <button class="mbtn" id="esClose">ЗАКРЫТЬ (X / Esc)</button>
     </div>
+  </div>
+</div>
+
+<!-- ============ ENDLESS MODIFIERS ============ -->
+<div id="modScreen" class="screen hidden">
+  <div class="panel wide">
+    <h2>ВЫБЕРИТЕ МОДИФИКАТОР</h2>
+    <div class="hintbox" style="margin-top:0">Бесконечный режим: каждые 10 волн вы выбираете один модификатор.
+      Выбирайте с умом — они складываются до конца забега.</div>
+    <div class="sd-grid" id="modGrid"></div>
+    <div class="mod-active" id="modActive"></div>
   </div>
 </div>
 

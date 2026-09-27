@@ -852,6 +852,7 @@ const Game = {
   online: null,
   buyOpen: false,
   shooterPickOpen: false,
+  _modPickOpen: false,
   enemySpawnOpen: false,
   _spawnHpMul: 1,
   buyTimer: 0,
@@ -1011,7 +1012,7 @@ const Game = {
       if (mode === 'custom') this.startOffline(false, false, true);
       else if (mode === 'freehorde') this.startOffline(true, true, false, true);
       else if (mode === 'horde') this.startOffline(true, false, false, true);
-      else this.startOffline(false, false, false, true);
+      else this.startOffline(false, false, false, true);   // normal / bossrush / daily / endless
     });
     bindClick('btnCreditsClose', () => this.closeCredits());
     bindClick('btnMatchAgain', () => this.rematchOnline());
@@ -1345,6 +1346,7 @@ const Game = {
     this.offlineDead = false;
     this.offlineDeadT = 0;
     this._creditsOpen = false;
+    this._modPickOpen = false;
     // NOTE: the checkpoint is deliberately NOT cleared here. It is dropped only
     // by an explicit "НОВАЯ ИГРА" (or after being consumed), so leaving to the
     // menu and returning can still resume the run.
@@ -1362,6 +1364,37 @@ const Game = {
       this.offHpMul = null;
     }
     this._freeHorde = this.freePlay;
+    /* ---- special offline modes (boss-rush / daily / endless) ---- */
+    const offMode = Store.data.offMode || 'normal';
+    this.specialMode = this.customOffline ? 'normal' : offMode;
+    this.isBossRush = this.specialMode === 'bossrush';
+    this.isEndless = this.specialMode === 'endless';
+    this.isDaily = this.specialMode === 'daily';
+    this.modState = makeModState();
+    this.modList = [];
+    this._modPending = false;
+    this._dailySeed = 0;
+    if (this.isDaily) {
+      /* deterministic seed from the calendar day: everyone gets the same run.
+         Three fixed modifiers are derived from that seed for all players. */
+      const d = new Date();
+      this._dailySeed = d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate();
+      let s = this._dailySeed >>> 0;
+      const rng = () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; };
+      this.modList = MODIFIERS.slice().sort(() => rng() - .5).slice(0, 3);
+      this.modList.forEach(m => m.apply(this.modState));
+      Store.data.offMods = {}; this.modList.forEach(m => Store.data.offMods[m.id] = 1);
+      Store.save();
+    } else if (this.isEndless && forcePreset) {
+      // a fresh endless run clears the stored modifier list
+      Store.data.offMods = {}; Store.data.offModPick = 0; Store.save();
+    }
+    if (this.isEndless && !forcePreset) {
+      /* resuming an endless run (e.g. from the menu): replay the stored picks */
+      const stored = Store.data.offMods || {};
+      this.modList = MODIFIERS.filter(m => stored[m.id]);
+      this.modList.forEach(m => m.apply(this.modState));
+    }
     this.ensureMap(Store.data.map);
     this.matchHP = Store.data.maxHP || 100;
     // ОРДА ×10: force the mass mode from the menu button, otherwise honour the
@@ -1400,6 +1433,15 @@ const Game = {
       this.beginBuyPhase(30, 'СВОЙ ОФФЛАЙН — ВОЛНА 1');
       UI.toast('Свой оффлайн: зомби ×' + this.offCountMul + ' · HP ×' + this.offHpMul +
         (this.freePlay ? ' · магазин бесплатный' : ' · магазин платный'), '#4aa3ff');
+    } else if (this.isBossRush) {
+      this.beginBuyPhase(30, 'БОСС-РАШ — ЭТАП 1');
+      UI.toast('БОСС-РАШ: только боссы, каждый сильнее', '#c24bff');
+    } else if (this.isDaily) {
+      this.beginBuyPhase(30, 'ИСПЫТАНИЕ ДНЯ');
+      UI.toast('ИСПЫТАНИЕ ДНЯ · ' + this.modList.map(m => m.name).join(' · '), '#4aa3ff');
+    } else if (this.isEndless) {
+      this.beginBuyPhase(30, 'БЕСКОНЕЧНЫЙ — ВОЛНА 1');
+      UI.toast('БЕСКОНЕЧНЫЙ: модификатор каждые 10 волн', '#c24bff');
     } else {
       this.beginBuyPhase(30, this.hordeMode ? (this.freePlay ? 'БЕСПЛАТНАЯ ОРДА — ВОЛНА 1' : 'ОРДА — ВОЛНА 1') : 'ВОЛНА 1');
       if (this.freePlay && this.hordeMode) UI.toast('БЕСПЛАТНАЯ ОРДА: всё оружие бесплатно', '#57d16a');
@@ -3236,12 +3278,32 @@ const Game = {
     o.wave++;
     o.bosses = 0;
     o.bossPending = 0;
+    /* endless: every 10 waves pause and let the player pick a modifier */
+    if (this.isEndless && o.wave > 1 && (o.wave - 1) % 10 === 0) {
+      this.openModifierPicker(o.wave);
+    }
     // offline: a fresh arena every 10 waves (waves 11, 21, 31 …)
     if (this.mode === CS.MODE.OFFLINE) this.rotateMapIfNeeded(o.wave);
     let count = Math.round(CFG.zombieStartCount + (o.wave - 1) * 2.4);
     // zombie-count multiplier: custom mode uses its own, else the ×10 preset
     const countMul = (this.offCountMul != null) ? this.offCountMul : (this.hordeMode ? CFG.hordeCountMul : 1);
-    count = Math.round(count * countMul);
+    count = Math.round(count * countMul * (this.modState ? this.modState.count : 1));
+
+    /* ---- BOSS-RUSH: every wave is a boss, escalating with each one ---- */
+    if (this.isBossRush) {
+      const bm = this.bossRushList();
+      const type = bm[(o.wave - 1) % bm.length];
+      o.bossType = type;
+      o.bossPending = 1;
+      count = 0;
+      UI.center(ZOMBIES[type].name, 'БОСС-РАШ · ЭТАП ' + o.wave, 3.0);
+      UI.toast('БОСС-РАШ: ' + ZOMBIES[type].name, '#c24bff');
+      Audio3D_SFX.waveStart();
+      o.totalThisWave = 0; o.spawnedThisWave = 0; o.toSpawn = 0;
+      o.betweenWaves = false; o.waveStart = U.now();
+      Bus.emit('waveStart', o.wave);
+      return;
+    }
 
     /* ---- BOSS WAVE ----
        At 15 / 30 / 50 / 100 a boss joins the wave. ОРДА ×10 summons five of them
@@ -3295,7 +3357,44 @@ const Game = {
     return null;
   },
 
-  /* spawn one boss at a ring position around the player */
+  /* ---- special modes: endless modifiers & boss-rush ---- */
+  bossRushList() { return ['bossWarden', 'bossBrute', 'bossTitan', 'bossFinal']; },
+  _modList() { return MODIFIERS.filter(m => (Store.data.offMods || {})[m.id]); },
+  openModifierPicker(wave) {
+    const choices = MODIFIERS.slice().sort(() => Math.random() - .5).slice(0, 3);
+    this._modChoices = choices;
+    this._modPickOpen = true;
+    this.roundState = 'live';
+    const grid = UI.el.modGrid;
+    if (grid) {
+      grid.innerHTML = '';
+      choices.forEach(m => {
+        const b = document.createElement('button');
+        b.className = 'modcard';
+        b.innerHTML = '<b>' + U.esc(m.name) + '</b><i>' + U.esc(m.desc) + '</i>';
+        b.addEventListener('click', () => this.pickModifier(m));
+        grid.appendChild(b);
+      });
+    }
+    if (UI.el.modActive) UI.el.modActive.innerHTML = 'Активные модификаторы: ' +
+      (this.modList.length ? this.modList.map(m => '<b>' + U.esc(m.name) + '</b>').join(' · ') : 'нет');
+    UI.show('modScreen');
+    Audio3D_SFX.uiClick();
+  },
+  pickModifier(m) {
+    m.apply(this.modState);
+    this.modList.push(m);
+    Store.data.offMods = {}; this.modList.forEach(x => Store.data.offMods[x.id] = 1);
+    Store.data.offModPick = (Store.data.offModPick || 0) + 1;
+    Store.save();
+    UI.show('hud');
+    UI.toast('Модификатор: ' + m.name + ' — ' + m.desc, '#c24bff');
+    Audio3D_SFX.buy();
+    // the picker paused the wave; resume play
+    this._modPickOpen = false;
+    this.roundState = 'live';
+  },
+
   spawnBoss(type) {
     const s = MAP.zombieSpawns && MAP.zombieSpawns.length ? U.pick(MAP.zombieSpawns) : { x: 0, z: 0 };
     const b = this.horde.spawn(type, s.x, s.z);
@@ -3303,6 +3402,12 @@ const Game = {
     // the normal boss health; custom mode scales bosses by its own HP setting.
     if (this.offHpMul != null) b.maxHealth *= this.offHpMul;
     else if (this.hordeMode && !this.freePlay) b.maxHealth *= .30;
+    /* boss-rush: each successive boss is tougher, so the ladder keeps rising */
+    if (this.isBossRush) b.maxHealth *= (1 + (this.offline.wave - 1) * .35);
+    if (this.modState) b.maxHealth *= this.modState.hp;
+    if (this.modState && this.modState.speed !== 1) b.speed *= this.modState.speed;
+    if (this.modState && this.modState.dmg !== 1) b.dmg *= this.modState.dmg;
+    if (this.modState && this.modState.armor) b.armor = Math.min(.7, b.armor + this.modState.armor);
     b.health = b.maxHealth;
     b.isBoss = true;
     b._introT = 1.6;                    // drives the entrance FX / slow time-in
@@ -3332,7 +3437,10 @@ const Game = {
     return pool;
   },
   /* the armoured robot mini-boss is a rare special, from wave 8 onward */
-  isMiniBossWave(wave) { return wave >= 8 && (wave - 8) % 3 === 0; },
+  isMiniBossWave(wave) {
+    const every = (this.modState && this.modState.miniEvery) || 3;
+    return wave >= 8 && (wave - 8) % every === 0;
+  },
   pickZombieType(wave) {
     const pool = this.waveTypesFor(wave);
     let total = 0; pool.forEach(p => total += p.w);
@@ -3534,8 +3642,10 @@ const Game = {
       const s = this.horde.spawnRandom('robot', this.player.pos.x, this.player.pos.z, 30);
       const hpMul = (this.offHpMul != null) ? this.offHpMul
         : ((this.hordeMode && !this.freePlay) ? CFG.hordeHpMul : 1);
-      s.maxHealth *= hpMul; s.health = s.maxHealth;
-      s.dmg *= (1 + (o.wave - 1) * .05);
+      s.maxHealth *= hpMul * this.modState.hp; s.health = s.maxHealth;
+      s.dmg *= (1 + (o.wave - 1) * .05) * this.modState.dmg;
+      s.speed *= this.modState.speed;
+      s.dmgTakenMul = this.modState.playerDmg;
       s.isMiniBoss = true;
       Audio3D_SFX.growl(s.pos.x, s.pos.y, s.pos.z, 'brute');
       UI.toast('РОБОТ-ЗОМБИ в бою', '#4ad6ff');
@@ -3547,7 +3657,7 @@ const Game = {
       // custom multipliers may be huge, so spawn faster / allow more alive
       const big = (this.offCountMul || 1) > 3 || this.hordeMode;
       const waveSpd = big ? CFG.hordeSpawnInterval : CFG.zombieSpawnInterval;
-      const interval = Math.max(.10, waveSpd - o.wave * (big ? .006 : .045));
+      const interval = Math.max(.10, (waveSpd - o.wave * (big ? .006 : .045)) * ((this.modState && this.modState.spawn) || 1));
       const maxAlive = big ? CFG.hordeMaxAlive : CFG.zombieMaxAlive;
       let guard = 0;
       const burst = big ? 8 : 6;
@@ -3562,17 +3672,20 @@ const Game = {
            weakened zombies; БЕСПЛАТНАЯ ОРДА uses normal full-strength health. */
         const hpMul = (this.offHpMul != null) ? this.offHpMul
           : ((this.hordeMode && !this.freePlay) ? CFG.hordeHpMul : 1);
-        z.maxHealth *= scale * hpMul;
+        z.maxHealth *= scale * hpMul * this.modState.hp;
         z.health = z.maxHealth;
-        z.dmg *= (1 + (o.wave - 1) * .05);
+        z.dmg *= (1 + (o.wave - 1) * .05) * this.modState.dmg;
+        z.speed *= this.modState.speed;
+        z.dmgTakenMul = this.modState.playerDmg;
+        if (this.modState.armor) z.armor = Math.min(.7, (z.armor || 0) + this.modState.armor);
         o.toSpawn--; o.spawnedThisWave++;
       }
-    } else if (this.horde.aliveCount === 0) {
+    } else if ((this.horde.aliveCount === 0 && this.offline.spawnedThisWave >= this.offline.totalThisWave)) {
       // wave cleared — the spawn queue is empty and nothing is left alive
       // (dying corpses are not re-captured here; they simply fade out)
-      const bonus = 400 + o.wave * 120;
+      const bonus = Math.round((400 + o.wave * 120) * ((this.modState && this.modState.playerDmg) || 1));
       this.player.money += bonus;
-      this.player.score += 250 + o.wave * 40;
+      this.player.score += Math.round((250 + o.wave * 40) * ((this.modState && this.modState.playerDmg) || 1));
       o.betweenWaves = true;
       o.breakT = 7;
       Audio3D_SFX.roundEnd(true);
@@ -4972,6 +5085,7 @@ const Game = {
 
   playerHurt(dmg, source) {    const p = this.player;
     if (!p.alive || (this.mode !== CS.MODE.OFFLINE && this.mode !== CS.MODE.RANGE)) return;
+    if (this.modState && this.modState.playerHurt !== 1) dmg *= this.modState.playerHurt;
     this.applyDamageToSelf(dmg, source ? { x: source.pos.x, y: source.pos.y, z: source.pos.z } : null);
   },
 
@@ -5867,7 +5981,7 @@ const Game = {
     }
 
     // ---- movement is frozen during the buy phase (CS-style freeze time) ----
-    const frozen = this.roundState === 'buy' || this.shooterPickOpen || this.enemySpawnOpen;
+    const frozen = this.roundState === 'buy' || this.shooterPickOpen || this.enemySpawnOpen || this._modPickOpen;
     const pin = frozen ? { f: 0, r: 0, run: false, crouch: p.in.crouch, wantJump: false } : p.in;
 
     // ---- physics ----
@@ -5877,7 +5991,7 @@ const Game = {
 
     // ---- round flow ----
     this.updateBuyPhase(dt);
-    if (this.mode === CS.MODE.OFFLINE) { this.updateOffline(dt); this.updateCrates(dt); }
+    if (this.mode === CS.MODE.OFFLINE && !this._modPickOpen) { this.updateOffline(dt); this.updateCrates(dt); }
 
     // ---- AI ----
     if (this.horde) this.horde.update(dt, p);

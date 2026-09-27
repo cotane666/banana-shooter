@@ -22,7 +22,7 @@ const UI = {
       'matchEnd', 'meTitle', 'meWinner', 'meScore', 'meDetail', 'btnMatchAgain', 'btnMatchMenu',
       'mapChips', 'playerChips', 'hpChips', 'hordeChips', 'lobbyMaps', 'lobbyPlayers', 'lobbyHp', 'lobbyFree', 'lobbyRounds',
       'offCountChips', 'offHpChips', 'offFreeChips', 'custom', 'lobbyShop', 'lobbyShopItems',
-      'medkitTag', 'droneTag', 'shieldTag', 'missileHud', 'mhTime', 'mhReadout',
+      'medkitTag', 'droneTag', 'shieldTag', 'heatTag', 'missileHud', 'mhTime', 'mhReadout',
       'sdScreen', 'sdGrid', 'sdSearch', 'sdToggle2', 'sdClose', 'sdConfig'];
     ids.forEach(i => this.el[i] = $(i));
     this.buildBuyCats();
@@ -372,6 +372,18 @@ const UI = {
       }
     }
 
+    // laser cannon heat, shown while it is the held weapon
+    if (e.heatTag) {
+      const held = !!(p.slot === 2 && p.inv[2] && p.inv[2].id === 'laserCannon');
+      e.heatTag.classList.toggle('hidden', !held);
+      if (held) {
+        const d = WEAPONS.laserCannon;
+        const left = Math.max(0, (d.beamMax || 10) - (p.beamHeat || 0));
+        if (p.beamVent > 0) { e.heatTag.textContent = 'ОСТЫВАЕТ ' + Math.ceil(p.beamVent) + 'с'; e.heatTag.classList.remove('usable'); e.heatTag.classList.add('hot'); }
+        else { e.heatTag.textContent = 'ЛАЗЕР ' + Math.ceil(left) + 'с'; e.heatTag.classList.add('usable'); e.heatTag.classList.remove('hot'); }
+      }
+    }
+
     if (extra) {
       if (extra.timer !== undefined) {
         e.roundTimer.textContent = U.time(extra.timer);
@@ -512,6 +524,7 @@ const UI = {
         if (w.mag !== Infinity) stats.push(['МАГ', w.mag]);
         if (w.pellets) stats.push(['ДРОБЬ', w.pellets]);
         if (w.pierce) stats.push(['ПРОБИВ', 'НАСКВОЗЬ']);
+        if (w.beam) stats.push(['ЛУЧ', w.beamMax + 'с']);
         if (w.splash) stats.push(['РАДИУС', w.splash + 'м']);
         mkCard(id, w.name, w.cat.toUpperCase(), w.price, stats, owned, !free && player.money < w.price,
           () => Bus.emit('buy', id));

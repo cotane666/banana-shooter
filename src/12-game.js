@@ -3449,6 +3449,59 @@ const Game = {
     return v;
   },
 
+  /* ============================================================
+     LASER CANNON: a held, continuous piercing beam
+     Every frame the trigger is held the beam re-traces from the muzzle to the
+     first wall and burns every enemy along the way (damage per second, not per
+     shot). It is drawn by a single persistent mesh in Effects.
+     ============================================================ */
+  updateBeam(dt) {
+    const p = this.player;
+    const def = p.def;
+    const origin = this.eyePos();
+    const dir = this.cameraDir();
+    const muzzle = this.muzzleWorldPos();
+    const maxD = def.range || 200;
+
+    // everything the beam passes through takes damage over time
+    const dps = (def.beamDps || def.dmg) * dt;
+    if (this.horde) {
+      for (const z of this.horde.list) {
+        if (!z.alive || z.dying) continue;
+        const h = rayZombie(origin, dir, z, maxD);
+        if (!h) continue;
+        const hs = h.part === 'head';
+        const dmg = dps * (hs ? (def.headMul || 1) : h.part === 'legs' ? CFG.limbMultiplier : 1);
+        z.takeDamage(dmg, h.part, dir);
+        p.damageDealt += dmg;
+      }
+    }
+    if (this.mode === CS.MODE.ONLINE) {
+      for (const rp of this.remotePlayers) {
+        if (!rp.alive) continue;
+        const h = this.rayRemotePlayerFor(rp, origin, dir, maxD);
+        if (!h) continue;
+        const hs = h.part === 'head';
+        const dmg = dps * (hs ? (def.headMul || CFG.headshotMultiplier) : h.part === 'legs' ? CFG.limbMultiplier : 1);
+        this.sendPvpHit(dmg, h.part, hs, rp);
+      }
+    }
+
+    // the beam stops on the first solid wall
+    const wallHits = this.world.raycastAll(origin, dir, maxD);
+    let beamEnd = this.eyePos();
+    beamEnd.x += dir.x * maxD; beamEnd.y += dir.y * maxD; beamEnd.z += dir.z * maxD;
+    if (wallHits.length) beamEnd = wallHits[0].point;
+    if (this.effects) this.effects.holdBeam(muzzle, beamEnd, def.beamColor);
+    p.bulletsFired += dt * 20;           // counts as fire for the HUD/statistics
+    UI.hitmark(false);
+    this._hitmarkT = U.now();
+  },
+
+  stopBeam() {
+    if (this.effects) this.effects.endBeam();
+  },
+
   fire() {
     const p = this.player, w = p.weapon;
     if (!w || !p.canFire()) {
@@ -4944,21 +4997,29 @@ const Game = {
     // ---- shooting ----
     // Firing is only allowed once the match is live: not during the buy phase
     // and not while the buy menu is open.
+    const beamReady = p.def && p.def.beam && p.spinT > .85 && p.beamVent <= 0;
     if (p.alive && !this.buyOpen && this.roundState === 'live') {
       const def = p.def;
-      if (def.auto || def.slot === 3 || held) {
-        // automatic weapons fire continuously while held; with a continuous
-        // touch source the semi latch is cleared so every weapon repeats
-        if (held) p._semiLatch = false;
-        if (p.triggerDown) this.fire();
-      } else if (p.triggerDown && !p._semiLatch) {
-        // semi-auto fallback for synthetic input (tests/replays) and retry after
-        // a deploy/reload; a real mouse press already fires and sets the latch
-        if (this.fire()) p._semiLatch = true;
+      if (def.beam && p.triggerDown && beamReady) {
+        // held fire: a continuous piercing beam instead of bullets
+        this.updateBeam(dt);
+      } else {
+        if (def.beam) this.stopBeam();
+        if (def.auto || def.slot === 3 || held) {
+          // automatic weapons fire continuously while held; with a continuous
+          // touch source the semi latch is cleared so every weapon repeats
+          if (held) p._semiLatch = false;
+          if (p.triggerDown) this.fire();
+        } else if (p.triggerDown && !p._semiLatch) {
+          // semi-auto fallback for synthetic input (tests/replays) and retry after
+          // a deploy/reload; a real mouse press already fires and sets the latch
+          if (this.fire()) p._semiLatch = true;
+        }
       }
       if (!p.triggerDown) p._semiLatch = false;
-    } else if (!p.triggerDown) {
-      p._semiLatch = false;
+    } else {
+      if (p.def && p.def.beam) this.stopBeam();
+      if (!p.triggerDown) p._semiLatch = false;
     }
 
     // ---- movement is frozen during the buy phase (CS-style freeze time) ----

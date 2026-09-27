@@ -213,6 +213,15 @@ const WEAPONS = {
            auto: true, spread: .004, moveSpread: .030, recoil: 1.4, falloff: .98, range: 220, headMul: 1.8,
            sound: 'laser', pierce: true },
 
+  /* ---------------- heavy: continuous laser cannon ----------------
+     Hold fire: the barrel cluster spins up, then a piercing beam erupts and
+     burns everything along the line. It can only burn for `beamMax` seconds
+     before it overheats and vents for `beamVent` seconds. */
+  laserCannon: { name: 'ЛАЗЕРНАЯ ПУШКА', cat: 'heavy', slot: 2, price: 18000, dmg: 320, rpm: 60, mag: Infinity, reserve: 0,
+           auto: true, spread: .005, moveSpread: .020, recoil: 0, falloff: .98, range: 220, headMul: 1.6,
+           sound: 'laser', pierce: true, spinUp: .45,
+           beam: true, beamMax: 10, beamVent: 3.5, beamDps: 320, beamColor: 0xff6a2a },
+
   /* ---------------- heavy: atomic "freedom" RPG ---------------- */
   atomicRpg: { name: 'АТОМНОЕ РПГ СВОБОДЫ', cat: 'heavy', slot: 2, price: 20000, dmg: 1300, rpm: 34, mag: 1, reserve: 20,
          auto: false, spread: .006, moveSpread: .070, recoil: 7.3, falloff: .99, range: 260, headMul: 1.2,

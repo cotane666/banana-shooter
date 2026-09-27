@@ -109,6 +109,47 @@ class Effects {
     if (hit) hit.material = this._tintMat(0x39ff6a, true);
   }
 
+  /* ---------- continuous beam (laser cannon) ----------
+     One persistent mesh per colour, repositioned every frame while the trigger
+     is held. `hold` keeps it alive for this frame; without it the beam hides. */
+  holdBeam(from, to, color) {
+    if (!this._beam) {
+      this._beam = new THREE.Group();
+      // hot white-ish core
+      this._beamCore = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 1, 10),
+        new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: .95, blending: THREE.AdditiveBlending, depthWrite: false }));
+      // coloured body
+      this._beamBody = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 1, 12),
+        new THREE.MeshBasicMaterial({ color: 0xff6a2a, transparent: true, opacity: .6, blending: THREE.AdditiveBlending, depthWrite: false }));
+      // soft wide halo
+      this._beamGlow = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 1, 12),
+        new THREE.MeshBasicMaterial({ color: 0xff6a2a, transparent: true, opacity: .26, blending: THREE.AdditiveBlending, depthWrite: false }));
+      for (const m of [this._beamCore, this._beamBody, this._beamGlow]) m.renderOrder = 3;
+      this._beam.add(this._beamGlow); this._beam.add(this._beamBody); this._beam.add(this._beamCore);
+      this.scene.add(this._beam);
+    }
+    const dx = to.x - from.x, dy = to.y - from.y, dz = to.z - from.z;
+    const len = Math.sqrt(dx * dx + dy * dy + dz * dz);
+    if (len < .05) { this._beam.visible = false; return; }
+    this._beam.visible = true;
+    const mid = { x: (from.x + to.x) / 2, y: (from.y + to.y) / 2, z: (from.z + to.z) / 2 };
+    const layers = [[this._beamCore, .028, .95], [this._beamBody, .075, .6], [this._beamGlow, .16, .26]];
+    for (const [m, r, op] of layers) {
+      m.position.set(mid.x, mid.y, mid.z);
+      m.scale.set(r, len, r);
+      m.lookAt(to.x, to.y, to.z);
+      m.rotateX(Math.PI / 2);
+      m.material.opacity = op;
+    }
+    const c = color || 0xff6a2a;
+    this._beamBody.material.color.setHex(c);
+    this._beamGlow.material.color.setHex(c);
+    // sparks at the point of contact, refreshed every frame
+    this.particle(to.x, to.y, to.z, U.rand(-3, 3), U.rand(2, 8), U.rand(-3, 3), U.rand(.08, .2), 'spark', U.rand(.15, .35));
+  }
+
+  endBeam() { if (this._beam) this._beam.visible = false; }
+
   /* ---------- particles ---------- */
   particle(x, y, z, vx, vy, vz, size, type, life) {
     if (this.particles.length > this.maxParticles) return null;
@@ -467,6 +508,11 @@ class Effects {
     this.particles.length = 0;
     this.decals.forEach(d => this.scene.remove(d));
     this.decals.length = 0;
+    if (this._beam) {
+      this._beam.traverse(o => { if (o.geometry) o.geometry.dispose(); });
+      if (this._beam.parent) this._beam.parent.remove(this._beam);
+      this._beam = null;
+    }
     if (this.tracerPool.length > 80) this.tracerPool.length = 80;
     if (this.particlePool.length > 300) this.particlePool.length = 300;
   }

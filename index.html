@@ -199,6 +199,8 @@ kbd{background:#0c0f12;border:1px solid var(--line);border-bottom:2px solid #333
 .geartag.usable{color:#12161a;background:var(--green);border-color:var(--green)}
 #droneTag.usable{background:var(--blue);border-color:var(--blue)}
 #shieldTag.usable{background:var(--blue);border-color:var(--blue)}
+#heatTag.usable{background:var(--or);border-color:var(--or)}
+#heatTag.hot{background:var(--red);border-color:var(--red);color:#fff;animation:pulse .5s infinite}
 
 .hud-tr{position:absolute;right:22px;top:18px;text-align:right}
 .money{font-size:26px;font-weight:900;color:var(--green);text-shadow:0 2px 10px #000;letter-spacing:1px}
@@ -924,6 +926,7 @@ html.touch .fld input{padding:10px;font-size:15px}
       <span id="medkitTag" class="geartag hidden">АПТЕЧКА ×2</span>
       <span id="droneTag" class="geartag hidden">ДРОН</span>
       <span id="shieldTag" class="geartag hidden">ЩИТ</span>
+      <span id="heatTag" class="geartag hidden">ЛАЗЕР</span>
     </div>
   </div>
 
@@ -1336,6 +1339,15 @@ const WEAPONS = {
   laser: { name: 'ЛАЗЕРНАЯ ВИНТОВКА', cat: 'heavy', slot: 2, price: 16500, dmg: 150, rpm: 240, mag: 30, reserve: 120,
            auto: true, spread: .004, moveSpread: .030, recoil: 1.4, falloff: .98, range: 220, headMul: 1.8,
            sound: 'laser', pierce: true },
+
+  /* ---------------- heavy: continuous laser cannon ----------------
+     Hold fire: the barrel cluster spins up, then a piercing beam erupts and
+     burns everything along the line. It can only burn for `beamMax` seconds
+     before it overheats and vents for `beamVent` seconds. */
+  laserCannon: { name: 'ЛАЗЕРНАЯ ПУШКА', cat: 'heavy', slot: 2, price: 18000, dmg: 320, rpm: 60, mag: Infinity, reserve: 0,
+           auto: true, spread: .005, moveSpread: .020, recoil: 0, falloff: .98, range: 220, headMul: 1.6,
+           sound: 'laser', pierce: true, spinUp: .45,
+           beam: true, beamMax: 10, beamVent: 3.5, beamDps: 320, beamColor: 0xff6a2a },
 
   /* ---------------- heavy: atomic "freedom" RPG ---------------- */
   atomicRpg: { name: 'АТОМНОЕ РПГ СВОБОДЫ', cat: 'heavy', slot: 2, price: 20000, dmg: 1300, rpm: 34, mag: 1, reserve: 20,
@@ -3920,6 +3932,54 @@ function buildWeaponModel(id) {
       break;
     }
 
+    /* ---------------- ЛАЗЕРНАЯ ПУШКА: spinning continuous-beam cannon ----------------
+       A long olive-grey frame with a red-hot barrel cluster on a spinning hub,
+       a glowing core and a big rear heat-sink. The cluster is its own named group
+       so it can whir up while the trigger is held (see applyBarrelSpin). */
+    case 'laserCannon': {
+      const OLIV = 0xa7ac96, OLIV2 = 0x8a8f78, DARK = 0x2a2e26, HOT = 0xff5a2a, GLOW = 0xffb060;
+      add(B(.130, .115, .96, OLIV, 0, .010, -.36));                 // long slab body
+      add(B(.105, .070, .34, OLIV2, 0, .072, -.30));                // top housing
+      add(B(.120, .090, .12, OLIV2, 0, -.040, -.66));               // front block
+      add(B(.126, .020, .74, OLIV2, 0, -.050, -.30));               // under-rail
+      // the glowing heat channel that runs down the body
+      add(B(.070, .042, .60, HOT, 0, .010, -.40));
+      add(B(.050, .026, .52, GLOW, 0, .010, -.36));
+      // barrel cluster on its own spinning hub
+      const barrels = new THREE.Group();
+      for (let i = 0; i < 6; i++) {
+        const a = (i / 6) * Math.PI * 2;
+        barrels.add(CYL(.017, .70, PAL.steel, Math.cos(a) * .042, Math.sin(a) * .042, -.88, 8));
+        barrels.add(CYL(.022, .06, HOT, Math.cos(a) * .042, Math.sin(a) * .042, -1.18, 8));
+      }
+      barrels.add(CYL(.058, .10, PAL.black, 0, 0, -.58, 12));       // hub
+      barrels.add(CYL(.062, .07, HOT, 0, 0, -1.22, 12));            // muzzle ring
+      barrels.name = 'barrels';
+      g.add(barrels);
+      // cooling fins along the barrel shroud
+      for (let i = 0; i < 7; i++) add(B(.100, .020, .016, DARK, 0, .048, -.62 - i * .055));
+      // the big red lens at the receiver
+      const lensHub = new THREE.Group();
+      lensHub.add(CYL(.085, .05, DARK, 0, .012, -.30, 14));
+      const lens = new THREE.Mesh(new THREE.SphereGeometry(.052, 10, 8),
+        new THREE.MeshBasicMaterial({ color: 0xff3a2a }));
+      lens.position.set(0, .012, -.315);
+      lensHub.add(lens);
+      const lensRing = new THREE.Mesh(new THREE.TorusGeometry(.078, .012, 8, 16),
+        new THREE.MeshBasicMaterial({ color: 0xffd0a0 }));
+      lensRing.position.set(0, .012, -.29);
+      lensHub.add(lensRing);
+      g.add(lensHub);
+      // front sight + rear heat-sink
+      add(B(.022, .060, .024, DARK, 0, .108, -.78));
+      add(B(.026, .026, .026, HOT, 0, .118, -.74));
+      add(B(.135, .150, .10, DARK, 0, .000, .14));                  // rear heat-sink block
+      add(B(.100, .110, .06, OLIV2, 0, .000, .22));
+      // grip + trigger
+      add(B(.048, .130, .058, DARK, 0, -.095, -.08, .18));
+      break;
+    }
+
     /* ---------------- АТОМНОЕ РПГ СВОБОДЫ: bulky green launcher ---------------- */
     case 'atomicRpg': {
       const GREEN = 0x2f7d3a, GREEN2 = 0x1c4f24, DARK = 0x14181c, GLOW = 0x39ff5a;
@@ -4142,6 +4202,7 @@ const MUZZLE_Z = {
   negev: -0.86,
   minigun: -0.98, rpg: -1.20,
   laser: -0.98, atomicRpg: -1.06, yhs: -1.16,
+  laserCannon: -1.24,
   rocketgun: -0.94, shield: -0.30,
   banana: -0.92
 };
@@ -4428,6 +4489,9 @@ class Player {
     this.spinT = 0;           // minigun spin-up (0..1)
     this.spinPhase = 0;       // accumulated barrel-cluster rotation (radians)
     this._spinSnd = false;
+    // laser cannon: continuous-beam heat
+    this.beamHeat = 0;        // seconds the beam has burned (per trigger-pull)
+    this.beamVent = 0;        // seconds still venting after an overheat
     this.climbing = false;    // mid-vault onto a ledge
     this.climbT = 0;
     this.climbDur = CFG.climbDuration;
@@ -4857,6 +4921,24 @@ class Player {
     } else {
       this.spinT = 0;
     }
+    // laser cannon heat: burn while the beam is up, vent when it is not
+    if (def.beam) {
+      if (this.beamVent > 0) {
+        this.beamVent = Math.max(0, this.beamVent - dt);
+        this.beamHeat = 0;
+      } else if (this.triggerDown && this.spinT > .85 && this.reloadT <= 0 && this.deployT <= 0 && this.weapon.mag > 0) {
+        this.beamHeat += dt;
+        if (this.beamHeat >= (def.beamMax || 10)) {
+          this.beamHeat = 0;                       // overheat — forced vent
+          this.beamVent = def.beamVent || 3.5;
+          if (this.isLocal) { Audio3D_SFX.deny(); UI.toast('ПЕРЕГРЕВ · остывает', '#e33a2e'); }
+        }
+      } else {
+        this.beamHeat = Math.max(0, this.beamHeat - dt * 2.5);   // cools off fast between bursts
+      }
+    } else {
+      this.beamHeat = 0; this.beamVent = 0;
+    }
 
     if (this.flashT > 0) {
       this.flashT -= dt;
@@ -4884,6 +4966,7 @@ class Player {
     const w = this.weapon; if (!w) return false;
     if (!this.alive) return false;
     if (this.def.spinUp && this.spinT < 1) return false;   // minigun must wind up
+    if (this.def.beam && this.beamVent > 0) return false;  // laser cannon is venting
     if (this.fireCd > 0 || this.reloadT > 0 || this.deployT > 0) return false;
     if (w.mag <= 0) return false;
     return true;
@@ -6287,6 +6370,47 @@ class Effects {
     if (hit) hit.material = this._tintMat(0x39ff6a, true);
   }
 
+  /* ---------- continuous beam (laser cannon) ----------
+     One persistent mesh per colour, repositioned every frame while the trigger
+     is held. `hold` keeps it alive for this frame; without it the beam hides. */
+  holdBeam(from, to, color) {
+    if (!this._beam) {
+      this._beam = new THREE.Group();
+      // hot white-ish core
+      this._beamCore = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 1, 10),
+        new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: .95, blending: THREE.AdditiveBlending, depthWrite: false }));
+      // coloured body
+      this._beamBody = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 1, 12),
+        new THREE.MeshBasicMaterial({ color: 0xff6a2a, transparent: true, opacity: .6, blending: THREE.AdditiveBlending, depthWrite: false }));
+      // soft wide halo
+      this._beamGlow = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 1, 12),
+        new THREE.MeshBasicMaterial({ color: 0xff6a2a, transparent: true, opacity: .26, blending: THREE.AdditiveBlending, depthWrite: false }));
+      for (const m of [this._beamCore, this._beamBody, this._beamGlow]) m.renderOrder = 3;
+      this._beam.add(this._beamGlow); this._beam.add(this._beamBody); this._beam.add(this._beamCore);
+      this.scene.add(this._beam);
+    }
+    const dx = to.x - from.x, dy = to.y - from.y, dz = to.z - from.z;
+    const len = Math.sqrt(dx * dx + dy * dy + dz * dz);
+    if (len < .05) { this._beam.visible = false; return; }
+    this._beam.visible = true;
+    const mid = { x: (from.x + to.x) / 2, y: (from.y + to.y) / 2, z: (from.z + to.z) / 2 };
+    const layers = [[this._beamCore, .028, .95], [this._beamBody, .075, .6], [this._beamGlow, .16, .26]];
+    for (const [m, r, op] of layers) {
+      m.position.set(mid.x, mid.y, mid.z);
+      m.scale.set(r, len, r);
+      m.lookAt(to.x, to.y, to.z);
+      m.rotateX(Math.PI / 2);
+      m.material.opacity = op;
+    }
+    const c = color || 0xff6a2a;
+    this._beamBody.material.color.setHex(c);
+    this._beamGlow.material.color.setHex(c);
+    // sparks at the point of contact, refreshed every frame
+    this.particle(to.x, to.y, to.z, U.rand(-3, 3), U.rand(2, 8), U.rand(-3, 3), U.rand(.08, .2), 'spark', U.rand(.15, .35));
+  }
+
+  endBeam() { if (this._beam) this._beam.visible = false; }
+
   /* ---------- particles ---------- */
   particle(x, y, z, vx, vy, vz, size, type, life) {
     if (this.particles.length > this.maxParticles) return null;
@@ -6645,6 +6769,11 @@ class Effects {
     this.particles.length = 0;
     this.decals.forEach(d => this.scene.remove(d));
     this.decals.length = 0;
+    if (this._beam) {
+      this._beam.traverse(o => { if (o.geometry) o.geometry.dispose(); });
+      if (this._beam.parent) this._beam.parent.remove(this._beam);
+      this._beam = null;
+    }
     if (this.tracerPool.length > 80) this.tracerPool.length = 80;
     if (this.particlePool.length > 300) this.particlePool.length = 300;
   }
@@ -6676,7 +6805,7 @@ const UI = {
       'matchEnd', 'meTitle', 'meWinner', 'meScore', 'meDetail', 'btnMatchAgain', 'btnMatchMenu',
       'mapChips', 'playerChips', 'hpChips', 'hordeChips', 'lobbyMaps', 'lobbyPlayers', 'lobbyHp', 'lobbyFree', 'lobbyRounds',
       'offCountChips', 'offHpChips', 'offFreeChips', 'custom', 'lobbyShop', 'lobbyShopItems',
-      'medkitTag', 'droneTag', 'shieldTag', 'missileHud', 'mhTime', 'mhReadout',
+      'medkitTag', 'droneTag', 'shieldTag', 'heatTag', 'missileHud', 'mhTime', 'mhReadout',
       'sdScreen', 'sdGrid', 'sdSearch', 'sdToggle2', 'sdClose', 'sdConfig'];
     ids.forEach(i => this.el[i] = $(i));
     this.buildBuyCats();
@@ -7026,6 +7155,18 @@ const UI = {
       }
     }
 
+    // laser cannon heat, shown while it is the held weapon
+    if (e.heatTag) {
+      const held = !!(p.slot === 2 && p.inv[2] && p.inv[2].id === 'laserCannon');
+      e.heatTag.classList.toggle('hidden', !held);
+      if (held) {
+        const d = WEAPONS.laserCannon;
+        const left = Math.max(0, (d.beamMax || 10) - (p.beamHeat || 0));
+        if (p.beamVent > 0) { e.heatTag.textContent = 'ОСТЫВАЕТ ' + Math.ceil(p.beamVent) + 'с'; e.heatTag.classList.remove('usable'); e.heatTag.classList.add('hot'); }
+        else { e.heatTag.textContent = 'ЛАЗЕР ' + Math.ceil(left) + 'с'; e.heatTag.classList.add('usable'); e.heatTag.classList.remove('hot'); }
+      }
+    }
+
     if (extra) {
       if (extra.timer !== undefined) {
         e.roundTimer.textContent = U.time(extra.timer);
@@ -7166,6 +7307,7 @@ const UI = {
         if (w.mag !== Infinity) stats.push(['МАГ', w.mag]);
         if (w.pellets) stats.push(['ДРОБЬ', w.pellets]);
         if (w.pierce) stats.push(['ПРОБИВ', 'НАСКВОЗЬ']);
+        if (w.beam) stats.push(['ЛУЧ', w.beamMax + 'с']);
         if (w.splash) stats.push(['РАДИУС', w.splash + 'м']);
         mkCard(id, w.name, w.cat.toUpperCase(), w.price, stats, owned, !free && player.money < w.price,
           () => Bus.emit('buy', id));
@@ -11509,6 +11651,59 @@ const Game = {
     return v;
   },
 
+  /* ============================================================
+     LASER CANNON: a held, continuous piercing beam
+     Every frame the trigger is held the beam re-traces from the muzzle to the
+     first wall and burns every enemy along the way (damage per second, not per
+     shot). It is drawn by a single persistent mesh in Effects.
+     ============================================================ */
+  updateBeam(dt) {
+    const p = this.player;
+    const def = p.def;
+    const origin = this.eyePos();
+    const dir = this.cameraDir();
+    const muzzle = this.muzzleWorldPos();
+    const maxD = def.range || 200;
+
+    // everything the beam passes through takes damage over time
+    const dps = (def.beamDps || def.dmg) * dt;
+    if (this.horde) {
+      for (const z of this.horde.list) {
+        if (!z.alive || z.dying) continue;
+        const h = rayZombie(origin, dir, z, maxD);
+        if (!h) continue;
+        const hs = h.part === 'head';
+        const dmg = dps * (hs ? (def.headMul || 1) : h.part === 'legs' ? CFG.limbMultiplier : 1);
+        z.takeDamage(dmg, h.part, dir);
+        p.damageDealt += dmg;
+      }
+    }
+    if (this.mode === CS.MODE.ONLINE) {
+      for (const rp of this.remotePlayers) {
+        if (!rp.alive) continue;
+        const h = this.rayRemotePlayerFor(rp, origin, dir, maxD);
+        if (!h) continue;
+        const hs = h.part === 'head';
+        const dmg = dps * (hs ? (def.headMul || CFG.headshotMultiplier) : h.part === 'legs' ? CFG.limbMultiplier : 1);
+        this.sendPvpHit(dmg, h.part, hs, rp);
+      }
+    }
+
+    // the beam stops on the first solid wall
+    const wallHits = this.world.raycastAll(origin, dir, maxD);
+    let beamEnd = this.eyePos();
+    beamEnd.x += dir.x * maxD; beamEnd.y += dir.y * maxD; beamEnd.z += dir.z * maxD;
+    if (wallHits.length) beamEnd = wallHits[0].point;
+    if (this.effects) this.effects.holdBeam(muzzle, beamEnd, def.beamColor);
+    p.bulletsFired += dt * 20;           // counts as fire for the HUD/statistics
+    UI.hitmark(false);
+    this._hitmarkT = U.now();
+  },
+
+  stopBeam() {
+    if (this.effects) this.effects.endBeam();
+  },
+
   fire() {
     const p = this.player, w = p.weapon;
     if (!w || !p.canFire()) {
@@ -13004,21 +13199,29 @@ const Game = {
     // ---- shooting ----
     // Firing is only allowed once the match is live: not during the buy phase
     // and not while the buy menu is open.
+    const beamReady = p.def && p.def.beam && p.spinT > .85 && p.beamVent <= 0;
     if (p.alive && !this.buyOpen && this.roundState === 'live') {
       const def = p.def;
-      if (def.auto || def.slot === 3 || held) {
-        // automatic weapons fire continuously while held; with a continuous
-        // touch source the semi latch is cleared so every weapon repeats
-        if (held) p._semiLatch = false;
-        if (p.triggerDown) this.fire();
-      } else if (p.triggerDown && !p._semiLatch) {
-        // semi-auto fallback for synthetic input (tests/replays) and retry after
-        // a deploy/reload; a real mouse press already fires and sets the latch
-        if (this.fire()) p._semiLatch = true;
+      if (def.beam && p.triggerDown && beamReady) {
+        // held fire: a continuous piercing beam instead of bullets
+        this.updateBeam(dt);
+      } else {
+        if (def.beam) this.stopBeam();
+        if (def.auto || def.slot === 3 || held) {
+          // automatic weapons fire continuously while held; with a continuous
+          // touch source the semi latch is cleared so every weapon repeats
+          if (held) p._semiLatch = false;
+          if (p.triggerDown) this.fire();
+        } else if (p.triggerDown && !p._semiLatch) {
+          // semi-auto fallback for synthetic input (tests/replays) and retry after
+          // a deploy/reload; a real mouse press already fires and sets the latch
+          if (this.fire()) p._semiLatch = true;
+        }
       }
       if (!p.triggerDown) p._semiLatch = false;
-    } else if (!p.triggerDown) {
-      p._semiLatch = false;
+    } else {
+      if (p.def && p.def.beam) this.stopBeam();
+      if (!p.triggerDown) p._semiLatch = false;
     }
 
     // ---- movement is frozen during the buy phase (CS-style freeze time) ----

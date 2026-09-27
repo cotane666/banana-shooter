@@ -425,6 +425,54 @@ function buildWeaponModel(id) {
       break;
     }
 
+    /* ---------------- ЛАЗЕРНАЯ ПУШКА: spinning continuous-beam cannon ----------------
+       A long olive-grey frame with a red-hot barrel cluster on a spinning hub,
+       a glowing core and a big rear heat-sink. The cluster is its own named group
+       so it can whir up while the trigger is held (see applyBarrelSpin). */
+    case 'laserCannon': {
+      const OLIV = 0xa7ac96, OLIV2 = 0x8a8f78, DARK = 0x2a2e26, HOT = 0xff5a2a, GLOW = 0xffb060;
+      add(B(.130, .115, .96, OLIV, 0, .010, -.36));                 // long slab body
+      add(B(.105, .070, .34, OLIV2, 0, .072, -.30));                // top housing
+      add(B(.120, .090, .12, OLIV2, 0, -.040, -.66));               // front block
+      add(B(.126, .020, .74, OLIV2, 0, -.050, -.30));               // under-rail
+      // the glowing heat channel that runs down the body
+      add(B(.070, .042, .60, HOT, 0, .010, -.40));
+      add(B(.050, .026, .52, GLOW, 0, .010, -.36));
+      // barrel cluster on its own spinning hub
+      const barrels = new THREE.Group();
+      for (let i = 0; i < 6; i++) {
+        const a = (i / 6) * Math.PI * 2;
+        barrels.add(CYL(.017, .70, PAL.steel, Math.cos(a) * .042, Math.sin(a) * .042, -.88, 8));
+        barrels.add(CYL(.022, .06, HOT, Math.cos(a) * .042, Math.sin(a) * .042, -1.18, 8));
+      }
+      barrels.add(CYL(.058, .10, PAL.black, 0, 0, -.58, 12));       // hub
+      barrels.add(CYL(.062, .07, HOT, 0, 0, -1.22, 12));            // muzzle ring
+      barrels.name = 'barrels';
+      g.add(barrels);
+      // cooling fins along the barrel shroud
+      for (let i = 0; i < 7; i++) add(B(.100, .020, .016, DARK, 0, .048, -.62 - i * .055));
+      // the big red lens at the receiver
+      const lensHub = new THREE.Group();
+      lensHub.add(CYL(.085, .05, DARK, 0, .012, -.30, 14));
+      const lens = new THREE.Mesh(new THREE.SphereGeometry(.052, 10, 8),
+        new THREE.MeshBasicMaterial({ color: 0xff3a2a }));
+      lens.position.set(0, .012, -.315);
+      lensHub.add(lens);
+      const lensRing = new THREE.Mesh(new THREE.TorusGeometry(.078, .012, 8, 16),
+        new THREE.MeshBasicMaterial({ color: 0xffd0a0 }));
+      lensRing.position.set(0, .012, -.29);
+      lensHub.add(lensRing);
+      g.add(lensHub);
+      // front sight + rear heat-sink
+      add(B(.022, .060, .024, DARK, 0, .108, -.78));
+      add(B(.026, .026, .026, HOT, 0, .118, -.74));
+      add(B(.135, .150, .10, DARK, 0, .000, .14));                  // rear heat-sink block
+      add(B(.100, .110, .06, OLIV2, 0, .000, .22));
+      // grip + trigger
+      add(B(.048, .130, .058, DARK, 0, -.095, -.08, .18));
+      break;
+    }
+
     /* ---------------- АТОМНОЕ РПГ СВОБОДЫ: bulky green launcher ---------------- */
     case 'atomicRpg': {
       const GREEN = 0x2f7d3a, GREEN2 = 0x1c4f24, DARK = 0x14181c, GLOW = 0x39ff5a;
@@ -647,6 +695,7 @@ const MUZZLE_Z = {
   negev: -0.86,
   minigun: -0.98, rpg: -1.20,
   laser: -0.98, atomicRpg: -1.06, yhs: -1.16,
+  laserCannon: -1.24,
   rocketgun: -0.94, shield: -0.30,
   banana: -0.92
 };
@@ -933,6 +982,9 @@ class Player {
     this.spinT = 0;           // minigun spin-up (0..1)
     this.spinPhase = 0;       // accumulated barrel-cluster rotation (radians)
     this._spinSnd = false;
+    // laser cannon: continuous-beam heat
+    this.beamHeat = 0;        // seconds the beam has burned (per trigger-pull)
+    this.beamVent = 0;        // seconds still venting after an overheat
     this.climbing = false;    // mid-vault onto a ledge
     this.climbT = 0;
     this.climbDur = CFG.climbDuration;
@@ -1362,6 +1414,24 @@ class Player {
     } else {
       this.spinT = 0;
     }
+    // laser cannon heat: burn while the beam is up, vent when it is not
+    if (def.beam) {
+      if (this.beamVent > 0) {
+        this.beamVent = Math.max(0, this.beamVent - dt);
+        this.beamHeat = 0;
+      } else if (this.triggerDown && this.spinT > .85 && this.reloadT <= 0 && this.deployT <= 0 && this.weapon.mag > 0) {
+        this.beamHeat += dt;
+        if (this.beamHeat >= (def.beamMax || 10)) {
+          this.beamHeat = 0;                       // overheat — forced vent
+          this.beamVent = def.beamVent || 3.5;
+          if (this.isLocal) { Audio3D_SFX.deny(); UI.toast('ПЕРЕГРЕВ · остывает', '#e33a2e'); }
+        }
+      } else {
+        this.beamHeat = Math.max(0, this.beamHeat - dt * 2.5);   // cools off fast between bursts
+      }
+    } else {
+      this.beamHeat = 0; this.beamVent = 0;
+    }
 
     if (this.flashT > 0) {
       this.flashT -= dt;
@@ -1389,6 +1459,7 @@ class Player {
     const w = this.weapon; if (!w) return false;
     if (!this.alive) return false;
     if (this.def.spinUp && this.spinT < 1) return false;   // minigun must wind up
+    if (this.def.beam && this.beamVent > 0) return false;  // laser cannon is venting
     if (this.fireCd > 0 || this.reloadT > 0 || this.deployT > 0) return false;
     if (w.mag <= 0) return false;
     return true;

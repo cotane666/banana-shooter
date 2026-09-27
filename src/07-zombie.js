@@ -149,6 +149,76 @@ function buildZombieMesh(type) {
     cannon.position.set(.55, 1.52, -.30);
     g.add(cannon);
     parts.cannon = cannon;
+  } else if (type === 'digger') {
+    /* КОПАТЕЛЬ: hunched, clawed, dirt-caked burrower */
+    torso.rotation.x = .75;
+    head.position.set(0, 1.16, .40);
+    armL.position.set(-.34, .82, .18); armR.position.set(.34, .82, .18);
+    armL.scale.set(1.3, 1.15, 1.3); armR.scale.set(1.3, 1.15, 1.3);
+    const clawMat = new THREE.MeshLambertMaterial({ color: 0xcbb48a, emissive: 0x1a1408 });
+    [-1, 1].forEach(sgn => {
+      const claw = new THREE.Mesh(new THREE.ConeGeometry(.06, .28, 5), clawMat);
+      claw.position.set(sgn * .34, .48, .30); claw.rotation.x = 1.4;
+      g.add(claw);
+    });
+    // a dirt mound hump on the back
+    const hump = new THREE.Mesh(new THREE.SphereGeometry(.30, 8, 6),
+      new THREE.MeshLambertMaterial({ color: 0x4a3a22 }));
+    hump.position.set(0, 1.25, .18); hump.scale.set(1.1, .65, 1.2); hump.rotation.x = .75;
+    g.add(hump);
+  } else if (type === 'splitter') {
+    /* ДЕЛЯЩИЙСЯ: bloated, lumpy, ready to burst */
+    chest.scale.set(1.25, 1.2, 1.25);
+    pelvis.scale.set(1.15, 1.05, 1.15);
+    const lumpMat = new THREE.MeshLambertMaterial({ color: 0x8f4a6a, emissive: 0x200812 });
+    for (let i = 0; i < 5; i++) {
+      const a = i / 5 * Math.PI * 2;
+      const lump = new THREE.Mesh(new THREE.SphereGeometry(U.rand(.12, .20), 7, 6), lumpMat);
+      lump.position.set(Math.cos(a) * .22, .16 + U.rand(-.12, .16), Math.sin(a) * .18 - .12);
+      torso.add(lump);
+    }
+    head.scale.set(1.1, 1.1, 1.1);
+  } else if (type === 'healer') {
+    /* ЛЕКАРЬ: robed, with a glowing healing halo */
+    const robe = new THREE.Mesh(new THREE.ConeGeometry(.34, 1.0, 8),
+      new THREE.MeshLambertMaterial({ color: 0x2f6f52 }));
+    robe.position.y = .5; g.add(robe);
+    const halo = new THREE.Mesh(new THREE.TorusGeometry(.22, .03, 6, 16),
+      new THREE.MeshBasicMaterial({ color: 0x6fffa8 }));
+    halo.rotation.x = Math.PI / 2; halo.position.y = 1.82; g.add(halo);
+    const orbMat = new THREE.MeshBasicMaterial({ color: 0x9dffc4 });
+    const orb = new THREE.Mesh(new THREE.SphereGeometry(.09, 8, 6), orbMat);
+    orb.position.set(.30, 1.10, -.10); g.add(orb);
+    parts.halo = halo; parts.orb = orb;
+    chest.material = new THREE.MeshLambertMaterial({ color: 0x356f52 });
+  } else if (type === 'shielder') {
+    /* ЩИТОНОСЕЦ: big front plate, exposed back */
+    chest.scale.set(1.3, 1.15, 1.2);
+    const plateMat = new THREE.MeshLambertMaterial({ color: 0x7a8aa8, emissive: 0x0a0e16 });
+    const plate = new THREE.Mesh(new THREE.BoxGeometry(1.0, 1.5, .10), plateMat);
+    plate.position.set(0, 1.05, -.42); plate.rotation.x = .06; g.add(plate);
+    const rim = new THREE.Mesh(new THREE.BoxGeometry(1.04, .10, .14), plateMat);
+    rim.position.set(0, 1.78, -.42); g.add(rim);
+    const boss = new THREE.Mesh(new THREE.SphereGeometry(.12, 8, 6),
+      new THREE.MeshBasicMaterial({ color: 0x9ab6e0 }));
+    boss.position.set(0, 1.05, -.50); g.add(boss);
+    parts.plate = plate;
+  } else if (type === 'summoner') {
+    /* ПРИЗЫВАТЕЛЬ: tall, horns, a swirling summoning core */
+    chest.scale.set(1.15, 1.15, 1.15);
+    const hornMat = new THREE.MeshLambertMaterial({ color: 0xcfc0e6 });
+    [-1, 1].forEach(sgn => {
+      const horn = new THREE.Mesh(new THREE.ConeGeometry(.05, .34, 6), hornMat);
+      horn.position.set(sgn * .16, 1.80, .02); horn.rotation.z = sgn * -.4;
+      g.add(horn);
+    });
+    const coreMat = new THREE.MeshBasicMaterial({ color: 0xc24bff, transparent: true, opacity: .9 });
+    const core = new THREE.Mesh(new THREE.SphereGeometry(.14, 10, 8), coreMat);
+    core.position.set(0, 1.05, -.30); g.add(core);
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(.30, .03, 6, 18),
+      new THREE.MeshBasicMaterial({ color: 0x9a3aff, transparent: true, opacity: .8 }));
+    ring.position.set(0, 1.05, -.30); g.add(ring);
+    parts.summonCore = core; parts.summonRing = ring;
   } else if (ZOMBIES[type] && ZOMBIES[type].boss) {
     /* Every boss gets its own silhouette so it reads instantly from across the
        arena. Shared base is bulked up first, then the type-specific build adds
@@ -387,6 +457,11 @@ class Zombie {
     this.freezeT = 0;        // seconds of frost left (АБСОЛЮТНЫЙ НОЛЬ)
     this.freezeBank = 0;     // damage stored while frozen, paid out on shatter
     this.portalCd = 0;       // mirror-gate re-teleport cooldown
+    /* special-enemy state (КОПАТЕЛЬ / ЛЕКАРЬ / ПРИЗЫВАТЕЛЬ) */
+    this.burrowT = 0; this.burrowCd = (this.def.burrowCd || 8) * U.rand(.6, 1.1); this.mound = 0; this.emergeT = 0;
+    this.healCd = U.rand(.5, 2.5); this.healPulse = 0; this.healFlash = 0;
+    this.summonCd = U.rand(2, 5); this.summonPulse = 0;
+    this.blockFlash = 0;
 
     this.group = buildZombieMesh(type);
     this.group.scale.setScalar(this.scale);
@@ -430,6 +505,17 @@ class Zombie {
     let dmg = amount * mul;
     // armoured enemies (the robot zombie) soak a share of every hit
     if (this.armor > 0) dmg *= (1 - this.armor);
+    /* ЩИТОНОСЕЦ: a bolt from the front is almost entirely deflected by the plate */
+    if (this.def.frontalShield && fromDir && (fromDir.x || fromDir.z)) {
+      const fx = Math.sin(this.yaw), fz = Math.cos(this.yaw);       // facing away from target
+      const dl = Math.hypot(fromDir.x, fromDir.z) || 1;
+      const dot = (fromDir.x / dl) * fx + (fromDir.z / dl) * fz;    // 1 = hit from directly behind
+      const arc = this.def.shieldArc === undefined ? .6 : this.def.shieldArc;
+      if (dot > arc) {                                              // struck the front plate
+        dmg *= (1 - (this.def.shieldReduction === undefined ? .92 : this.def.shieldReduction));
+        this.blockFlash = .1;
+      }
+    }
     this.health -= dmg;
     this.hitFlash = .12;
     this.staggerT = Math.max(this.staggerT, part === 'head' ? .16 : .07);
@@ -618,8 +704,74 @@ class Zombie {
       }
     }
 
+    /* ЛЕКАРЬ: pulses healing to nearby wounded zombies */
+    if (this.def.heals) {
+      this.healCd -= dt;
+      if (this.healCd <= 0) {
+        let healed = false;
+        const list = ctx.neighbors || [];
+        for (let i = 0; i < list.length; i++) {
+          const o = list[i];
+          if (o === this || !o.alive || o.dying) continue;
+          const d = Math.hypot(o.pos.x - this.pos.x, o.pos.z - this.pos.z);
+          if (d > (this.def.healRange || 9)) continue;
+          if (o.health < o.maxHealth) { o.health = Math.min(o.maxHealth, o.health + (this.def.healAmount || 55)); o.healFlash = .5; healed = true; }
+        }
+        this.healCd = this.def.healCd || 3;
+        this.healPulse = .6;
+        if (healed) Bus.emit('zombieHeal', this);
+      }
+    }
+    /* ПРИЗЫВАТЕЛЬ: spawns a fresh pack around itself */
+    if (this.def.summons) {
+      this.summonCd -= dt;
+      if (this.summonCd <= 0 && ctx.horde) {
+        this.summonCd = this.def.summonCd || 6.5;
+        for (let i = 0; i < (this.def.summonCount || 4); i++) {
+          const a = U.rand(0, 6.28), r = U.rand(1.6, 3.4);
+          let sx = U.clamp(this.pos.x + Math.cos(a) * r, -MAP.size / 2 + 3, MAP.size / 2 - 3);
+          let sz = U.clamp(this.pos.z + Math.sin(a) * r, -MAP.size / 2 + 3, MAP.size / 2 - 3);
+          const sp = ctx.horde.spawn('walker', sx, sz);
+          sp.health = sp.maxHealth = Math.max(30, this.maxHealth * .18);
+        }
+        Bus.emit('zombieSummon', this);
+        this.summonPulse = .7;
+      }
+    }
+    if (this.healFlash > 0) this.healFlash -= dt;
+    if (this.healPulse > 0) this.healPulse -= dt;
+    if (this.summonPulse > 0) this.summonPulse -= dt;
+    this.groundY = this.pos.y;
+
     // ---- gravity & movement ----
     if (!this.onGround) this.vel.y -= CFG.gravity * dt;
+
+    /* КОПАТЕЛЬ: periodically dives under, races to the player and bursts up */
+    if (this.def.burrow) {
+      if (this.burrowT > 0) {
+        this.burrowT -= dt;
+        // submerged: no contact, race straight toward the player
+        const bx = toP.x, bz = toP.z;
+        const bl = Math.hypot(bx, bz) || 1;
+        const bs = this.speed * 2.7;
+        this.pos.x = U.clamp(this.pos.x + (bx / bl) * bs * dt, -MAP.size / 2 + 2, MAP.size / 2 - 2);
+        this.pos.z = U.clamp(this.pos.z + (bz / bl) * bs * dt, -MAP.size / 2 + 2, MAP.size / 2 - 2);
+        this.pos.y = -0.5;
+        if (this.burrowT > .45) this.mound = 1;   // dirt marker while tunnelling
+        if (this.burrowT <= 0) {
+          // emerge BEHIND the player (a spot past them, away from their facing)
+          this.pos.x = U.clamp(player.pos.x + Math.sin(player.yaw) * 2.0, -MAP.size / 2 + 2, MAP.size / 2 - 2);
+          this.pos.z = U.clamp(player.pos.z + Math.cos(player.yaw) * 2.0, -MAP.size / 2 + 2, MAP.size / 2 - 2);
+          this.pos.y = ctx.world.groundAt(this.pos.x, this.pos.z, 3) || 0;
+          this.mound = 0; this.emergeT = .25;
+          this.attackCd = 0;
+        }
+        this.applyVisual(dt, bs);
+        return;
+      }
+      this.burrowCd -= dt;
+      if (this.burrowCd <= 0 && distXZ > 4 && distXZ < 30) { this.burrowT = 1.1; this.burrowCd = this.def.burrowCd || 8; this.mound = 1; return; }
+    }
     const speed = this.speed * speedMul * (this.staggerT > 0 ? .35 : 1);
     const moveX = dirX * speed, moveZ = dirZ * speed;
 
@@ -738,6 +890,36 @@ class Zombie {
       p.coreHalo.scale.setScalar(.9 + k * .35);
       p.coreHalo.material.opacity = .22 + k * .25;
     }
+    // ---- new-special flair ----
+    if (p.halo) { p.halo.rotation.z += dt * 1.2; p.halo.visible = this.healPulse > 0 || (this.healCd < .6); }
+    if (p.orb) {
+      const k = .5 + .5 * Math.sin(ph * 2.5);
+      p.orb.scale.setScalar(.85 + k * .4);
+      p.orb.material.color.setHex(this.healPulse > 0 ? 0xffffff : 0x9dffc4);
+    }
+    if (p.summonCore) {
+      const k = .5 + .5 * Math.sin(ph * 2.2);
+      p.summonCore.scale.setScalar(.9 + k * .5 * (.4 + bob));
+      p.summonCore.material.opacity = .5 + k * .5;
+      if (p.summonRing) { p.summonRing.rotation.z += dt * 2.4; p.summonRing.rotation.x = .6 + Math.sin(ph) * .4; }
+    }
+    if (p.plate) p.plate.material.emissive.setHex(this.blockFlash > 0 ? 0x2a3550 : 0x0a0e16);
+    if (this.blockFlash > 0) this.blockFlash -= dt;
+    // КОПАТЕЛЬ dirt mound: a marker that shows where it is tunnelling
+    if (this.def.burrow) {
+      if (this.mound && !this.moundMesh) {
+        const m = new THREE.Mesh(new THREE.SphereGeometry(.55, 8, 6),
+          new THREE.MeshLambertMaterial({ color: 0x5a4426 }));
+        m.scale.set(1, .40, 1); m.position.y = .12;
+        if (this.group.parent) this.group.parent.add(m);
+        this.moundMesh = m;
+      }
+      if (this.moundMesh) {
+        this.moundMesh.visible = !!this.mound;
+        this.moundMesh.position.set(this.pos.x, (this.groundY || 0) + .12, this.pos.z);
+      }
+    }
+    if (this.emergeT > 0) this.emergeT -= dt;
 
     // hit flash
     const flash = this.hitFlash > 0;
@@ -754,6 +936,8 @@ class Zombie {
   dispose(scene) {
     scene.remove(this.group);
     this.group.traverse(o => { if (o.geometry) o.geometry.dispose(); });
+    if (this.moundMesh) { if (this.moundMesh.parent) this.moundMesh.parent.remove(this.moundMesh); this.moundMesh.geometry.dispose(); this.moundMesh.material.dispose(); this.moundMesh = null; }
+    if (this.iceShell) { if (this.iceShell.parent) this.iceShell.parent.remove(this.iceShell); this.iceShell.geometry.dispose(); this.iceShell.material.dispose(); this.iceShell = null; }
   }
 }
 
@@ -927,7 +1111,7 @@ class Horde {
   update(dt, player) {
     this.flow.update(dt, player.pos.x, player.pos.z);
     this.bucketize();
-    const ctx = { player, world: this.world, flow: this.flow, neighbors: null };
+    const ctx = { player, world: this.world, flow: this.flow, neighbors: null, horde: this };
     for (let i = 0; i < this.list.length; i++) {
       const z = this.list[i];
       ctx.neighbors = this.nearby(z);

@@ -1167,6 +1167,15 @@ const Game = {
       this.effects.decal(z.pos.x, .02, z.pos.z, 0, 1, 0, 2.6, 'frost');
       Audio3D_SFX.explosionAt(z.pos.x, z.pos.y + 1, z.pos.z);
     });
+    Bus.on('zombieHeal', z => {
+      // ЛЕКАРЬ: a green pulse over each zombie it tops up
+      this.effects.particle(z.pos.x, z.pos.y + 1.2 * z.scale, z.pos.z, 0, 1.2, 0, .5, 'spark', .5);
+    });
+    Bus.on('zombieSummon', z => {
+      // ПРИЗЫВАТЕЛЬ: a violet portal burst where the pack appears
+      this.effects.explosion(z.pos.x, z.pos.y + 1, z.pos.z, 3.2, [0xc24bff, 0x1a0a20]);
+      Audio3D_SFX.explosionAt(z.pos.x, z.pos.y + 1, z.pos.z);
+    });
 
     // network events
     Net.on('hello', m => this.onPeerHello(m));
@@ -3314,6 +3323,12 @@ const Game = {
     if (wave >= 5) pool.push({ t: 'spitter', w: Math.min(5, wave * .5) });
     if (wave >= 6) pool.push({ t: 'flying', w: Math.min(4, (wave - 5) * .55) });
     if (wave >= 7) pool.push({ t: 'brute', w: Math.min(3, (wave - 5) * .4) });
+    /* new specials — each unlocked a couple of waves apart */
+    if (wave >= 6) pool.push({ t: 'digger', w: Math.min(3, (wave - 5) * .4) });
+    if (wave >= 7) pool.push({ t: 'splitter', w: Math.min(3, (wave - 6) * .38) });
+    if (wave >= 8) pool.push({ t: 'shielder', w: Math.min(3, (wave - 7) * .36) });
+    if (wave >= 9) pool.push({ t: 'healer', w: Math.min(2, (wave - 8) * .30) });
+    if (wave >= 10) pool.push({ t: 'summoner', w: Math.min(2, (wave - 9) * .26) });
     return pool;
   },
   /* the armoured robot mini-boss is a rare special, from wave 8 onward */
@@ -5064,6 +5079,19 @@ const Game = {
     Audio3D_SFX.kill();
     UI.hitmark(true);
     this._hitmarkT = U.now();
+    /* ДЕЛЯЩИЙСЯ: bursts into a handful of smaller zombies when it dies */
+    if (def.splits && this.horde && !z._splitDone) {
+      z._splitDone = true;
+      for (let i = 0; i < def.splits; i++) {
+        const a = (i / def.splits) * Math.PI * 2 + U.rand(-.4, .4);
+        const r = U.rand(1.0, 2.2);
+        const sx = U.clamp(z.pos.x + Math.cos(a) * r, -MAP.size / 2 + 3, MAP.size / 2 - 3);
+        const sz = U.clamp(z.pos.z + Math.sin(a) * r, -MAP.size / 2 + 3, MAP.size / 2 - 3);
+        const sp = this.horde.spawn(def.splitType || 'crawler', sx, sz);
+        sp.health = sp.maxHealth = Math.max(24, z.maxHealth * .28);
+      }
+      this.effects.explosion(z.pos.x, z.pos.y + 1, z.pos.z, 3.0, [0xc24bff, 0x1a0a20]);
+    }
     /* Boss/mini-boss death: a huge detonation, coloured to their aura, and the
        boss theme fades out when the last one falls. */
     if (z.isBoss || z.isMiniBoss) {

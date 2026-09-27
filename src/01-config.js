@@ -355,6 +355,18 @@ const ZOMBIES = {
   robot:  { name: 'РОБОТ-ЗОМБИ',  hp: 1600, speed: 1.75, dmg: 45, score: 2200, money: 950, scale: 1.85, color: 0x8b95a1, atkRange: 2.3,
             miniBoss: true, armor: .35, shoot: 'plasma', shootRange: 26, shootCd: 2.2, shootDmg: 24, shootSpeed: 34, shootGrav: 0 },
 
+  /* ---- new specials (waves 6+) ---- */
+  digger:  { name: 'КОПАТЕЛЬ',    hp: 150, speed: 2.35, dmg: 20, score: 320, money: 130, scale: 1.05, color: 0x6a5a3a, atkRange: 1.7,
+             burrow: true, burrowCd: 8 },
+  splitter:{ name: 'ДЕЛЯЩИЙСЯ',   hp: 130, speed: 1.9, dmg: 15, score: 280, money: 110, scale: 1.1, color: 0x7a4a6a, atkRange: 1.6,
+             splits: 3, splitType: 'crawler' },
+  healer:  { name: 'ЛЕКАРЬ',      hp: 110, speed: 1.7, dmg: 10, score: 300, money: 140, scale: 1.0, color: 0x3f8f6a, atkRange: 1.5,
+             heals: true, healRange: 9, healCd: 3.0, healAmount: 55 },
+  shielder:{ name: 'ЩИТОНОСЕЦ',   hp: 240, speed: 1.5, dmg: 24, score: 380, money: 160, scale: 1.2, color: 0x5a6a8a, atkRange: 1.9,
+             frontalShield: true, shieldArc: .6, shieldReduction: .92 },
+  summoner:{ name: 'ПРИЗЫВАТЕЛЬ', hp: 420, speed: 1.35, dmg: 18, score: 900, money: 420, scale: 1.35, color: 0x6b3f8f, atkRange: 1.8,
+             summons: true, summonCd: 6.5, summonCount: 4 },
+
   /* ---- BOSSES (spawned on dedicated boss waves) ----
      Every boss has its own `abilities` list. `Game.updateBosses` fires one at
      random every `abilityCd` seconds: summon reinforcements, a shockwave slam,

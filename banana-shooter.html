@@ -13414,12 +13414,16 @@ const Game = {
          made long enough to bridge the gap since the previous mark — so any
          sweep paints one continuous burning line instead of separate dashes. */
       const n = wallHits[0].normal || { x: -dir.x, y: -dir.y, z: -dir.z };
-      const last = this._lastScorch;
+      let last = this._lastScorch;
       let trail = null, gap = 0;
       if (last) {
         const dx = beamEnd.x - last.x, dy = beamEnd.y - last.y, dz = beamEnd.z - last.z;
         gap = Math.hypot(dx, dy, dz);
-        if (gap > 1e-3) trail = { x: dx / gap, y: dy / gap, z: dz / gap };
+        // A big jump means the beam was released and restarted elsewhere (or the
+        // view whipped around) — never bridge it with one enormous strip; treat
+        // it as a fresh contact instead.
+        if (gap > 3.5) { last = null; }
+        else if (gap > 1e-3) trail = { x: dx / gap, y: dy / gap, z: dz / gap };
       }
       this._scorchT = (this._scorchT || 0) - dt;
       if (!last) {
@@ -13430,7 +13434,10 @@ const Game = {
       } else if (this._scorchT <= 0 && gap > .25) {
         this._scorchT = .06;
         this._lastScorch = { x: beamEnd.x, y: beamEnd.y, z: beamEnd.z };
-        this.effects.scorch(beamEnd.x, beamEnd.y, beamEnd.z, n.x, n.y, n.z, .5, trail, gap * 1.15 + .75);
+        // the strip length is capped too, so a fast sweep never paints a stripe
+        // longer than a couple of metres across the wall
+        const len = Math.min(gap * 1.15 + .75, 3.2);
+        this.effects.scorch(beamEnd.x, beamEnd.y, beamEnd.z, n.x, n.y, n.z, .5, trail, len);
       }
     }
     if (this.effects) this.effects.holdBeam(muzzle, beamEnd, def.beamColor);
@@ -13441,6 +13448,8 @@ const Game = {
 
   stopBeam() {
     if (this.effects) this.effects.endBeam();
+    // a new burst must not connect to where the previous one ended
+    this._lastScorch = null;
   },
 
   fire() {

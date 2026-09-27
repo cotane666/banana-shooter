@@ -229,7 +229,7 @@ const WEAPONS = {
          splash: 14.0, splashDmg: 1200, explosionColor: [0x39ff5a, 0x0a1a0a], noSelfDamage: true, nuke: true },
 
   /* ---------------- Y.H.S: absurdly strong, absurdly fast MG ---------------- */
-  yhs: { name: 'Y.H.S', cat: 'heavy', slot: 2, price: 20000, dmg: 180, rpm: 5750, mag: 2000, reserve: 0,
+  yhs: { name: 'Y.H.S', cat: 'heavy', slot: 2, price: 35000, dmg: 180, rpm: 5750, mag: 2000, reserve: 0,
          auto: true, spread: .030, moveSpread: .020, recoil: .35, falloff: .85, range: 140, headMul: 2.3,
          sound: 'rifle', spinUp: .35 },
 

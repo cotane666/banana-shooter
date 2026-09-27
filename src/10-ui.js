@@ -453,7 +453,7 @@ const UI = {
     const shopAllows = (cat) => !allow || allow[cat] !== 0;
     const itemAllow = (typeof Game !== 'undefined' && Game.shopItemAllow) ? Game.shopItemAllow : null;
     const itemAllowed = (id) => !itemAllow || itemAllow[id] !== 0;
-    const mkCard = (id, name, desc, price, stats, owned, cant, onClick) => {
+    const mkCard = (id, name, desc, price, stats, owned, cant, onClick, onOwned) => {
       n++;
       const d = document.createElement('div');
       d.className = 'bcard' + (cant ? ' cant' : '') + (owned ? ' own' : '');
@@ -462,7 +462,14 @@ const UI = {
         '<div class="wd">' + U.esc(desc) + '</div>' +
         '<div class="wst">' + stats.map(s => '<span>' + s[0] + ' <i>' + s[1] + '</i></span>').join('') + '</div>' +
         (owned ? '<div class="pr">КУПЛЕНО</div>' : '<div class="pr">$' + price + '</div>');
-      d.addEventListener('click', () => { if (!cant && !owned) onClick(); else if (!owned) { Audio3D_SFX.deny(); if (id === 'medkit') UI.toast('Аптечек максимум: ' + CFG.medkitMax); else UI.toast('Недостаточно денег'); } });
+      d.title = owned ? 'Нажмите, чтобы взять в руки' : 'Нажмите, чтобы купить';
+      d.addEventListener('click', () => {
+        if (owned) { if (onOwned) onOwned(); return; }
+        if (!cant) { onClick(); return; }
+        Audio3D_SFX.deny();
+        if (id === 'medkit') UI.toast('Аптечек максимум: ' + CFG.medkitMax);
+        else UI.toast('Недостаточно денег');
+      });
       wrap.appendChild(d);
     };
 
@@ -520,6 +527,7 @@ const UI = {
         if (!shopAllows(w.cat)) return;
         if (!itemAllowed(id)) return;
         const owned = player.has(id);
+        const equipped = owned && player.slot === w.slot && player.inv[w.slot] && player.inv[w.slot].id === id;
         const rpm = Math.round(w.rpm);
         const stats = [['УРОН', w.dmg], ['ТЕМП', rpm]];
         if (w.mag !== Infinity) stats.push(['МАГ', w.mag]);
@@ -528,7 +536,9 @@ const UI = {
         if (w.beam) stats.push(['ЛУЧ', w.beamMax + 'с']);
         if (w.splash) stats.push(['РАДИУС', w.splash + 'м']);
         mkCard(id, w.name, w.cat.toUpperCase(), w.price, stats, owned, !free && player.money < w.price,
-          () => Bus.emit('buy', id));
+          () => Bus.emit('buy', id),
+          () => Bus.emit('equip', id));
+        if (equipped) { const c = wrap.lastChild; if (c) { c.classList.add('equipped'); const pr = c.querySelector('.pr'); if (pr) pr.textContent = 'В РУКАХ'; } }
       });
     }
     this.el.buyOwned.textContent = this.ownedList(player);

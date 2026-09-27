@@ -1123,6 +1123,7 @@ const Game = {
 
     // game events
     Bus.on('buy', id => this.tryBuy(id));
+    Bus.on('equip', id => this.equipWeapon(id));
     Bus.on('buyGear', id => this.tryBuyGear(id));
     Bus.on('touchBuy', () => {
       // One button opens and closes the shop: on a phone there is no B/Esc key.
@@ -2669,6 +2670,27 @@ const Game = {
     if (this.mode !== CS.MODE.ONLINE) return true;
     const a = this.shopItemsAllow();
     return a[id] !== 0;
+  },
+
+  /* Take an already-owned weapon into the hands (shop click on an owned card). */
+  equipWeapon(id) {
+    const w = WEAPONS[id];
+    if (!w || !this.player) return;
+    if (!this.player.has(id)) return;
+    if (this.player.slot === w.slot && this.player.inv[w.slot] && this.player.inv[w.slot].id === id) {
+      Audio3D_SFX.uiClick();
+      UI.toast('Уже в руках: ' + w.name);
+      return;
+    }
+    this.player.slot = w.slot;
+    this.player.deployT = Math.max(this.player.deployT, .35);
+    this.player.flashT = 0;
+    this.player.buildViewModel();
+    this.attachViewModel();
+    Audio3D_SFX.reloadStep(0);
+    UI.toast('В руки: ' + w.name, '#57d16a');
+    UI.renderBuy(this.player, this.buyTimer);
+    if (this.mode === CS.MODE.ONLINE) this.broadcastScore();
   },
 
   tryBuy(id) {

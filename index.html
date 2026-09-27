@@ -390,6 +390,9 @@ html.touch #bossBar .boss-name{font-size:11px;letter-spacing:2px}
 .bcard.cant{opacity:.42;cursor:not-allowed}
 .bcard.cant:hover{transform:none;border-top-color:#39434c}
 .bcard.own{border-top-color:var(--green)}
+.bcard.own:hover{border-top-color:#8ff0a0;background:#16241b}
+.bcard.equipped{border-top-color:var(--or);box-shadow:0 0 0 1px rgba(255,157,33,.5) inset}
+.bcard.equipped .pr{color:var(--or2)}
 .bcard .num{position:absolute;right:9px;top:7px;font-size:10px;color:#4d565f;background:#0c0f12;
   border:1px solid var(--line);border-radius:2px;padding:1px 5px}
 .bcard .wn{font-size:16px;font-weight:800;letter-spacing:1.2px;color:#fff}
@@ -1409,7 +1412,7 @@ const WEAPONS = {
          splash: 14.0, splashDmg: 1200, explosionColor: [0x39ff5a, 0x0a1a0a], noSelfDamage: true, nuke: true },
 
   /* ---------------- Y.H.S: absurdly strong, absurdly fast MG ---------------- */
-  yhs: { name: 'Y.H.S', cat: 'heavy', slot: 2, price: 20000, dmg: 180, rpm: 5750, mag: 2000, reserve: 0,
+  yhs: { name: 'Y.H.S', cat: 'heavy', slot: 2, price: 35000, dmg: 180, rpm: 5750, mag: 2000, reserve: 0,
          auto: true, spread: .030, moveSpread: .020, recoil: .35, falloff: .85, range: 140, headMul: 2.3,
          sound: 'rifle', spinUp: .35 },
 
@@ -7737,7 +7740,7 @@ const UI = {
     const shopAllows = (cat) => !allow || allow[cat] !== 0;
     const itemAllow = (typeof Game !== 'undefined' && Game.shopItemAllow) ? Game.shopItemAllow : null;
     const itemAllowed = (id) => !itemAllow || itemAllow[id] !== 0;
-    const mkCard = (id, name, desc, price, stats, owned, cant, onClick) => {
+    const mkCard = (id, name, desc, price, stats, owned, cant, onClick, onOwned) => {
       n++;
       const d = document.createElement('div');
       d.className = 'bcard' + (cant ? ' cant' : '') + (owned ? ' own' : '');
@@ -7746,7 +7749,14 @@ const UI = {
         '<div class="wd">' + U.esc(desc) + '</div>' +
         '<div class="wst">' + stats.map(s => '<span>' + s[0] + ' <i>' + s[1] + '</i></span>').join('') + '</div>' +
         (owned ? '<div class="pr">КУПЛЕНО</div>' : '<div class="pr">$' + price + '</div>');
-      d.addEventListener('click', () => { if (!cant && !owned) onClick(); else if (!owned) { Audio3D_SFX.deny(); if (id === 'medkit') UI.toast('Аптечек максимум: ' + CFG.medkitMax); else UI.toast('Недостаточно денег'); } });
+      d.title = owned ? 'Нажмите, чтобы взять в руки' : 'Нажмите, чтобы купить';
+      d.addEventListener('click', () => {
+        if (owned) { if (onOwned) onOwned(); return; }
+        if (!cant) { onClick(); return; }
+        Audio3D_SFX.deny();
+        if (id === 'medkit') UI.toast('Аптечек максимум: ' + CFG.medkitMax);
+        else UI.toast('Недостаточно денег');
+      });
       wrap.appendChild(d);
     };
 
@@ -7804,6 +7814,7 @@ const UI = {
         if (!shopAllows(w.cat)) return;
         if (!itemAllowed(id)) return;
         const owned = player.has(id);
+        const equipped = owned && player.slot === w.slot && player.inv[w.slot] && player.inv[w.slot].id === id;
         const rpm = Math.round(w.rpm);
         const stats = [['УРОН', w.dmg], ['ТЕМП', rpm]];
         if (w.mag !== Infinity) stats.push(['МАГ', w.mag]);
@@ -7812,7 +7823,9 @@ const UI = {
         if (w.beam) stats.push(['ЛУЧ', w.beamMax + 'с']);
         if (w.splash) stats.push(['РАДИУС', w.splash + 'м']);
         mkCard(id, w.name, w.cat.toUpperCase(), w.price, stats, owned, !free && player.money < w.price,
-          () => Bus.emit('buy', id));
+          () => Bus.emit('buy', id),
+          () => Bus.emit('equip', id));
+        if (equipped) { const c = wrap.lastChild; if (c) { c.classList.add('equipped'); const pr = c.querySelector('.pr'); if (pr) pr.textContent = 'В РУКАХ'; } }
       });
     }
     this.el.buyOwned.textContent = this.ownedList(player);
@@ -9827,6 +9840,7 @@ const Game = {
 
     // game events
     Bus.on('buy', id => this.tryBuy(id));
+    Bus.on('equip', id => this.equipWeapon(id));
     Bus.on('buyGear', id => this.tryBuyGear(id));
     Bus.on('touchBuy', () => {
       // One button opens and closes the shop: on a phone there is no B/Esc key.
@@ -11373,6 +11387,27 @@ const Game = {
     if (this.mode !== CS.MODE.ONLINE) return true;
     const a = this.shopItemsAllow();
     return a[id] !== 0;
+  },
+
+  /* Take an already-owned weapon into the hands (shop click on an owned card). */
+  equipWeapon(id) {
+    const w = WEAPONS[id];
+    if (!w || !this.player) return;
+    if (!this.player.has(id)) return;
+    if (this.player.slot === w.slot && this.player.inv[w.slot] && this.player.inv[w.slot].id === id) {
+      Audio3D_SFX.uiClick();
+      UI.toast('Уже в руках: ' + w.name);
+      return;
+    }
+    this.player.slot = w.slot;
+    this.player.deployT = Math.max(this.player.deployT, .35);
+    this.player.flashT = 0;
+    this.player.buildViewModel();
+    this.attachViewModel();
+    Audio3D_SFX.reloadStep(0);
+    UI.toast('В руки: ' + w.name, '#57d16a');
+    UI.renderBuy(this.player, this.buyTimer);
+    if (this.mode === CS.MODE.ONLINE) this.broadcastScore();
   },
 
   tryBuy(id) {

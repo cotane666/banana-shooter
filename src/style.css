@@ -375,6 +375,9 @@ html.touch #bossBar .boss-name{font-size:11px;letter-spacing:2px}
 .bcard.cant{opacity:.42;cursor:not-allowed}
 .bcard.cant:hover{transform:none;border-top-color:#39434c}
 .bcard.own{border-top-color:var(--green)}
+.bcard.own:hover{border-top-color:#8ff0a0;background:#16241b}
+.bcard.equipped{border-top-color:var(--or);box-shadow:0 0 0 1px rgba(255,157,33,.5) inset}
+.bcard.equipped .pr{color:var(--or2)}
 .bcard .num{position:absolute;right:9px;top:7px;font-size:10px;color:#4d565f;background:#0c0f12;
   border:1px solid var(--line);border-radius:2px;padding:1px 5px}
 .bcard .wn{font-size:16px;font-weight:800;letter-spacing:1.2px;color:#fff}

@@ -487,14 +487,27 @@ html.touch #rangePanel #rpToggle{display:none !important}
 #sdScreen #sdSearch:focus{border-color:var(--or)}
 #sdGrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;
   max-height:56vh;overflow:auto;padding-right:4px}
-#modScreen .sd-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;margin-top:6px}
-.modcard{background:linear-gradient(180deg,#1a1430,#120d22);border:1px solid #4a3a7a;border-top:3px solid #9a3aff;
+#modScreen .sd-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;margin-top:6px}.modcard{background:linear-gradient(180deg,#1a1430,#120d22);border:1px solid #4a3a7a;border-top:3px solid #9a3aff;
   color:var(--txt);font-family:inherit;text-align:left;padding:14px 16px;border-radius:4px;cursor:pointer;transition:.12s}
 .modcard:hover{background:#241a44;transform:translateY(-2px);border-top-color:#c24bff}
 .modcard b{display:block;font-size:14px;letter-spacing:1.5px;color:#d9b6ff;margin-bottom:6px}
 .modcard i{font-style:normal;font-size:11.5px;color:var(--dim);line-height:1.4}
 .mod-active{margin-top:16px;font-size:12px;letter-spacing:1px;color:var(--dim)}
 .mod-active b{color:#c24bff}
+.ach-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px;margin-top:6px}
+.achcard{background:linear-gradient(180deg,#151a1f,#0f1317);border:1px solid var(--line);border-left:4px solid #39434c;
+  padding:10px 12px;border-radius:4px}
+.achcard.on{border-left-color:#ffd24a;background:linear-gradient(180deg,#221c10,#151109)}
+.achcard b{display:block;font-size:12.5px;letter-spacing:1.2px;color:#dfe6ee;margin-bottom:5px}
+.achcard.on b{color:#ffd24a}
+.achcard i{font-style:normal;font-size:11px;color:var(--dim);line-height:1.35}
+#weaponWheel{position:absolute;inset:0;z-index:40;pointer-events:none;display:flex;align-items:center;justify-content:center}
+#weaponWheel .ww-inner{display:flex;gap:14px;pointer-events:auto}
+.wwitem{background:rgba(15,19,23,.92);border:1px solid var(--line);border-top:3px solid #39434c;color:var(--txt);
+  font-family:inherit;padding:14px 18px;border-radius:5px;cursor:pointer;min-width:130px;text-align:center}
+.wwitem.on{border-top-color:var(--or);background:rgba(35,28,12,.95)}
+.wwitem b{display:block;font-size:18px;color:var(--or);margin-bottom:5px}
+.wwitem span{font-size:11px;letter-spacing:1px;color:var(--dim)}
 .sdcard{background:linear-gradient(180deg,#161b20,#11151a);border:1px solid var(--line);border-top:2px solid #39434c;
   border-radius:3px;padding:11px 13px;cursor:pointer;transition:.12s;position:relative}
 .sdcard:hover{border-top-color:var(--or);background:#1d242b;transform:translateY(-2px)}
@@ -749,6 +762,7 @@ html.touch .fld input{padding:10px;font-size:15px}
       <button class="mbtn" id="btnRange"><b>ПОЛИГОН</b><i>Всё оружие бесплатно · манекены и урон в секунду</i></button>
       <button class="mbtn" id="btnOnline"><b>ОНЛАЙН</b><i>Бой против друзей: 2–4 игрока, выбор карты</i></button>
       <button class="mbtn" id="btnMatch"><b>ПАРАМЕТРЫ МАТЧА</b><i>Карта · число игроков · здоровье</i></button>
+      <button class="mbtn" id="btnExtras"><b>ДОСТИЖЕНИЯ И РЕКОРДЫ</b><i>Награды за вехи · таблица лучших забегов</i></button>
       <button class="mbtn" id="btnAndroid"><b>СКАЧАТЬ НА ANDROID</b><i>Установка на телефон / планшет</i></button>
       <button class="mbtn" id="btnIos"><b>СКАЧАТЬ НА iOS</b><i>Установка на iPhone / iPad</i></button>
       <button class="mbtn" id="btnControls"><b>УПРАВЛЕНИЕ</b><i>Клавиши и настройки</i></button>
@@ -1139,6 +1153,20 @@ html.touch .fld input{padding:10px;font-size:15px}
     </div>
   </div>
 </div>
+
+<!-- ============ ACHIEVEMENTS & RECORDS ============ -->
+<div id="extras" class="screen hidden">
+  <div class="panel wide">
+    <h2>ДОСТИЖЕНИЯ</h2>
+    <div class="ach-grid" id="achGrid"></div>
+    <h2 class="mt">РЕКОРДЫ ЗАБЕГОВ</h2>
+    <table class="sb" id="recTable"></table>
+    <div class="btnrow"><button class="mbtn small primary" id="btnExtrasBack">НАЗАД</button></div>
+  </div>
+</div>
+
+<!-- ============ WEAPON WHEEL ============ -->
+<div id="weaponWheel" class="hidden"><div class="ww-inner" id="wwInner"></div></div>
 
 <!-- ============ ENDLESS MODIFIERS ============ -->
 <div id="modScreen" class="screen hidden">
@@ -1648,6 +1676,23 @@ const MODIFIERS = [
 const MOD_BASE = { speed: 1, hp: 1, dmg: 1, count: 1, armor: 0, spawn: 1, playerDmg: 1, playerHurt: 1, miniEvery: 3 };
 function makeModState() { return Object.assign({}, MOD_BASE); }
 
+/* ---------------- achievements ----------------
+   `check(s)` reads a live stats snapshot and returns true when earned. They are
+   stored in Store.data.ach and re-evaluated on every kill / wave / death. */
+const ACHIEVEMENTS = [
+  { id: 'firstBlood', name: 'ПЕРВАЯ КРОВЬ', desc: 'Убить первого зомби',       check: s => s.kills >= 1 },
+  { id: 'slayer100',  name: 'ЧИСТИЛЬЩИК',   desc: '100 зомби за забег',         check: s => s.kills >= 100 },
+  { id: 'slayer500',  name: 'МЯСОРУБКА',    desc: '500 зомби за забег',         check: s => s.kills >= 500 },
+  { id: 'wave10',     name: 'ДЕСЯТКА',      desc: 'Дожить до 10 волны',         check: s => s.wave >= 10 },
+  { id: 'wave25',     name: 'ВЕТЕРАН',      desc: 'Дожить до 25 волны',         check: s => s.wave >= 25 },
+  { id: 'wave50',     name: 'ЛЕГЕНДА',      desc: 'Дожить до 50 волны',         check: s => s.wave >= 50 },
+  { id: 'boss1',      name: 'ПОБЕДИТЕЛЬ БОССА', desc: 'Убить босса',            check: s => s.bossKills >= 1 },
+  { id: 'boss4',      name: 'ГРОЗА БОССОВ', desc: 'Убить 4 боссов',             check: s => s.bossKills >= 4 },
+  { id: 'head10',     name: 'СНАЙПЕР',      desc: '10 убийств в голову',        check: s => s.headshots >= 10 },
+  { id: 'rich',       name: 'БОГАЧ',        desc: 'Накопить $50 000',           check: s => s.money >= 50000 },
+  { id: 'survive',    name: 'ЖИВУЧИЙ',      desc: 'Пережить 15 минут в забеге', check: s => s.playTime >= 900 }
+];
+
 /* ---------------- utils ---------------- */
 const U = {
   clamp: (v, a, b) => v < a ? a : v > b ? b : v,
@@ -1687,7 +1732,8 @@ const Store = {
   data: { sens: 2.2, fov: 80, vol: 60, quality: 1, touchSens: 1.5, name: '', best: 0, bestWave: 0, killsTotal: 0, matches: 0, wins: 0, signalSrv: 0, aimBest: 0, aimAutoFire: 1,
           map: 'arena', players: 2, maxHP: 100, aimAssist: 1, horde: 0, clears: 0, freeplay: 0, rounds: 3, playTime: 0,
           offCount: 1, offHp: 1, offFree: 0, offMode: 'normal', offMods: {}, offModsRun: 0, offModPick: 0, checkpoint: null, shopAllow: {}, shopItems: {}, music: 1, sfxVol: 100, musicVol: 70,
-          grenade: 'frag', buildable: 'turret', weather: 'day', trapsEnabled: 1 },
+          grenade: 'frag', buildable: 'turret', weather: 'day', trapsEnabled: 1,
+          ach: {}, runs: [], petOwned: 1 },
   load() {
     try { const r = localStorage.getItem(this.key); if (r) Object.assign(this.data, JSON.parse(r)); } catch (e) { }
     return this.data;
@@ -9154,6 +9200,7 @@ const UI = {
       'mapChips', 'playerChips', 'hpChips', 'hordeChips', 'lobbyMaps', 'lobbyPlayers', 'lobbyHp', 'lobbyFree', 'lobbyRounds',
       'offCountChips', 'offHpChips', 'offFreeChips', 'offModeChips', 'offCustomBox', 'offHordeBox', 'offSpecialBox', 'offCpBox', 'offCpInfo', 'btnOffContinue', 'custom', 'lobbyShop', 'lobbyShopItems',
       'modScreen', 'modGrid', 'modActive',
+      'extras', 'achGrid', 'recTable', 'btnExtrasBack', 'weaponWheel', 'wwInner',
       'medkitTag', 'droneTag', 'grenadeTag', 'shieldTag', 'heatTag', 'missileHud', 'mhTime', 'mhReadout',
       'sdScreen', 'sdGrid', 'sdSearch', 'sdToggle2', 'sdClose', 'sdConfig',
       'esScreen', 'esGrid', 'esSearch', 'esCount', 'esClear', 'esClose', 'esConfig'];
@@ -9164,7 +9211,7 @@ const UI = {
 
   /* ---------------- screens ---------------- */
   show(name) {
-    ['loading', 'menu', 'controls', 'lobby', 'hud', 'buy', 'scoreboard', 'pause', 'connect', 'android', 'ios', 'credits', 'matchEnd', 'custom', 'clickToPlay', 'sdScreen', 'esScreen', 'modScreen'].forEach(s => {
+    ['loading', 'menu', 'controls', 'lobby', 'hud', 'buy', 'scoreboard', 'pause', 'connect', 'android', 'ios', 'credits', 'matchEnd', 'custom', 'clickToPlay', 'sdScreen', 'esScreen', 'modScreen', 'extras'].forEach(s => {
       const e = this.el[s];
       if (!e) return;
       const on = s === name;
@@ -9173,12 +9220,12 @@ const UI = {
     this.current = name;
   },
   hideOverlays() {
-    ['buy', 'scoreboard', 'pause', 'controls', 'lobby', 'menu', 'connect', 'android', 'ios', 'credits', 'matchEnd', 'custom', 'sdScreen', 'esScreen', 'modScreen'].forEach(s => {
+    ['buy', 'scoreboard', 'pause', 'controls', 'lobby', 'menu', 'connect', 'android', 'ios', 'credits', 'matchEnd', 'custom', 'sdScreen', 'esScreen', 'modScreen', 'extras'].forEach(s => {
       if (this.el[s]) this.el[s].classList.add('hidden');
     });
   },
   overlayOpen() {
-    return ['buy', 'scoreboard', 'pause', 'controls', 'lobby', 'menu', 'connect', 'android', 'ios', 'credits', 'matchEnd', 'custom', 'sdScreen', 'esScreen', 'modScreen'].some(s => this.el[s] && !this.el[s].classList.contains('hidden'));
+    return ['buy', 'scoreboard', 'pause', 'controls', 'lobby', 'menu', 'connect', 'android', 'ios', 'credits', 'matchEnd', 'custom', 'sdScreen', 'esScreen', 'modScreen', 'extras'].some(s => this.el[s] && !this.el[s].classList.contains('hidden'));
   },
 
   /* ============================================================
@@ -9981,14 +10028,49 @@ const UI = {
 
   renderMenuStats() {
     const clears = Store.data.clears || 0;
+    const achN = Object.keys(Store.data.ach || {}).length;
     this.el.menuStats.innerHTML =
       '<div class="clearstat"><b>' + clears + '</b>ПРОХОЖДЕНИЙ</div>' +
       '<div><b>' + Store.data.best + '</b>РЕКОРД</div>' +
       '<div><b>' + Store.data.bestWave + '</b>ЛУЧШАЯ ВОЛНА</div>' +
       '<div><b>' + Store.data.killsTotal + '</b>ЗОМБИ УБИТО</div>' +
       '<div><b>' + Store.data.wins + '/' + Store.data.matches + '</b>ПОБЕД В ОНЛАЙН</div>' +
+      '<div><b>' + achN + '/' + ACHIEVEMENTS.length + '</b>ДОСТИЖЕНИЙ</div>' +
       '<div><b>' + U.duration(Store.data.playTime) + '</b>ВРЕМЯ В ИГРЕ</div>';
-  }
+  },
+
+  /* achievements + best-run table */
+  renderExtras() {
+    const ach = Store.data.ach || {};
+    if (this.el.achGrid) {
+      this.el.achGrid.innerHTML = ACHIEVEMENTS.map(a => {
+        const on = !!ach[a.id];
+        return '<div class="achcard' + (on ? ' on' : '') + '"><b>' + (on ? '🏆 ' : '🔒 ') + U.esc(a.name) + '</b><i>' + U.esc(a.desc) + '</i></div>';
+      }).join('');
+    }
+    if (this.el.recTable) {
+      const runs = Store.data.runs || [];
+      if (!runs.length) this.el.recTable.innerHTML = '<tr><td class="t">Пока нет завершённых забегов</td></tr>';
+      else this.el.recTable.innerHTML = '<tr><th>#</th><th>СЧЁТ</th><th>ВОЛНА</th><th>УБИТО</th><th>РЕЖИМ</th><th>ДАТА</th></tr>' +
+        runs.map((r, i) => '<tr><td class="t">' + (i + 1) + '</td><td class="s">' + r.score + '</td><td>' + r.wave + '</td><td>' + r.kills + '</td><td>' + U.esc(r.mode) + '</td><td class="t">' + r.date + '</td></tr>').join('');
+    }
+  },
+
+  /* weapon wheel: a radial list of owned weapons; clicking one switches */
+  showWheel(game) {
+    const p = game.player;
+    if (!p || !this.el.weaponWheel) return;
+    const items = [];
+    for (const s of [1, 2, 3]) { const w = p.inv[s]; if (w) items.push({ slot: s, id: w.id, name: WEAPONS[w.id] ? WEAPONS[w.id].name : w.id }); }
+    this.el.wwInner.innerHTML = items.map(it =>
+      '<button class="wwitem' + (p.slot === it.slot ? ' on' : '') + '" data-slot="' + it.slot + '"><b>' + it.slot + '</b><span>' + U.esc(it.name) + '</span></button>'
+    ).join('');
+    Array.from(this.el.wwInner.children).forEach(b => {
+      b.addEventListener('click', () => { game.switchSlot(parseInt(b.dataset.slot, 10)); this.hideWheel(); });
+    });
+    this.el.weaponWheel.classList.remove('hidden');
+  },
+  hideWheel() { if (this.el.weaponWheel) this.el.weaponWheel.classList.add('hidden'); }
 };
 
 /* ---------------- keyboard shortcut helper ---------------- */
@@ -11645,6 +11727,8 @@ const Game = {
     });
     bindClick('btnRange', () => this.startRange());
     bindClick('btnMatch', () => { this._prevScreen = 'menu'; UI.refreshChips(); UI.show('controls'); });
+    bindClick('btnExtras', () => { UI.renderExtras(); UI.show('extras'); });
+    bindClick('btnExtrasBack', () => UI.show('menu'));
     bindClick('btnAndroid', () => UI.show('android'));
     bindClick('btnAndroidBack', () => UI.show('menu'));
     bindClick('btnAndroidCopy', () => {
@@ -11889,7 +11973,7 @@ const Game = {
       case 'Digit1': if (!this.paused) this.switchSlot(1); break;
       case 'Digit2': if (!this.paused) this.switchSlot(2); break;
       case 'Digit3': if (!this.paused) this.switchSlot(3); break;
-      case 'KeyQ': if (!this.paused) this.switchSlot(this.player.nextSlot()); break;
+      case 'KeyQ': if (!this.paused) { this.switchSlot(this.player.nextSlot()); UI.showWheel(this); setTimeout(() => UI.hideWheel(), 1500); } break;
       case 'KeyN': this.invertY(); break;
       // On PC the pointer is locked during play, so DOM buttons cannot be
       // clicked at all — the range features get keyboard shortcuts.
@@ -11928,6 +12012,99 @@ const Game = {
       case 'KeyO':
         if (!this.paused) this.cycleTimeOfDay();
         break;
+    }
+  },
+
+  /* ============================================================
+     ACHIEVEMENTS · RECORDS · PET
+     ============================================================ */
+  statsSnapshot() {
+    const p = this.player;
+    return {
+      kills: p ? p.zombieKills : 0,
+      headshots: p ? p.headshots : 0,
+      money: p ? p.money : 0,
+      wave: this.offline ? this.offline.wave : 0,
+      bossKills: this._bossKills || 0,
+      playTime: this.offline ? (U.now() - this.offline.startTime) / 1000 : 0
+    };
+  },
+  checkAchievements() {
+    const s = this.statsSnapshot();
+    const ach = Store.data.ach = Store.data.ach || {};
+    let earned = false;
+    ACHIEVEMENTS.forEach(a => {
+      if (ach[a.id]) return;
+      if (a.check(s)) {
+        ach[a.id] = 1; earned = true;
+        UI.toast('ДОСТИЖЕНИЕ: ' + a.name + ' — ' + a.desc, '#ffd24a');
+        UI.feed('<span class="z">🏆 ' + a.name + '</span>');
+        Audio3D_SFX.buy();
+      }
+    });
+    if (earned) Store.save();
+    return earned;
+  },
+  recordRun() {
+    const p = this.player;
+    if (!p) return;
+    const runs = Store.data.runs = Store.data.runs || [];
+    runs.push({
+      score: p.score, wave: this.offline ? this.offline.wave : 0,
+      kills: p.zombieKills, mode: this.specialMode || 'normal',
+      date: new Date().toISOString().slice(0, 10)
+    });
+    runs.sort((a, b) => b.score - a.score);
+    Store.data.runs = runs.slice(0, 10);
+    Store.save();
+  },
+  buildPet() {
+    if (!Store.data.petOwned) return;
+    if (this.pet) return;
+    const g = new THREE.Group();
+    const body = new THREE.Mesh(new THREE.CapsuleGeometry(.14, .22, 4, 8),
+      new THREE.MeshLambertMaterial({ color: 0xf2c93b, emissive: 0x2a2008 }));
+    body.rotation.z = Math.PI / 2; body.position.y = .2; g.add(body);
+    const eyeMat = new THREE.MeshBasicMaterial({ color: 0x101010 });
+    [-1, 1].forEach(s => {
+      const e = new THREE.Mesh(new THREE.SphereGeometry(.022, 6, 5), eyeMat);
+      e.position.set(s * .06, .26, -.13); g.add(e);
+    });
+    const stem = new THREE.Mesh(new THREE.BoxGeometry(.03, .06, .03), new THREE.MeshLambertMaterial({ color: 0x6f8f3a }));
+    stem.position.y = .32; g.add(stem);
+    this.scene.add(g);
+    this.pet = { mesh: g, pos: { x: 0, y: 1, z: 0 }, bob: 0 };
+  },
+  removePet() {
+    if (!this.pet) return;
+    if (this.pet.mesh.parent) this.pet.mesh.parent.remove(this.pet.mesh);
+    this.pet.mesh.traverse(o => { if (o.geometry) o.geometry.dispose(); });
+    this.pet = null;
+  },
+  updatePet(dt) {
+    if (!this.pet || !this.player) return;
+    const p = this.player;
+    const pt = this.pet;
+    // hover just in front of and beside the player
+    const tx = p.pos.x + Math.sin(p.yaw) * 1.1 + Math.cos(p.yaw) * .7;
+    const tz = p.pos.z + Math.cos(p.yaw) * 1.1 - Math.sin(p.yaw) * .7;
+    const ty = (this.world.groundAt(tx, tz, p.pos.y + 4) || 0) + 1.05;
+    pt.bob += dt * 4;
+    pt.pos.x = U.lerp(pt.pos.x, tx, 1 - Math.pow(.02, dt));
+    pt.pos.y = U.lerp(pt.pos.y, ty + Math.sin(pt.bob) * .08, 1 - Math.pow(.03, dt));
+    pt.pos.z = U.lerp(pt.pos.z, tz, 1 - Math.pow(.02, dt));
+    pt.mesh.position.set(pt.pos.x, pt.pos.y, pt.pos.z);
+    // it nibbles the nearest zombie it bumps into
+    pt.atkCd = Math.max(0, (pt.atkCd || 0) - dt);
+    if (pt.atkCd <= 0 && this.horde) {
+      for (const z of this.horde.list) {
+        if (!z.alive || z.dying) continue;
+        if (Math.hypot(z.pos.x - pt.pos.x, z.pos.z - pt.pos.z) < 1.3) {
+          z.takeDamage(18, 'body', { x: 0, y: 0, z: 0 });
+          pt.atkCd = 1.2;
+          break;
+        }
+      }
     }
   },
 
@@ -12187,6 +12364,7 @@ const Game = {
     this.offlineDeadT = 0;
     this._creditsOpen = false;
     this._modPickOpen = false;
+    this._bossKills = 0;
     // NOTE: the checkpoint is deliberately NOT cleared here. It is dropped only
     // by an explicit "НОВАЯ ИГРА" (or after being consumed), so leaving to the
     // menu and returning can still resume the run.
@@ -12267,6 +12445,7 @@ const Game = {
     this.horde = new Horde(this.scene, this.world, this);
     this.effects = new Effects(this.scene, Store.data.quality);
     this.effects.clear();
+    this.buildPet();
 
     this.spawnPlayerLocal(0);
     if (this.customOffline) {
@@ -14698,6 +14877,8 @@ const Game = {
     Store.data.clears = (Store.data.clears || 0) + 1;
     Store.save();
     this.player.score += 50000;
+    this.recordRun();
+    this.checkAchievements();
     // stop the wave flow: no break timer, no wave 101
     const o = this.offline;
     if (o) { o.campaignWon = true; o.betweenWaves = false; o.toSpawn = 0; }
@@ -16144,6 +16325,8 @@ const Game = {
       if (p.score > Store.data.best) { Store.data.best = p.score; Store.save(); }
       if (o.wave > Store.data.bestWave) { Store.data.bestWave = o.wave; Store.save(); }
       Store.data.killsTotal += p.zombieKills; Store.save();
+      this.recordRun();
+      this.checkAchievements();
       UI.center('ВЫ ПОГИБЛИ', 'Счёт: ' + p.score + ' · Волна ' + o.wave, 4.0);
       UI.toast('Волна ' + o.wave + ' · Счёт ' + p.score + ' · Нажмите Tab для статистики', '#e33a2e');
       this.roundState = 'end';
@@ -16199,7 +16382,9 @@ const Game = {
       // no boss left alive → back to the battle track (or menu)
       const anyLeft = this.horde && this.horde.list.some(o => o !== z && (o.isBoss || o.isMiniBoss) && o.alive && !o.dying);
       if (!anyLeft) this.refreshMusic();
+      if (z.isBoss) { this._bossKills = (this._bossKills || 0) + 1; }
     }
+    this.checkAchievements();
     UI.feed('<b>' + U.esc(p.name) + '</b> <span class="z">✖ ' + def.name + (headshot ? ' (в голову)' : '') + '</span> +$' + def.money);
     if (headshot) UI.toast('В ГОЛОВУ! +$' + def.money + ' +' + Math.round(def.score * 1.5) + ' очков', '#ff9d21');
     Bus.emit('kill', z, headshot);
@@ -16974,6 +17159,7 @@ const Game = {
     this.updateBuyPhase(dt);
     if (this.mode === CS.MODE.OFFLINE && !this._modPickOpen) { this.updateOffline(dt); this.updateCrates(dt); }
     this.updateGrenades(dt);
+    this.updatePet(dt);
 
     // ---- AI ----
     if (this.horde) this.horde.update(dt, p);

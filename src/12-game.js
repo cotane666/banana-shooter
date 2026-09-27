@@ -1023,6 +1023,8 @@ const Game = {
     });
     bindClick('btnRange', () => this.startRange());
     bindClick('btnMatch', () => { this._prevScreen = 'menu'; UI.refreshChips(); UI.show('controls'); });
+    bindClick('btnExtras', () => { UI.renderExtras(); UI.show('extras'); });
+    bindClick('btnExtrasBack', () => UI.show('menu'));
     bindClick('btnAndroid', () => UI.show('android'));
     bindClick('btnAndroidBack', () => UI.show('menu'));
     bindClick('btnAndroidCopy', () => {
@@ -1267,7 +1269,7 @@ const Game = {
       case 'Digit1': if (!this.paused) this.switchSlot(1); break;
       case 'Digit2': if (!this.paused) this.switchSlot(2); break;
       case 'Digit3': if (!this.paused) this.switchSlot(3); break;
-      case 'KeyQ': if (!this.paused) this.switchSlot(this.player.nextSlot()); break;
+      case 'KeyQ': if (!this.paused) { this.switchSlot(this.player.nextSlot()); UI.showWheel(this); setTimeout(() => UI.hideWheel(), 1500); } break;
       case 'KeyN': this.invertY(); break;
       // On PC the pointer is locked during play, so DOM buttons cannot be
       // clicked at all — the range features get keyboard shortcuts.
@@ -1306,6 +1308,99 @@ const Game = {
       case 'KeyO':
         if (!this.paused) this.cycleTimeOfDay();
         break;
+    }
+  },
+
+  /* ============================================================
+     ACHIEVEMENTS · RECORDS · PET
+     ============================================================ */
+  statsSnapshot() {
+    const p = this.player;
+    return {
+      kills: p ? p.zombieKills : 0,
+      headshots: p ? p.headshots : 0,
+      money: p ? p.money : 0,
+      wave: this.offline ? this.offline.wave : 0,
+      bossKills: this._bossKills || 0,
+      playTime: this.offline ? (U.now() - this.offline.startTime) / 1000 : 0
+    };
+  },
+  checkAchievements() {
+    const s = this.statsSnapshot();
+    const ach = Store.data.ach = Store.data.ach || {};
+    let earned = false;
+    ACHIEVEMENTS.forEach(a => {
+      if (ach[a.id]) return;
+      if (a.check(s)) {
+        ach[a.id] = 1; earned = true;
+        UI.toast('ДОСТИЖЕНИЕ: ' + a.name + ' — ' + a.desc, '#ffd24a');
+        UI.feed('<span class="z">🏆 ' + a.name + '</span>');
+        Audio3D_SFX.buy();
+      }
+    });
+    if (earned) Store.save();
+    return earned;
+  },
+  recordRun() {
+    const p = this.player;
+    if (!p) return;
+    const runs = Store.data.runs = Store.data.runs || [];
+    runs.push({
+      score: p.score, wave: this.offline ? this.offline.wave : 0,
+      kills: p.zombieKills, mode: this.specialMode || 'normal',
+      date: new Date().toISOString().slice(0, 10)
+    });
+    runs.sort((a, b) => b.score - a.score);
+    Store.data.runs = runs.slice(0, 10);
+    Store.save();
+  },
+  buildPet() {
+    if (!Store.data.petOwned) return;
+    if (this.pet) return;
+    const g = new THREE.Group();
+    const body = new THREE.Mesh(new THREE.CapsuleGeometry(.14, .22, 4, 8),
+      new THREE.MeshLambertMaterial({ color: 0xf2c93b, emissive: 0x2a2008 }));
+    body.rotation.z = Math.PI / 2; body.position.y = .2; g.add(body);
+    const eyeMat = new THREE.MeshBasicMaterial({ color: 0x101010 });
+    [-1, 1].forEach(s => {
+      const e = new THREE.Mesh(new THREE.SphereGeometry(.022, 6, 5), eyeMat);
+      e.position.set(s * .06, .26, -.13); g.add(e);
+    });
+    const stem = new THREE.Mesh(new THREE.BoxGeometry(.03, .06, .03), new THREE.MeshLambertMaterial({ color: 0x6f8f3a }));
+    stem.position.y = .32; g.add(stem);
+    this.scene.add(g);
+    this.pet = { mesh: g, pos: { x: 0, y: 1, z: 0 }, bob: 0 };
+  },
+  removePet() {
+    if (!this.pet) return;
+    if (this.pet.mesh.parent) this.pet.mesh.parent.remove(this.pet.mesh);
+    this.pet.mesh.traverse(o => { if (o.geometry) o.geometry.dispose(); });
+    this.pet = null;
+  },
+  updatePet(dt) {
+    if (!this.pet || !this.player) return;
+    const p = this.player;
+    const pt = this.pet;
+    // hover just in front of and beside the player
+    const tx = p.pos.x + Math.sin(p.yaw) * 1.1 + Math.cos(p.yaw) * .7;
+    const tz = p.pos.z + Math.cos(p.yaw) * 1.1 - Math.sin(p.yaw) * .7;
+    const ty = (this.world.groundAt(tx, tz, p.pos.y + 4) || 0) + 1.05;
+    pt.bob += dt * 4;
+    pt.pos.x = U.lerp(pt.pos.x, tx, 1 - Math.pow(.02, dt));
+    pt.pos.y = U.lerp(pt.pos.y, ty + Math.sin(pt.bob) * .08, 1 - Math.pow(.03, dt));
+    pt.pos.z = U.lerp(pt.pos.z, tz, 1 - Math.pow(.02, dt));
+    pt.mesh.position.set(pt.pos.x, pt.pos.y, pt.pos.z);
+    // it nibbles the nearest zombie it bumps into
+    pt.atkCd = Math.max(0, (pt.atkCd || 0) - dt);
+    if (pt.atkCd <= 0 && this.horde) {
+      for (const z of this.horde.list) {
+        if (!z.alive || z.dying) continue;
+        if (Math.hypot(z.pos.x - pt.pos.x, z.pos.z - pt.pos.z) < 1.3) {
+          z.takeDamage(18, 'body', { x: 0, y: 0, z: 0 });
+          pt.atkCd = 1.2;
+          break;
+        }
+      }
     }
   },
 
@@ -1565,6 +1660,7 @@ const Game = {
     this.offlineDeadT = 0;
     this._creditsOpen = false;
     this._modPickOpen = false;
+    this._bossKills = 0;
     // NOTE: the checkpoint is deliberately NOT cleared here. It is dropped only
     // by an explicit "НОВАЯ ИГРА" (or after being consumed), so leaving to the
     // menu and returning can still resume the run.
@@ -1645,6 +1741,7 @@ const Game = {
     this.horde = new Horde(this.scene, this.world, this);
     this.effects = new Effects(this.scene, Store.data.quality);
     this.effects.clear();
+    this.buildPet();
 
     this.spawnPlayerLocal(0);
     if (this.customOffline) {
@@ -4076,6 +4173,8 @@ const Game = {
     Store.data.clears = (Store.data.clears || 0) + 1;
     Store.save();
     this.player.score += 50000;
+    this.recordRun();
+    this.checkAchievements();
     // stop the wave flow: no break timer, no wave 101
     const o = this.offline;
     if (o) { o.campaignWon = true; o.betweenWaves = false; o.toSpawn = 0; }
@@ -5522,6 +5621,8 @@ const Game = {
       if (p.score > Store.data.best) { Store.data.best = p.score; Store.save(); }
       if (o.wave > Store.data.bestWave) { Store.data.bestWave = o.wave; Store.save(); }
       Store.data.killsTotal += p.zombieKills; Store.save();
+      this.recordRun();
+      this.checkAchievements();
       UI.center('ВЫ ПОГИБЛИ', 'Счёт: ' + p.score + ' · Волна ' + o.wave, 4.0);
       UI.toast('Волна ' + o.wave + ' · Счёт ' + p.score + ' · Нажмите Tab для статистики', '#e33a2e');
       this.roundState = 'end';
@@ -5577,7 +5678,9 @@ const Game = {
       // no boss left alive → back to the battle track (or menu)
       const anyLeft = this.horde && this.horde.list.some(o => o !== z && (o.isBoss || o.isMiniBoss) && o.alive && !o.dying);
       if (!anyLeft) this.refreshMusic();
+      if (z.isBoss) { this._bossKills = (this._bossKills || 0) + 1; }
     }
+    this.checkAchievements();
     UI.feed('<b>' + U.esc(p.name) + '</b> <span class="z">✖ ' + def.name + (headshot ? ' (в голову)' : '') + '</span> +$' + def.money);
     if (headshot) UI.toast('В ГОЛОВУ! +$' + def.money + ' +' + Math.round(def.score * 1.5) + ' очков', '#ff9d21');
     Bus.emit('kill', z, headshot);
@@ -6352,6 +6455,7 @@ const Game = {
     this.updateBuyPhase(dt);
     if (this.mode === CS.MODE.OFFLINE && !this._modPickOpen) { this.updateOffline(dt); this.updateCrates(dt); }
     this.updateGrenades(dt);
+    this.updatePet(dt);
 
     // ---- AI ----
     if (this.horde) this.horde.update(dt, p);

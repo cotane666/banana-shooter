@@ -408,6 +408,23 @@ const MODIFIERS = [
 const MOD_BASE = { speed: 1, hp: 1, dmg: 1, count: 1, armor: 0, spawn: 1, playerDmg: 1, playerHurt: 1, miniEvery: 3 };
 function makeModState() { return Object.assign({}, MOD_BASE); }
 
+/* ---------------- achievements ----------------
+   `check(s)` reads a live stats snapshot and returns true when earned. They are
+   stored in Store.data.ach and re-evaluated on every kill / wave / death. */
+const ACHIEVEMENTS = [
+  { id: 'firstBlood', name: 'ПЕРВАЯ КРОВЬ', desc: 'Убить первого зомби',       check: s => s.kills >= 1 },
+  { id: 'slayer100',  name: 'ЧИСТИЛЬЩИК',   desc: '100 зомби за забег',         check: s => s.kills >= 100 },
+  { id: 'slayer500',  name: 'МЯСОРУБКА',    desc: '500 зомби за забег',         check: s => s.kills >= 500 },
+  { id: 'wave10',     name: 'ДЕСЯТКА',      desc: 'Дожить до 10 волны',         check: s => s.wave >= 10 },
+  { id: 'wave25',     name: 'ВЕТЕРАН',      desc: 'Дожить до 25 волны',         check: s => s.wave >= 25 },
+  { id: 'wave50',     name: 'ЛЕГЕНДА',      desc: 'Дожить до 50 волны',         check: s => s.wave >= 50 },
+  { id: 'boss1',      name: 'ПОБЕДИТЕЛЬ БОССА', desc: 'Убить босса',            check: s => s.bossKills >= 1 },
+  { id: 'boss4',      name: 'ГРОЗА БОССОВ', desc: 'Убить 4 боссов',             check: s => s.bossKills >= 4 },
+  { id: 'head10',     name: 'СНАЙПЕР',      desc: '10 убийств в голову',        check: s => s.headshots >= 10 },
+  { id: 'rich',       name: 'БОГАЧ',        desc: 'Накопить $50 000',           check: s => s.money >= 50000 },
+  { id: 'survive',    name: 'ЖИВУЧИЙ',      desc: 'Пережить 15 минут в забеге', check: s => s.playTime >= 900 }
+];
+
 /* ---------------- utils ---------------- */
 const U = {
   clamp: (v, a, b) => v < a ? a : v > b ? b : v,
@@ -447,7 +464,8 @@ const Store = {
   data: { sens: 2.2, fov: 80, vol: 60, quality: 1, touchSens: 1.5, name: '', best: 0, bestWave: 0, killsTotal: 0, matches: 0, wins: 0, signalSrv: 0, aimBest: 0, aimAutoFire: 1,
           map: 'arena', players: 2, maxHP: 100, aimAssist: 1, horde: 0, clears: 0, freeplay: 0, rounds: 3, playTime: 0,
           offCount: 1, offHp: 1, offFree: 0, offMode: 'normal', offMods: {}, offModsRun: 0, offModPick: 0, checkpoint: null, shopAllow: {}, shopItems: {}, music: 1, sfxVol: 100, musicVol: 70,
-          grenade: 'frag', buildable: 'turret', weather: 'day', trapsEnabled: 1 },
+          grenade: 'frag', buildable: 'turret', weather: 'day', trapsEnabled: 1,
+          ach: {}, runs: [], petOwned: 1 },
   load() {
     try { const r = localStorage.getItem(this.key); if (r) Object.assign(this.data, JSON.parse(r)); } catch (e) { }
     return this.data;

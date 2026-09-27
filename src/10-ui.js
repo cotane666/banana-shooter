@@ -23,6 +23,7 @@ const UI = {
       'mapChips', 'playerChips', 'hpChips', 'hordeChips', 'lobbyMaps', 'lobbyPlayers', 'lobbyHp', 'lobbyFree', 'lobbyRounds',
       'offCountChips', 'offHpChips', 'offFreeChips', 'offModeChips', 'offCustomBox', 'offHordeBox', 'offSpecialBox', 'offCpBox', 'offCpInfo', 'btnOffContinue', 'custom', 'lobbyShop', 'lobbyShopItems',
       'modScreen', 'modGrid', 'modActive',
+      'extras', 'achGrid', 'recTable', 'btnExtrasBack', 'weaponWheel', 'wwInner',
       'medkitTag', 'droneTag', 'grenadeTag', 'shieldTag', 'heatTag', 'missileHud', 'mhTime', 'mhReadout',
       'sdScreen', 'sdGrid', 'sdSearch', 'sdToggle2', 'sdClose', 'sdConfig',
       'esScreen', 'esGrid', 'esSearch', 'esCount', 'esClear', 'esClose', 'esConfig'];
@@ -33,7 +34,7 @@ const UI = {
 
   /* ---------------- screens ---------------- */
   show(name) {
-    ['loading', 'menu', 'controls', 'lobby', 'hud', 'buy', 'scoreboard', 'pause', 'connect', 'android', 'ios', 'credits', 'matchEnd', 'custom', 'clickToPlay', 'sdScreen', 'esScreen', 'modScreen'].forEach(s => {
+    ['loading', 'menu', 'controls', 'lobby', 'hud', 'buy', 'scoreboard', 'pause', 'connect', 'android', 'ios', 'credits', 'matchEnd', 'custom', 'clickToPlay', 'sdScreen', 'esScreen', 'modScreen', 'extras'].forEach(s => {
       const e = this.el[s];
       if (!e) return;
       const on = s === name;
@@ -42,12 +43,12 @@ const UI = {
     this.current = name;
   },
   hideOverlays() {
-    ['buy', 'scoreboard', 'pause', 'controls', 'lobby', 'menu', 'connect', 'android', 'ios', 'credits', 'matchEnd', 'custom', 'sdScreen', 'esScreen', 'modScreen'].forEach(s => {
+    ['buy', 'scoreboard', 'pause', 'controls', 'lobby', 'menu', 'connect', 'android', 'ios', 'credits', 'matchEnd', 'custom', 'sdScreen', 'esScreen', 'modScreen', 'extras'].forEach(s => {
       if (this.el[s]) this.el[s].classList.add('hidden');
     });
   },
   overlayOpen() {
-    return ['buy', 'scoreboard', 'pause', 'controls', 'lobby', 'menu', 'connect', 'android', 'ios', 'credits', 'matchEnd', 'custom', 'sdScreen', 'esScreen', 'modScreen'].some(s => this.el[s] && !this.el[s].classList.contains('hidden'));
+    return ['buy', 'scoreboard', 'pause', 'controls', 'lobby', 'menu', 'connect', 'android', 'ios', 'credits', 'matchEnd', 'custom', 'sdScreen', 'esScreen', 'modScreen', 'extras'].some(s => this.el[s] && !this.el[s].classList.contains('hidden'));
   },
 
   /* ============================================================
@@ -850,14 +851,49 @@ const UI = {
 
   renderMenuStats() {
     const clears = Store.data.clears || 0;
+    const achN = Object.keys(Store.data.ach || {}).length;
     this.el.menuStats.innerHTML =
       '<div class="clearstat"><b>' + clears + '</b>ПРОХОЖДЕНИЙ</div>' +
       '<div><b>' + Store.data.best + '</b>РЕКОРД</div>' +
       '<div><b>' + Store.data.bestWave + '</b>ЛУЧШАЯ ВОЛНА</div>' +
       '<div><b>' + Store.data.killsTotal + '</b>ЗОМБИ УБИТО</div>' +
       '<div><b>' + Store.data.wins + '/' + Store.data.matches + '</b>ПОБЕД В ОНЛАЙН</div>' +
+      '<div><b>' + achN + '/' + ACHIEVEMENTS.length + '</b>ДОСТИЖЕНИЙ</div>' +
       '<div><b>' + U.duration(Store.data.playTime) + '</b>ВРЕМЯ В ИГРЕ</div>';
-  }
+  },
+
+  /* achievements + best-run table */
+  renderExtras() {
+    const ach = Store.data.ach || {};
+    if (this.el.achGrid) {
+      this.el.achGrid.innerHTML = ACHIEVEMENTS.map(a => {
+        const on = !!ach[a.id];
+        return '<div class="achcard' + (on ? ' on' : '') + '"><b>' + (on ? '🏆 ' : '🔒 ') + U.esc(a.name) + '</b><i>' + U.esc(a.desc) + '</i></div>';
+      }).join('');
+    }
+    if (this.el.recTable) {
+      const runs = Store.data.runs || [];
+      if (!runs.length) this.el.recTable.innerHTML = '<tr><td class="t">Пока нет завершённых забегов</td></tr>';
+      else this.el.recTable.innerHTML = '<tr><th>#</th><th>СЧЁТ</th><th>ВОЛНА</th><th>УБИТО</th><th>РЕЖИМ</th><th>ДАТА</th></tr>' +
+        runs.map((r, i) => '<tr><td class="t">' + (i + 1) + '</td><td class="s">' + r.score + '</td><td>' + r.wave + '</td><td>' + r.kills + '</td><td>' + U.esc(r.mode) + '</td><td class="t">' + r.date + '</td></tr>').join('');
+    }
+  },
+
+  /* weapon wheel: a radial list of owned weapons; clicking one switches */
+  showWheel(game) {
+    const p = game.player;
+    if (!p || !this.el.weaponWheel) return;
+    const items = [];
+    for (const s of [1, 2, 3]) { const w = p.inv[s]; if (w) items.push({ slot: s, id: w.id, name: WEAPONS[w.id] ? WEAPONS[w.id].name : w.id }); }
+    this.el.wwInner.innerHTML = items.map(it =>
+      '<button class="wwitem' + (p.slot === it.slot ? ' on' : '') + '" data-slot="' + it.slot + '"><b>' + it.slot + '</b><span>' + U.esc(it.name) + '</span></button>'
+    ).join('');
+    Array.from(this.el.wwInner.children).forEach(b => {
+      b.addEventListener('click', () => { game.switchSlot(parseInt(b.dataset.slot, 10)); this.hideWheel(); });
+    });
+    this.el.weaponWheel.classList.remove('hidden');
+  },
+  hideWheel() { if (this.el.weaponWheel) this.el.weaponWheel.classList.add('hidden'); }
 };
 
 /* ---------------- keyboard shortcut helper ---------------- */

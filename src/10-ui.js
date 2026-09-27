@@ -23,7 +23,7 @@ const UI = {
       'mapChips', 'playerChips', 'hpChips', 'hordeChips', 'lobbyMaps', 'lobbyPlayers', 'lobbyHp', 'lobbyFree', 'lobbyRounds',
       'offCountChips', 'offHpChips', 'offFreeChips', 'offModeChips', 'offCustomBox', 'offHordeBox', 'offSpecialBox', 'offCpBox', 'offCpInfo', 'btnOffContinue', 'custom', 'lobbyShop', 'lobbyShopItems',
       'modScreen', 'modGrid', 'modActive',
-      'medkitTag', 'droneTag', 'shieldTag', 'heatTag', 'missileHud', 'mhTime', 'mhReadout',
+      'medkitTag', 'droneTag', 'grenadeTag', 'shieldTag', 'heatTag', 'missileHud', 'mhTime', 'mhReadout',
       'sdScreen', 'sdGrid', 'sdSearch', 'sdToggle2', 'sdClose', 'sdConfig',
       'esScreen', 'esGrid', 'esSearch', 'esCount', 'esClear', 'esClose', 'esConfig'];
     ids.forEach(i => this.el[i] = $(i));
@@ -401,6 +401,14 @@ const UI = {
       e.droneTag.classList.toggle('hidden', !ready);
       e.droneTag.classList.toggle('usable', ready);
     }
+    // grenades: current kind and how many are left
+    if (e.grenadeTag) {
+      const kind = Store.data.grenade || 'frag';
+      const n = (p.grenades && p.grenades[kind]) || 0;
+      e.grenadeTag.textContent = grenadeName(kind) + ' ×' + n;
+      e.grenadeTag.classList.toggle('hidden', n <= 0 && !(p.grenades && (p.grenades.frag + p.grenades.freeze + p.grenades.napalm) > 0));
+      e.grenadeTag.classList.toggle('usable', n > 0);
+    }
     // energy shield state, shown while the shield is the held weapon
     if (e.shieldTag) {
       const held = !!(p.slot === 2 && p.inv[2] && p.inv[2].id === 'shield');
@@ -540,6 +548,13 @@ const UI = {
           cant = (!free && player.money < g.price) || full;
           stats = [['ЛЕЧИТ', '+' + CFG.medkitHeal + ' HP'], ['В ЗАПАСЕ', unlimited ? n : (n + '/' + CFG.medkitMax)], ['КЛАВИША', 'H']];
           desc = full ? 'Лимит — купите ЯЩИК АПТЕЧЕК' : 'Применить в бою (или кнопка на телефоне)';
+        } else if (g.grenade) {
+          player.grenades = player.grenades || { frag: 0, freeze: 0, napalm: 0 };
+          const n = player.grenades[g.grenade] || 0;
+          owned = false;
+          cant = (!free && player.money < g.price) || n >= 4;
+          stats = [['В ЗАПАСЕ', n + '/4'], ['КЛАВИША', 'G'], ['СМЕНА', 'J']];
+          desc = g.desc;
         } else if (g.ammo) {
           owned = false;
           cant = !free && player.money < g.price;

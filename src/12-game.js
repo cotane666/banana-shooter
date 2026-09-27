@@ -1259,6 +1259,8 @@ const Game = {
         break;
       case 'KeyR': if (!this.paused) this.player.reload(); break;
       case 'KeyH': if (!this.paused) this.useMedkit(); break;
+      case 'KeyG': if (!this.paused) this.throwGrenade(); break;
+      case 'KeyJ': if (!this.paused) this.cycleGrenade(); break;
       case 'KeyF': if (!this.paused) { if (this.drone) this.detonateDrone(false); else this.launchDrone(); } break;
       // dedicated climb: E vaults onto whatever the player is facing
       case 'KeyE': if (!this.paused && this.player) this.player.climbQueued = true; break;
@@ -2835,8 +2837,8 @@ const Game = {
     if (!this.itemAllowed(id)) { Audio3D_SFX.deny(); UI.toast('Этот предмет выключен хостом'); return; }
     const free = this.isFreeShop();
 
-    /* Consumables: ammo refill, kamikaze drone, and the medkit upgrade. */
-    if (g.ammo || g.medkit || g.medkitBox || g.drone) {
+    /* Consumables: ammo refill, kamikaze drone, grenades and the medkit upgrade. */
+    if (g.ammo || g.medkit || g.medkitBox || g.drone || g.grenade) {
       if (!free && this.player.money < g.price) { Audio3D_SFX.deny(); UI.toast('Не хватает денег'); return; }
       // the field kit is limited unless the medkit-box upgrade was bought
       if (g.medkit && !this.player.medkitUnlimited && (this.player.medkits || 0) >= CFG.medkitMax) {
@@ -2851,10 +2853,19 @@ const Game = {
       else if (g.medkit) this.player.medkits = (this.player.medkits || 0) + 1;
       else if (g.medkitBox) { this.player.medkitUnlimited = true; }
       else if (g.drone) { this.player.drone = (this.player.drone || 0) + 1; this.player.droneOwned = true; }
+      else if (g.grenade) {
+        const cap = 4;
+        this.player.grenades = this.player.grenades || { frag: 0, freeze: 0, napalm: 0 };
+        const cur = this.player.grenades[g.grenade] || 0;
+        if (cur >= cap) { Audio3D_SFX.deny(); UI.toast('Гранат максимум: ' + cap); if (!free) this.player.money += g.price; return; }
+        this.player.grenades[g.grenade] = cur + 1;
+        Store.data.grenade = g.grenade; Store.save();
+      }
       Audio3D_SFX.buy();
       const extra = g.medkitBox ? ' — лимит аптечек снят'
         : g.medkit ? ' (' + this.player.medkits + ' в запасе)'
-          : g.drone ? ' (' + this.player.drone + ' в запасе)' : '';
+          : g.drone ? ' (' + this.player.drone + ' в запасе)'
+            : g.grenade ? ' (' + this.player.grenades[g.grenade] + ' шт · G — бросок)' : '';
       UI.toast('Куплено: ' + g.name + extra, '#57d16a');
       UI.renderBuy(this.player, this.buyTimer);
       if (this.mode === CS.MODE.ONLINE) this.broadcastScore();
@@ -2904,6 +2915,16 @@ const Game = {
   },
 
   /* Аптечка: instant heal, usable at any time during a live round/battle */
+  /* cycle the active grenade kind */
+  cycleGrenade() {
+    const order = ['frag', 'freeze', 'napalm'];
+    const cur = Store.data.grenade || 'frag';
+    const next = order[(order.indexOf(cur) + 1) % order.length];
+    Store.data.grenade = next; Store.save();
+    UI.toast('Граната: ' + grenadeName(next), '#ff9d21');
+    Audio3D_SFX.uiClick();
+  },
+
   useMedkit() {
     const p = this.player;
     if (!p || !p.alive) return false;
@@ -2918,6 +2939,116 @@ const Game = {
     UI.toast('+' + CFG.medkitHeal + ' HP', '#57d16a');
     if (this.mode === CS.MODE.ONLINE) this.broadcastScore();
     return true;
+  },
+
+  /* ============================================================
+     GRENADES (G / ЛКМ на «ГРАНАТАХ», кнопка на телефоне)
+     Three kinds: frag (shrapnel), freeze (cryo) and napalm (fire pool).
+     A grenade is lobbed, bounces once or twice, then detonates.
+     ============================================================ */
+  throwGrenade() {
+    const p = this.player;
+    if (!p || !p.alive) return false;
+    if (this.mode === CS.MODE.MENU || this.paused) return false;
+    if (this.roundState === 'buy' && this.mode !== CS.MODE.RANGE) { UI.toast('Гранаты — только в бою', '#f5d33c'); Audio3D_SFX.deny(); return false; }
+    const kind = Store.data.grenade || 'frag';
+    const count = p.grenades ? (p.grenades[kind] || 0) : 0;
+    if (count <= 0) { UI.toast('Гранат нет — купите в магазине (B)', '#f5d33c'); Audio3D_SFX.deny(); return false; }
+    p.grenades[kind] = count - 1;
+    const eye = this.eyePos();
+    const d = this.cameraDir();
+    const start = { x: eye.x + d.x * .5, y: eye.y + .1, z: eye.z + d.z * .5 };
+    const mesh = buildGrenadeModel(kind);
+    mesh.position.set(start.x, start.y, start.z);
+    this.scene.add(mesh);
+    const speed = 19;
+    this._grenades = this._grenades || [];
+    this._grenades.push({
+      kind: kind, mesh: mesh, pos: { x: start.x, y: start.y, z: start.z },
+      vel: { x: d.x * speed, y: d.y * speed + 2.6, z: d.z * speed },
+      grav: CFG.gravity * .75, fuse: 2.4, bounces: 0
+    });
+    Audio3D_SFX.uiClick();
+    return true;
+  },
+
+  updateGrenades(dt) {
+    if (!this._grenades || !this._grenades.length) return;
+    const world = this.world;
+    for (let i = this._grenades.length - 1; i >= 0; i--) {
+      const g = this._grenades[i];
+      g.fuse -= dt;
+      g.vel.y -= g.grav * dt;
+      const nx = g.pos.x + g.vel.x * dt, ny = g.pos.y + g.vel.y * dt, nz = g.pos.z + g.vel.z * dt;
+      const len = Math.hypot(nx - g.pos.x, ny - g.pos.y, nz - g.pos.z);
+      const dir = len > 1e-6 ? { x: (nx - g.pos.x) / len, y: (ny - g.pos.y) / len, z: (nz - g.pos.z) / len } : { x: 0, y: -1, z: 0 };
+      const hit = world.raycastAll(g.pos, dir, len + .12);
+      if (hit.length) {
+        const h = hit[0];
+        g.pos.x = h.point.x + h.normal.x * .12; g.pos.y = h.point.y + h.normal.y * .12; g.pos.z = h.point.z + h.normal.z * .12;
+        const vn = g.vel.x * h.normal.x + g.vel.y * h.normal.y + g.vel.z * h.normal.z;
+        g.vel.x -= 2 * vn * h.normal.x; g.vel.y -= 2 * vn * h.normal.y; g.vel.z -= 2 * vn * h.normal.z;
+        g.vel.x *= .5; g.vel.y *= .5; g.vel.z *= .5;
+        g.bounces++;
+      } else { g.pos.x = nx; g.pos.y = ny; g.pos.z = nz; }
+      g.mesh.position.set(g.pos.x, g.pos.y, g.pos.z);
+      g.mesh.rotation.x += dt * 6; g.mesh.rotation.y += dt * 4;
+      if (g.fuse <= 0) { this.detonateGrenade(g); this.removeGrenade(i); }
+    }
+  },
+
+  detonateGrenade(g) {
+    const kind = g.kind;
+    if (kind === 'frag') {
+      const R = 5.2, dmg = 190;
+      this.effects.explosion(g.pos.x, g.pos.y, g.pos.z, R, [0xffb060, 0x151210]);
+      Audio3D_SFX.explosionAt(g.pos.x, g.pos.y, g.pos.z);
+      if (this.horde) for (const z of this.horde.list) {
+        if (!z.alive || z.dying) continue;
+        const d = Math.hypot(z.pos.x - g.pos.x, (z.pos.y + 1) - g.pos.y, z.pos.z - g.pos.z);
+        if (d > R) continue;
+        const dealt = dmg * (1 - d / R);
+        z.takeDamage(dealt, 'body', { x: 0, y: 0, z: 0 });
+        this.player.damageDealt += dealt;
+      }
+      const p = this.player;
+      const ds = Math.hypot(p.pos.x - g.pos.x, (p.pos.y + 1) - g.pos.y, p.pos.z - g.pos.z);
+      if (ds < R * .9) this.applyDamageToSelf(dmg * (1 - ds / (R * .9)) * .3, g.pos);
+    } else if (kind === 'freeze') {
+      const R = 5.5;
+      this.effects.frostBurst(g.pos.x, g.pos.y, g.pos.z, R);
+      this.effects.decal(g.pos.x, g.pos.y + .02, g.pos.z, 0, 1, 0, R, 'frost', null, null, R, g.pos);
+      Audio3D_SFX.explosionAt(g.pos.x, g.pos.y, g.pos.z);
+      this.freezeAt(g.pos, R, 4.5, 40);
+    } else if (kind === 'napalm') {
+      const R = 6.4, dmg = 60;
+      this.effects.explosion(g.pos.x, g.pos.y, g.pos.z, R, [0xff7a1a, 0x2a0d02]);
+      Audio3D_SFX.explosionAt(g.pos.x, g.pos.y, g.pos.z);
+      if (this.horde) for (const z of this.horde.list) {
+        if (!z.alive || z.dying) continue;
+        const d = Math.hypot(z.pos.x - g.pos.x, z.pos.z - g.pos.z);
+        if (d < R) { z.takeDamage(dmg, 'body', { x: 0, y: 0, z: 0 }); this.player.damageDealt += dmg; }
+      }
+      // a burning ground pool that keeps damaging (re-use the acid field)
+      this.effects.decal(g.pos.x, g.pos.y + .02, g.pos.z, 0, 1, 0, R, 'acid', null, null, R, g.pos);
+      for (let k = 0; k < 14; k++) {
+        const a = U.rand(0, 6.28), r = U.rand(.4, R);
+        this.effects.particle(g.pos.x + Math.cos(a) * r, g.pos.y + .2, g.pos.z + Math.sin(a) * r,
+          0, U.rand(1.4, 3.4), 0, U.rand(.10, .26), 'spark', U.rand(.5, 1.2));
+      }
+    }
+  },
+
+  removeGrenade(i) {
+    const g = this._grenades[i];
+    if (g && g.mesh.parent) g.mesh.parent.remove(g.mesh);
+    if (g && g.mesh.traverse) g.mesh.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material) o.material.dispose(); });
+    this._grenades.splice(i, 1);
+  },
+
+  clearGrenades() {
+    if (!this._grenades) return;
+    while (this._grenades.length) this.removeGrenade(0);
   },
 
   /* ============================================================
@@ -4724,6 +4855,7 @@ const Game = {
     this.removeTurretDrone();
     this.clearHiveDrones();
     this.clearChrono();
+    this.clearGrenades();
   },
 
   clearDrone() {
@@ -5992,6 +6124,7 @@ const Game = {
     // ---- round flow ----
     this.updateBuyPhase(dt);
     if (this.mode === CS.MODE.OFFLINE && !this._modPickOpen) { this.updateOffline(dt); this.updateCrates(dt); }
+    this.updateGrenades(dt);
 
     // ---- AI ----
     if (this.horde) this.horde.update(dt, p);

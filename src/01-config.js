@@ -321,8 +321,12 @@ const GEAR = {
   ammo:         { name: 'ПАТРОНЫ',        price: 1500, ammo: true, desc: 'Полный запас ко всем стволам' },
   medkit:       { name: 'АПТЕЧКА',        price: 600,  medkit: true, desc: 'H или кнопка — +50 HP в бою' },
   medkitBox:    { name: 'ЯЩИК АПТЕЧЕК',   price: 10000, medkitBox: true, desc: 'Навсегда снимает лимит на аптечки' },
-  drone:        { name: 'ДРОН-КАМИКАДЗЕ', price: 10000, drone: true, desc: 'Управляемый · враг может сбить' }
+  drone:        { name: 'ДРОН-КАМИКАДЗЕ', price: 10000, drone: true, desc: 'Управляемый · враг может сбить' },
+  frag:         { name: 'ГРАНАТА',         price: 300,  grenade: 'frag',   desc: 'Осколочная · G — бросок' },
+  freezeNade:   { name: 'КРИО-ГРАНАТА',    price: 500,  grenade: 'freeze', desc: 'Замораживает зомби в области' },
+  napalmNade:   { name: 'НАПАЛМ',          price: 700,  grenade: 'napalm', desc: 'Оставляет горящую лужу' }
 };
+function grenadeName(kind) { return kind === 'freeze' ? 'КРИО' : kind === 'napalm' ? 'НАПАЛМ' : 'ГРАНАТА'; }
 
 const BUY_CATS = [
   { id: 'pistol',  label: 'ПИСТОЛЕТЫ' },

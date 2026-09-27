@@ -1310,6 +1310,27 @@ function addGlowSphere(g, r, color, opacity) {
   return halo;
 }
 
+/* A grenade: a small round body with a lever, coloured by kind */
+function buildGrenadeModel(kind) {
+  const col = kind === 'freeze' ? 0x8fe6ff : kind === 'napalm' ? 0xd8641a : 0x4a5a3a;
+  const g = new THREE.Group();
+  const body = new THREE.Mesh(new THREE.SphereGeometry(.10, 10, 8),
+    new THREE.MeshLambertMaterial({ color: col, emissive: 0x0a0c0a }));
+  body.scale.y = 1.25;
+  g.add(body);
+  const cap = new THREE.Mesh(new THREE.CylinderGeometry(.035, .045, .06, 8), gunMat(0x2b2f34));
+  cap.position.y = .14; g.add(cap);
+  const lever = new THREE.Mesh(new THREE.BoxGeometry(.02, .10, .04), gunMat(0x8b939d));
+  lever.position.set(.05, .10, 0); lever.rotation.z = .25; g.add(lever);
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(.03, .008, 6, 12), gunMat(0xb0b6bd));
+  ring.position.set(.08, .14, 0); ring.rotation.y = Math.PI / 2; g.add(ring);
+  // a faint glow so it reads in flight
+  const halo = new THREE.Mesh(new THREE.SphereGeometry(.16, 8, 6),
+    new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: .18, blending: THREE.AdditiveBlending, depthWrite: false }));
+  g.add(halo);
+  return g;
+}
+
 /* A glob of acid thrown by a spitter: a sickly green sphere with a soft glow */
 function buildAcidBlob() {
   const g = new THREE.Group();
@@ -1487,6 +1508,7 @@ class Player {
     this.medkitUnlimited = false;  // the medkit-box upgrade removed the carry cap
     this.drone = 0;           // kamikaze drones ready to launch, with F
     this.droneOwned = false;  // has bought the drone: it recharges every online round
+    this.grenades = { frag: 0, freeze: 0, napalm: 0 };   // thrown with G
     // energy shield (active shield): raised by LMB for a few seconds, then cools
     this.shieldActive = false;
     this.shieldT = 0;         // seconds left while the field is up

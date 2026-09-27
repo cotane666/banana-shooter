@@ -1554,71 +1554,81 @@ function buildMechChassis() {
     b.castShadow = true; b.receiveShadow = true;
     g.add(b); return b;
   };
-  // ------- torso / cockpit (around eye height ~3.3) -------
-  box(1.10, 1.05, .78, matB, 0, 2.75, 0);              // chest
-  box(1.18, .14, .84, matB2, 0, 3.30, 0);              // top plate
-  box(1.14, .14, .84, matB2, 0, 2.24, 0);              // lower plate
-  box(.44, .50, .10, matW, 0, 2.80, .42);              // white chest panel
-  const visor = new THREE.Mesh(new THREE.BoxGeometry(.70, .16, .06), new THREE.MeshBasicMaterial({ color: 0x8fe6ff }));
-  visor.position.set(0, 3.16, .40); g.add(visor);
-  box(.18, .10, .04, matG, 0, 2.72, .47);              // eagle emblem
-  box(.05, .18, .04, matG, 0, 2.72, .47);
-  [-1, 1].forEach(s => box(.09, .13, .04, matG, s * .10, 2.72, .47, 0, 0, s * .5));
-  // shoulder pauldrons
-  box(.52, .50, .62, matB, -1.00, 3.22, 0);
-  box(.52, .50, .62, matB, 1.00, 3.22, 0);
-  box(.56, .12, .66, matB2, -1.00, 3.50, 0);
-  box(.56, .12, .66, matB2, 1.00, 3.50, 0);
-  [-1, 1].forEach(s => { for (let i = 0; i < 3; i++) box(.06, .06, .06, matG, s * 1.22, 3.32 - i * .14, .22); });
-  // right arm: minigun cluster (points forward, -Z)
+  /* OPEN COCKPIT layout: the eye sits at ~3.3, so every structural piece is kept
+     BELOW that line or pushed to the sides — nothing crosses the centre of view. */
+  // ------- torso: a low chest the pilot's legs sit in (top well under the eyes) -------
+  box(1.06, .62, .80, matB, 0, 2.42, -.06);            // chest (top ≈ 2.73)
+  box(1.12, .12, .84, matB2, 0, 2.74, -.06);           // chest rim
+  box(1.02, .12, .80, matB2, 0, 2.10, -.06);           // belt
+  box(.42, .40, .10, matW, 0, 2.42, -.44);              // white front panel (below eyes, ahead)
+  box(.16, .09, .04, matG, 0, 2.44, -.50);              // eagle emblem
+  box(.05, .16, .04, matG, 0, 2.44, -.50);
+  [-1, 1].forEach(s => box(.08, .11, .04, matG, s * .09, 2.44, -.50, 0, 0, s * .5));
+  // ------- side shoulder blocks (out at ±1, tops kept low so they frame the view) -------
+  [-1, 1].forEach(s => {
+    box(.50, .40, .60, matB, s * 1.02, 2.92, -.02);    // pauldron (top ≈ 3.12, at the very side)
+    box(.54, .10, .64, matB2, s * 1.02, 3.14, -.02);
+    for (let i = 0; i < 3; i++) box(.055, .055, .055, matG, s * 1.24, 3.02 - i * .12, .20);
+  });
+  // ------- open roll-cage: thin bars around the view, NOT across it -------
+  // two uprights behind the pilot + a top rail at the very top (above eye line)
+  [-.62, .62].forEach(x => box(.06, 1.9, .06, matD, x, 3.0, .40, .12, 0, 0));
+  box(1.34, .07, .07, matD, 0, 3.94, .34, .12, 0, 0);  // over-head rail (well above eyes)
+  box(.07, 1.9, .06, matD, -.62, 3.0, .40, .12, 0, 0);
+  // small angled corner braces so the cage reads as a structure
+  box(.07, .06, .5, matD, -.62, 3.86, .16, .5, 0, 0);
+  box(.07, .06, .5, matD, .62, 3.86, .16, .5, 0, 0);
+  // ------- right arm: minigun cluster, held low and out to the right -------
   const mgArm = new THREE.Group();
   const cluster = new THREE.Group();
   for (let i = 0; i < 6; i++) {
     const a = (i / 6) * Math.PI * 2;
-    const bc = new THREE.Mesh(new THREE.CylinderGeometry(.05, .05, 1.5, 8), matD);
+    const bc = new THREE.Mesh(new THREE.CylinderGeometry(.045, .045, 1.35, 8), matD);
     bc.rotation.x = Math.PI / 2;
-    bc.position.set(Math.cos(a) * .16, Math.sin(a) * .16, -1.15);
+    bc.position.set(Math.cos(a) * .14, Math.sin(a) * .14, -1.05);
     cluster.add(bc);
   }
-  const clamp = new THREE.Mesh(new THREE.CylinderGeometry(.19, .19, .16, 14), matD);
-  clamp.rotation.x = Math.PI / 2; clamp.position.z = -.55; cluster.add(clamp);
-  const ring = new THREE.Mesh(new THREE.CylinderGeometry(.16, .16, .10, 14), new THREE.MeshBasicMaterial({ color: 0x4ad6ff }));
-  ring.rotation.x = Math.PI / 2; ring.position.z = -1.86; cluster.add(ring);
+  const clamp = new THREE.Mesh(new THREE.CylinderGeometry(.17, .17, .16, 14), matD);
+  clamp.rotation.x = Math.PI / 2; clamp.position.z = -.5; cluster.add(clamp);
+  const ring = new THREE.Mesh(new THREE.CylinderGeometry(.14, .14, .10, 14), new THREE.MeshBasicMaterial({ color: 0x4ad6ff }));
+  ring.rotation.x = Math.PI / 2; ring.position.z = -1.7; cluster.add(ring);
   cluster.name = 'barrels';
   mgArm.add(cluster);
-  mgArm.position.set(1.35, 2.90, -.1);
+  mgArm.position.set(1.28, 2.55, -.15);                // low + right
   g.add(mgArm);
-  box(.42, .42, .60, matB2, 1.38, 3.15, .18);          // right arm housing
-  // left arm: laser pod with red missile tubes
+  box(.40, .38, .58, matB2, 1.30, 2.86, .12);          // right arm housing
+  // ------- left arm: laser pod + red missile tubes, low and out to the left -------
   const lzArm = new THREE.Group();
-  box(.46, .46, .66, matB2, 0, 0, 0);
-  box(.10, .42, .66, matW, -.27, 0, 0);
+  box(.44, .44, .64, matB2, 0, 0, 0);
+  box(.10, .40, .64, matW, -.26, 0, 0);
   for (let r = 0; r < 3; r++) for (let c = 0; c < 2; c++) {
-    const tube = new THREE.Mesh(new THREE.CylinderGeometry(.055, .055, .10, 10), new THREE.MeshLambertMaterial({ color: RED }));
+    const tube = new THREE.Mesh(new THREE.CylinderGeometry(.052, .052, .10, 10), new THREE.MeshLambertMaterial({ color: RED }));
     tube.rotation.x = Math.PI / 2;
-    tube.position.set((c - .5) * .13, .10 - r * .13, -.38);
+    tube.position.set((c - .5) * .12, .09 - r * .12, -.36);
     lzArm.add(tube);
   }
-  const emit = new THREE.Mesh(new THREE.CylinderGeometry(.10, .10, .90, 12), matD);
-  emit.rotation.x = Math.PI / 2; emit.position.set(0, -.30, -.7); lzArm.add(emit);
-  const emitRing = new THREE.Mesh(new THREE.CylinderGeometry(.12, .12, .08, 12), new THREE.MeshBasicMaterial({ color: 0x39ff6a }));
-  emitRing.rotation.x = Math.PI / 2; emitRing.position.set(0, -.30, -1.1); lzArm.add(emitRing);
-  lzArm.position.set(-1.35, 2.95, -.1);
+  const emit = new THREE.Mesh(new THREE.CylinderGeometry(.09, .09, .85, 12), matD);
+  emit.rotation.x = Math.PI / 2; emit.position.set(0, -.28, -.65); lzArm.add(emit);
+  const emitRing = new THREE.Mesh(new THREE.CylinderGeometry(.11, .11, .08, 12), new THREE.MeshBasicMaterial({ color: 0x39ff6a }));
+  emitRing.rotation.x = Math.PI / 2; emitRing.position.set(0, -.28, -1.02); lzArm.add(emitRing);
+  lzArm.position.set(-1.28, 2.58, -.15);
   g.add(lzArm);
   // ------- pelvis + legs -------
-  box(.90, .42, .62, matB2, 0, 2.05, 0);
+  box(.88, .40, .62, matB2, 0, 1.90, -.02);
   [-1, 1].forEach(s => {
-    box(.40, .70, .46, matB, s * .42, 1.55, 0);
-    box(.42, .12, .48, matB2, s * .42, 1.86, 0);
-    box(.46, .80, .40, matD, s * .42, .85, .05);
-    box(.42, .16, .44, matB, s * .42, 1.18, .02);
-    box(.52, .22, .78, matB, s * .42, .14, .10);
+    box(.40, .72, .46, matB, s * .42, 1.44, 0);        // thigh
+    box(.42, .12, .48, matB2, s * .42, 1.76, 0);
+    box(.46, .82, .40, matD, s * .42, .80, .05);       // shin
+    box(.42, .16, .44, matB, s * .42, 1.14, .02);
+    box(.52, .22, .78, matB, s * .42, .14, .10);       // foot
     box(.54, .10, .84, matB2, s * .42, .26, .10);
-    box(.16, .16, .04, matG, s * .42, 1.30, .28);
+    box(.16, .16, .04, matG, s * .42, 1.24, .28);      // golden badge
   });
-  [-.6, .6].forEach(x => { const e = new THREE.Mesh(new THREE.CylinderGeometry(.10, .12, .5, 10), matD); e.position.set(x, 3.2, -.55); g.add(e); });
-  for (let i = 0; i < 3; i++) box(.03, .03, .7, matD, -.9 + i * .06, 2.5, -.35, .5, 0, 0);
-  for (let i = 0; i < 3; i++) box(.03, .03, .7, matD, .9 - i * .06, 2.5, -.35, .5, 0, 0);
+  // exhaust stacks on the BACK (+z is behind the pilot, since forward is -z)
+  [-.55, .55].forEach(x => { const e = new THREE.Mesh(new THREE.CylinderGeometry(.09, .11, .5, 10), matD); e.position.set(x, 2.9, .5); g.add(e); });
+  // power cables (behind)
+  for (let i = 0; i < 3; i++) box(.03, .03, .6, matD, -.85 + i * .06, 2.4, .42, .5, 0, 0);
+  for (let i = 0; i < 3; i++) box(.03, .03, .6, matD, .85 - i * .06, 2.4, .42, .5, 0, 0);
   g.userData.barrels = cluster;
   return g;
 }

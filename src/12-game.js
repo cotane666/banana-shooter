@@ -3758,7 +3758,21 @@ const Game = {
     const wallHits = this.world.raycastAll(origin, dir, maxD);
     let beamEnd = this.eyePos();
     beamEnd.x += dir.x * maxD; beamEnd.y += dir.y * maxD; beamEnd.z += dir.z * maxD;
-    if (wallHits.length) beamEnd = wallHits[0].point;
+    if (wallHits.length) {
+      beamEnd = wallHits[0].point;
+      /* Leave a glowing scorch mark where the beam hits. It is throttled by
+         BOTH time and distance: standing still on one spot does not stack
+         decals, while sweeping the beam paints a continuous burn line. */
+      this._scorchT = (this._scorchT || 0) - dt;
+      const last = this._lastScorch;
+      const moved = !last || Math.hypot(beamEnd.x - last.x, beamEnd.y - last.y, beamEnd.z - last.z) > .55;
+      if (this._scorchT <= 0 && (moved || !last)) {
+        this._scorchT = .05;
+        this._lastScorch = { x: beamEnd.x, y: beamEnd.y, z: beamEnd.z };
+        const n = wallHits[0].normal || { x: -dir.x, y: -dir.y, z: -dir.z };
+        this.effects.scorch(beamEnd.x, beamEnd.y, beamEnd.z, n.x, n.y, n.z, .5 + Math.random() * .2);
+      }
+    }
     if (this.effects) this.effects.holdBeam(muzzle, beamEnd, def.beamColor);
     p.bulletsFired += dt * 20;           // counts as fire for the HUD/statistics
     UI.hitmark(false);

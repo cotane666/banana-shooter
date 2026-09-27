@@ -7466,11 +7466,12 @@ class Effects {
     this.decalMats = {
       concrete: new THREE.MeshBasicMaterial({ map: this._holeTexture(0x2a2724), transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4 }),
       metal: new THREE.MeshBasicMaterial({ map: this._holeTexture(0x3a3d40), transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4 }),
-      blood: new THREE.MeshBasicMaterial({ map: this._bloodTexture(), transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4 })
+      blood: new THREE.MeshBasicMaterial({ map: this._bloodTexture(), transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4 }),
+      scorch: new THREE.MeshBasicMaterial({ map: this._scorchTexture(), transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -5 })
     };
-
     this.tracerPool = [];
     this.particlePool = [];
+    this._scorchAcc = 0;
     this._t = 0;
   }
 
@@ -7494,6 +7495,35 @@ class Effects {
     g.addColorStop(.5, 'rgba(110,8,6,.7)');
     g.addColorStop(1, 'rgba(80,4,4,0)');
     x.fillStyle = g; x.beginPath(); x.arc(32, 32, 26, 0, 7); x.fill();
+    const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
+  }
+  /* scorch mark left by a laser: a charred dark core with a smouldering rim */
+  _scorchTexture() {
+    const c = makeCanvas(96); const x = c.getContext('2d');
+    x.clearRect(0, 0, 96, 96);
+    // dark burnt core
+    const g = x.createRadialGradient(48, 48, 1, 48, 48, 34);
+    g.addColorStop(0, 'rgba(8,6,5,.95)');
+    g.addColorStop(.45, 'rgba(24,14,8,.85)');
+    g.addColorStop(.75, 'rgba(60,28,10,.45)');
+    g.addColorStop(1, 'rgba(30,16,8,0)');
+    x.fillStyle = g; x.beginPath(); x.arc(48, 48, 34, 0, 7); x.fill();
+    // hot glowing rim (the laser's heat)
+    const rim = x.createRadialGradient(48, 48, 22, 48, 48, 40);
+    rim.addColorStop(0, 'rgba(255,150,40,0)');
+    rim.addColorStop(.55, 'rgba(255,120,30,.55)');
+    rim.addColorStop(.8, 'rgba(180,60,10,.25)');
+    rim.addColorStop(1, 'rgba(120,30,5,0)');
+    x.fillStyle = rim; x.beginPath(); x.arc(48, 48, 40, 0, 7); x.fill();
+    // a few charred streaks radiating out
+    x.strokeStyle = 'rgba(12,8,6,.7)'; x.lineWidth = 3;
+    for (let i = 0; i < 9; i++) {
+      const a = (i / 9) * Math.PI * 2 + 0.3;
+      x.beginPath();
+      x.moveTo(48, 48);
+      x.lineTo(48 + Math.cos(a) * (30 + Math.random() * 8), 48 + Math.sin(a) * (30 + Math.random() * 8));
+      x.stroke();
+    }
     const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
   }
 
@@ -7698,7 +7728,7 @@ class Effects {
       this.scene.remove(old);
       if (old.material) old.material = null;
     }
-    const mat = this.decalMats[kind === 'blood' ? 'blood' : kind === 'metal' ? 'metal' : 'concrete'];
+    const mat = this.decalMats[kind === 'blood' ? 'blood' : kind === 'metal' ? 'metal' : kind === 'scorch' ? 'scorch' : 'concrete'];
     const m = new THREE.Mesh(this.decalGeo, mat);
     m.position.set(x + nx * .012, y + ny * .012, z + nz * .012);
     // orient the plane along the surface normal
@@ -7711,13 +7741,27 @@ class Effects {
       m.lookAt(new THREE.Vector3(x + nx, y + ny, z + nz));
       m.rotateZ(U.rand(0, 6.28));
     }
-    m.rotation.z += U.rand(0, 6.28);
+    if (kind !== 'scorch') m.rotation.z += U.rand(0, 6.28);
     m.scale.set(size, size, 1);
-    m.renderOrder = 2;
+    m.userData.baseSize = size;
+    m.renderOrder = kind === 'scorch' ? 3 : 2;
     this.scene.add(m);
     this.decals.push(m);
     m.userData.birth = this._t;
-    m.userData.ttl = kind === 'blood' ? 22 : 16;
+    m.userData.ttl = kind === 'blood' ? 22 : kind === 'scorch' ? 30 : 16;
+  }
+
+  /* a lingering, glowing burn mark where the laser beam met a surface.
+     Rate-limited so a held beam does not spam one every frame; it drifts a
+     little each time so a sweep leaves a continuous scorched line. */
+  scorch(x, y, z, nx, ny, nz, size) {
+    this.decal(x, y, z, nx, ny, nz, size === undefined ? .6 : size, 'scorch');
+    // a brief ember puff at the spot
+    if (Math.random() < .6) {
+      this.particle(x, y, z,
+        (nx || 0) * U.rand(.5, 2) + U.rand(-1, 1), U.rand(.5, 2.4), (nz || 0) * U.rand(.5, 2) + U.rand(-1, 1),
+        U.rand(.04, .10), 'smoke', U.rand(.3, .8));
+    }
   }
 
   /* cached tinted materials for coloured explosions (avoid per-blast leaks) */
@@ -13290,7 +13334,21 @@ const Game = {
     const wallHits = this.world.raycastAll(origin, dir, maxD);
     let beamEnd = this.eyePos();
     beamEnd.x += dir.x * maxD; beamEnd.y += dir.y * maxD; beamEnd.z += dir.z * maxD;
-    if (wallHits.length) beamEnd = wallHits[0].point;
+    if (wallHits.length) {
+      beamEnd = wallHits[0].point;
+      /* Leave a glowing scorch mark where the beam hits. It is throttled by
+         BOTH time and distance: standing still on one spot does not stack
+         decals, while sweeping the beam paints a continuous burn line. */
+      this._scorchT = (this._scorchT || 0) - dt;
+      const last = this._lastScorch;
+      const moved = !last || Math.hypot(beamEnd.x - last.x, beamEnd.y - last.y, beamEnd.z - last.z) > .55;
+      if (this._scorchT <= 0 && (moved || !last)) {
+        this._scorchT = .05;
+        this._lastScorch = { x: beamEnd.x, y: beamEnd.y, z: beamEnd.z };
+        const n = wallHits[0].normal || { x: -dir.x, y: -dir.y, z: -dir.z };
+        this.effects.scorch(beamEnd.x, beamEnd.y, beamEnd.z, n.x, n.y, n.z, .5 + Math.random() * .2);
+      }
+    }
     if (this.effects) this.effects.holdBeam(muzzle, beamEnd, def.beamColor);
     p.bulletsFired += dt * 20;           // counts as fire for the HUD/statistics
     UI.hitmark(false);

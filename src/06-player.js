@@ -1150,54 +1150,81 @@ function buildWeaponModel(id) {
       break;
     }
 
-    /* ---------------- МЕХА-МИНИГАН: giant 6-barrel spinning cannon (mech suit) ---------------- */
+    /* ---------------- МЕХА-МИНИГАН: левая рука дредноута — бронированный многозарядный пулемёт ---------------- */
     case 'mechMinigun': {
+      // дредноутская палитра: синяя броня, белые полосы, золото, тёмный металл
+      const BLUE = 0x2b4a8f, BLUE2 = 0x1d3568, WHITE = 0xdfe6f0, GOLD = 0xd8b45a, DK = 0x1b2026;
       const GLOW = 0x4ad6ff;
-      add(B(.12, .14, .40, PAL.gun, 0, 0, -.14));                      // giant housing
-      add(B(.13, .020, .40, PAL.black, 0, .072, -.14));
-      for (let i = 0; i < 5; i++) add(B(.122, .010, .016, PAL.black, 0, -.05 + i * .026, -.14));
-      add(B(.13, .15, .16, PAL.black, 0, 0, .07));                     // gearbox
-      add(CYL(.075, .06, PAL.steel, 0, 0, .14, 16));
+      // большей корпус-плечо (мощная броневая коробка)
+      add(B(.20, .20, .30, BLUE, 0, .01, -.10));                     // главный бронеблок
+      add(B(.22, .036, .30, BLUE2, 0, .12, -.10));                   // верхняя бронеплита
+      add(B(.205, .05, .13, WHITE, 0, .095, .02));                   // белая полоса-акцент
+      // заклёпки по краю
+      for (let i = 0; i < 5; i++) add(B(.010, .010, .010, GOLD, -.095, .12, -.22 + i * .055));
+      for (let i = 0; i < 5; i++) add(B(.010, .010, .010, GOLD, .095, .12, -.22 + i * .055));
+      // орлиная эмблема (упрощённая: золотой крест с крыльями)
+      add(B(.05, .03, .012, GOLD, .06, .05, -.26));
+      add(B(.016, .05, .012, GOLD, .06, .05, -.26));
+      [-1, 1].forEach(s => add(B(.02, .038, .012, GOLD, .06 + s * .035, .05, -.26, 0, 0, s * .5)));
+      // тяжёлый ствольный узел с 6 вращающимися стволами
       const barrels = new THREE.Group();
       for (let i = 0; i < 6; i++) {
         const a = (i / 6) * Math.PI * 2;
-        barrels.add(CYL(.020, .95, PAL.steel, Math.cos(a) * .075, Math.sin(a) * .075, -.85, 6));
-        barrels.add(CYL(.024, .06, PAL.black, Math.cos(a) * .075, Math.sin(a) * .075, -.42, 8));
-        barrels.add(CYL(.024, .06, PAL.black, Math.cos(a) * .075, Math.sin(a) * .075, -1.16, 8));
+        barrels.add(CYL(.026, .82, DK, Math.cos(a) * .085, Math.sin(a) * .085, -.78, 8));   // ствол
+        barrels.add(CYL(.032, .08, GOLD, Math.cos(a) * .085, Math.sin(a) * .085, -.40, 8)); // латунное кольцо
+        barrels.add(CYL(.034, .07, DK, Math.cos(a) * .085, Math.sin(a) * .085, -1.06, 8));  // дульный кожух
       }
-      barrels.add(CYL(.088, .09, PAL.black, 0, 0, -.42, 14));
-      barrels.add(CYL(.086, .08, PAL.black, 0, 0, -.78, 14));
-      barrels.add(CYL(.080, .06, GLOW, 0, 0, -1.22, 14));              // hot muzzle ring
-      barrels.add(CYL(.062, .03, PAL.steel, 0, 0, -1.26, 14));
+      barrels.add(CYL(.10, .10, DK, 0, 0, -.40, 16));                // передний хомут
+      barrels.add(CYL(.098, .09, DK, 0, 0, -.78, 16));               // задний хомут
+      barrels.add(CYL(.086, .06, GLOW, 0, 0, -1.14, 16));            // раскалённое дульное кольцо
+      barrels.add(CYL(.070, .03, DK, 0, 0, -1.18, 16));              // срез
       barrels.name = 'barrels';
       g.add(barrels);
-      // glowing mech brace + drum
-      add(B(.20, .022, .40, GLOW, 0, -.085, -.20));
-      add(B(.19, .20, .22, PAL.oliv, 0, -.21, .0));                    // ammo drum
-      add(CYL(.10, .12, PAL.oliv, 0, -.21, .13, 16));
-      add(B(.05, .05, .06, GLOW, 0, .10, .0));                         // core light
+      // кожух между бронёй и стволами + золотые болты
+      add(CYL(.115, .20, BLUE, 0, 0, -.30, 16));
+      add(CYL(.12, .03, GOLD, 0, 0, -.22, 16));
+      // кабели питания сбоку (тянутся назад)
+      for (let i = 0; i < 3; i++) {
+        const cbl = new THREE.Mesh(new THREE.CylinderGeometry(.012, .012, .30, 6), gunMat(0x14181c));
+        cbl.position.set(-.11, .10 - i * .03, .12); cbl.rotation.x = .5 + i * .15; g.add(cbl);
+      }
+      // амуниционный барабан снизу
+      add(CYL(.11, .16, BLUE2, 0, -.175, -.02, 16));
+      add(CYL(.06, .18, DK, 0, -.175, -.02, 14));
+      add(B(.04, .05, .06, GLOW, 0, .14, .06));                      // огонёк ядра
       break;
     }
 
-    /* ---------------- ГИПЕР-ЛАЗЕР: heavy piercing laser (mech suit) ---------------- */
+    /* ---------------- ГИПЕР-ЛАЗЕР: правая рука дредноута — ракетный под + лазерный эмиттер ---------------- */
     case 'mechLaser': {
+      const BLUE = 0x2b4a8f, BLUE2 = 0x1d3568, WHITE = 0xdfe6f0, GOLD = 0xd8b45a, DK = 0x1b2026, RED = 0xc4302a;
       const GLOW = 0x39ff6a;
-      add(B(.10, .12, .46, PAL.gun, 0, 0, -.16));                      // long body
-      add(B(.11, .020, .40, PAL.gunLight, 0, .075, -.16));
+      // бронепод (как ракетный под дредноута)
+      add(B(.20, .22, .24, BLUE, .05, .02, -.06));                   // корпус пода
+      add(B(.21, .034, .25, BLUE2, .05, .14, -.06));                 // верх плита
+      add(B(.045, .20, .24, WHITE, .145, .02, -.06));                // белая боковая полоса
+      for (let i = 0; i < 4; i++) add(B(.010, .010, .010, GOLD, -.045, .13, -.16 + i * .05));  // заклёпки
+      // красные ракетные трубы (сетка 2×3) — как на фото
+      for (let r = 0; r < 3; r++) for (let c = 0; c < 2; c++) {
+        add(CYL(.026, .06, RED, .05 + (c - .5) * .065, .10 - r * .07, -.19, 10));
+        add(CYL(.020, .02, DK, .05 + (c - .5) * .065, .10 - r * .07, -.215, 10));
+      }
+      // лазерный эмиттер снизу-вперёд (гипер-пушка)
       const barrels = new THREE.Group();
       for (let i = 0; i < 3; i++) {
         const a = (i / 3) * Math.PI * 2;
-        barrels.add(CYL(.016, .70, PAL.steel, Math.cos(a) * .045, Math.sin(a) * .045, -.70, 8));
+        barrels.add(CYL(.018, .66, DK, Math.cos(a) * .05, .02 + Math.sin(a) * .05, -.66, 8));
       }
-      barrels.add(CYL(.024, .76, GLOW, 0, 0, -.72, 12));               // glowing core rod
-      barrels.add(CYL(.05, .05, GLOW, 0, 0, -1.08, 12));               // emitter ring
-      for (let i = 0; i < 5; i++) barrels.add(CYL(.05, .016, GLOW, 0, 0, -.30 - i * .12, 12));  // coils
+      barrels.add(CYL(.028, .72, GLOW, 0, .02, -.68, 12));           // светящийся стержень
+      barrels.add(CYL(.056, .05, GLOW, 0, .02, -1.00, 14));          // эмиттер-кольцо
+      for (let i = 0; i < 5; i++) barrels.add(CYL(.05, .018, GLOW, 0, .02, -.30 - i * .11, 12)); // катушки
       barrels.name = 'barrels';
       g.add(barrels);
-      add(B(.06, .14, .09, PAL.black, 0, -.085, .04, .16));            // grip
-      add(B(.09, .14, .16, 0x2a3a2e, 0, .02, .2));                     // power cell
-      add(CYL(.028, .10, PAL.black, 0, .1, .2));                       // cell cap
-      add(B(.03, .03, .04, GLOW, 0, .12, -.10));                       // core light
+      // кормовой блок питания + золотая отделка
+      add(B(.10, .12, .15, BLUE2, .05, .02, .16));
+      add(CYL(.03, .10, DK, .05, .13, .16));
+      add(B(.03, .04, .05, GLOW, .05, .16, -.02));                   // огонёк ядра
+      add(B(.03, .03, .03, GOLD, .13, -.06, .05));                   // золотая деталь
       break;
     }
 
@@ -1242,7 +1269,9 @@ const MUZZLE_Z = {
   banana: -0.92,
   acid: -0.76, hive: -0.26, disc: -0.32, freeze: -0.76, tesla: -0.72,
   portal: -0.48, blackhole: -0.54, turretDrone: -0.28, chrono: -0.48,
-  tesla: -0.50
+  tesla: -0.50,
+  flamer: -0.78,
+  mechMinigun: -1.22, mechLaser: -1.04
 };
 
 /* An RPG rocket: a tube body with a pointed warhead and fins */

@@ -360,12 +360,15 @@ const UI = {
       e.droneTag.classList.toggle('hidden', !ready);
       e.droneTag.classList.toggle('usable', ready);
     }
-    // energy shield integrity, shown while the shield is the held weapon
+    // energy shield state, shown while the shield is the held weapon
     if (e.shieldTag) {
-      const on = !!p.shieldActive;
-      e.shieldTag.classList.toggle('hidden', !on);
-      e.shieldTag.classList.toggle('usable', on);
-      if (on) e.shieldTag.textContent = 'ЩИТ ' + Math.max(0, Math.round(p.shieldHp || 0));
+      const held = !!(p.slot === 2 && p.inv[2] && p.inv[2].id === 'shield');
+      e.shieldTag.classList.toggle('hidden', !held);
+      if (held) {
+        if (p.shieldActive) { e.shieldTag.textContent = 'ЩИТ ' + Math.ceil(p.shieldT) + 'с'; e.shieldTag.classList.add('usable'); }
+        else if (p.shieldCd > 0) { e.shieldTag.textContent = 'ЩИТ · ' + Math.ceil(p.shieldCd) + 'с'; e.shieldTag.classList.remove('usable'); }
+        else { e.shieldTag.textContent = 'ЩИТ · ЛКМ'; e.shieldTag.classList.add('usable'); }
+      }
     }
 
     if (extra) {

@@ -1303,7 +1303,7 @@ const WEAPONS = {
   /* ---------------- energy shield: blocks incoming projectiles, reflects them ---------------- */
   shield: { name: 'ЭНЕРГОЩИТ', cat: 'heavy', slot: 2, price: 8000, dmg: 0, rpm: 60, mag: Infinity, reserve: 0,
          auto: true, spread: 0, moveSpread: 0, recoil: 0, falloff: 1, range: 0, headMul: 1, sound: 'laser',
-         shield: true, shieldHp: 250 },
+         shield: true, activeTime: 5, cooldown: 4 },
 
   /* ---------------- the legendary banana launcher ---------------- */
   /* Rapid-fire version: the banana is now a full-auto blaster. Damage per fruit
@@ -3932,21 +3932,60 @@ function buildWeaponModel(id) {
       break;
     }
 
-    /* ---------------- ЭНЕРГОЩИТ: flat emitter plate on an arm ---------------- */
+    /* ---------------- ЭНЕРГОЩИТ: large blue energy shield plate ---------------- */
     case 'shield': {
-      const ARM = 0x2b3340, TRIM = 0x4aa3ff, FIELD = 0x9fd8ff;
-      add(B(.050, .140, .050, ARM, 0, -.090, .02, .16));            // grip/arm
-      add(B(.036, .060, .12, ARM, 0, -.020, -.06));                 // forearm mount
-      // the emitter frame (an open ring that "holds" the energy field)
-      add(CYL(.34, .03, TRIM, 0, .12, -.30, 20));                   // emitter ring (edge-on)
-      add(B(.020, .020, .020, TRIM, 0, .12, -.30));                 // hub
-      // a translucent energy plate — the visible field the player carries
-      const field = new THREE.Mesh(new THREE.CircleGeometry(.42, 24),
-        new THREE.MeshBasicMaterial({ color: FIELD, transparent: true, opacity: .30, side: THREE.DoubleSide, depthWrite: false }));
-      field.rotation.y = Math.PI / 2;                               // face outward (±X)
-      field.position.set(0, .12, -.30);
-      field.renderOrder = 4;
+      const EDGE = 0x4aa3ff, EDGE2 = 0x8fd0ff, CORE = 0x2f7ad0;
+      // the emitter gauntlet the player holds
+      add(B(.050, .140, .050, 0x2b3340, 0, -.090, .02, .16));       // grip/arm
+      add(B(.042, .070, .13, 0x39424d, 0, -.022, -.06));            // forearm mount
+      add(B(.030, .036, .05, EDGE, 0, -.010, -.13));                // emitter block
+      // a BIG flat energy plate in front of the player (its own group so the
+      // game can show/hide it when the shield is actually up)
+      const field = new THREE.Group();
       field.name = 'shieldField';
+      field.position.set(0, .10, -.42);
+      field.visible = false;
+      // outline frame: a rounded shield silhouette built from edge bars
+      const edgeMat = new THREE.MeshBasicMaterial({ color: EDGE, transparent: true, opacity: .9, depthWrite: false, blending: THREE.AdditiveBlending });
+      const fillMat = new THREE.MeshBasicMaterial({ color: CORE, transparent: true, opacity: .28, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending });
+      const rimMat = new THREE.MeshBasicMaterial({ color: EDGE2, transparent: true, opacity: .55, depthWrite: false, blending: THREE.AdditiveBlending });
+      field.userData.mats = [edgeMat, fillMat, rimMat];
+      // the translucent body of the shield (a tall hexagonal panel)
+      const shape = new THREE.Shape();
+      shape.moveTo(0, -.85);
+      shape.lineTo(-.55, -.55);
+      shape.lineTo(-.62, .10);
+      shape.lineTo(-.40, .72);
+      shape.lineTo(0, .90);
+      shape.lineTo(.40, .72);
+      shape.lineTo(.62, .10);
+      shape.lineTo(.55, -.55);
+      shape.lineTo(0, -.85);
+      const panel = new THREE.Mesh(new THREE.ShapeGeometry(shape), fillMat);
+      panel.renderOrder = 4;
+      field.add(panel);
+      // glowing rim around the panel
+      const rim = new THREE.Line(new THREE.BufferGeometry().setFromPoints(shape.getPoints(40)),
+        new THREE.LineBasicMaterial({ color: EDGE2, transparent: true, opacity: .9, blending: THREE.AdditiveBlending, depthWrite: false }));
+      rim.position.z = .01;
+      field.add(rim);
+      // vertical spine + two side struts (the glowing circuitry look)
+      const strut = (w, h, x, y, mat) => {
+        const s = new THREE.Mesh(new THREE.PlaneGeometry(w, h), mat);
+        s.position.set(x, y, .02);
+        return s;
+      };
+      field.add(strut(.05, 1.35, 0, .0, edgeMat));                   // central spine
+      field.add(strut(.045, 1.0, -.30, -.05, rimMat));               // left strut
+      field.add(strut(.045, 1.0, .30, -.05, rimMat));                // right strut
+      field.add(strut(.30, .05, 0, .45, rimMat));                    // upper bar
+      field.add(strut(.30, .05, 0, -.45, rimMat));                   // lower bar
+      // small emitter nodes around the rim
+      [[-.5, .25], [.5, .25], [-.42, -.5], [.42, -.5], [0, .8]].forEach(p => {
+        const n = new THREE.Mesh(new THREE.CircleGeometry(.06, 10), edgeMat);
+        n.position.set(p[0], p[1], .03);
+        field.add(n);
+      });
       g.add(field);
       g.userData.field = field;
       break;
@@ -4266,9 +4305,10 @@ class Player {
     this.medkitUnlimited = false;  // the medkit-box upgrade removed the carry cap
     this.drone = 0;           // kamikaze drones ready to launch, with F
     this.droneOwned = false;  // has bought the drone: it recharges every online round
-    // energy shield: only active while it is the held weapon
-    this.shieldHp = 0;        // field integrity (recharged on equip)
+    // energy shield (active shield): raised by LMB for a few seconds, then cools
     this.shieldActive = false;
+    this.shieldT = 0;         // seconds left while the field is up
+    this.shieldCd = 0;        // seconds left until it can be raised again
 
     // ---- inventory ----
     this.inv = { 1: null, 2: null, 3: { id: 'knife', mag: Infinity, reserve: 0 } };
@@ -6768,12 +6808,15 @@ const UI = {
       e.droneTag.classList.toggle('hidden', !ready);
       e.droneTag.classList.toggle('usable', ready);
     }
-    // energy shield integrity, shown while the shield is the held weapon
+    // energy shield state, shown while the shield is the held weapon
     if (e.shieldTag) {
-      const on = !!p.shieldActive;
-      e.shieldTag.classList.toggle('hidden', !on);
-      e.shieldTag.classList.toggle('usable', on);
-      if (on) e.shieldTag.textContent = 'ЩИТ ' + Math.max(0, Math.round(p.shieldHp || 0));
+      const held = !!(p.slot === 2 && p.inv[2] && p.inv[2].id === 'shield');
+      e.shieldTag.classList.toggle('hidden', !held);
+      if (held) {
+        if (p.shieldActive) { e.shieldTag.textContent = 'ЩИТ ' + Math.ceil(p.shieldT) + 'с'; e.shieldTag.classList.add('usable'); }
+        else if (p.shieldCd > 0) { e.shieldTag.textContent = 'ЩИТ · ' + Math.ceil(p.shieldCd) + 'с'; e.shieldTag.classList.remove('usable'); }
+        else { e.shieldTag.textContent = 'ЩИТ · ЛКМ'; e.shieldTag.classList.add('usable'); }
+      }
     }
 
     if (extra) {
@@ -8883,6 +8926,11 @@ const Game = {
     if (!Input.locked) { Input.requestLock(); return; }
     if (btn === 0) {
       this.player.triggerDown = true;
+      // The shield does not fire: LMB raises the field (if it is off cooldown).
+      if (this.player.def && this.player.def.shield) {
+        if (this.player.alive && this.roundState === 'live') this.activateShield();
+        return;
+      }
       // Semi-auto, pump-action and melee fire on press, so a fast click can
       // never fall between two frames and be swallowed. Full-auto weapons are
       // driven from the game loop while the button is held.
@@ -10594,7 +10642,7 @@ const Game = {
       return false;                 // no shot fired
     }
     const def = p.def;
-    if (def.shield) return false;          // the shield is held, it does not fire
+    if (def.shield) { this.activateShield(); return false; }   // shield raises, never fires
     if (w.mag !== Infinity) w.mag--;
     p.fireCd = 60 / def.rpm;
     p.bulletsFired++;
@@ -11157,23 +11205,67 @@ const Game = {
   },
 
   /* ============================================================
-     ENERGY SHIELD
-     A held item that fills the primary slot instead of a gun. While it is the
-     active weapon the field is up: it blocks incoming projectiles (rockets,
-     bananas, guided missiles) and reflects them back at the shooter. Bullets
-     pass through, so it is not a full immunity. Integrity drains as it absorbs
-     and recharges on equip.
+     ENERGY SHIELD (ACTIVE SHIELD)
+     A held item that fills the primary slot instead of a gun. It is NOT always
+     on: pressing fire raises the field for a few seconds, then it goes on
+     cooldown. While up it blocks incoming projectiles (rockets, bananas, guided
+     missiles / blasts) and reflects them back at the shooter. Bullets still pass
+     through, so it is not a full immunity.
      ============================================================ */
+  activateShield() {
+    const p = this.player;
+    if (!p || !p.alive) return false;
+    if (p.slot !== 2 || !p.inv[2] || p.inv[2].id !== 'shield') return false;
+    if (p.shieldActive) return false;                 // already up
+    if ((p.shieldCd || 0) > 0) { Audio3D_SFX.deny(); return false; }   // still recharging
+    p.shieldActive = true;
+    p.shieldT = WEAPONS.shield.activeTime;
+    Audio3D_SFX.pickup();
+    UI.toast('ЩИТ АКТИВЕН', '#4aa3ff');
+    const f = p.vmInner && p.vmInner.getObjectByName ? p.vmInner.getObjectByName('shieldField') : null;
+    if (f) f.visible = true;
+    if (this.mode === CS.MODE.ONLINE) this.broadcastScore();
+    return true;
+  },
+
   updateShield(dt) {
     const p = this.player;
     if (!p) return;
     const isShield = p.slot === 2 && p.inv[2] && p.inv[2].id === 'shield';
-    p.shieldActive = !!isShield && p.alive;
+    const f = p.vmInner && p.vmInner.getObjectByName ? p.vmInner.getObjectByName('shieldField') : null;
+
+    // not holding the shield: everything is off and the cooldown is cleared
+    if (!isShield || !p.alive) {
+      p.shieldActive = false;
+      p.shieldT = 0;
+      p.shieldCd = 0;
+      if (f) f.visible = false;
+      return;
+    }
+
     if (p.shieldActive) {
-      if (!p.shieldHp || p.shieldHp <= 0) p.shieldHp = WEAPONS.shield.shieldHp;
-      // pulse the visible energy plate
-      const f = p.vmInner && p.vmInner.getObjectByName ? p.vmInner.getObjectByName('shieldField') : null;
-      if (f && f.material) f.material.opacity = .22 + .10 * (0.5 + 0.5 * Math.sin(U.now() / 140));
+      p.shieldT -= dt;
+      if (p.shieldT <= 0) {
+        // field drops and the cooldown begins
+        p.shieldActive = false;
+        p.shieldT = 0;
+        p.shieldCd = WEAPONS.shield.cooldown;
+        if (f) f.visible = false;
+        Audio3D_SFX.reloadStep(0);
+      }
+    } else if (p.shieldCd > 0) {
+      p.shieldCd = Math.max(0, p.shieldCd - dt);
+    }
+
+    // a soft pulse while the field is up
+    if (f) {
+      f.visible = p.shieldActive;
+      if (p.shieldActive && f.userData && f.userData.mats) {
+        const k = .5 + .5 * Math.sin(U.now() / 130);
+        f.userData.mats[0].opacity = .75 + .20 * k;    // edges
+        f.userData.mats[1].opacity = .22 + .12 * k;    // body
+        f.userData.mats[2].opacity = .45 + .20 * k;    // struts/rim
+      }
     }
   },
 
@@ -11184,15 +11276,13 @@ const Game = {
     if (!p || !p.shieldActive) return false;
     // only reflect incoming projectiles (never our own)
     if (pr.ownerIsLocal) return false;
-    // drain integrity a little per block
-    p.shieldHp = Math.max(0, (p.shieldHp || WEAPONS.shield.shieldHp) - 40);
     // tell the world it was blocked
     UI.hitmark(false);
     this._hitmarkT = U.now();
     this.effects.laser({ x: pr.pos.x, y: pr.pos.y, z: pr.pos.z },
       { x: p.pos.x, y: p.pos.y + 1.2, z: p.pos.z });
     Audio3D_SFX.pickup();
-    UI.feed('<span class="z">🛡 Щит отразил снаряд</span>');
+    UI.feed('<span class="z">Щит отразил снаряд</span>');
     return true;
   },
 
@@ -11619,8 +11709,6 @@ const Game = {
 
   /* Our shield caught an incoming projectile: bounce the damage to its sender. */
   reflectProjectile(h) {
-    const p = this.player;
-    p.shieldHp = Math.max(0, (p.shieldHp || WEAPONS.shield.shieldHp) - 50);
     UI.hitmark(false); this._hitmarkT = U.now();
     Audio3D_SFX.pickup();
     UI.feed('<span class="z">Щит отразил снаряд</span>');
@@ -11630,11 +11718,6 @@ const Game = {
       t: 'hit', dmg: Math.round(h.dmg), part: 'body', hs: 0, at: U.now(),
       to: h.from, from: Net.selfId(), reflect: 1
     });
-    if (p.shieldHp <= 0) {
-      p.shieldHp = 0;
-      UI.center('ЩИТ ПЕРЕГРУЖЕН', 'Отражение больше не работает', 2.0);
-      Audio3D_SFX.deny();
-    }
   },
 
   onRemoteDied(d) {

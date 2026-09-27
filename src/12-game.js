@@ -1073,6 +1073,11 @@ const Game = {
     if (!Input.locked) { Input.requestLock(); return; }
     if (btn === 0) {
       this.player.triggerDown = true;
+      // The shield does not fire: LMB raises the field (if it is off cooldown).
+      if (this.player.def && this.player.def.shield) {
+        if (this.player.alive && this.roundState === 'live') this.activateShield();
+        return;
+      }
       // Semi-auto, pump-action and melee fire on press, so a fast click can
       // never fall between two frames and be swallowed. Full-auto weapons are
       // driven from the game loop while the button is held.
@@ -2784,7 +2789,7 @@ const Game = {
       return false;                 // no shot fired
     }
     const def = p.def;
-    if (def.shield) return false;          // the shield is held, it does not fire
+    if (def.shield) { this.activateShield(); return false; }   // shield raises, never fires
     if (w.mag !== Infinity) w.mag--;
     p.fireCd = 60 / def.rpm;
     p.bulletsFired++;
@@ -3347,23 +3352,67 @@ const Game = {
   },
 
   /* ============================================================
-     ENERGY SHIELD
-     A held item that fills the primary slot instead of a gun. While it is the
-     active weapon the field is up: it blocks incoming projectiles (rockets,
-     bananas, guided missiles) and reflects them back at the shooter. Bullets
-     pass through, so it is not a full immunity. Integrity drains as it absorbs
-     and recharges on equip.
+     ENERGY SHIELD (ACTIVE SHIELD)
+     A held item that fills the primary slot instead of a gun. It is NOT always
+     on: pressing fire raises the field for a few seconds, then it goes on
+     cooldown. While up it blocks incoming projectiles (rockets, bananas, guided
+     missiles / blasts) and reflects them back at the shooter. Bullets still pass
+     through, so it is not a full immunity.
      ============================================================ */
+  activateShield() {
+    const p = this.player;
+    if (!p || !p.alive) return false;
+    if (p.slot !== 2 || !p.inv[2] || p.inv[2].id !== 'shield') return false;
+    if (p.shieldActive) return false;                 // already up
+    if ((p.shieldCd || 0) > 0) { Audio3D_SFX.deny(); return false; }   // still recharging
+    p.shieldActive = true;
+    p.shieldT = WEAPONS.shield.activeTime;
+    Audio3D_SFX.pickup();
+    UI.toast('ЩИТ АКТИВЕН', '#4aa3ff');
+    const f = p.vmInner && p.vmInner.getObjectByName ? p.vmInner.getObjectByName('shieldField') : null;
+    if (f) f.visible = true;
+    if (this.mode === CS.MODE.ONLINE) this.broadcastScore();
+    return true;
+  },
+
   updateShield(dt) {
     const p = this.player;
     if (!p) return;
     const isShield = p.slot === 2 && p.inv[2] && p.inv[2].id === 'shield';
-    p.shieldActive = !!isShield && p.alive;
+    const f = p.vmInner && p.vmInner.getObjectByName ? p.vmInner.getObjectByName('shieldField') : null;
+
+    // not holding the shield: everything is off and the cooldown is cleared
+    if (!isShield || !p.alive) {
+      p.shieldActive = false;
+      p.shieldT = 0;
+      p.shieldCd = 0;
+      if (f) f.visible = false;
+      return;
+    }
+
     if (p.shieldActive) {
-      if (!p.shieldHp || p.shieldHp <= 0) p.shieldHp = WEAPONS.shield.shieldHp;
-      // pulse the visible energy plate
-      const f = p.vmInner && p.vmInner.getObjectByName ? p.vmInner.getObjectByName('shieldField') : null;
-      if (f && f.material) f.material.opacity = .22 + .10 * (0.5 + 0.5 * Math.sin(U.now() / 140));
+      p.shieldT -= dt;
+      if (p.shieldT <= 0) {
+        // field drops and the cooldown begins
+        p.shieldActive = false;
+        p.shieldT = 0;
+        p.shieldCd = WEAPONS.shield.cooldown;
+        if (f) f.visible = false;
+        Audio3D_SFX.reloadStep(0);
+      }
+    } else if (p.shieldCd > 0) {
+      p.shieldCd = Math.max(0, p.shieldCd - dt);
+    }
+
+    // a soft pulse while the field is up
+    if (f) {
+      f.visible = p.shieldActive;
+      if (p.shieldActive && f.userData && f.userData.mats) {
+        const k = .5 + .5 * Math.sin(U.now() / 130);
+        f.userData.mats[0].opacity = .75 + .20 * k;    // edges
+        f.userData.mats[1].opacity = .22 + .12 * k;    // body
+        f.userData.mats[2].opacity = .45 + .20 * k;    // struts/rim
+      }
     }
   },
 
@@ -3374,15 +3423,13 @@ const Game = {
     if (!p || !p.shieldActive) return false;
     // only reflect incoming projectiles (never our own)
     if (pr.ownerIsLocal) return false;
-    // drain integrity a little per block
-    p.shieldHp = Math.max(0, (p.shieldHp || WEAPONS.shield.shieldHp) - 40);
     // tell the world it was blocked
     UI.hitmark(false);
     this._hitmarkT = U.now();
     this.effects.laser({ x: pr.pos.x, y: pr.pos.y, z: pr.pos.z },
       { x: p.pos.x, y: p.pos.y + 1.2, z: p.pos.z });
     Audio3D_SFX.pickup();
-    UI.feed('<span class="z">🛡 Щит отразил снаряд</span>');
+    UI.feed('<span class="z">Щит отразил снаряд</span>');
     return true;
   },
 
@@ -3809,8 +3856,6 @@ const Game = {
 
   /* Our shield caught an incoming projectile: bounce the damage to its sender. */
   reflectProjectile(h) {
-    const p = this.player;
-    p.shieldHp = Math.max(0, (p.shieldHp || WEAPONS.shield.shieldHp) - 50);
     UI.hitmark(false); this._hitmarkT = U.now();
     Audio3D_SFX.pickup();
     UI.feed('<span class="z">Щит отразил снаряд</span>');
@@ -3820,11 +3865,6 @@ const Game = {
       t: 'hit', dmg: Math.round(h.dmg), part: 'body', hs: 0, at: U.now(),
       to: h.from, from: Net.selfId(), reflect: 1
     });
-    if (p.shieldHp <= 0) {
-      p.shieldHp = 0;
-      UI.center('ЩИТ ПЕРЕГРУЖЕН', 'Отражение больше не работает', 2.0);
-      Audio3D_SFX.deny();
-    }
   },
 
   onRemoteDied(d) {

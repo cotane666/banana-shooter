@@ -508,21 +508,60 @@ function buildWeaponModel(id) {
       break;
     }
 
-    /* ---------------- ЭНЕРГОЩИТ: flat emitter plate on an arm ---------------- */
+    /* ---------------- ЭНЕРГОЩИТ: large blue energy shield plate ---------------- */
     case 'shield': {
-      const ARM = 0x2b3340, TRIM = 0x4aa3ff, FIELD = 0x9fd8ff;
-      add(B(.050, .140, .050, ARM, 0, -.090, .02, .16));            // grip/arm
-      add(B(.036, .060, .12, ARM, 0, -.020, -.06));                 // forearm mount
-      // the emitter frame (an open ring that "holds" the energy field)
-      add(CYL(.34, .03, TRIM, 0, .12, -.30, 20));                   // emitter ring (edge-on)
-      add(B(.020, .020, .020, TRIM, 0, .12, -.30));                 // hub
-      // a translucent energy plate — the visible field the player carries
-      const field = new THREE.Mesh(new THREE.CircleGeometry(.42, 24),
-        new THREE.MeshBasicMaterial({ color: FIELD, transparent: true, opacity: .30, side: THREE.DoubleSide, depthWrite: false }));
-      field.rotation.y = Math.PI / 2;                               // face outward (±X)
-      field.position.set(0, .12, -.30);
-      field.renderOrder = 4;
+      const EDGE = 0x4aa3ff, EDGE2 = 0x8fd0ff, CORE = 0x2f7ad0;
+      // the emitter gauntlet the player holds
+      add(B(.050, .140, .050, 0x2b3340, 0, -.090, .02, .16));       // grip/arm
+      add(B(.042, .070, .13, 0x39424d, 0, -.022, -.06));            // forearm mount
+      add(B(.030, .036, .05, EDGE, 0, -.010, -.13));                // emitter block
+      // a BIG flat energy plate in front of the player (its own group so the
+      // game can show/hide it when the shield is actually up)
+      const field = new THREE.Group();
       field.name = 'shieldField';
+      field.position.set(0, .10, -.42);
+      field.visible = false;
+      // outline frame: a rounded shield silhouette built from edge bars
+      const edgeMat = new THREE.MeshBasicMaterial({ color: EDGE, transparent: true, opacity: .9, depthWrite: false, blending: THREE.AdditiveBlending });
+      const fillMat = new THREE.MeshBasicMaterial({ color: CORE, transparent: true, opacity: .28, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending });
+      const rimMat = new THREE.MeshBasicMaterial({ color: EDGE2, transparent: true, opacity: .55, depthWrite: false, blending: THREE.AdditiveBlending });
+      field.userData.mats = [edgeMat, fillMat, rimMat];
+      // the translucent body of the shield (a tall hexagonal panel)
+      const shape = new THREE.Shape();
+      shape.moveTo(0, -.85);
+      shape.lineTo(-.55, -.55);
+      shape.lineTo(-.62, .10);
+      shape.lineTo(-.40, .72);
+      shape.lineTo(0, .90);
+      shape.lineTo(.40, .72);
+      shape.lineTo(.62, .10);
+      shape.lineTo(.55, -.55);
+      shape.lineTo(0, -.85);
+      const panel = new THREE.Mesh(new THREE.ShapeGeometry(shape), fillMat);
+      panel.renderOrder = 4;
+      field.add(panel);
+      // glowing rim around the panel
+      const rim = new THREE.Line(new THREE.BufferGeometry().setFromPoints(shape.getPoints(40)),
+        new THREE.LineBasicMaterial({ color: EDGE2, transparent: true, opacity: .9, blending: THREE.AdditiveBlending, depthWrite: false }));
+      rim.position.z = .01;
+      field.add(rim);
+      // vertical spine + two side struts (the glowing circuitry look)
+      const strut = (w, h, x, y, mat) => {
+        const s = new THREE.Mesh(new THREE.PlaneGeometry(w, h), mat);
+        s.position.set(x, y, .02);
+        return s;
+      };
+      field.add(strut(.05, 1.35, 0, .0, edgeMat));                   // central spine
+      field.add(strut(.045, 1.0, -.30, -.05, rimMat));               // left strut
+      field.add(strut(.045, 1.0, .30, -.05, rimMat));                // right strut
+      field.add(strut(.30, .05, 0, .45, rimMat));                    // upper bar
+      field.add(strut(.30, .05, 0, -.45, rimMat));                   // lower bar
+      // small emitter nodes around the rim
+      [[-.5, .25], [.5, .25], [-.42, -.5], [.42, -.5], [0, .8]].forEach(p => {
+        const n = new THREE.Mesh(new THREE.CircleGeometry(.06, 10), edgeMat);
+        n.position.set(p[0], p[1], .03);
+        field.add(n);
+      });
       g.add(field);
       g.userData.field = field;
       break;
@@ -842,9 +881,10 @@ class Player {
     this.medkitUnlimited = false;  // the medkit-box upgrade removed the carry cap
     this.drone = 0;           // kamikaze drones ready to launch, with F
     this.droneOwned = false;  // has bought the drone: it recharges every online round
-    // energy shield: only active while it is the held weapon
-    this.shieldHp = 0;        // field integrity (recharged on equip)
+    // energy shield (active shield): raised by LMB for a few seconds, then cools
     this.shieldActive = false;
+    this.shieldT = 0;         // seconds left while the field is up
+    this.shieldCd = 0;        // seconds left until it can be raised again
 
     // ---- inventory ----
     this.inv = { 1: null, 2: null, 3: { id: 'knife', mag: Infinity, reserve: 0 } };

@@ -233,7 +233,7 @@ const WEAPONS = {
   /* ---------------- energy shield: blocks incoming projectiles, reflects them ---------------- */
   shield: { name: 'ЭНЕРГОЩИТ', cat: 'heavy', slot: 2, price: 8000, dmg: 0, rpm: 60, mag: Infinity, reserve: 0,
          auto: true, spread: 0, moveSpread: 0, recoil: 0, falloff: 1, range: 0, headMul: 1, sound: 'laser',
-         shield: true, shieldHp: 250 },
+         shield: true, activeTime: 5, cooldown: 4 },
 
   /* ---------------- the legendary banana launcher ---------------- */
   /* Rapid-fire version: the banana is now a full-auto blaster. Damage per fruit

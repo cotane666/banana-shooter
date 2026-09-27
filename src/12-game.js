@@ -1066,14 +1066,14 @@ const Game = {
     bindClick('btnControlsBack', () => UI.show(this._prevScreen || 'menu'));
     bindClick('btnLobbyBack', () => { Net.close(false); UI.show('menu'); });
     bindClick('btnResume', () => this.togglePause(false));
+    bindClick('btnSaveNow', () => this.manualSave());
     bindClick('btnPauseControls', () => { this._prevScreen = 'pause'; UI.show('controls'); });
     bindClick('btnLeave', () => this.stopToMenu());
     bindClick('btnReset', () => {
       if (confirm('Сбросить весь прогресс и настройки?')) {
-        Store.data = { sens: 2.2, fov: 80, vol: 60, quality: 1, touchSens: 1.5, name: '', best: 0, bestWave: 0, killsTotal: 0, matches: 0, wins: 0, signalSrv: 0, aimBest: 0, aimAutoFire: 1, map: 'arena', players: 2, maxHP: 100, aimAssist: 1, horde: 0, clears: 0, freeplay: 0, rounds: 3, playTime: 0, offCount: 1, offHp: 1, offFree: 0, offMode: 'normal', offMods: {}, offModsRun: 0, offModPick: 0, checkpoint: null, shopAllow: {}, shopItems: {}, music: 1, sfxVol: 100, musicVol: 70, grenade: 'frag', buildable: 'turret', weather: 'day', trapsEnabled: 1, ach: {}, runs: [], petOwned: 1, checkpoints: {} };
+        Store.data = { sens: 2.2, fov: 80, vol: 60, quality: 1, touchSens: 1.5, name: '', best: 0, bestWave: 0, killsTotal: 0, matches: 0, wins: 0, signalSrv: 0, aimBest: 0, aimAutoFire: 1, map: 'arena', players: 2, maxHP: 100, aimAssist: 1, horde: 0, clears: 0, freeplay: 0, rounds: 3, playTime: 0, offCount: 1, offHp: 1, offFree: 0, offMode: 'normal', offMods: {}, offModsRun: 0, offModPick: 0, checkpoint: null, shopAllow: {}, shopItems: {}, music: 1, sfxVol: 100, musicVol: 70, grenade: 'frag', buildable: 'turret', weather: 'day', trapsEnabled: 1, ach: {}, runs: [], checkpoints: {} };
         this.shopAllow = MATCH.defaultShopAllow();
         Store.save();
-        this.removePet();
         UI.refreshChips(); UI.renderMenuStats(); UI.toast('Прогресс сброшен');
       }
     });
@@ -1305,6 +1305,13 @@ const Game = {
       case 'KeyZ':
         if (this.mode === CS.MODE.RANGE && this.enemySpawnOpen) this.cycleSpawnHp(1);
         break;
+      /* M — save the run at any moment; Y — unstick the horde (2-min cooldown) */
+      case 'KeyM':
+        if (!this.paused) this.manualSave();
+        break;
+      case 'KeyY':
+        if (!this.paused) this.resetZombiePositions();
+        break;
       case 'KeyO':
         if (!this.paused) this.cycleTimeOfDay();
         break;
@@ -1354,54 +1361,52 @@ const Game = {
     Store.data.runs = runs.slice(0, 10);
     Store.save();
   },
-  buildPet() {
-    if (!Store.data.petOwned) return;
-    if (this.pet) return;
-    const g = new THREE.Group();
-    const body = new THREE.Mesh(new THREE.CapsuleGeometry(.14, .22, 4, 8),
-      new THREE.MeshLambertMaterial({ color: 0xf2c93b, emissive: 0x2a2008 }));
-    body.rotation.z = Math.PI / 2; body.position.y = .2; g.add(body);
-    const eyeMat = new THREE.MeshBasicMaterial({ color: 0x101010 });
-    [-1, 1].forEach(s => {
-      const e = new THREE.Mesh(new THREE.SphereGeometry(.022, 6, 5), eyeMat);
-      e.position.set(s * .06, .26, -.13); g.add(e);
-    });
-    const stem = new THREE.Mesh(new THREE.BoxGeometry(.03, .06, .03), new THREE.MeshLambertMaterial({ color: 0x6f8f3a }));
-    stem.position.y = .32; g.add(stem);
-    this.scene.add(g);
-    this.pet = { mesh: g, pos: { x: 0, y: 1, z: 0 }, bob: 0 };
+  /* ============================================================
+     MANUAL SAVE / ZOMBIE UNSTICK / (pet removed)
+     ============================================================ */
+  /* Save the run right now, at any moment, into this mode's slot. */
+  manualSave() {
+    if (this.mode !== CS.MODE.OFFLINE) { UI.toast('Сохранение доступно в оффлайне', '#e33a2e'); Audio3D_SFX.deny(); return false; }
+    if (!this.player || !this.offline) return false;
+    this.saveCheckpoint(this.offline.wave || 1);
+    UI.center('ИГРА СОХРАНЕНА', offlineModeLabel(this.checkpointKey()) + ' · волна ' + (this.offline.wave || 1), 1.6);
+    UI.toast('Сохранено: волна ' + (this.offline.wave || 1), '#57d16a');
+    UI.feed('<span class="z">💾 Сохранено · волна ' + (this.offline.wave || 1) + '</span>');
+    Audio3D_SFX.pickup();
+    return true;
   },
-  removePet() {
-    if (!this.pet) return;
-    if (this.pet.mesh.parent) this.pet.mesh.parent.remove(this.pet.mesh);
-    this.pet.mesh.traverse(o => { if (o.geometry) o.geometry.dispose(); });
-    this.pet = null;
-  },
-  updatePet(dt) {
-    if (!this.pet || !this.player) return;
-    const p = this.player;
-    const pt = this.pet;
-    // hover just in front of and beside the player
-    const tx = p.pos.x + Math.sin(p.yaw) * 1.1 + Math.cos(p.yaw) * .7;
-    const tz = p.pos.z + Math.cos(p.yaw) * 1.1 - Math.sin(p.yaw) * .7;
-    const ty = (this.world.groundAt(tx, tz, p.pos.y + 4) || 0) + 1.05;
-    pt.bob += dt * 4;
-    pt.pos.x = U.lerp(pt.pos.x, tx, 1 - Math.pow(.02, dt));
-    pt.pos.y = U.lerp(pt.pos.y, ty + Math.sin(pt.bob) * .08, 1 - Math.pow(.03, dt));
-    pt.pos.z = U.lerp(pt.pos.z, tz, 1 - Math.pow(.02, dt));
-    pt.mesh.position.set(pt.pos.x, pt.pos.y, pt.pos.z);
-    // it nibbles the nearest zombie it bumps into
-    pt.atkCd = Math.max(0, (pt.atkCd || 0) - dt);
-    if (pt.atkCd <= 0 && this.horde) {
-      for (const z of this.horde.list) {
-        if (!z.alive || z.dying) continue;
-        if (Math.hypot(z.pos.x - pt.pos.x, z.pos.z - pt.pos.z) < 1.3) {
-          z.takeDamage(18, 'body', { x: 0, y: 0, z: 0 });
-          pt.atkCd = 1.2;
-          break;
-        }
-      }
+
+  /* Y — once every 2 minutes: teleport every zombie back to its spawn ring so
+     any that got wedged in geometry pop out. */
+  resetZombiePositions() {
+    const cd = 120;                 // seconds between uses
+    const now = U.now();
+    if (this._zResetAt && now - this._zResetAt < cd * 1000) {
+      const left = Math.ceil((cd * 1000 - (now - this._zResetAt)) / 1000);
+      UI.toast('Сброс зомби через ' + left + 'с', '#f5d33c');
+      Audio3D_SFX.deny();
+      return false;
     }
+    if (!this.horde || !this.horde.list.length) { UI.toast('Зомби нет', '#f5d33c'); return false; }
+    this._zResetAt = now;
+    const spawns = MAP.zombieSpawns && MAP.zombieSpawns.length ? MAP.zombieSpawns : [{ x: 0, z: 0 }];
+    let n = 0;
+    for (const z of this.horde.list) {
+      if (!z.alive || z.dying) continue;
+      const s = U.pick(spawns);
+      const jx = s.x + U.rand(-2, 2), jz = s.z + U.rand(-2, 2);
+      z.pos.x = jx; z.pos.z = jz;
+      z.pos.y = this.world.groundAt(jx, jz, 4) || 0;
+      z.vel.x = z.vel.y = z.vel.z = 0;
+      z.stuckT = 0;
+      if (typeof z.thaw === 'function' && z.frozen) z.thaw();
+      this.effects.particle(jx, z.pos.y + 1, jz, 0, 1.2, 0, .5, 'spark', .5);
+      n++;
+    }
+    UI.center('СБРОС ЗОМБИ', n + ' возвращены на спавн', 1.6);
+    UI.toast('Зомби сброшены: ' + n, '#4aa3ff');
+    Audio3D_SFX.uiClick();
+    return true;
   },
 
   invertY() {
@@ -1741,7 +1746,6 @@ const Game = {
     this.horde = new Horde(this.scene, this.world, this);
     this.effects = new Effects(this.scene, Store.data.quality);
     this.effects.clear();
-    this.buildPet();
 
     this.spawnPlayerLocal(0);
     if (this.customOffline) {
@@ -6470,7 +6474,6 @@ const Game = {
     this.updateBuyPhase(dt);
     if (this.mode === CS.MODE.OFFLINE && !this._modPickOpen) { this.updateOffline(dt); this.updateCrates(dt); }
     this.updateGrenades(dt);
-    this.updatePet(dt);
 
     // ---- AI ----
     if (this.horde) this.horde.update(dt, p);

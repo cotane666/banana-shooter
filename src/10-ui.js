@@ -24,7 +24,7 @@ const UI = {
       'offCountChips', 'offHpChips', 'offFreeChips', 'offModeChips', 'offCustomBox', 'offHordeBox', 'offSpecialBox', 'offCpBox', 'offCpInfo', 'offCpMode', 'offCpList', 'btnOffContinue', 'custom', 'lobbyShop', 'lobbyShopItems',
       'modScreen', 'modGrid', 'modActive',
       'extras', 'achGrid', 'recTable', 'btnExtrasBack', 'weaponWheel', 'wwInner',
-      'medkitTag', 'droneTag', 'grenadeTag', 'shieldTag', 'heatTag', 'missileHud', 'mhTime', 'mhReadout',
+      'medkitTag', 'droneTag', 'grenadeTag', 'zResetTag', 'shieldTag', 'heatTag', 'missileHud', 'mhTime', 'mhReadout',
       'sdScreen', 'sdGrid', 'sdSearch', 'sdToggle2', 'sdClose', 'sdConfig',
       'esScreen', 'esGrid', 'esSearch', 'esCount', 'esClear', 'esClose', 'esConfig'];
     ids.forEach(i => this.el[i] = $(i));
@@ -430,6 +430,13 @@ const UI = {
       e.grenadeTag.textContent = grenadeName(kind) + ' ×' + n;
       e.grenadeTag.classList.toggle('hidden', n <= 0 && !(p.grenades && (p.grenades.frag + p.grenades.freeze + p.grenades.napalm) > 0));
       e.grenadeTag.classList.toggle('usable', n > 0);
+    }
+    // Y — unstick cooldown indicator (only while recharging)
+    if (e.zResetTag && typeof Game !== 'undefined') {
+      const cd = 120000;
+      const left = Game._zResetAt ? (cd - (U.now() - Game._zResetAt)) / 1000 : 0;
+      if (left > 0.5) { e.zResetTag.textContent = 'СБРОС ЗОМБИ · ' + Math.ceil(left) + 'с'; e.zResetTag.classList.remove('hidden'); e.zResetTag.classList.remove('usable'); }
+      else { e.zResetTag.classList.add('hidden'); }
     }
     // energy shield state, shown while the shield is the held weapon
     if (e.shieldTag) {

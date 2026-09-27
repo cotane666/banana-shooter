@@ -442,8 +442,22 @@ html.touch #autoFireTag{font-size:11px;padding:3px 11px}
   padding:7px 8px;border-radius:3px;transition:.12s}
 #rangePanel #rpToggle:hover{background:#242c33;border-left-color:var(--or)}
 #rangePanel #rpToggle.on{background:linear-gradient(90deg,#123a1a,#1d2329);border-left-color:var(--green);color:#9be8a8}
-/* the panel is desktop-only; hide it outright on touch devices */
-html.touch #rangePanel{display:none !important}
+#rangePanel .rp-sub{margin-top:10px;padding-top:8px;border-top:1px solid var(--line);
+  font-size:9.5px;color:var(--or);font-weight:800;letter-spacing:1.6px;margin-bottom:6px}
+#rangePanel #sdWeapon{width:100%;box-sizing:border-box;background:#12171c;color:#fff;
+  border:1px solid var(--line);border-radius:3px;padding:6px;font-family:inherit;
+  font-size:11px;letter-spacing:.5px;margin-bottom:6px;outline:none}
+#rangePanel #sdToggle{pointer-events:auto;width:100%;cursor:pointer;
+  background:#1d2329;border:1px solid var(--line);border-left:3px solid var(--or);
+  color:var(--txt);font-family:inherit;font-size:10.5px;letter-spacing:1.2px;
+  padding:7px 8px;border-radius:3px;transition:.12s}
+#rangePanel #sdToggle:hover{background:#242c33}
+#rangePanel #sdToggle.on{background:linear-gradient(90deg,#3a1212,#1d2329);border-left-color:#e33a2e;color:#ff9b91}
+/* On a phone the readouts are still useful, so the panel moves under the
+   minimap and grows a tap target for the shooting dummy (the aim drill stays
+   PC-only, so its button is hidden there). */
+html.touch #rangePanel{right:auto;left:12px;top:108px;width:174px;padding:8px 10px;font-size:10px}
+html.touch #rangePanel #rpToggle{display:none !important}
 
 /* ---------- click to play ---------- */
 #clickToPlay{position:fixed;inset:0;z-index:35;background:rgba(4,6,8,.86);display:flex;

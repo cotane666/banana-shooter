@@ -403,6 +403,107 @@ class Dummy extends Zombie {
   }
 }
 
+/* ---------------- shooting dummy (test range) ----------------
+   A dummy that stands still and shoots back at the player once it is switched
+   on. Its weapon can be chosen from the range panel (V toggles it and [ / ]
+   cycle the weapon on PC; the panel itself is tappable on a phone). It reports
+   damage per second exactly like a normal dummy because it IS one. */
+function shooterWeaponIds() {
+  const ids = [];
+  for (const id in WEAPONS) {
+    const w = WEAPONS[id];
+    if (!w || id === 'knife' || w.shield || w.projectile || w.dmg <= 0) continue;
+    ids.push(id);
+  }
+  return ids;
+}
+
+class ShooterDummy extends Dummy {
+  constructor(x, z, y) {
+    super(x, z, y);
+    this.isShooter = true;
+    this.dummyName = 'МАНЕКЕН-СТРЕЛОК';
+    this.active = false;               // fires only when the player turns it on
+    this.weaponId = 'ak47';
+    this.fireCd = 1.4;                 // grace period after switching on
+    this.flashT = 0;
+    this.weaponGroup = null;
+    // gunmetal blue paint so it is never mistaken for an ordinary target
+    const bs = new THREE.MeshLambertMaterial({ color: 0x9fb4cf });
+    const bc = new THREE.MeshLambertMaterial({ color: 0x3d5372 });
+    this.group.traverse(o => {
+      if (!o.isMesh || !o.material || !o.material.color) return;
+      const hex = o.material.color.getHex();
+      if (hex === 0xc8a06a) o.material = bs;         // skin
+      else if (hex === 0x6b4a2a) o.material = bc;    // cloth
+    });
+    this.plate = makeNameplate('СТРЕЛОК');
+    this.plate.position.set(0, 3.35, 0);
+    this.group.add(this.plate);
+    this.setWeapon(this.weaponId);
+  }
+
+  /* Attach (or swap) the weapon model in the right hand. Launchers and the
+     shield are left out: this dummy fires hitscan rounds only. */
+  setWeapon(id) {
+    const def = WEAPONS[id];
+    if (!def || def.projectile || def.shield || id === 'knife' || def.dmg <= 0) id = 'ak47';
+    this.weaponId = id;
+    const armR = this.parts.armR;
+    if (this.weaponGroup) { armR.remove(this.weaponGroup); this.weaponGroup = null; }
+    const w = buildSoldierWeapon(id);
+    w.position.set(.02, -.60, .02);
+    w.rotation.set(-Math.PI / 2, 0, 0);
+    w.scale.setScalar(.95);
+    armR.add(w);
+    this.weaponGroup = w;
+  }
+
+  update(dt, ctx) {
+    const target = (ctx && ctx.player) || Game.player;
+    // always face the player so the weapon points at them
+    if (target) this.yaw = Math.atan2(-(target.pos.x - this.pos.x), -(target.pos.z - this.pos.z));
+    Dummy.prototype.update.call(this, dt, ctx);   // DPS readout + hit reaction, no movement
+    // a fixed two-handed firing pose (the zombie "reach" would aim the gun away)
+    const p = this.parts;
+    p.armL.rotation.x = 1.15; p.armL.rotation.z = .14;
+    p.armR.rotation.x = 1.30; p.armR.rotation.z = -.14;
+    if (this.flashT > 0) this.flashT -= dt;
+    if (!this.active || !this.alive || !target || !target.alive) return;
+    if (Game.aim) return;                          // never fire into the aim room
+    this.fireCd -= dt;
+    if (this.fireCd <= 0) this.shoot(target);
+  }
+
+  shoot(target) {
+    const def = WEAPONS[this.weaponId] || WEAPONS.ak47;
+    // A deliberate, beatable cadence — never faster than ~3 shots a second —
+    // and reduced damage so the player can trade fire instead of dying at once.
+    this.fireCd = Math.max(.34, 60 / (def.rpm || 300));
+    const from = { x: this.pos.x - Math.sin(this.yaw) * .6, y: this.pos.y + 1.35 * this.scale, z: this.pos.z - Math.cos(this.yaw) * .6 };
+    const aim = { x: target.pos.x, y: target.pos.y + 1.05, z: target.pos.z };
+    const d = dirTo(from, aim);
+    const dir = Game.spreadDirection(d.dir, Math.max(def.spread || .02, .012) * 2.6, false);
+    const maxDist = Math.max(30, def.range || 100);
+    const walls = Game.world.raycastAll(from, dir, maxDist);
+    const wallHit = walls.length ? walls[0] : null;
+    const end = wallHit ? wallHit.point
+      : { x: from.x + dir.x * maxDist, y: from.y + dir.y * maxDist, z: from.z + dir.z * maxDist };
+    Game.effects.tracer(from, end, 1, true);
+    if (wallHit) Game.effects.impact(wallHit.point, wallHit.normal, 'concrete');
+    Audio3D_SFX.shot(def.sound || 'rifle', from.x, from.y, from.z);
+    this.flashT = .05;
+    // did the shot pass through the player's body before reaching a wall?
+    const oc = { x: target.pos.x - from.x, y: (target.pos.y + 1.0) - from.y, z: target.pos.z - from.z };
+    const tca = oc.x * dir.x + oc.y * dir.y + oc.z * dir.z;
+    if (tca <= 0) return;
+    if (wallHit && tca >= wallHit.t) return;
+    const perp2 = (oc.x * oc.x + oc.y * oc.y + oc.z * oc.z) - tca * tca;
+    if (perp2 > .55 * .55) return;
+    Game.applyDamageToSelf(Math.max(4, def.dmg * .22), from);
+  }
+}
+
 /* ---------------- remote player (online) ---------------- */
 let REMOTE_SKIN = 0;
 class RemotePlayer {
@@ -860,6 +961,14 @@ const Game = {
       if (this.mode !== CS.MODE.RANGE) return;
       this.toggleAimTrain(!this.aim);
     });
+    bindClick('sdToggle', () => this.toggleShooterDummy());
+    const sdSel = document.getElementById('sdWeapon');
+    if (sdSel) sdSel.addEventListener('change', () => {
+      if (this.mode !== CS.MODE.RANGE || !this.shooterDummy) return;
+      this.shooterDummy.setWeapon(sdSel.value);
+      const def = WEAPONS[sdSel.value];
+      UI.toast('Манекен: ' + (def ? def.name : sdSel.value), '#4aa3ff');
+    });
     bindClick('btnOnline', () => { UI.show('lobby'); this.resetLobby(); Net.warmup(); });
     bindClick('btnControls', () => { this._prevScreen = 'menu'; UI.show('controls'); });
     bindClick('btnControlsBack', () => UI.show(this._prevScreen || 'menu'));
@@ -1059,6 +1168,16 @@ const Game = {
       case 'KeyT':
         if (this.mode === CS.MODE.RANGE && !IS_TOUCH) this.toggleAimTrain(!this.aim);
         break;
+      // shooting dummy: V turns it on/off, [ and ] pick its weapon
+      case 'KeyV':
+        if (this.mode === CS.MODE.RANGE) this.toggleShooterDummy();
+        break;
+      case 'BracketLeft':
+        if (this.mode === CS.MODE.RANGE) this.cycleShooterWeapon(-1);
+        break;
+      case 'BracketRight':
+        if (this.mode === CS.MODE.RANGE) this.cycleShooterWeapon(1);
+        break;
     }
   },
 
@@ -1244,12 +1363,65 @@ const Game = {
       this.dummies.push(d);
       this.horde.list.push(d);            // so every existing raycast finds them
     }
+    // the shooting dummy: straight ahead and a little further back, so its
+    // rounds come down the middle of the arena. It stays dormant (and safe to
+    // shoot at) until the player turns it on from the range panel.
+    this.shooterDummy = null;
+    const sx = s.x + fx * 16, sz = s.z + fz * 16;
+    const sy = this.world.groundAt(sx, sz, 6);
+    const sd = new ShooterDummy(sx, sz, sy === null ? 0 : sy);
+    sd.yaw = face + Math.PI;
+    this.scene.add(sd.group);
+    this.dummies.push(sd);
+    this.horde.list.push(sd);
+    this.shooterDummy = sd;
+  },
+
+  /* Range panel: switch the shooting dummy on/off and pick its weapon. */
+  toggleShooterDummy() {
+    const d = this.shooterDummy;
+    if (!d || this.mode !== CS.MODE.RANGE) return;
+    d.active = !d.active;
+    d.fireCd = 1.4;                       // short grace period after switching on
+    UI.toast(d.active ? 'Манекен-стрелок ВКЛ' : 'Манекен-стрелок ВЫКЛ', d.active ? '#57d16a' : '#e33a2e');
+    if (d.active) Audio3D_SFX.pickup(); else Audio3D_SFX.deny();
+    this.updateRangePanel();
+  },
+
+  cycleShooterWeapon(step) {
+    const d = this.shooterDummy;
+    if (!d || this.mode !== CS.MODE.RANGE) return;
+    const ids = shooterWeaponIds();
+    if (!ids.length) return;
+    let i = ids.indexOf(d.weaponId);
+    i = (i + step + ids.length) % ids.length;
+    d.setWeapon(ids[i]);
+    const def = WEAPONS[d.weaponId];
+    UI.toast('Манекен: ' + (def ? def.name : d.weaponId), '#4aa3ff');
+    this.updateRangePanel();
+  },
+
+  /* On the range the player can be killed by the shooting dummy. Without this
+     they would be stuck dead, because no round flow runs there to respawn. */
+  updateRangeRespawn(dt) {
+    const p = this.player;
+    if (p.alive) { this._rangeDeadT = 0; return; }
+    this._rangeDeadT = (this._rangeDeadT || 0) + dt;
+    if (this._rangeDeadT >= 3) {
+      this._rangeDeadT = 0;
+      p.maxHealth = this.matchHP;
+      this.spawnPlayerLocal(0);
+      this.player.money = 999999;
+      UI.center('ВОЗРОЖДЕНИЕ', 'Манекен-стрелок продолжает огонь', 1.6);
+    }
   },
 
   clearDummies() {
     if (!this.dummies) return;
     for (const d of this.dummies) d.dispose(this.scene);
     this.dummies = [];
+    this.shooterDummy = null;
+    this._rangeDeadT = 0;
   },
 
   clearTargets() {
@@ -1269,6 +1441,7 @@ const Game = {
     }
     this._rangeDps = totalDps;
     if (this.targets && this.aim) this.updateTargets(dt);
+    this.updateRangeRespawn(dt);
     // the range never ends: keep it out of the round-flow timers
     this.roundState = 'live';
     this.roundT = 0;
@@ -1405,17 +1578,19 @@ const Game = {
       acc: document.getElementById('rpAcc'),
       streak: document.getElementById('rpStreak'),
       best: document.getElementById('rpBest'),
-      toggle: document.getElementById('rpToggle')
+      toggle: document.getElementById('rpToggle'),
+      sdWeapon: document.getElementById('sdWeapon'),
+      sdToggle: document.getElementById('sdToggle')
     };
     if (!el.panel) return;
     // The range panel (damage / hits / accuracy) is a PC-only readout: on a
     // phone it crowded the screen, so it is not shown there at all.
-    const inRange = this.mode === CS.MODE.RANGE && this.running && !IS_TOUCH;
+    const inRange = this.mode === CS.MODE.RANGE && this.running;
     el.panel.classList.toggle('hidden', !inRange);
     if (!inRange) return;
     const a = this.aim;
-    // the drill is PC-only, so the toggle always belongs to the keyboard path
-    if (el.toggle) el.toggle.style.display = '';
+    // the drill is PC-only, so its button is only meaningful there
+    if (el.toggle) el.toggle.style.display = IS_TOUCH ? 'none' : '';
     if (a) {
       el.title.textContent = 'АИМ-ТРЕНИРОВКА';
       el.score.textContent = String(a.score);
@@ -1437,6 +1612,28 @@ const Game = {
       // clicked — advertise the keyboard shortcut on the button itself.
       el.toggle.textContent = 'АИМ-ТРЕНИРОВКА (T)';
       el.toggle.classList.remove('on');
+    }
+    // shooting-dummy controls
+    if (el.sdWeapon) {
+      if (el.sdWeapon.options.length === 0) {
+        for (const id of shooterWeaponIds()) {
+          const o = document.createElement('option');
+          o.value = id; o.textContent = WEAPONS[id].name;
+          el.sdWeapon.appendChild(o);
+        }
+      }
+      const d = this.shooterDummy;
+      if (d) {
+        if (el.sdWeapon.value !== d.weaponId) el.sdWeapon.value = d.weaponId;
+        el.sdWeapon.disabled = false;
+      } else {
+        el.sdWeapon.disabled = true;
+      }
+    }
+    if (el.sdToggle) {
+      const on = !!(this.shooterDummy && this.shooterDummy.active);
+      el.sdToggle.textContent = on ? 'ВЫКЛЮЧИТЬ (V)' : 'ВКЛЮЧИТЬ (V)';
+      el.sdToggle.classList.toggle('on', on);
     }
   },
 

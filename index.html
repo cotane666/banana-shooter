@@ -11269,23 +11269,6 @@ const Game = {
     }
   },
 
-  /* Called when a projectile is about to hit US online: if the shield is up it
-     is reflected; returns true when the hit was blocked. */
-  tryReflectProjectile(pr, fromPeerId) {
-    const p = this.player;
-    if (!p || !p.shieldActive) return false;
-    // only reflect incoming projectiles (never our own)
-    if (pr.ownerIsLocal) return false;
-    // tell the world it was blocked
-    UI.hitmark(false);
-    this._hitmarkT = U.now();
-    this.effects.laser({ x: pr.pos.x, y: pr.pos.y, z: pr.pos.z },
-      { x: p.pos.x, y: p.pos.y + 1.2, z: p.pos.z });
-    Audio3D_SFX.pickup();
-    UI.feed('<span class="z">Щит отразил снаряд</span>');
-    return true;
-  },
-
   /* Report a hit to the shooter's victim. In the star network only the victim
      may apply it, so every hit carries the target's peer id. `kind` marks a
      projectile hit (rocket/banana/guided) so a shield can reflect it. */
@@ -11698,24 +11681,25 @@ const Game = {
     if (!me) return;
     const src = this.remoteById(h.from);
     this._lastHitBy = h.from;                // remembered so we can name our killer
-    /* The energy shield reflects incoming PROJECTILES back at the shooter: we
-       apply no damage here and instead tell the shooter their own shot hit them. */
-    if (h.pr && !h.reflect && this.player.shieldActive) {
-      this.reflectProjectile(h);
+    /* The energy shield reflects ANY incoming hit — bullets as well as rockets,
+       bananas and blasts — back at the shooter. We take no damage here and tell
+       the shooter their own shot hit them instead. `reflect` stops a loop. */
+    if (!h.reflect && this.player.shieldActive) {
+      this.reflectHit(h);
       return;
     }
     this.applyDamageToSelf(h.dmg, src ? { x: src.pos.x, y: src.pos.y + 1.2, z: src.pos.z } : null);
   },
 
-  /* Our shield caught an incoming projectile: bounce the damage to its sender. */
-  reflectProjectile(h) {
+  /* Our shield caught an incoming hit: bounce the damage straight back. */
+  reflectHit(h) {
     UI.hitmark(false); this._hitmarkT = U.now();
     Audio3D_SFX.pickup();
-    UI.feed('<span class="z">Щит отразил снаряд</span>');
-    UI.toast('Щит отразил снаряд!', '#4aa3ff');
-    // send the reflected damage straight back to the shooter
+    UI.feed('<span class="z">Щит отразил удар</span>');
+    UI.toast(h.pr ? 'Щит отразил снаряд!' : 'Щит отразил пулю!', '#4aa3ff');
+    // send the reflected damage straight back to the shooter, keeping the part
     Net.send({
-      t: 'hit', dmg: Math.round(h.dmg), part: 'body', hs: 0, at: U.now(),
+      t: 'hit', dmg: Math.round(h.dmg), part: h.part || 'body', hs: h.hs ? 1 : 0, at: U.now(),
       to: h.from, from: Net.selfId(), reflect: 1
     });
   },

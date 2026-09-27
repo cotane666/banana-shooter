@@ -1684,6 +1684,33 @@ class Player {
       if (this.beamVent > 0) {
         this.beamVent = Math.max(0, this.beamVent - dt);
         this.beamHeat = 0;
+        // overheated barrel: sparks and smoke pour off the muzzle while it vents
+        if (this.isLocal && game && game.effects) {
+          const eye = game.eyePos ? game.eyePos() : this.pos;
+          const dir = game.cameraDir ? game.cameraDir() : { x: -Math.sin(this.yaw), y: 0, z: -Math.cos(this.yaw) };
+          const tip = { x: eye.x + dir.x * .9 - Math.sin(this.yaw) * .12, y: eye.y - .18 + dir.y * .9, z: eye.z + dir.z * .9 - Math.cos(this.yaw) * .12 };
+          const k = U.clamp(this.beamVent / Math.max(.001, (def.beamVent || 3.5)), 0, 1);   // 1 → 0 as it cools
+          // sparks: more at first, thinning out as it cools
+          if (Math.random() < .6 + k * .4) {
+            for (let i = 0; i < 2; i++) {
+              game.effects.particle(
+                tip.x + U.rand(-.12, .12), tip.y + U.rand(-.10, .10), tip.z + U.rand(-.12, .12),
+                dir.x * U.rand(1, 5) + U.rand(-2, 2), U.rand(1, 4), dir.z * U.rand(1, 5) + U.rand(-2, 2),
+                U.rand(.03, .07), 'spark', U.rand(.12, .35));
+            }
+          }
+          // smoke: a steady plume that thins as the barrel cools
+          if (Math.random() < .5 + k * .5) {
+            game.effects.particle(
+              tip.x + U.rand(-.10, .10), tip.y + U.rand(-.06, .14), tip.z + U.rand(-.10, .10),
+              dir.x * U.rand(.3, 1.4) + U.rand(-.5, .5), U.rand(.6, 2.0), dir.z * U.rand(.3, 1.4) + U.rand(-.5, .5),
+              U.rand(.05, .12), 'smoke', U.rand(.6, 1.6));
+          }
+          // a flicker of heat-light on the first, hottest moment
+          if (k > .8 && Math.random() < .25) {
+            game.effects.particle(tip.x, tip.y, tip.z, 0, .6, 0, .06, 'spark', .1);
+          }
+        }
       } else if (this.alive && this.triggerDown && this.spinT > .85 && this.reloadT <= 0 && this.deployT <= 0 && this.weapon.mag > 0) {
         if (this.isLocal && !this._beamSnd) Audio3D_SFX.cannonBeamStart(this.pos.x, this.pos.y + 1.2, this.pos.z);
         this.beamHeat += dt;

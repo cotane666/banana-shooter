@@ -3760,17 +3760,28 @@ const Game = {
     beamEnd.x += dir.x * maxD; beamEnd.y += dir.y * maxD; beamEnd.z += dir.z * maxD;
     if (wallHits.length) {
       beamEnd = wallHits[0].point;
-      /* Leave a glowing scorch mark where the beam hits. It is throttled by
-         BOTH time and distance: standing still on one spot does not stack
-         decals, while sweeping the beam paints a continuous burn line. */
-      this._scorchT = (this._scorchT || 0) - dt;
+      /* Leave a fire trail where the beam hits. The strip is oriented ALONG THE
+         PATH the impact point traces on the surface (not along the beam), and is
+         made long enough to bridge the gap since the previous mark — so any
+         sweep paints one continuous burning line instead of separate dashes. */
+      const n = wallHits[0].normal || { x: -dir.x, y: -dir.y, z: -dir.z };
       const last = this._lastScorch;
-      const moved = !last || Math.hypot(beamEnd.x - last.x, beamEnd.y - last.y, beamEnd.z - last.z) > .55;
-      if (this._scorchT <= 0 && (moved || !last)) {
+      let trail = null, gap = 0;
+      if (last) {
+        const dx = beamEnd.x - last.x, dy = beamEnd.y - last.y, dz = beamEnd.z - last.z;
+        gap = Math.hypot(dx, dy, dz);
+        if (gap > 1e-3) trail = { x: dx / gap, y: dy / gap, z: dz / gap };
+      }
+      this._scorchT = (this._scorchT || 0) - dt;
+      if (!last) {
+        // first contact: a single short mark oriented along the beam
         this._scorchT = .05;
         this._lastScorch = { x: beamEnd.x, y: beamEnd.y, z: beamEnd.z };
-        const n = wallHits[0].normal || { x: -dir.x, y: -dir.y, z: -dir.z };
-        this.effects.scorch(beamEnd.x, beamEnd.y, beamEnd.z, n.x, n.y, n.z, .55, dir);
+        this.effects.scorch(beamEnd.x, beamEnd.y, beamEnd.z, n.x, n.y, n.z, .5, dir, .5 * 2.6);
+      } else if (this._scorchT <= 0 && gap > .25) {
+        this._scorchT = .06;
+        this._lastScorch = { x: beamEnd.x, y: beamEnd.y, z: beamEnd.z };
+        this.effects.scorch(beamEnd.x, beamEnd.y, beamEnd.z, n.x, n.y, n.z, .5, trail, gap * 1.15 + .75);
       }
     }
     if (this.effects) this.effects.holdBeam(muzzle, beamEnd, def.beamColor);

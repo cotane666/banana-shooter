@@ -307,7 +307,7 @@ class Effects {
   }
 
   /* ---------- decals ---------- */
-  decal(x, y, z, nx, ny, nz, size, kind, dir) {
+  decal(x, y, z, nx, ny, nz, size, kind, dir, length) {
     if (this.decals.length >= this.maxDecals) {
       const old = this.decals.shift();
       this.scene.remove(old);
@@ -332,8 +332,8 @@ class Effects {
       m.quaternion.setFromRotationMatrix(basis);
       m.position.set(x + zAxis.x * .014, y + zAxis.y * .014, z + zAxis.z * .014);
       const width = size === undefined ? .8 : size;        // across the beam
-      const length = width * 2.6;                          // stretched along it
-      m.scale.set(length, width, 1);
+      const len = (length === undefined ? width * 2.6 : length);
+      m.scale.set(len, width, 1);
     } else {
       m.position.set(x + nx * .012, y + ny * .012, z + nz * .012);
       // orient the plane along the surface normal
@@ -387,8 +387,8 @@ class Effects {
   /* a lingering fire streak where the laser beam met a surface. `dir` (the
      beam's travel direction) stretches the mark into a line along the surface,
      so a held/swept beam paints a continuous burning trail. */
-  scorch(x, y, z, nx, ny, nz, size, dir) {
-    this.decal(x, y, z, nx, ny, nz, size === undefined ? .6 : size, 'scorch', dir);
+  scorch(x, y, z, nx, ny, nz, size, dir, length) {
+    this.decal(x, y, z, nx, ny, nz, size === undefined ? .6 : size, 'scorch', dir, length);
     // embers + a wisp of smoke at the spot
     if (Math.random() < .7) {
       this.particle(x, y, z,

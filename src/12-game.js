@@ -1311,9 +1311,10 @@ const Game = {
       case 'BracketRight':
         if (this.mode === CS.MODE.RANGE && !this.shooterPickOpen) this.cycleShooterWeapon(1);
         break;
-      // range enemy spawner
+      // range enemy spawner; in the mech X is the ground dash
       case 'KeyX':
         if (this.mode === CS.MODE.RANGE) this.toggleEnemySpawn(!this.enemySpawnOpen);
+        else if (!this.paused && this.isMechActive()) Input.dashQueued = true;
         break;
       case 'KeyZ':
         if (this.mode === CS.MODE.RANGE && this.enemySpawnOpen) this.cycleSpawnHp(1);
@@ -4978,6 +4979,9 @@ const Game = {
         p.mechSuit = false;
         p.height = CFG.playerHeight;
         p.radius = CFG.playerRadius;
+        // drop mech-only abilities so they can't leak onto foot
+        p.jetActive = false; p.jetT = 0; p.jetCd = 0;
+        p.dashActive = false; p.dashT = 0; p.dashCd = 0; p.dashTook = null;
         // put the normal pistol back in hand instead of the mech weapons
         p.inv[2] = null; p.inv[1] = null;
         p.slot = 3;
@@ -5248,6 +5252,63 @@ const Game = {
           });
         }
         if (ud.jetLight) ud.jetLight.intensity = on ? (5 + Math.random() * 3) : 0;
+      },
+      /* МЕХАКОСТЮМ: dash — a short, powerful ground burst.
+         Direction = current movement input (or straight ahead if standing still).
+         Anything caught in the sweep takes damage and is shoved aside. */
+      mechDash() {
+        const p = this.player;
+        if (!this.isMechActive() || !p.alive) return false;
+        if (this.roundState !== 'live' || this.buyOpen) return false;
+        if (p.dashActive) return false;
+        if (p.dashCd > 0) {
+          UI.toast('Рывок через ' + p.dashCd.toFixed(1) + 'с', '#f5d33c');
+          Audio3D_SFX.deny(); return false;
+        }
+        // wish direction from the movement keys (falls back to facing forward)
+        const cy = Math.cos(p.yaw), sy = Math.sin(p.yaw);
+        let dx = -sy * (p.in.f || 0) + cy * (p.in.r || 0);
+        let dz = -cy * (p.in.f || 0) - sy * (p.in.r || 0);
+        const dl = Math.hypot(dx, dz);
+        if (dl > 0.01) { dx /= dl; dz /= dl; } else { dx = -sy; dz = -cy; }
+        p.dashDir.x = dx; p.dashDir.z = dz;
+        p.dashActive = true; p.dashT = CFG.mechDashTime;
+        p.dashTook = {};                       // zombies already hit this dash
+        p.dashCd = 0;                          // cooldown starts when the dash ends
+        // burst of dust thrown up behind the mech
+        if (this.effects) {
+          for (let i = 0; i < 12; i++) {
+            this.effects.particle(
+              p.pos.x - dx * .5 + U.rand(-.4, .4), p.pos.y + .3 + U.rand(0, 1.2), p.pos.z - dz * .5 + U.rand(-.4, .4),
+              -dx * U.rand(2, 6) + U.rand(-2, 2), U.rand(.5, 2.5), -dz * U.rand(2, 6) + U.rand(-2, 2),
+              U.rand(.10, .22), 'smoke', U.rand(.3, .7));
+          }
+        }
+        Audio3D_SFX.tone(90, .28, 'triangle', .16, p.pos.x, p.pos.y, p.pos.z, 220);
+        UI.toast('РЫВОК!', '#4ad6ff');
+        return true;
+      },
+      /* per-frame dash contact sweep: damage + shove anything in the path */
+      updateMechDash(dt) {
+        const p = this.player;
+        if (!p || !p.dashActive || !this.horde) return;
+        const R = CFG.mechRadius + 1.5;
+        for (const z of this.horde.list) {
+          if (!z.alive || z.dying) continue;
+          if (p.dashTook && p.dashTook[z.id]) continue;
+          const d = Math.hypot(z.pos.x - p.pos.x, z.pos.z - p.pos.z);
+          if (d > R) continue;
+          if (p.dashTook) p.dashTook[z.id] = 1;
+          const dmg = CFG.mechDashDmg;
+          z.takeDamage(dmg, 'body', p.dashDir);
+          p.damageDealt += dmg;
+          // shove the zombie away along the dash direction and stagger it
+          z.staggerT = Math.max(z.staggerT || 0, .5);
+          z.pos.x = U.clamp(z.pos.x + p.dashDir.x * .9, -MAP.size / 2 + 2, MAP.size / 2 - 2);
+          z.pos.z = U.clamp(z.pos.z + p.dashDir.z * .9, -MAP.size / 2 + 2, MAP.size / 2 - 2);
+          if (this.effects) this.effects.impact({ x: z.pos.x, y: z.pos.y + 1.0, z: z.pos.z }, { x: -p.dashDir.x, y: 0, z: -p.dashDir.z }, 'flesh');
+          Audio3D_SFX.flesh(z.pos.x, z.pos.y + 1.0, z.pos.z);
+        }
       },
       /* ЛКМ fires the minigun, ПКМ fires the laser, both independent and held */
       updateMech(dt, lmb, rmb) {
@@ -6955,6 +7016,8 @@ const Game = {
       if (this.isMechActive()) this.launchMechMissiles();
       else p.climbQueued = true;
     }
+    // mech dash: the dash button / key is edge-triggered
+    if (Input.consumeDash()) this.mechDash();
 
     p._wantAim = Input.aimDown() && canLook;
 
@@ -7030,6 +7093,7 @@ const Game = {
 
     // ---- physics ----
     p.update(dt, this.world, pin);
+    this.updateMechDash(dt);
     p.tickWeapon(dt, this);
     this.updateShield(dt);
 

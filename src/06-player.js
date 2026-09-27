@@ -1872,6 +1872,11 @@ class Player {
     this.jetActive = false;   // jetpack thrusting
     this.jetT = 0;            // seconds of thrust left this burst
     this.jetCd = 0;           // seconds until the pack can fire again
+    this.dashActive = false;  // mech ground-dash in progress
+    this.dashT = 0;           // seconds of dash left
+    this.dashCd = 0;          // seconds until the dash recharges
+    this.dashDir = { x: 0, z: 0 };
+    this.dashTook = null;     // ids of zombies already hit by the current dash
     this.grenades = { frag: 0, freeze: 0, napalm: 0 };   // thrown with G
     this.builds = { turret: 0, barricade: 0, mine: 0 };  // placed with K
     // energy shield (active shield): raised by LMB for a few seconds, then cools
@@ -2184,6 +2189,22 @@ class Player {
         this.jetActive = true; this.jetT = CFG.mechJetMax;
       }
     } else { this.jetActive = false; this.jetCd = 0; this.jetT = 0; }
+
+    /* ---- МЕХАКОСТЮМ: dash ----
+       A short, powerful ground burst in the dash direction. Overrides the
+       horizontal velocity while it runs, then goes on cooldown. */
+    if (this.mechSuit) {
+      if (this.dashCd > 0) this.dashCd -= dt;
+      if (this.dashActive) {
+        this.dashT -= dt;
+        const k = Math.max(0, this.dashT / CFG.mechDashTime);   // ease-out
+        const s = CFG.mechDashSpeed * (0.35 + 0.65 * k);
+        this.vel.x = this.dashDir.x * s;
+        this.vel.z = this.dashDir.z * s;
+        if (this.vel.y < 0) this.vel.y = 0;                     // keep the burst level
+        if (this.dashT <= 0) { this.dashActive = false; this.dashCd = CFG.mechDashCd; this.dashTook = null; }
+      }
+    } else { this.dashActive = false; this.dashCd = 0; this.dashT = 0; }
 
     // ---- gravity ----
     this.vel.y -= CFG.gravity * dt;

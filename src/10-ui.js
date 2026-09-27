@@ -24,7 +24,7 @@ const UI = {
       'offCountChips', 'offHpChips', 'offFreeChips', 'offModeChips', 'offCustomBox', 'offHordeBox', 'offSpecialBox', 'offCpBox', 'offCpInfo', 'offCpMode', 'offCpList', 'offCountExact', 'offCountFixed', 'btnOffContinue', 'custom', 'lobbyShop', 'lobbyShopItems',
       'modScreen', 'modGrid', 'modActive',
       'extras', 'achGrid', 'recTable', 'btnExtrasBack', 'weaponWheel', 'wwInner',
-      'medkitTag', 'droneTag', 'grenadeTag', 'zResetTag', 'jetTag', 'shieldTag', 'heatTag', 'missileHud', 'mhTime', 'mhReadout',
+      'medkitTag', 'droneTag', 'grenadeTag', 'zResetTag', 'jetTag', 'dashTag', 'shieldTag', 'heatTag', 'missileHud', 'mhTime', 'mhReadout',
       'sdScreen', 'sdGrid', 'sdSearch', 'sdToggle2', 'sdClose', 'sdConfig',
       'esScreen', 'esGrid', 'esSearch', 'esCount', 'esClear', 'esClose', 'esConfig'];
     ids.forEach(i => this.el[i] = $(i));
@@ -455,6 +455,16 @@ const UI = {
         if (p.jetActive) { e.jetTag.textContent = 'ДЖЕТПАК ' + Math.max(0, p.jetT).toFixed(1) + 'с'; e.jetTag.classList.add('usable'); }
         else if (p.jetCd > 0) { e.jetTag.textContent = 'ДЖЕТПАК · ' + Math.max(0, p.jetCd).toFixed(1) + 'с'; e.jetTag.classList.remove('usable'); }
         else { e.jetTag.textContent = 'ДЖЕТПАК · ПРОБЕЛ'; e.jetTag.classList.add('usable'); }
+      }
+    }
+    // dash indicator (mech only)
+    if (e.dashTag) {
+      const inMech = (typeof Game !== 'undefined') && Game.isMechActive && Game.isMechActive();
+      e.dashTag.classList.toggle('hidden', !inMech);
+      if (inMech) {
+        if (p.dashActive) { e.dashTag.textContent = 'РЫВОК!'; e.dashTag.classList.add('usable'); }
+        else if (p.dashCd > 0) { e.dashTag.textContent = 'РЫВОК · ' + Math.max(0, p.dashCd).toFixed(1) + 'с'; e.dashTag.classList.remove('usable'); }
+        else { e.dashTag.textContent = 'РЫВОК · X'; e.dashTag.classList.add('usable'); }
       }
     }
     // Y — unstick cooldown indicator (only while recharging)

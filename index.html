@@ -867,6 +867,7 @@ html.touch .fld input{padding:10px;font-size:15px}
       <div class="krow"><kbd>Y</kbd><span>Сбросить зомби на спавн (раз в 2 мин)</span></div>
       <div class="krow"><kbd>ЛКМ/ПКМ</kbd><span>Мехакостюм: миниган / лазер</span></div>
       <div class="krow"><kbd>Space</kbd><span>Мехакостюм: джетпак (1.5с · перезаряд 1.5с)</span></div>
+      <div class="krow"><kbd>X</kbd><span>Мехакостюм: рывок вперёд</span></div>
       <div class="krow"><kbd>F</kbd><span>Дрон-камикадзе</span></div>
       <div class="krow"><kbd>V</kbd><span>Дрон-турель (снаряжение)</span></div>
       <div class="krow"><kbd>1 2 3</kbd><span>Пистолет / Основное / Нож</span></div>
@@ -1043,6 +1044,7 @@ html.touch .fld input{padding:10px;font-size:15px}
       <span id="grenadeTag" class="geartag hidden">ГРАНАТА ×2</span>
       <span id="zResetTag" class="geartag hidden">СБРОС ЗОМБИ</span>
       <span id="jetTag" class="geartag hidden">ДЖЕТПАК</span>
+      <span id="dashTag" class="geartag hidden">РЫВОК</span>
       <span id="shieldTag" class="geartag hidden">ЩИТ</span>
       <span id="heatTag" class="geartag hidden">ЛАЗЕР</span>
     </div>
@@ -1330,6 +1332,11 @@ const CFG = {
   mechJetMax: 1.5,
   mechJetRecharge: 1.5,
   mechJetThrust: 9.5,       // вертикальная тяга (м/с), поднимает даже без земли
+  /* мех-рывок: короткий мощный бросок вперёд, затем перезарядка */
+  mechDashSpeed: 26,        // начальная скорость броска (м/с)
+  mechDashTime: 0.28,       // сколько длится сам бросок (с)
+  mechDashCd: 2.2,          // перезарядка рывка (с)
+  mechDashDmg: 60,          // урон/отброс зомби, которых задели на рывке
   maxHP: 100,
   maxAP: 100,
   stepUp: 0.62,
@@ -6290,6 +6297,11 @@ class Player {
     this.jetActive = false;   // jetpack thrusting
     this.jetT = 0;            // seconds of thrust left this burst
     this.jetCd = 0;           // seconds until the pack can fire again
+    this.dashActive = false;  // mech ground-dash in progress
+    this.dashT = 0;           // seconds of dash left
+    this.dashCd = 0;          // seconds until the dash recharges
+    this.dashDir = { x: 0, z: 0 };
+    this.dashTook = null;     // ids of zombies already hit by the current dash
     this.grenades = { frag: 0, freeze: 0, napalm: 0 };   // thrown with G
     this.builds = { turret: 0, barricade: 0, mine: 0 };  // placed with K
     // energy shield (active shield): raised by LMB for a few seconds, then cools
@@ -6602,6 +6614,22 @@ class Player {
         this.jetActive = true; this.jetT = CFG.mechJetMax;
       }
     } else { this.jetActive = false; this.jetCd = 0; this.jetT = 0; }
+
+    /* ---- МЕХАКОСТЮМ: dash ----
+       A short, powerful ground burst in the dash direction. Overrides the
+       horizontal velocity while it runs, then goes on cooldown. */
+    if (this.mechSuit) {
+      if (this.dashCd > 0) this.dashCd -= dt;
+      if (this.dashActive) {
+        this.dashT -= dt;
+        const k = Math.max(0, this.dashT / CFG.mechDashTime);   // ease-out
+        const s = CFG.mechDashSpeed * (0.35 + 0.65 * k);
+        this.vel.x = this.dashDir.x * s;
+        this.vel.z = this.dashDir.z * s;
+        if (this.vel.y < 0) this.vel.y = 0;                     // keep the burst level
+        if (this.dashT <= 0) { this.dashActive = false; this.dashCd = CFG.mechDashCd; this.dashTook = null; }
+      }
+    } else { this.dashActive = false; this.dashCd = 0; this.dashT = 0; }
 
     // ---- gravity ----
     this.vel.y -= CFG.gravity * dt;
@@ -8063,6 +8091,7 @@ const Input = {
   onLockChange: null,
   bindings: {},
   climbQueued: false,  // set by the PC climb key, consumed once per press
+  dashQueued: false,   // set by the PC dash key, consumed once per press
 
   init(el) {
     this.el = el;
@@ -8220,6 +8249,11 @@ const Input = {
   consumeClimb() {
     if (IS_TOUCH) { const c = TouchUI.climbQueued; TouchUI.climbQueued = false; return c; }
     const c = this.climbQueued; this.climbQueued = false; return c;
+  },
+  /* dedicated dash request (mech ground burst): touch button or PC key */
+  consumeDash() {
+    if (IS_TOUCH) { const d = TouchUI.dashQueued; TouchUI.dashQueued = false; return d; }
+    const d = this.dashQueued; this.dashQueued = false; return d;
   }
 };
 
@@ -8245,7 +8279,7 @@ const TouchUI = {
   reloadQueued: false,
   switchQueued: 0,
   climbQueued: false,
-  autoRun: false,
+  dashQueued: false,
   runHeld: false,
   sens: 1.5,
   _els: {},
@@ -8278,6 +8312,7 @@ const TouchUI = {
       '<button id="tHeal" class="tbtn small accent">АПТЕЧКА</button>' +
       '<button id="tDrone" class="tbtn small accent">ДРОН</button>' +
       '<button id="tClimb" class="tbtn small accent">ЗАЛЕЗТЬ</button>' +
+      '<button id="tDash" class="tbtn small accent">РЫВОК</button>' +
       '<button id="tBuy" class="tbtn small accent">МАГАЗИН</button>' +
       '<button id="tMenu" class="tbtn small">ПАУЗА</button>' +
       '<div id="tHint">Слева — ходьба · Справа — обзор · Тап — огонь · АВТО — очередь · ЗАЛЕЗТЬ — паркур</div>';
@@ -8296,6 +8331,7 @@ const TouchUI = {
       heal: document.getElementById('tHeal'),
       drone: document.getElementById('tDrone'),
       climb: document.getElementById('tClimb'),
+      dash: document.getElementById('tDash'),
       buy: document.getElementById('tBuy'),
       menu: document.getElementById('tMenu'),
       hint: document.getElementById('tHint')
@@ -8335,6 +8371,7 @@ const TouchUI = {
     E.reload.addEventListener('touchstart', e => { swallow(e); this.reloadQueued = true; E.reload.classList.add('down'); setTimeout(() => E.reload.classList.remove('down'), 130); }, { passive: false });
     E.swap.addEventListener('touchstart', e => { swallow(e); this.switchQueued = 1; E.swap.classList.add('down'); setTimeout(() => E.swap.classList.remove('down'), 130); }, { passive: false });
     E.climb.addEventListener('touchstart', e => { swallow(e); this.climbQueued = true; E.climb.classList.add('down'); setTimeout(() => E.climb.classList.remove('down'), 160); }, { passive: false });
+    E.dash.addEventListener('touchstart', e => { swallow(e); this.dashQueued = true; E.dash.classList.add('down'); setTimeout(() => E.dash.classList.remove('down'), 160); }, { passive: false });
     E.heal.addEventListener('touchstart', e => { swallow(e); Bus.emit('touchUseMedkit'); E.heal.classList.add('down'); setTimeout(() => E.heal.classList.remove('down'), 160); }, { passive: false });
     E.drone.addEventListener('touchstart', e => { swallow(e); Bus.emit('touchUseDrone'); E.drone.classList.add('down'); setTimeout(() => E.drone.classList.remove('down'), 160); }, { passive: false });
     E.buy.addEventListener('touchstart', e => { swallow(e); Bus.emit('touchBuy'); E.buy.classList.add('down'); setTimeout(() => E.buy.classList.remove('down'), 130); }, { passive: false });
@@ -9766,7 +9803,7 @@ const UI = {
       'offCountChips', 'offHpChips', 'offFreeChips', 'offModeChips', 'offCustomBox', 'offHordeBox', 'offSpecialBox', 'offCpBox', 'offCpInfo', 'offCpMode', 'offCpList', 'offCountExact', 'offCountFixed', 'btnOffContinue', 'custom', 'lobbyShop', 'lobbyShopItems',
       'modScreen', 'modGrid', 'modActive',
       'extras', 'achGrid', 'recTable', 'btnExtrasBack', 'weaponWheel', 'wwInner',
-      'medkitTag', 'droneTag', 'grenadeTag', 'zResetTag', 'jetTag', 'shieldTag', 'heatTag', 'missileHud', 'mhTime', 'mhReadout',
+      'medkitTag', 'droneTag', 'grenadeTag', 'zResetTag', 'jetTag', 'dashTag', 'shieldTag', 'heatTag', 'missileHud', 'mhTime', 'mhReadout',
       'sdScreen', 'sdGrid', 'sdSearch', 'sdToggle2', 'sdClose', 'sdConfig',
       'esScreen', 'esGrid', 'esSearch', 'esCount', 'esClear', 'esClose', 'esConfig'];
     ids.forEach(i => this.el[i] = $(i));
@@ -10197,6 +10234,16 @@ const UI = {
         if (p.jetActive) { e.jetTag.textContent = 'ДЖЕТПАК ' + Math.max(0, p.jetT).toFixed(1) + 'с'; e.jetTag.classList.add('usable'); }
         else if (p.jetCd > 0) { e.jetTag.textContent = 'ДЖЕТПАК · ' + Math.max(0, p.jetCd).toFixed(1) + 'с'; e.jetTag.classList.remove('usable'); }
         else { e.jetTag.textContent = 'ДЖЕТПАК · ПРОБЕЛ'; e.jetTag.classList.add('usable'); }
+      }
+    }
+    // dash indicator (mech only)
+    if (e.dashTag) {
+      const inMech = (typeof Game !== 'undefined') && Game.isMechActive && Game.isMechActive();
+      e.dashTag.classList.toggle('hidden', !inMech);
+      if (inMech) {
+        if (p.dashActive) { e.dashTag.textContent = 'РЫВОК!'; e.dashTag.classList.add('usable'); }
+        else if (p.dashCd > 0) { e.dashTag.textContent = 'РЫВОК · ' + Math.max(0, p.dashCd).toFixed(1) + 'с'; e.dashTag.classList.remove('usable'); }
+        else { e.dashTag.textContent = 'РЫВОК · X'; e.dashTag.classList.add('usable'); }
       }
     }
     // Y — unstick cooldown indicator (only while recharging)
@@ -12638,9 +12685,10 @@ const Game = {
       case 'BracketRight':
         if (this.mode === CS.MODE.RANGE && !this.shooterPickOpen) this.cycleShooterWeapon(1);
         break;
-      // range enemy spawner
+      // range enemy spawner; in the mech X is the ground dash
       case 'KeyX':
         if (this.mode === CS.MODE.RANGE) this.toggleEnemySpawn(!this.enemySpawnOpen);
+        else if (!this.paused && this.isMechActive()) Input.dashQueued = true;
         break;
       case 'KeyZ':
         if (this.mode === CS.MODE.RANGE && this.enemySpawnOpen) this.cycleSpawnHp(1);
@@ -16305,6 +16353,9 @@ const Game = {
         p.mechSuit = false;
         p.height = CFG.playerHeight;
         p.radius = CFG.playerRadius;
+        // drop mech-only abilities so they can't leak onto foot
+        p.jetActive = false; p.jetT = 0; p.jetCd = 0;
+        p.dashActive = false; p.dashT = 0; p.dashCd = 0; p.dashTook = null;
         // put the normal pistol back in hand instead of the mech weapons
         p.inv[2] = null; p.inv[1] = null;
         p.slot = 3;
@@ -16575,6 +16626,63 @@ const Game = {
           });
         }
         if (ud.jetLight) ud.jetLight.intensity = on ? (5 + Math.random() * 3) : 0;
+      },
+      /* МЕХАКОСТЮМ: dash — a short, powerful ground burst.
+         Direction = current movement input (or straight ahead if standing still).
+         Anything caught in the sweep takes damage and is shoved aside. */
+      mechDash() {
+        const p = this.player;
+        if (!this.isMechActive() || !p.alive) return false;
+        if (this.roundState !== 'live' || this.buyOpen) return false;
+        if (p.dashActive) return false;
+        if (p.dashCd > 0) {
+          UI.toast('Рывок через ' + p.dashCd.toFixed(1) + 'с', '#f5d33c');
+          Audio3D_SFX.deny(); return false;
+        }
+        // wish direction from the movement keys (falls back to facing forward)
+        const cy = Math.cos(p.yaw), sy = Math.sin(p.yaw);
+        let dx = -sy * (p.in.f || 0) + cy * (p.in.r || 0);
+        let dz = -cy * (p.in.f || 0) - sy * (p.in.r || 0);
+        const dl = Math.hypot(dx, dz);
+        if (dl > 0.01) { dx /= dl; dz /= dl; } else { dx = -sy; dz = -cy; }
+        p.dashDir.x = dx; p.dashDir.z = dz;
+        p.dashActive = true; p.dashT = CFG.mechDashTime;
+        p.dashTook = {};                       // zombies already hit this dash
+        p.dashCd = 0;                          // cooldown starts when the dash ends
+        // burst of dust thrown up behind the mech
+        if (this.effects) {
+          for (let i = 0; i < 12; i++) {
+            this.effects.particle(
+              p.pos.x - dx * .5 + U.rand(-.4, .4), p.pos.y + .3 + U.rand(0, 1.2), p.pos.z - dz * .5 + U.rand(-.4, .4),
+              -dx * U.rand(2, 6) + U.rand(-2, 2), U.rand(.5, 2.5), -dz * U.rand(2, 6) + U.rand(-2, 2),
+              U.rand(.10, .22), 'smoke', U.rand(.3, .7));
+          }
+        }
+        Audio3D_SFX.tone(90, .28, 'triangle', .16, p.pos.x, p.pos.y, p.pos.z, 220);
+        UI.toast('РЫВОК!', '#4ad6ff');
+        return true;
+      },
+      /* per-frame dash contact sweep: damage + shove anything in the path */
+      updateMechDash(dt) {
+        const p = this.player;
+        if (!p || !p.dashActive || !this.horde) return;
+        const R = CFG.mechRadius + 1.5;
+        for (const z of this.horde.list) {
+          if (!z.alive || z.dying) continue;
+          if (p.dashTook && p.dashTook[z.id]) continue;
+          const d = Math.hypot(z.pos.x - p.pos.x, z.pos.z - p.pos.z);
+          if (d > R) continue;
+          if (p.dashTook) p.dashTook[z.id] = 1;
+          const dmg = CFG.mechDashDmg;
+          z.takeDamage(dmg, 'body', p.dashDir);
+          p.damageDealt += dmg;
+          // shove the zombie away along the dash direction and stagger it
+          z.staggerT = Math.max(z.staggerT || 0, .5);
+          z.pos.x = U.clamp(z.pos.x + p.dashDir.x * .9, -MAP.size / 2 + 2, MAP.size / 2 - 2);
+          z.pos.z = U.clamp(z.pos.z + p.dashDir.z * .9, -MAP.size / 2 + 2, MAP.size / 2 - 2);
+          if (this.effects) this.effects.impact({ x: z.pos.x, y: z.pos.y + 1.0, z: z.pos.z }, { x: -p.dashDir.x, y: 0, z: -p.dashDir.z }, 'flesh');
+          Audio3D_SFX.flesh(z.pos.x, z.pos.y + 1.0, z.pos.z);
+        }
       },
       /* ЛКМ fires the minigun, ПКМ fires the laser, both independent and held */
       updateMech(dt, lmb, rmb) {
@@ -18282,6 +18390,8 @@ const Game = {
       if (this.isMechActive()) this.launchMechMissiles();
       else p.climbQueued = true;
     }
+    // mech dash: the dash button / key is edge-triggered
+    if (Input.consumeDash()) this.mechDash();
 
     p._wantAim = Input.aimDown() && canLook;
 
@@ -18357,6 +18467,7 @@ const Game = {
 
     // ---- physics ----
     p.update(dt, this.world, pin);
+    this.updateMechDash(dt);
     p.tickWeapon(dt, this);
     this.updateShield(dt);
 

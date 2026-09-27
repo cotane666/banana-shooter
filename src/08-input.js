@@ -36,6 +36,7 @@ const Input = {
   onLockChange: null,
   bindings: {},
   climbQueued: false,  // set by the PC climb key, consumed once per press
+  dashQueued: false,   // set by the PC dash key, consumed once per press
 
   init(el) {
     this.el = el;
@@ -193,6 +194,11 @@ const Input = {
   consumeClimb() {
     if (IS_TOUCH) { const c = TouchUI.climbQueued; TouchUI.climbQueued = false; return c; }
     const c = this.climbQueued; this.climbQueued = false; return c;
+  },
+  /* dedicated dash request (mech ground burst): touch button or PC key */
+  consumeDash() {
+    if (IS_TOUCH) { const d = TouchUI.dashQueued; TouchUI.dashQueued = false; return d; }
+    const d = this.dashQueued; this.dashQueued = false; return d;
   }
 };
 
@@ -218,7 +224,7 @@ const TouchUI = {
   reloadQueued: false,
   switchQueued: 0,
   climbQueued: false,
-  autoRun: false,
+  dashQueued: false,
   runHeld: false,
   sens: 1.5,
   _els: {},
@@ -251,6 +257,7 @@ const TouchUI = {
       '<button id="tHeal" class="tbtn small accent">АПТЕЧКА</button>' +
       '<button id="tDrone" class="tbtn small accent">ДРОН</button>' +
       '<button id="tClimb" class="tbtn small accent">ЗАЛЕЗТЬ</button>' +
+      '<button id="tDash" class="tbtn small accent">РЫВОК</button>' +
       '<button id="tBuy" class="tbtn small accent">МАГАЗИН</button>' +
       '<button id="tMenu" class="tbtn small">ПАУЗА</button>' +
       '<div id="tHint">Слева — ходьба · Справа — обзор · Тап — огонь · АВТО — очередь · ЗАЛЕЗТЬ — паркур</div>';
@@ -269,6 +276,7 @@ const TouchUI = {
       heal: document.getElementById('tHeal'),
       drone: document.getElementById('tDrone'),
       climb: document.getElementById('tClimb'),
+      dash: document.getElementById('tDash'),
       buy: document.getElementById('tBuy'),
       menu: document.getElementById('tMenu'),
       hint: document.getElementById('tHint')
@@ -308,6 +316,7 @@ const TouchUI = {
     E.reload.addEventListener('touchstart', e => { swallow(e); this.reloadQueued = true; E.reload.classList.add('down'); setTimeout(() => E.reload.classList.remove('down'), 130); }, { passive: false });
     E.swap.addEventListener('touchstart', e => { swallow(e); this.switchQueued = 1; E.swap.classList.add('down'); setTimeout(() => E.swap.classList.remove('down'), 130); }, { passive: false });
     E.climb.addEventListener('touchstart', e => { swallow(e); this.climbQueued = true; E.climb.classList.add('down'); setTimeout(() => E.climb.classList.remove('down'), 160); }, { passive: false });
+    E.dash.addEventListener('touchstart', e => { swallow(e); this.dashQueued = true; E.dash.classList.add('down'); setTimeout(() => E.dash.classList.remove('down'), 160); }, { passive: false });
     E.heal.addEventListener('touchstart', e => { swallow(e); Bus.emit('touchUseMedkit'); E.heal.classList.add('down'); setTimeout(() => E.heal.classList.remove('down'), 160); }, { passive: false });
     E.drone.addEventListener('touchstart', e => { swallow(e); Bus.emit('touchUseDrone'); E.drone.classList.add('down'); setTimeout(() => E.drone.classList.remove('down'), 160); }, { passive: false });
     E.buy.addEventListener('touchstart', e => { swallow(e); Bus.emit('touchBuy'); E.buy.classList.add('down'); setTimeout(() => E.buy.classList.remove('down'), 130); }, { passive: false });

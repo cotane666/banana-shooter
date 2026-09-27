@@ -1535,6 +1535,112 @@ function buildPlasmaBolt() {
   return g;
 }
 
+/* A mech chassis shell the player sits inside (visible around the camera).
+   Blue armoured dreadnought body: shoulder blocks, cockpit hatch, arms with the
+   minigun and the laser pod, and two heavy legs. Built around the origin with
+   the floor at y=0 and the cockpit around eye height. */
+function buildMechChassis() {
+  const BLUE = 0x2b4a8f, BLUE2 = 0x1d3568, WHITE = 0xdfe6f0, GOLD = 0xd8b45a, DK = 0x1b2026, RED = 0xc4302a;
+  const matB = new THREE.MeshLambertMaterial({ color: BLUE });
+  const matB2 = new THREE.MeshLambertMaterial({ color: BLUE2 });
+  const matW = new THREE.MeshLambertMaterial({ color: WHITE });
+  const matG = new THREE.MeshLambertMaterial({ color: GOLD, emissive: 0x1a1405 });
+  const matD = new THREE.MeshLambertMaterial({ color: DK });
+  const g = new THREE.Group();
+  const box = (w, h, d, m, x, y, z, rx, ry, rz) => {
+    const b = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m);
+    b.position.set(x, y, z);
+    if (rx) b.rotation.x = rx; if (ry) b.rotation.y = ry; if (rz) b.rotation.z = rz;
+    b.castShadow = true; b.receiveShadow = true;
+    g.add(b); return b;
+  };
+  // ------- torso / cockpit (around eye height ~3.3) -------
+  box(1.10, 1.05, .78, matB, 0, 2.75, 0);              // chest
+  box(1.18, .14, .84, matB2, 0, 3.30, 0);              // top plate
+  box(1.14, .14, .84, matB2, 0, 2.24, 0);              // lower plate
+  box(.44, .50, .10, matW, 0, 2.80, .42);              // white chest panel
+  const visor = new THREE.Mesh(new THREE.BoxGeometry(.70, .16, .06), new THREE.MeshBasicMaterial({ color: 0x8fe6ff }));
+  visor.position.set(0, 3.16, .40); g.add(visor);
+  box(.18, .10, .04, matG, 0, 2.72, .47);              // eagle emblem
+  box(.05, .18, .04, matG, 0, 2.72, .47);
+  [-1, 1].forEach(s => box(.09, .13, .04, matG, s * .10, 2.72, .47, 0, 0, s * .5));
+  // shoulder pauldrons
+  box(.52, .50, .62, matB, -1.00, 3.22, 0);
+  box(.52, .50, .62, matB, 1.00, 3.22, 0);
+  box(.56, .12, .66, matB2, -1.00, 3.50, 0);
+  box(.56, .12, .66, matB2, 1.00, 3.50, 0);
+  [-1, 1].forEach(s => { for (let i = 0; i < 3; i++) box(.06, .06, .06, matG, s * 1.22, 3.32 - i * .14, .22); });
+  // right arm: minigun cluster (points forward, -Z)
+  const mgArm = new THREE.Group();
+  const cluster = new THREE.Group();
+  for (let i = 0; i < 6; i++) {
+    const a = (i / 6) * Math.PI * 2;
+    const bc = new THREE.Mesh(new THREE.CylinderGeometry(.05, .05, 1.5, 8), matD);
+    bc.rotation.x = Math.PI / 2;
+    bc.position.set(Math.cos(a) * .16, Math.sin(a) * .16, -1.15);
+    cluster.add(bc);
+  }
+  const clamp = new THREE.Mesh(new THREE.CylinderGeometry(.19, .19, .16, 14), matD);
+  clamp.rotation.x = Math.PI / 2; clamp.position.z = -.55; cluster.add(clamp);
+  const ring = new THREE.Mesh(new THREE.CylinderGeometry(.16, .16, .10, 14), new THREE.MeshBasicMaterial({ color: 0x4ad6ff }));
+  ring.rotation.x = Math.PI / 2; ring.position.z = -1.86; cluster.add(ring);
+  cluster.name = 'barrels';
+  mgArm.add(cluster);
+  mgArm.position.set(1.35, 2.90, -.1);
+  g.add(mgArm);
+  box(.42, .42, .60, matB2, 1.38, 3.15, .18);          // right arm housing
+  // left arm: laser pod with red missile tubes
+  const lzArm = new THREE.Group();
+  box(.46, .46, .66, matB2, 0, 0, 0);
+  box(.10, .42, .66, matW, -.27, 0, 0);
+  for (let r = 0; r < 3; r++) for (let c = 0; c < 2; c++) {
+    const tube = new THREE.Mesh(new THREE.CylinderGeometry(.055, .055, .10, 10), new THREE.MeshLambertMaterial({ color: RED }));
+    tube.rotation.x = Math.PI / 2;
+    tube.position.set((c - .5) * .13, .10 - r * .13, -.38);
+    lzArm.add(tube);
+  }
+  const emit = new THREE.Mesh(new THREE.CylinderGeometry(.10, .10, .90, 12), matD);
+  emit.rotation.x = Math.PI / 2; emit.position.set(0, -.30, -.7); lzArm.add(emit);
+  const emitRing = new THREE.Mesh(new THREE.CylinderGeometry(.12, .12, .08, 12), new THREE.MeshBasicMaterial({ color: 0x39ff6a }));
+  emitRing.rotation.x = Math.PI / 2; emitRing.position.set(0, -.30, -1.1); lzArm.add(emitRing);
+  lzArm.position.set(-1.35, 2.95, -.1);
+  g.add(lzArm);
+  // ------- pelvis + legs -------
+  box(.90, .42, .62, matB2, 0, 2.05, 0);
+  [-1, 1].forEach(s => {
+    box(.40, .70, .46, matB, s * .42, 1.55, 0);
+    box(.42, .12, .48, matB2, s * .42, 1.86, 0);
+    box(.46, .80, .40, matD, s * .42, .85, .05);
+    box(.42, .16, .44, matB, s * .42, 1.18, .02);
+    box(.52, .22, .78, matB, s * .42, .14, .10);
+    box(.54, .10, .84, matB2, s * .42, .26, .10);
+    box(.16, .16, .04, matG, s * .42, 1.30, .28);
+  });
+  [-.6, .6].forEach(x => { const e = new THREE.Mesh(new THREE.CylinderGeometry(.10, .12, .5, 10), matD); e.position.set(x, 3.2, -.55); g.add(e); });
+  for (let i = 0; i < 3; i++) box(.03, .03, .7, matD, -.9 + i * .06, 2.5, -.35, .5, 0, 0);
+  for (let i = 0; i < 3; i++) box(.03, .03, .7, matD, .9 - i * .06, 2.5, -.35, .5, 0, 0);
+  g.userData.barrels = cluster;
+  return g;
+}
+
+/* A homing mech missile (small, with a blue flame) */
+function buildMechMissile() {
+  const g = new THREE.Group();
+  const body = new THREE.Mesh(new THREE.CylinderGeometry(.07, .07, .34, 10), gunMat(0x3a4149));
+  body.rotation.x = Math.PI / 2; g.add(body);
+  const nose = new THREE.Mesh(new THREE.ConeGeometry(.08, .20, 10), gunMat(0x20252b));
+  nose.rotation.x = -Math.PI / 2; nose.position.z = -.24; g.add(nose);
+  const flame = new THREE.Mesh(new THREE.ConeGeometry(.07, .28, 8),
+    new THREE.MeshBasicMaterial({ color: 0x7fd8ff, transparent: true, opacity: .85, blending: THREE.AdditiveBlending, depthWrite: false }));
+  flame.rotation.x = Math.PI / 2; flame.position.z = .28; g.add(flame);
+  for (let i = 0; i < 4; i++) {
+    const a = (i / 4) * Math.PI * 2 + Math.PI / 4;
+    const fin = new THREE.Mesh(new THREE.BoxGeometry(.012, .07, .09), gunMat(0x20252b));
+    fin.position.set(Math.cos(a) * .06, Math.sin(a) * .06, .16); fin.rotation.z = a; g.add(fin);
+  }
+  return g;
+}
+
 /* A small kamikaze drone: a flat body with four arms, spinning rotors, a camera
    pod and a red warhead light on the nose. Points along -Z like the weapons. */
 let _droneGeo = null;

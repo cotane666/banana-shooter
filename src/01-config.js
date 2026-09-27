@@ -24,6 +24,11 @@ const CFG = {
   playerRadius: 0.42,
   eyeHeight: 1.62,
   eyeHeightCrouch: 0.92,
+  /* мехакостюм: сидишь в кабине робота — камера заметно выше зомби */
+  mechEyeHeight: 3.30,
+  mechHeight: 3.55,
+  mechRadius: 0.62,
+  mechMissileCd: 2.6,       // секунд между залпами самонаводящихся ракет (E)
   maxHP: 100,
   maxAP: 100,
   stepUp: 0.62,
@@ -284,12 +289,12 @@ const WEAPONS = {
           sound: 'shotgun', flame: true, flameDps: 900, flameRange: 13, flameCone: .42, burnT: 3.5, burnDps: 120 },
 
   /* ---------- МЕХАКОСТЮМ: giant 6-barrel minigun (primary) + hyper laser (secondary) ---------- */
-  mechMinigun: { name: 'МЕХА-МИНИГАН', cat: 'exp', slot: 2, price: 0, dmg: 55, rpm: 1600, mag: 600, reserve: 1200,
+  mechMinigun: { name: 'МЕХА-МИНИГАН', cat: 'exp', slot: 2, price: 0, dmg: 55, rpm: 1600, mag: 9999, reserve: 0,
           auto: true, spread: .030, moveSpread: .020, recoil: .55, falloff: .70, range: 130, headMul: 2.0,
-          sound: 'rifle', spinUp: .55, mechWeapon: true },
-  mechLaser: { name: 'ГИПЕР-ЛАЗЕР', cat: 'exp', slot: 1, price: 0, dmg: 320, rpm: 420, mag: 2000, reserve: 0,
+          sound: 'rifle', spinUp: .55, mechWeapon: true, hugeAmmo: true },
+  mechLaser: { name: 'ГИПЕР-ЛАЗЕР', cat: 'exp', slot: 1, price: 0, dmg: 320, rpm: 420, mag: 9999, reserve: 0,
           auto: true, spread: .006, moveSpread: .020, recoil: .5, falloff: .98, range: 220, headMul: 1.8,
-          sound: 'laser', pierce: true, mechWeapon: true },
+          sound: 'laser', pierce: true, mechWeapon: true, hugeAmmo: true },
 
   /* ГРАВИТАЦИЯ: black hole — a sphere that drags the horde in, then implodes */
   blackhole: { name: 'ЧЁРНАЯ ДЫРА', cat: 'exp', slot: 2, price: 65000, dmg: 60, rpm: 30, mag: 1, reserve: 5,

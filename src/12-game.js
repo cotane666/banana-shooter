@@ -1271,7 +1271,7 @@ const Game = {
       case 'KeyJ': if (!this.paused) this.cycleGrenade(); break;
       case 'KeyF': if (!this.paused) { if (this.drone) this.detonateDrone(false); else this.launchDrone(); } break;
       // dedicated climb: E vaults onto whatever the player is facing
-      case 'KeyE': if (!this.paused && this.player) this.player.climbQueued = true; break;
+      case 'KeyE': if (!this.paused) { if (this.isMechActive()) this.launchMechMissiles(); else if (this.player) this.player.climbQueued = true; } break;
       case 'Digit1': if (!this.paused) this.switchSlot(1); break;
       case 'Digit2': if (!this.paused) this.switchSlot(2); break;
       case 'Digit3': if (!this.paused) this.switchSlot(3); break;
@@ -4247,9 +4247,11 @@ const Game = {
   /* Player eye position in world space (the camera's actual origin). */
   eyePos() {
     const p = this.player;
+    const mech = this.isMechActive();
+    const eye = mech ? CFG.mechEyeHeight : (p.crouching ? CFG.eyeHeightCrouch : CFG.eyeHeight);
     return {
       x: p.pos.x,
-      y: p.pos.y + (p.crouching ? CFG.eyeHeightCrouch : CFG.eyeHeight),
+      y: p.pos.y + eye,
       z: p.pos.z
     };
   },
@@ -4932,14 +4934,137 @@ const Game = {
         p.mechSuit = true;
         p.slot = 2;
         p.deployT = .6;
+        // sit in the cockpit: taller body, wider stance, camera up high
+        p.height = CFG.mechHeight;
+        p.radius = CFG.mechRadius;
+        p.mechMissiles = 0;
         p.buildViewModel(); this.attachViewModel();
-        UI.center('МЕХАКОСТЮМ', 'ЛКМ — миниган · ПКМ — гипер-лазер', 2.4);
-        UI.toast('Мехакостюм надет: миниган (ЛКМ) + гипер-лазер (ПКМ)', '#4ad6ff');
+        this.buildMechBody();
+        UI.center('МЕХАКОСТЮМ', 'ЛКМ — миниган · ПКМ — лазер · E — ракеты', 2.6);
+        UI.toast('Вы в кабине меха: ЛКМ миниган · ПКМ лазер · E ракеты', '#4ad6ff');
+      },
+      /* visible mech chassis + cockpit around the player (third-person shell).
+         In first person the cockpit frame appears as the view model braces. */
+      buildMechBody() {
+        if (!this.mechBody) {
+          this.mechBody = buildMechChassis();
+          this.scene.add(this.mechBody);
+        }
+      },
+      removeMechBody() {
+        if (!this.mechBody) return;
+        if (this.mechBody.parent) this.mechBody.parent.remove(this.mechBody);
+        this.mechBody.traverse(o => { if (o.geometry) o.geometry.dispose(); });
+        this.mechBody = null;
+      },
+      /* E — launch a volley of homing missiles at nearby zombies */
+      launchMechMissiles() {
+        const p = this.player;
+        if (!this.isMechActive() || !p.alive) { UI.toast('Ракеты доступны в мехакостюме', '#f5d33c'); return false; }
+        if (this.roundState !== 'live' || this.mode === CS.MODE.MENU) return false;
+        const now = U.now();
+        if (this._mechMissileAt && now - this._mechMissileAt < CFG.mechMissileCd * 1000) {
+          const left = Math.ceil((CFG.mechMissileCd * 1000 - (now - this._mechMissileAt)) / 1000);
+          UI.toast('Ракеты через ' + left + 'с', '#f5d33c'); Audio3D_SFX.deny(); return false;
+        }
+        this._mechMissileAt = now;
+        this.mechMissiles = this.mechMissiles || [];
+        const eye = this.eyePos();
+        const dir = this.cameraDir();
+        // pick up to 4 nearest zombies as targets
+        let targets = [];
+        if (this.horde) {
+          targets = this.horde.list.filter(z => z.alive && !z.dying)
+            .map(z => ({ z: z, d: Math.hypot(z.pos.x - p.pos.x, z.pos.z - p.pos.z) }))
+            .sort((a, b) => a.d - b.d).slice(0, 4).map(o => o.z);
+        }
+        for (let i = 0; i < 4; i++) {
+          const sx = .35 * (i % 2 === 0 ? 1 : -1);
+          const sy = .1 + (i < 2 ? .12 : -.02);
+          const mesh = buildMechMissile();
+          mesh.position.set(eye.x + dir.x * .8 + sx, eye.y + sy, eye.z + dir.z * .8);
+          this.scene.add(mesh);
+          this.mechMissiles.push({
+            mesh: mesh, pos: { x: mesh.position.x, y: mesh.position.y, z: mesh.position.z },
+            vel: { x: dir.x * 8, y: 4, z: dir.z * 8 }, life: 8,
+            target: targets[i % Math.max(1, targets.length)] || null, dmg: 420
+          });
+        }
+        Audio3D_SFX.explosionAt(eye.x, eye.y, eye.z);
+        UI.toast('Залп ракет!', '#4ad6ff');
+        return true;
+      },
+      updateMechMissiles(dt) {
+        if (!this.mechMissiles || !this.mechMissiles.length) return;
+        for (let i = this.mechMissiles.length - 1; i >= 0; i--) {
+          const m = this.mechMissiles[i];
+          m.life -= dt;
+          // (re)acquire a target if ours died
+          if (!m.target || !m.target.alive || m.target.dying) {
+            m.target = this.nearestZombie(m.pos.x, m.pos.z, 40);
+          }
+          const sp = 34;
+          if (m.target) {
+            const to = { x: m.target.pos.x - m.pos.x, y: (m.target.pos.y + 1.1 * m.target.scale) - m.pos.y, z: m.target.pos.z - m.pos.z };
+            const l = Math.hypot(to.x, to.y, to.z) || 1;
+            const k = 1 - Math.pow(.02, dt);
+            m.vel.x = U.lerp(m.vel.x, to.x / l * sp, k);
+            m.vel.y = U.lerp(m.vel.y, to.y / l * sp, k);
+            m.vel.z = U.lerp(m.vel.z, to.z / l * sp, k);
+          } else m.vel.y -= 8 * dt;
+          m.pos.x += m.vel.x * dt; m.pos.y += m.vel.y * dt; m.pos.z += m.vel.z * dt;
+          m.mesh.position.set(m.pos.x, m.pos.y, m.pos.z);
+          const vl = Math.hypot(m.vel.x, m.vel.y, m.vel.z) || 1;
+          m.mesh.lookAt(m.pos.x + m.vel.x / vl, m.pos.y + m.vel.y / vl, m.pos.z + m.vel.z / vl);
+          // smoke trail
+          if (Math.random() < .8) this.effects.particle(m.pos.x, m.pos.y, m.pos.z, U.rand(-.5, .5), U.rand(-.2, .8), U.rand(-.5, .5), U.rand(.06, .16), 'smoke', U.rand(.3, .7));
+          let boom = m.life <= 0;
+          if (m.target) {
+            const dd = Math.hypot(m.target.pos.x - m.pos.x, (m.target.pos.y + 1.1 * m.target.scale) - m.pos.y, m.target.pos.z - m.pos.z);
+            if (dd < 1.2) boom = true;
+          }
+          if (boom) {
+            const px = m.pos.x, py = m.pos.y, pz = m.pos.z;
+            this.effects.explosion(px, py, pz, 4.0, [0x4ad6ff, 0x100608]);
+            Audio3D_SFX.explosionAt(px, py, pz);
+            if (this.horde) for (const z of this.horde.list) {
+              if (!z.alive || z.dying) continue;
+              const dd = Math.hypot(z.pos.x - px, (z.pos.y + 1) - py, z.pos.z - pz);
+              if (dd > 4.0) continue;
+              const dealt = m.dmg * (1 - dd / 4.0);
+              z.takeDamage(dealt, 'body', { x: 0, y: 0, z: 0 });
+              this.player.damageDealt += dealt;
+            }
+            if (m.mesh.parent) m.mesh.parent.remove(m.mesh);
+            m.mesh.traverse(o => { if (o.geometry) o.geometry.dispose(); });
+            this.mechMissiles.splice(i, 1);
+          }
+        }
+      },
+      clearMechMissiles() {
+        if (!this.mechMissiles) return;
+        for (const m of this.mechMissiles) { if (m.mesh.parent) m.mesh.parent.remove(m.mesh); m.mesh.traverse(o => { if (o.geometry) o.geometry.dispose(); }); }
+        this.mechMissiles.length = 0;
       },
       /* the suit is "active" while its two weapons are still owned */
       isMechActive() {
         const p = this.player;
         return !!(p && p.mechSuit && p.inv[2] && p.inv[2].id === 'mechMinigun' && p.inv[1] && p.inv[1].id === 'mechLaser');
+      },
+      /* position the visible chassis around the player each frame */
+      updateMechBody(dt) {
+        if (!this.mechBody) return;
+        if (!this.isMechActive() || !this.player.alive) { this.mechBody.visible = false; return; }
+        const p = this.player;
+        this.mechBody.visible = true;
+        this.mechBody.position.set(p.pos.x, p.pos.y, p.pos.z);
+        this.mechBody.rotation.y = p.yaw;
+        // spin the minigun cluster when firing the minigun
+        const cluster = this.mechBody.userData.barrels;
+        if (cluster) {
+          this._mechSpin = (this._mechSpin || 0) + dt * (p.spinT > .1 ? 34 : 0);
+          cluster.rotation.z = this._mechSpin;
+        }
       },
       /* ЛКМ fires the minigun, ПКМ fires the laser, both independent and held */
       updateMech(dt, lmb, rmb) {
@@ -5427,6 +5552,8 @@ const Game = {
     this.clearHiveDrones();
     this.clearChrono();
     this.clearGrenades();
+    this.clearMechMissiles();
+    this.removeMechBody();
   },
 
   clearDrone() {
@@ -6629,8 +6756,12 @@ const Game = {
       else if (!TouchUI.firePressed && this._tapFireRelease <= 0) p.triggerDown = false;
       if (TouchUI.firePressed) p.triggerDown = true;
     }
-    // dedicated climb action: a touch button or the PC key, edge-triggered
-    if (Input.consumeClimb()) p.climbQueued = true;
+    // dedicated climb action: a touch button or the PC key, edge-triggered.
+    // In the mech the same button (E) launches the homing missiles instead.
+    if (Input.consumeClimb()) {
+      if (this.isMechActive()) this.launchMechMissiles();
+      else p.climbQueued = true;
+    }
 
     p._wantAim = Input.aimDown() && canLook;
 
@@ -6723,6 +6854,8 @@ const Game = {
       this.updateBurning(dt);        // lingering fire damage from the flamethrower
       this.updateTurretDrone(dt);    // companion turret auto-fire
     }
+    this.updateMechBody(dt);
+    this.updateMechMissiles(dt);
 
     // ---- flying bananas ----
     this.updateProjectiles(dt);
@@ -6956,7 +7089,7 @@ const Game = {
       return;
     }
 
-    const eyeH = p.crouching ? CFG.eyeHeightCrouch : CFG.eyeHeight;
+    const eyeH = this.isMechActive() ? CFG.mechEyeHeight : (p.crouching ? CFG.eyeHeightCrouch : CFG.eyeHeight);
     const dead = !p.alive;
     // on death the view sinks to the floor, as if the body dropped
     if (dead) p._deadT = (p._deadT || 0) + dt;

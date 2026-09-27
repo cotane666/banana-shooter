@@ -395,8 +395,8 @@ const UI = {
     const w = p.weapon;
     if (w) {
       const def = WEAPONS[w.id];
-      e.ammoMag.textContent = w.mag === Infinity ? '∞' : Math.max(0, w.mag);
-      e.ammoRes.textContent = w.id === 'knife' ? '' : '/ ' + (w.reserve === Infinity ? '∞' : Math.max(0, w.reserve));
+      e.ammoMag.textContent = w.mag === Infinity ? '∞' : Math.max(0, Math.round(w.mag));
+      e.ammoRes.textContent = w.id === 'knife' ? '' : '/ ' + (w.reserve === Infinity ? '∞' : Math.max(0, Math.round(w.reserve)));
       e.weaponName.textContent = def.name;
       e.ammoMag.style.color = (w.mag !== Infinity && w.mag <= Math.max(2, def.mag * .2)) ? '#e05141' : '#fff';
       // reload / low-ammo hint under the crosshair

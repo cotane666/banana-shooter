@@ -272,12 +272,11 @@ const WEAPONS = {
           sound: 'banana', projectile: 'hive', projSpeed: 24, projGravity: 11,
           hiveCount: 5, splash: .6, splashDmg: 40 },
 
-  /* ЦЕПЬ: tesla — a held "lightning machine gun": a constant electric arc that
-     forks from one enemy to the next while the trigger is down. */
-  tesla: { name: 'ТЕСЛА-ПУШКА', cat: 'exp', slot: 2, price: 45000, dmg: 60, rpm: 60, mag: 60, reserve: 240,
-          auto: true, spread: .014, moveSpread: .030, recoil: .3, falloff: .85, range: 78, headMul: 1.7,
-          sound: 'laser', special: 'tesla', electric: true,
-          beamDps: 210, beamColor: 0x9ad6ff, drainRate: 9, chain: 5, chainRange: 10 },
+  /* ЦЕПЬ: tesla — a lightning machine gun: extremely fast, weak electric bolts,
+     each forking to the next enemy in reach. ~2500 damage per second overall. */
+  tesla: { name: 'ТЕСЛА-ПУШКА', cat: 'exp', slot: 2, price: 45000, dmg: 42, rpm: 3600, mag: 150, reserve: 600,
+          auto: true, spread: .020, moveSpread: .030, recoil: .18, falloff: .85, range: 78, headMul: 1.5,
+          sound: 'laser', special: 'tesla', chain: 4, chainRange: 10 },
 
   /* ГРАВИТАЦИЯ: black hole — a sphere that drags the horde in, then implodes */
   blackhole: { name: 'ЧЁРНАЯ ДЫРА', cat: 'exp', slot: 2, price: 65000, dmg: 60, rpm: 30, mag: 1, reserve: 5,

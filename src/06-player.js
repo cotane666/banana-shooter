@@ -1014,49 +1014,47 @@ function buildWeaponModel(id) {
 
     /* ТЕСЛА-ПУШКА: a heavy coil gun — layered copper coils, a forked spark gap
        at the muzzle and a glowing energy core. Reads as a lightning thrower. */
+    /* ТЕСЛА-ПУШКА: компактный молниевый пулемёт — катушки, разрядник, ядро */
     case 'tesla': {
       const ARC = 0x9ad6ff, CU = 0xb5762f, CUD = 0x7a4c18, CORE = 0xdff2ff;
-      // main receiver body
-      add(B(.11, .12, .40, PAL.gun, 0, .05, -.12));            // ствольная коробка
-      add(B(.13, .03, .30, PAL.gunLight, 0, .12, -.12));       // верхняя планка
-      add(B(.09, .05, .16, PAL.black, 0, .05, .06));           // затвор
-      add(MAG(.06, .14, .08, PAL.mag, 0, -.075, .02, .18));    // магазин-катушка
-      // the coil stack: big copper rings shrinking toward the muzzle
-      const coilN = 7;
+      // compact receiver body (noticeably smaller than the other heavies)
+      add(B(.075, .075, .22, PAL.gun, 0, .035, -.05));         // ствольная коробка
+      add(B(.088, .020, .17, PAL.gunLight, 0, .082, -.05));    // верхняя планка
+      add(B(.06, .035, .09, PAL.black, 0, .035, .06));         // затвор
+      add(MAG(.045, .095, .05, PAL.mag, 0, -.048, .02, .18));  // магазин-катушка
+      // the coil stack: copper rings shrinking toward the muzzle
+      const coilN = 4;
       for (let i = 0; i < coilN; i++) {
         const t = i / (coilN - 1);
-        const r = .085 - t * .028;
-        add(CYL(r, .030, i % 2 ? CU : CUD, 0, .05, -.30 - i * .075, 14));
+        const r = .052 - t * .018;
+        add(CYL(r, .020, i % 2 ? CU : CUD, 0, .035, -.15 - i * .048, 10));
       }
       // inner conducting rod the coils wrap
-      add(CYL(.022, .52, PAL.steel, 0, .05, -.46));
+      add(CYL(.014, .28, PAL.steel, 0, .035, -.24));
       // twin prongs forming the spark gap
-      add(B(.022, .16, .07, PAL.steel, .085, .11, -.84, 0, .22));
-      add(B(.022, .16, .07, PAL.steel, -.085, .11, -.84, 0, -.22));
-      add(B(.022, .16, .07, PAL.steel, .085, -.01, -.84, 0, -.22));
-      add(B(.022, .16, .07, PAL.steel, -.085, -.01, -.84, 0, .22));
+      add(B(.015, .09, .04, PAL.steel, .050, .070, -.42, 0, .22));
+      add(B(.015, .09, .04, PAL.steel, -.050, .070, -.42, 0, -.22));
+      add(B(.015, .09, .04, PAL.steel, .050, .000, -.42, 0, -.22));
+      add(B(.015, .09, .04, PAL.steel, -.050, .000, -.42, 0, .22));
       // glowing energy core at the gap
-      const core = new THREE.Mesh(new THREE.SphereGeometry(.05, 12, 10),
+      const core = new THREE.Mesh(new THREE.SphereGeometry(.032, 10, 8),
         new THREE.MeshBasicMaterial({ color: CORE }));
-      core.position.set(0, .05, -.86); add(core);
+      core.position.set(0, .035, -.44); add(core);
       // a ring electrode around the gap
-      const ring = new THREE.Mesh(new THREE.TorusGeometry(.075, .014, 8, 20),
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(.046, .009, 8, 16),
         new THREE.MeshBasicMaterial({ color: ARC }));
-      ring.position.set(0, .05, -.88); add(ring);
+      ring.position.set(0, .035, -.45); add(ring);
       // side arc-rails (glow) and indicators
-      add(B(.014, .10, .30, ARC, .11, .07, -.30, 0, .1));
-      add(B(.014, .10, .30, ARC, -.11, .07, -.30, 0, -.1));
+      add(B(.010, .06, .16, ARC, .072, .048, -.15, 0, .1));
+      add(B(.010, .06, .16, ARC, -.072, .048, -.15, 0, -.1));
       // grip + trigger
-      add(B(.055, .14, .075, PAL.black, 0, -.08, .04, .16));
-      add(B(.02, .03, .06, PAL.steel, 0, -.045, .03));
+      add(B(.04, .10, .055, PAL.black, 0, -.052, .03, .16));
+      add(B(.014, .022, .045, PAL.steel, 0, -.030, .025));
       // rear capacitor with glow + vent fins
-      add(CYL(.07, .16, 0x24404f, 0, .05, .19));
-      add(CYL(.075, .02, CU, 0, .05, .12));
-      add(CYL(.075, .02, CU, 0, .05, .26));
-      for (let i = 0; i < 4; i++) add(B(.15, .012, .020, PAL.gunLight, 0, .12 + i * .022, .19));
-      add(DOT(.016, ARC, 0, .14, -.14));
-      add(DOT(.012, ARC, .10, .10, -.42));
-      add(DOT(.012, ARC, -.10, .10, -.42));
+      add(CYL(.045, .10, 0x24404f, 0, .035, .13));
+      add(CYL(.049, .014, CU, 0, .035, .09));
+      add(CYL(.049, .014, CU, 0, .035, .17));
+      add(DOT(.011, ARC, 0, .095, -.09));
       break;
     }
 
@@ -1175,7 +1173,7 @@ const MUZZLE_Z = {
   banana: -0.92,
   acid: -0.76, hive: -0.26, disc: -0.32, freeze: -0.76, tesla: -0.72,
   portal: -0.48, blackhole: -0.54, turretDrone: -0.28, chrono: -0.48,
-  tesla: -0.90
+  tesla: -0.50
 };
 
 /* An RPG rocket: a tube body with a pointed warhead and fins */

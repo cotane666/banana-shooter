@@ -4827,16 +4827,17 @@ const Game = {
          EXPERIMENTAL WEAPONS — bespoke firing behaviours
          ============================================================ */
 
-      /* dispatcher: weapons with a `special` handler never fire a bullet.
-         `electric` weapons (tesla) are a HELD continuous beam handled in the
-         game loop, so they must not fire a one-shot here. */
+      /* dispatcher: weapons with a `special` handler never fire a bullet. */
       fireSpecial(def, w) {
-        if (def.electric) return;
         const p = this.player;
+        const muzzle = this.muzzleWorldPos();
+        const origin = this.eyePos();
+        const dir = this.cameraDir();
         if (w.mag !== Infinity) w.mag--;
         p.bulletsFired++;
         p.fireCd = 60 / def.rpm;
-        p.flashT = .05;
+        p.flashT = .04;
+        if (def.special === 'tesla') return this.fireTesla(def, muzzle, origin, dir);
       },
 
       /* ДРОН-ТУРЕЛЬ now lives in GEAR: V launches/recalls it */
@@ -4870,10 +4871,10 @@ const Game = {
           const hitIds = { };
           hitIds[src.id] = 1;
           for (let c = 0; c <= (def.chain || 4); c++) {
-            const hs = c === 0 && hit.part === 'head';
-            const dealt = dmg * (hs ? (def.headMul || 1) : 1);
-            src.takeDamage(dealt, c === 0 ? hit.part : 'body', dir);
-            this.player.damageDealt += dealt;
+            // NOTE: pass the base damage and let takeDamage() apply the head/limb
+            // multiplier once — pre-multiplying by headMul here double-counted it.
+            src.takeDamage(dmg, c === 0 ? hit.part : 'body', dir);
+            this.player.damageDealt += dmg;
             // find the nearest not-yet-hit zombie within the chain radius
             let next = null, nd = 1e9, npt = null;
             for (const z of this.horde.list) {
@@ -4884,14 +4885,14 @@ const Game = {
               }
             }
             if (!next) break;
-            this.effects.arc(prevPoint, npt, 0x9ad6ff);
+            this.effects.bolt(prevPoint, npt, 0x9ad6ff);
             prevPoint = npt; hitIds[next.id] = 1; src = next; dmg *= .82;
           }
-          this.effects.arc(muzzle, end, 0x9ad6ff);
+          this.effects.bolt(muzzle, end, 0x9ad6ff);
           UI.hitmark(true);
         } else {
           end = wall ? wall.point : { x: origin.x + dir.x * range, y: origin.y + dir.y * range, z: origin.z + dir.z * range };
-          this.effects.arc(muzzle, end, 0x9ad6ff);
+          this.effects.bolt(muzzle, end, 0x9ad6ff);
           UI.hitmark(false);
         }
         Audio3D_SFX.laser(muzzle.x, muzzle.y, muzzle.z);
@@ -6521,18 +6522,12 @@ const Game = {
     // Firing is only allowed once the match is live: not during the buy phase
     // and not while the buy menu is open.
     const beamReady = p.def && p.def.beam && p.spinT > .85 && p.beamVent <= 0;
-    const teslaHeld = p.def && p.def.electric;
     if (p.alive && !this.buyOpen && this.roundState === 'live') {
       const def = p.def;
-      if (teslaHeld && p.triggerDown && p.weapon.mag > 0 && p.fireCd <= 0) {
-        // held lightning: constant electric damage while the trigger is down
-        this.updateTeslaBeam(dt);
-        this._teslaOn = true;
-      } else if (def.beam && p.triggerDown && beamReady) {
+      if (def.beam && p.triggerDown && beamReady) {
         // held fire: a continuous piercing beam instead of bullets
         this.updateBeam(dt);
       } else {
-        if (this._teslaOn) { this.stopTeslaBeam(); this._teslaOn = false; }
         if (def.beam) this.stopBeam();
         if (def.auto || def.slot === 3 || held) {
           // automatic weapons fire continuously while held; with a continuous
@@ -6547,7 +6542,6 @@ const Game = {
       }
       if (!p.triggerDown) p._semiLatch = false;
     } else {
-      if (this._teslaOn) { this.stopTeslaBeam(); this._teslaOn = false; }
       if (p.def && p.def.beam) this.stopBeam();
       if (!p.triggerDown) p._semiLatch = false;
     }

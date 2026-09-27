@@ -227,6 +227,50 @@ class Effects {
     (this.arcs || (this.arcs = [])).push({ mesh: line, life: .12, max: .12 });
   }
 
+  /* a fat, forking electric bolt for tesla shots: a white core inside a coloured
+     halo plus a couple of side branches (matches the reference lightning look) */
+  bolt(from, to, color) {
+    const c = color === undefined ? 0x9ad6ff : color;
+    this.arcs = this.arcs || [];
+    const strands = [
+      { col: 0xffffff, op: .95, w: 1, amp: .10 },
+      { col: c, op: .7, w: 1, amp: .22 },
+      { col: c, op: .35, w: 1, amp: .40 }
+    ];
+    const dx = to.x - from.x, dy = to.y - from.y, dz = to.z - from.z;
+    const len = Math.hypot(dx, dy, dz) || 1;
+    for (const s of strands) {
+      const N = 7, pts = [];
+      for (let i = 0; i <= N; i++) {
+        const t = i / N;
+        const j = (i === 0 || i === N) ? 0 : s.amp;
+        pts.push(new THREE.Vector3(
+          from.x + dx * t + U.rand(-j, j) * len * .3,
+          from.y + dy * t + U.rand(-j, j) * len * .3,
+          from.z + dz * t + U.rand(-j, j) * len * .3));
+      }
+      const mat = new THREE.LineBasicMaterial({ color: s.col, transparent: true, opacity: s.op, blending: THREE.AdditiveBlending, depthWrite: false });
+      const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), mat);
+      line.frustumCulled = false; line.renderOrder = 4;
+      this.scene.add(line);
+      this.arcs.push({ mesh: line, life: .07, max: .07 });
+    }
+    // one short side-branch
+    const t0 = U.rand(.3, .7);
+    const bx = from.x + dx * t0, by = from.y + dy * t0, bz = from.z + dz * t0;
+    const per = new THREE.Vector3(U.rand(-1, 1), U.rand(-1, 1), U.rand(-1, 1)).normalize().multiplyScalar(len * .22);
+    const bts = [
+      new THREE.Vector3(bx, by, bz),
+      new THREE.Vector3(bx + per.x * .5, by + per.y * .5, bz + per.z * .5),
+      new THREE.Vector3(bx + per.x, by + per.y, bz + per.z)
+    ];
+    const bmat = new THREE.LineBasicMaterial({ color: c, transparent: true, opacity: .6, blending: THREE.AdditiveBlending, depthWrite: false });
+    const bline = new THREE.Line(new THREE.BufferGeometry().setFromPoints(bts), bmat);
+    bline.frustumCulled = false; bline.renderOrder = 4;
+    this.scene.add(bline);
+    this.arcs.push({ mesh: bline, life: .07, max: .07 });
+  }
+
   /* ---------- laser beam: a bright green core with a soft outer glow ---------- */
   laser(from, to) {
     const dx = to.x - from.x, dy = to.y - from.y, dz = to.z - from.z;

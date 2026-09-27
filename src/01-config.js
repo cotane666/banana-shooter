@@ -256,7 +256,7 @@ const WEAPONS = {
             sound: 'banana', projectile: 'banana', projSpeed: 52, projGravity: 13 },
 
   /* ============================================================
-     ЭКСПЕРИМЕНТАЛЬНОЕ — nine unusual weapons (20 000 – 80 000)
+     ЭКСПЕРИМЕНТАЛЬНОЕ — unusual weapons (25 000 – 65 000)
      They all sit in the `exp` shop category and use either a `special` handler
      (fired straight from Game.fireSpecial) or a dedicated `projectile` kind.
      ============================================================ */
@@ -272,62 +272,34 @@ const WEAPONS = {
           sound: 'banana', projectile: 'hive', projSpeed: 24, projGravity: 11,
           hiveCount: 5, splash: .6, splashDmg: 40 },
 
-  /* РИКОШЕТ: disc — bounces off walls and enemies, then flies home */
-  disc: { name: 'ДИСКОБОЛ', cat: 'exp', slot: 2, price: 35000, dmg: 190, rpm: 46, mag: 1, reserve: 8,
-          auto: false, spread: .004, moveSpread: .050, recoil: 4.0, falloff: .98, range: 200, headMul: 1.4,
-          sound: 'laser', projectile: 'disc', projSpeed: 36, projGravity: 1.5, bounces: 6, discReturn: 3.0 },
-
-  /* ХОЛОД: absolute zero — freezes the horde, frozen bodies shatter */
-  freeze: { name: 'АБСОЛЮТНЫЙ НОЛЬ', cat: 'exp', slot: 2, price: 40000, dmg: 80, rpm: 84, mag: 5, reserve: 20,
-          auto: false, spread: .020, moveSpread: .040, recoil: 2.2, falloff: .80, range: 90, headMul: 1.4,
-          sound: 'laser', projectile: 'freeze', projSpeed: 30, projGravity: 7,
-          splash: 3.4, splashDmg: 90, freezeT: 4.0 },
-
   /* ЦЕПЬ: tesla — lightning arcs from one enemy to the next */
   tesla: { name: 'ТЕСЛА-ПУШКА', cat: 'exp', slot: 2, price: 45000, dmg: 95, rpm: 130, mag: 40, reserve: 160,
           auto: true, spread: .014, moveSpread: .030, recoil: 1.0, falloff: .85, range: 78, headMul: 1.7,
           sound: 'laser', special: 'tesla', chain: 5, chainRange: 9.5 },
-
-  /* ПОРТАЛЫ: mirror gun — two linked gates teleport what enters them */
-  portal: { name: 'ЗЕРКАЛЬНАЯ ПУШКА', cat: 'exp', slot: 2, price: 55000, dmg: 0, rpm: 70, mag: Infinity, reserve: 0,
-          auto: false, spread: 0, moveSpread: 0, recoil: .6, falloff: 1, range: 60, headMul: 1,
-          sound: 'laser', special: 'portal', portalR: 1.9 },
 
   /* ГРАВИТАЦИЯ: black hole — a sphere that drags the horde in, then implodes */
   blackhole: { name: 'ЧЁРНАЯ ДЫРА', cat: 'exp', slot: 2, price: 65000, dmg: 60, rpm: 30, mag: 1, reserve: 5,
           auto: false, spread: .004, moveSpread: .050, recoil: 5.0, falloff: .99, range: 240, headMul: 1.2,
           sound: 'awp', projectile: 'blackhole', projSpeed: 32, projGravity: 3,
           wellR: 9.5, wellLife: 4.2, wellDps: 45, wellPull: 11,
-          splash: 8.5, splashDmg: 900, explosionColor: [0x9a5aff, 0x08040f], noSelfDamage: true },
-
-  /* КОМПАНЬОН: turret drone — a helper that follows and fires for you */
-  turretDrone: { name: 'ДРОН-ТУРЕЛЬ', cat: 'exp', slot: 2, price: 70000, dmg: 40, rpm: 70, mag: Infinity, reserve: 0,
-          auto: false, spread: 0, moveSpread: 0, recoil: 0, falloff: .90, range: 46, headMul: 1.8,
-          sound: 'laser', special: 'turret', turretDmg: 48, turretCd: .16, turretRange: 46 },
-
-  /* ВРЕМЯ: chrono — a bubble that slows everything inside it */
-  chrono: { name: 'ХРОНО-ПУШКА', cat: 'exp', slot: 2, price: 80000, dmg: 30, rpm: 44, mag: 3, reserve: 9,
-          auto: false, spread: .010, moveSpread: .050, recoil: 3.4, falloff: .95, range: 200, headMul: 1.2,
-          sound: 'awp', projectile: 'chrono', projSpeed: 32, projGravity: 3,
-          chronoR: 8.5, chronoLife: 7, chronoSlow: .16 }
+          splash: 8.5, splashDmg: 900, explosionColor: [0x9a5aff, 0x08040f], noSelfDamage: true }
 };
 
 const GEAR = {
   kevlar:       { name: 'БРОНЯ (KEVLAR)', price: 650,  ap: 100, helmet: false },
   kevlarHelmet: { name: 'БРОНЯ + ШЛЕМ',   price: 1000, ap: 100, helmet: true },
   heavyArmor:   { name: 'УКРЕПЛЁННАЯ БРОНЯ', price: 2000, ap: 200, helmet: true, heavy: true, desc: 'AP 200 · поглощает больше урона' },
+  energyArmor:  { name: 'ЭНЕРГОБРОНЯ',    price: 10000, ap: 300, helmet: true, heavy: true, energy: true, desc: 'AP 300 · лучшая защита, крепче укреплённой' },
   /* Consumables: bought once, kept for the rest of the match (and across
      rounds/offline waves). `ammo` is a refill, so it never shows as КУПЛЕНО. */
   ammo:         { name: 'ПАТРОНЫ',        price: 1500, ammo: true, desc: 'Полный запас ко всем стволам' },
   medkit:       { name: 'АПТЕЧКА',        price: 600,  medkit: true, desc: 'H или кнопка — +50 HP в бою' },
   medkitBox:    { name: 'ЯЩИК АПТЕЧЕК',   price: 10000, medkitBox: true, desc: 'Навсегда снимает лимит на аптечки' },
-  drone:        { name: 'ДРОН-КАМИКАДЗЕ', price: 10000, drone: true, desc: 'Управляемый · враг может сбить' },
-  frag:         { name: 'ГРАНАТА',         price: 300,  grenade: 'frag',   desc: 'Осколочная · G — бросок' },
-  freezeNade:   { name: 'КРИО-ГРАНАТА',    price: 500,  grenade: 'freeze', desc: 'Замораживает зомби в области' },
-  napalmNade:   { name: 'НАПАЛМ',          price: 700,  grenade: 'napalm', desc: 'Оставляет горящую лужу' },
-  turretBuild:  { name: 'ТУРЕЛЬ',          price: 2500, buildable: 'turret',    desc: 'Стреляет сама · K — поставить' },
-  barricade:    { name: 'БАРРИКАДА',       price: 900,  buildable: 'barricade', desc: 'Укрытие · K — поставить' },
-  mine:         { name: 'МИНА',            price: 1200, buildable: 'mine',      desc: 'Взрывается при враге · K — поставить' }
+  drone:        { name: 'ДРОН-КАМИКАДЗЕ', price: 10000, drone: true, desc: 'Управляемый · F — запуск, враг может сбить' },
+  turretGear:   { name: 'ДРОН-ТУРЕЛЬ',    price: 12000, turretGear: true, desc: 'V — вылетает и стреляет сам' },
+  frag:         { name: 'ГРАНАТА',         price: 100,  grenade: 'frag',   desc: 'Осколочная · G — бросок' },
+  freezeNade:   { name: 'КРИО-ГРАНАТА',    price: 120,  grenade: 'freeze', desc: 'Замораживает зомби в области' },
+  napalmNade:   { name: 'НАПАЛМ',          price: 150,  grenade: 'napalm', desc: 'Оставляет горящую лужу' }
 };
 function grenadeName(kind) { return kind === 'freeze' ? 'КРИО' : kind === 'napalm' ? 'НАПАЛМ' : 'ГРАНАТА'; }
 function todName(k) { return k === 'night' ? 'НОЧЬ' : 'ДЕНЬ'; }
@@ -376,9 +348,7 @@ const ZOMBIES = {
   robot:  { name: 'РОБОТ-ЗОМБИ',  hp: 1600, speed: 1.75, dmg: 45, score: 2200, money: 950, scale: 1.85, color: 0x8b95a1, atkRange: 2.3,
             miniBoss: true, armor: .35, shoot: 'plasma', shootRange: 26, shootCd: 2.2, shootDmg: 24, shootSpeed: 34, shootGrav: 0 },
 
-  /* ---- new specials (waves 6+) ---- */
-  digger:  { name: 'КОПАТЕЛЬ',    hp: 150, speed: 2.35, dmg: 20, score: 320, money: 130, scale: 1.05, color: 0x6a5a3a, atkRange: 1.7,
-             burrow: true, burrowCd: 8 },
+  /* ---- new specials (waves 7+) ---- */
   splitter:{ name: 'ДЕЛЯЩИЙСЯ',   hp: 130, speed: 1.9, dmg: 15, score: 280, money: 110, scale: 1.1, color: 0x7a4a6a, atkRange: 1.6,
              splits: 3, splitType: 'crawler' },
   healer:  { name: 'ЛЕКАРЬ',      hp: 110, speed: 1.7, dmg: 10, score: 300, money: 140, scale: 1.0, color: 0x3f8f6a, atkRange: 1.5,

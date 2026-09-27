@@ -965,7 +965,6 @@ function buildMap(scene, quality, mapId) {
 
   MAP.def.build(group, world);
 
-  buildHazards(group, world);
   buildAimRoom(group, world);
   buildLighting(group, quality);
   buildSky(group);

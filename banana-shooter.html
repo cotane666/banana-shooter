@@ -851,10 +851,9 @@ html.touch .fld input{padding:10px;font-size:15px}
       <div class="krow"><kbd>H</kbd><span>Аптечка (+50 HP)</span></div>
       <div class="krow"><kbd>G</kbd><span>Граната (осколочная / крио / напалм)</span></div>
       <div class="krow"><kbd>J</kbd><span>Сменить тип гранаты</span></div>
-      <div class="krow"><kbd>K</kbd><span>Поставить турель/баррикаду/мину</span></div>
-      <div class="krow"><kbd>L</kbd><span>Выбрать постройку</span></div>
       <div class="krow"><kbd>O</kbd><span>День / ночь</span></div>
       <div class="krow"><kbd>F</kbd><span>Дрон-камикадзе</span></div>
+      <div class="krow"><kbd>V</kbd><span>Дрон-турель (снаряжение)</span></div>
       <div class="krow"><kbd>1 2 3</kbd><span>Пистолет / Основное / Нож</span></div>
       <div class="krow"><kbd>B</kbd><span>Магазин (в фазе закупки)</span></div>
       <div class="krow"><kbd>T</kbd><span>Аим-тренировка (на полигоне)</span></div>
@@ -880,8 +879,6 @@ html.touch .fld input{padding:10px;font-size:15px}
       <input type="range" id="sQual" min="0" max="2" step="1" value="1"></label>
     <label class="slider">Автоприцел (телефон) <output id="oAim">Вкл</output>
       <input type="range" id="sAim" min="0" max="1" step="1" value="1"></label>
-    <label class="slider">Ловушки и погода <output id="oTraps">Вкл</output>
-      <input type="range" id="sTraps" min="0" max="1" step="1" value="1"></label>
     <h2 class="mt">ПАРАМЕТРЫ МАТЧА</h2>
     <div class="fld">Карта
       <div class="chips" id="mapChips"></div>
@@ -1536,7 +1533,7 @@ const WEAPONS = {
             sound: 'banana', projectile: 'banana', projSpeed: 52, projGravity: 13 },
 
   /* ============================================================
-     ЭКСПЕРИМЕНТАЛЬНОЕ — nine unusual weapons (20 000 – 80 000)
+     ЭКСПЕРИМЕНТАЛЬНОЕ — unusual weapons (25 000 – 65 000)
      They all sit in the `exp` shop category and use either a `special` handler
      (fired straight from Game.fireSpecial) or a dedicated `projectile` kind.
      ============================================================ */
@@ -1552,62 +1549,34 @@ const WEAPONS = {
           sound: 'banana', projectile: 'hive', projSpeed: 24, projGravity: 11,
           hiveCount: 5, splash: .6, splashDmg: 40 },
 
-  /* РИКОШЕТ: disc — bounces off walls and enemies, then flies home */
-  disc: { name: 'ДИСКОБОЛ', cat: 'exp', slot: 2, price: 35000, dmg: 190, rpm: 46, mag: 1, reserve: 8,
-          auto: false, spread: .004, moveSpread: .050, recoil: 4.0, falloff: .98, range: 200, headMul: 1.4,
-          sound: 'laser', projectile: 'disc', projSpeed: 36, projGravity: 1.5, bounces: 6, discReturn: 3.0 },
-
-  /* ХОЛОД: absolute zero — freezes the horde, frozen bodies shatter */
-  freeze: { name: 'АБСОЛЮТНЫЙ НОЛЬ', cat: 'exp', slot: 2, price: 40000, dmg: 80, rpm: 84, mag: 5, reserve: 20,
-          auto: false, spread: .020, moveSpread: .040, recoil: 2.2, falloff: .80, range: 90, headMul: 1.4,
-          sound: 'laser', projectile: 'freeze', projSpeed: 30, projGravity: 7,
-          splash: 3.4, splashDmg: 90, freezeT: 4.0 },
-
   /* ЦЕПЬ: tesla — lightning arcs from one enemy to the next */
   tesla: { name: 'ТЕСЛА-ПУШКА', cat: 'exp', slot: 2, price: 45000, dmg: 95, rpm: 130, mag: 40, reserve: 160,
           auto: true, spread: .014, moveSpread: .030, recoil: 1.0, falloff: .85, range: 78, headMul: 1.7,
           sound: 'laser', special: 'tesla', chain: 5, chainRange: 9.5 },
-
-  /* ПОРТАЛЫ: mirror gun — two linked gates teleport what enters them */
-  portal: { name: 'ЗЕРКАЛЬНАЯ ПУШКА', cat: 'exp', slot: 2, price: 55000, dmg: 0, rpm: 70, mag: Infinity, reserve: 0,
-          auto: false, spread: 0, moveSpread: 0, recoil: .6, falloff: 1, range: 60, headMul: 1,
-          sound: 'laser', special: 'portal', portalR: 1.9 },
 
   /* ГРАВИТАЦИЯ: black hole — a sphere that drags the horde in, then implodes */
   blackhole: { name: 'ЧЁРНАЯ ДЫРА', cat: 'exp', slot: 2, price: 65000, dmg: 60, rpm: 30, mag: 1, reserve: 5,
           auto: false, spread: .004, moveSpread: .050, recoil: 5.0, falloff: .99, range: 240, headMul: 1.2,
           sound: 'awp', projectile: 'blackhole', projSpeed: 32, projGravity: 3,
           wellR: 9.5, wellLife: 4.2, wellDps: 45, wellPull: 11,
-          splash: 8.5, splashDmg: 900, explosionColor: [0x9a5aff, 0x08040f], noSelfDamage: true },
-
-  /* КОМПАНЬОН: turret drone — a helper that follows and fires for you */
-  turretDrone: { name: 'ДРОН-ТУРЕЛЬ', cat: 'exp', slot: 2, price: 70000, dmg: 40, rpm: 70, mag: Infinity, reserve: 0,
-          auto: false, spread: 0, moveSpread: 0, recoil: 0, falloff: .90, range: 46, headMul: 1.8,
-          sound: 'laser', special: 'turret', turretDmg: 48, turretCd: .16, turretRange: 46 },
-
-  /* ВРЕМЯ: chrono — a bubble that slows everything inside it */
-  chrono: { name: 'ХРОНО-ПУШКА', cat: 'exp', slot: 2, price: 80000, dmg: 30, rpm: 44, mag: 3, reserve: 9,
-          auto: false, spread: .010, moveSpread: .050, recoil: 3.4, falloff: .95, range: 200, headMul: 1.2,
-          sound: 'awp', projectile: 'chrono', projSpeed: 32, projGravity: 3,
-          chronoR: 8.5, chronoLife: 7, chronoSlow: .16 }
+          splash: 8.5, splashDmg: 900, explosionColor: [0x9a5aff, 0x08040f], noSelfDamage: true }
 };
 
 const GEAR = {
   kevlar:       { name: 'БРОНЯ (KEVLAR)', price: 650,  ap: 100, helmet: false },
   kevlarHelmet: { name: 'БРОНЯ + ШЛЕМ',   price: 1000, ap: 100, helmet: true },
   heavyArmor:   { name: 'УКРЕПЛЁННАЯ БРОНЯ', price: 2000, ap: 200, helmet: true, heavy: true, desc: 'AP 200 · поглощает больше урона' },
+  energyArmor:  { name: 'ЭНЕРГОБРОНЯ',    price: 10000, ap: 300, helmet: true, heavy: true, energy: true, desc: 'AP 300 · лучшая защита, крепче укреплённой' },
   /* Consumables: bought once, kept for the rest of the match (and across
      rounds/offline waves). `ammo` is a refill, so it never shows as КУПЛЕНО. */
   ammo:         { name: 'ПАТРОНЫ',        price: 1500, ammo: true, desc: 'Полный запас ко всем стволам' },
   medkit:       { name: 'АПТЕЧКА',        price: 600,  medkit: true, desc: 'H или кнопка — +50 HP в бою' },
   medkitBox:    { name: 'ЯЩИК АПТЕЧЕК',   price: 10000, medkitBox: true, desc: 'Навсегда снимает лимит на аптечки' },
-  drone:        { name: 'ДРОН-КАМИКАДЗЕ', price: 10000, drone: true, desc: 'Управляемый · враг может сбить' },
-  frag:         { name: 'ГРАНАТА',         price: 300,  grenade: 'frag',   desc: 'Осколочная · G — бросок' },
-  freezeNade:   { name: 'КРИО-ГРАНАТА',    price: 500,  grenade: 'freeze', desc: 'Замораживает зомби в области' },
-  napalmNade:   { name: 'НАПАЛМ',          price: 700,  grenade: 'napalm', desc: 'Оставляет горящую лужу' },
-  turretBuild:  { name: 'ТУРЕЛЬ',          price: 2500, buildable: 'turret',    desc: 'Стреляет сама · K — поставить' },
-  barricade:    { name: 'БАРРИКАДА',       price: 900,  buildable: 'barricade', desc: 'Укрытие · K — поставить' },
-  mine:         { name: 'МИНА',            price: 1200, buildable: 'mine',      desc: 'Взрывается при враге · K — поставить' }
+  drone:        { name: 'ДРОН-КАМИКАДЗЕ', price: 10000, drone: true, desc: 'Управляемый · F — запуск, враг может сбить' },
+  turretGear:   { name: 'ДРОН-ТУРЕЛЬ',    price: 12000, turretGear: true, desc: 'V — вылетает и стреляет сам' },
+  frag:         { name: 'ГРАНАТА',         price: 100,  grenade: 'frag',   desc: 'Осколочная · G — бросок' },
+  freezeNade:   { name: 'КРИО-ГРАНАТА',    price: 120,  grenade: 'freeze', desc: 'Замораживает зомби в области' },
+  napalmNade:   { name: 'НАПАЛМ',          price: 150,  grenade: 'napalm', desc: 'Оставляет горящую лужу' }
 };
 function grenadeName(kind) { return kind === 'freeze' ? 'КРИО' : kind === 'napalm' ? 'НАПАЛМ' : 'ГРАНАТА'; }
 function todName(k) { return k === 'night' ? 'НОЧЬ' : 'ДЕНЬ'; }
@@ -1656,9 +1625,7 @@ const ZOMBIES = {
   robot:  { name: 'РОБОТ-ЗОМБИ',  hp: 1600, speed: 1.75, dmg: 45, score: 2200, money: 950, scale: 1.85, color: 0x8b95a1, atkRange: 2.3,
             miniBoss: true, armor: .35, shoot: 'plasma', shootRange: 26, shootCd: 2.2, shootDmg: 24, shootSpeed: 34, shootGrav: 0 },
 
-  /* ---- new specials (waves 6+) ---- */
-  digger:  { name: 'КОПАТЕЛЬ',    hp: 150, speed: 2.35, dmg: 20, score: 320, money: 130, scale: 1.05, color: 0x6a5a3a, atkRange: 1.7,
-             burrow: true, burrowCd: 8 },
+  /* ---- new specials (waves 7+) ---- */
   splitter:{ name: 'ДЕЛЯЩИЙСЯ',   hp: 130, speed: 1.9, dmg: 15, score: 280, money: 110, scale: 1.1, color: 0x7a4a6a, atkRange: 1.6,
              splits: 3, splitType: 'crawler' },
   healer:  { name: 'ЛЕКАРЬ',      hp: 110, speed: 1.7, dmg: 10, score: 300, money: 140, scale: 1.0, color: 0x3f8f6a, atkRange: 1.5,
@@ -3330,7 +3297,6 @@ function buildMap(scene, quality, mapId) {
 
   MAP.def.build(group, world);
 
-  buildHazards(group, world);
   buildAimRoom(group, world);
   buildLighting(group, quality);
   buildSky(group);
@@ -5945,6 +5911,7 @@ class Player {
     this.armor = 0;
     this.helmet = false;
     this.heavyArmor = false;   // reinforced armour soaks a larger share of damage
+    this.energyArmor = false;  // best suit: AP 300, soaks the most
     this.alive = true;
     this.money = 800;
     this.kills = 0;
@@ -5961,6 +5928,7 @@ class Player {
     this.medkitUnlimited = false;  // the medkit-box upgrade removed the carry cap
     this.drone = 0;           // kamikaze drones ready to launch, with F
     this.droneOwned = false;  // has bought the drone: it recharges every online round
+    this.turretDrone = 0;     // turret-drone charges (gear, launched with V)
     this.grenades = { frag: 0, freeze: 0, napalm: 0 };   // thrown with G
     this.builds = { turret: 0, barricade: 0, mine: 0 };  // placed with K
     // energy shield (active shield): raised by LMB for a few seconds, then cools
@@ -6678,23 +6646,6 @@ function buildZombieMesh(type) {
     cannon.position.set(.55, 1.52, -.30);
     g.add(cannon);
     parts.cannon = cannon;
-  } else if (type === 'digger') {
-    /* КОПАТЕЛЬ: hunched, clawed, dirt-caked burrower */
-    torso.rotation.x = .75;
-    head.position.set(0, 1.16, .40);
-    armL.position.set(-.34, .82, .18); armR.position.set(.34, .82, .18);
-    armL.scale.set(1.3, 1.15, 1.3); armR.scale.set(1.3, 1.15, 1.3);
-    const clawMat = new THREE.MeshLambertMaterial({ color: 0xcbb48a, emissive: 0x1a1408 });
-    [-1, 1].forEach(sgn => {
-      const claw = new THREE.Mesh(new THREE.ConeGeometry(.06, .28, 5), clawMat);
-      claw.position.set(sgn * .34, .48, .30); claw.rotation.x = 1.4;
-      g.add(claw);
-    });
-    // a dirt mound hump on the back
-    const hump = new THREE.Mesh(new THREE.SphereGeometry(.30, 8, 6),
-      new THREE.MeshLambertMaterial({ color: 0x4a3a22 }));
-    hump.position.set(0, 1.25, .18); hump.scale.set(1.1, .65, 1.2); hump.rotation.x = .75;
-    g.add(hump);
   } else if (type === 'splitter') {
     /* ДЕЛЯЩИЙСЯ: bloated, lumpy, ready to burst */
     chest.scale.set(1.25, 1.2, 1.25);
@@ -8256,20 +8207,6 @@ function initSettings() {
     if (o2) o2.textContent = fmt(S[key]);
   });
 
-  // traps & weather on/off
-  const tr = document.getElementById('sTraps'), ot = document.getElementById('oTraps');
-  const trNames = ['Выкл', 'Вкл'];
-  if (tr) {
-    tr.value = S.trapsEnabled === 0 ? 0 : 1;
-    if (ot) ot.textContent = trNames[parseInt(tr.value, 10)];
-    tr.addEventListener('input', () => {
-      S.trapsEnabled = parseInt(tr.value, 10);
-      if (ot) ot.textContent = trNames[S.trapsEnabled];
-      Store.save();
-      if (window.Game && Game.mode !== CS.MODE.MENU) Game.buildArenaOnTheFly(MAP.id);
-    });
-  }
-
   applySetting('sens', S.sens);
   applySetting('fov', S.fov);
   applySetting('vol', S.vol);
@@ -9780,12 +9717,10 @@ const UI = {
           cant = (!free && player.money < g.price) || n >= 4;
           stats = [['В ЗАПАСЕ', n + '/4'], ['КЛАВИША', 'G'], ['СМЕНА', 'J']];
           desc = g.desc;
-        } else if (g.buildable) {
-          player.builds = player.builds || { turret: 0, barricade: 0, mine: 0 };
-          const n = player.builds[g.buildable] || 0;
-          owned = false;
-          cant = (!free && player.money < g.price) || n >= 3;
-          stats = [['В ЗАПАСЕ', n + '/3'], ['КЛАВИША', 'K'], ['СМЕНА', 'L']];
+        } else if (g.turretGear) {
+          owned = !!player.turretDrone;
+          cant = !free && player.money < g.price;
+          stats = [['ЗАРЯДОВ', player.turretDrone || 0], ['УРОН', 48], ['КЛАВИША', 'V']];
           desc = g.desc;
         } else if (g.ammo) {
           owned = false;
@@ -9793,9 +9728,10 @@ const UI = {
           stats = [['ЭФФЕКТ', '100%'], ['ВСЕ СТВОЛЫ', 'ДА']];
           desc = g.desc;
         } else if (g.heavy) {
-          owned = !!player.heavyArmor && player.armor >= g.ap;
-          cant = !free && player.money < g.price;
-          stats = [['AP', g.ap], ['ПОГЛОЩ.', '75%'], ['ШЛЕМ', 'ДА']];
+          owned = g.energy ? !!player.energyArmor : (!!player.heavyArmor && !player.energyArmor && player.armor >= g.ap);
+          cant = (!free && player.money < g.price) || (g.energy ? !!player.energyArmor : (!!player.energyArmor));
+          const absorb = g.energy ? '88%' : '75%';
+          stats = [['AP', g.ap], ['ПОГЛОЩ.', absorb], ['ШЛЕМ', 'ДА']];
           desc = g.desc;
         } else {
           owned = (gid === 'kevlar' && player.armor >= 100 && !player.helmet) || (gid === 'kevlarHelmet' && player.armor >= 100 && player.helmet);
@@ -12034,10 +11970,11 @@ const Game = {
       case 'KeyT':
         if (this.mode === CS.MODE.RANGE && !IS_TOUCH) this.toggleAimTrain(!this.aim);
         break;
-      // shooting dummy: V turns it on/off, C opens the weapon picker,
-      // [ and ] cycle the weapon without opening anything
+      // shooting dummy: V turns it on/off (range), C opens the weapon picker;
+      // outside the range V launches the turret-drone gear instead
       case 'KeyV':
         if (this.mode === CS.MODE.RANGE) this.toggleShooterDummy();
+        else if (!this.paused) this.useTurretGear();
         break;
       case 'KeyC':
         if (this.mode === CS.MODE.RANGE) this.toggleShooterPick(!this.shooterPickOpen);
@@ -12054,13 +11991,6 @@ const Game = {
         break;
       case 'KeyZ':
         if (this.mode === CS.MODE.RANGE && this.enemySpawnOpen) this.cycleSpawnHp(1);
-        break;
-      /* ---- environment: place the selected buildable ---- */
-      case 'KeyK':
-        if (this.mode !== CS.MODE.RANGE && !this.paused) this.placeBuildable();
-        break;
-      case 'KeyL':
-        if (!this.paused) this.cycleBuildable();
         break;
       case 'KeyO':
         if (!this.paused) this.cycleTimeOfDay();
@@ -13910,7 +13840,7 @@ const Game = {
     const free = this.isFreeShop();
 
     /* Consumables: ammo refill, kamikaze drone, grenades and the medkit upgrade. */
-    if (g.ammo || g.medkit || g.medkitBox || g.drone || g.grenade || g.buildable) {
+    if (g.ammo || g.medkit || g.medkitBox || g.drone || g.grenade || g.buildable || g.turretGear) {
       if (!free && this.player.money < g.price) { Audio3D_SFX.deny(); UI.toast('Не хватает денег'); return; }
       // the field kit is limited unless the medkit-box upgrade was bought
       if (g.medkit && !this.player.medkitUnlimited && (this.player.medkits || 0) >= CFG.medkitMax) {
@@ -13941,27 +13871,33 @@ const Game = {
         this.player.builds[g.buildable] = cur + 1;
         Store.data.buildable = g.buildable; Store.save();
       }
+      else if (g.turretGear) {
+        this.player.turretDrone = (this.player.turretDrone || 0) + 1;
+      }
       Audio3D_SFX.buy();
       const extra = g.medkitBox ? ' — лимит аптечек снят'
         : g.medkit ? ' (' + this.player.medkits + ' в запасе)'
           : g.drone ? ' (' + this.player.drone + ' в запасе)'
-            : g.grenade ? ' (' + this.player.grenades[g.grenade] + ' шт · G — бросок)'
-              : g.buildable ? ' (' + this.player.builds[g.buildable] + ' шт · K — поставить)' : '';
+            : g.turretGear ? ' (' + this.player.turretDrone + ' заряд · V — вылет)'
+              : g.grenade ? ' (' + this.player.grenades[g.grenade] + ' шт · G — бросок)'
+                : g.buildable ? ' (' + this.player.builds[g.buildable] + ' шт · K — поставить)' : '';
       UI.toast('Куплено: ' + g.name + extra, '#57d16a');
       UI.renderBuy(this.player, this.buyTimer);
       if (this.mode === CS.MODE.ONLINE) this.broadcastScore();
       return;
     }
 
-    /* Armour: the heavy suit has more AP and soaks more, so it can be bought
-       even when normal armour was already owned. */
+    /* Armour: each tier has more AP and soaks more, so it can be bought even
+       when a weaker suit was already owned. The energy suit is the best. */
     if (g.heavy) {
-      if (this.player.heavyArmor && this.player.armor >= g.ap) { Audio3D_SFX.deny(); UI.toast('Уже куплено'); return; }
+      const currentBest = this.player.energyArmor ? 'energy' : this.player.heavyArmor ? 'heavy' : null;
+      if (currentBest === 'energy' || (currentBest === 'heavy' && !g.energy)) { Audio3D_SFX.deny(); UI.toast('Уже куплено'); return; }
       if (!free && this.player.money < g.price) { Audio3D_SFX.deny(); UI.toast('Не хватает денег'); return; }
       if (!free) this.player.money -= g.price;
+      if (g.energy) this.player.energyArmor = true;
+      else this.player.heavyArmor = true;
       this.player.armor = g.ap;
       this.player.helmet = true;
-      this.player.heavyArmor = true;
       Audio3D_SFX.buy();
       UI.toast('Куплено: ' + g.name + ' · AP ' + g.ap, '#57d16a');
       UI.renderBuy(this.player, this.buyTimer);
@@ -13969,11 +13905,10 @@ const Game = {
       return;
     }
 
-    if (this.player.armor >= 100 && (!g.helmet || this.player.helmet) && !this.player.heavyArmor) { Audio3D_SFX.deny(); UI.toast('Уже куплено'); return; }
+    if (this.player.armor >= 100 && (!g.helmet || this.player.helmet) && !this.player.heavyArmor && !this.player.energyArmor) { Audio3D_SFX.deny(); UI.toast('Уже куплено'); return; }
     if (!free && this.player.money < g.price) { Audio3D_SFX.deny(); UI.toast('Не хватает денег'); return; }
     if (!free) this.player.money -= g.price;
     this.player.armor = g.ap;
-    this.player.heavyArmor = false;      // the basic suits do not grant the bonus
     if (g.helmet) this.player.helmet = true;
     Audio3D_SFX.buy();
     UI.toast('Куплено: ' + g.name, '#57d16a');
@@ -14641,7 +14576,6 @@ const Game = {
     if (wave >= 6) pool.push({ t: 'flying', w: Math.min(4, (wave - 5) * .55) });
     if (wave >= 7) pool.push({ t: 'brute', w: Math.min(3, (wave - 5) * .4) });
     /* new specials — each unlocked a couple of waves apart */
-    if (wave >= 6) pool.push({ t: 'digger', w: Math.min(3, (wave - 5) * .4) });
     if (wave >= 7) pool.push({ t: 'splitter', w: Math.min(3, (wave - 6) * .38) });
     if (wave >= 8) pool.push({ t: 'shielder', w: Math.min(3, (wave - 7) * .36) });
     if (wave >= 9) pool.push({ t: 'healer', w: Math.min(2, (wave - 8) * .30) });
@@ -15509,8 +15443,19 @@ const Game = {
         p.fireCd = 60 / def.rpm;
         p.flashT = .05;
         if (def.special === 'tesla') return this.fireTesla(def, muzzle, origin, dir);
-        if (def.special === 'portal') { this.placePortal(def, origin, dir); return; }
-        if (def.special === 'turret') { this.toggleTurretDrone(def); return; }
+      },
+
+      /* ДРОН-ТУРЕЛЬ now lives in GEAR: V launches/recalls it */
+      useTurretGear() {
+        const p = this.player;
+        if (!p || !p.alive) return false;
+        if (this.mode === CS.MODE.MENU || this.paused) return false;
+        if (this.roundState === 'buy' && this.mode !== CS.MODE.RANGE) { UI.toast('Турель доступна только в бою', '#f5d33c'); Audio3D_SFX.deny(); return false; }
+        if (this.turretDrone) { this.removeTurretDrone(); p.turretDrone = (p.turretDrone || 0) + 1; UI.toast('Дрон-турель отозван (заряд возвращён)', '#ff9d21'); return true; }
+        if (!(p.turretDrone > 0)) { UI.toast('Дрона-турели нет — купите в магазине (B)', '#f5d33c'); Audio3D_SFX.deny(); return false; }
+        p.turretDrone--;
+        this.toggleTurretDrone({ dmg: 46, turretDmg: 48, turretCd: .16, turretRange: 46 });
+        return true;
       },
 
       /* ТЕСЛА-ПУШКА: hits the first target, then arcs from it to the nearest
@@ -16345,8 +16290,8 @@ const Game = {
     if (!p.alive) return;
     let actual = dmg;
     if (p.armor > 0) {
-      // reinforced armour soaks a larger share of the hit (and has more AP)
-      const absorbFrac = p.heavyArmor ? .75 : .5;
+      // reinforced armour soaks a larger share of the hit; the energy suit is best
+      const absorbFrac = p.energyArmor ? .88 : p.heavyArmor ? .75 : .5;
       const absorbed = Math.min(p.armor, actual * absorbFrac);
       p.armor -= absorbed;
       actual -= absorbed;
@@ -17225,8 +17170,6 @@ const Game = {
       this.updateChronoFields(dt);   // time-dilation bubbles
       this.updateHives(dt);          // hives hatching their swarm
       this.updatePortals(dt);        // mirror-gate teleport + lifetime
-      this.updateHazards(dt);        // lava / spikes / presses
-      this.updateBuildables(dt);     // placed turrets / barricades / mines
       this.updateTurretDrone(dt);    // companion turret auto-fire
     }
 

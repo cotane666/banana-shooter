@@ -149,23 +149,6 @@ function buildZombieMesh(type) {
     cannon.position.set(.55, 1.52, -.30);
     g.add(cannon);
     parts.cannon = cannon;
-  } else if (type === 'digger') {
-    /* КОПАТЕЛЬ: hunched, clawed, dirt-caked burrower */
-    torso.rotation.x = .75;
-    head.position.set(0, 1.16, .40);
-    armL.position.set(-.34, .82, .18); armR.position.set(.34, .82, .18);
-    armL.scale.set(1.3, 1.15, 1.3); armR.scale.set(1.3, 1.15, 1.3);
-    const clawMat = new THREE.MeshLambertMaterial({ color: 0xcbb48a, emissive: 0x1a1408 });
-    [-1, 1].forEach(sgn => {
-      const claw = new THREE.Mesh(new THREE.ConeGeometry(.06, .28, 5), clawMat);
-      claw.position.set(sgn * .34, .48, .30); claw.rotation.x = 1.4;
-      g.add(claw);
-    });
-    // a dirt mound hump on the back
-    const hump = new THREE.Mesh(new THREE.SphereGeometry(.30, 8, 6),
-      new THREE.MeshLambertMaterial({ color: 0x4a3a22 }));
-    hump.position.set(0, 1.25, .18); hump.scale.set(1.1, .65, 1.2); hump.rotation.x = .75;
-    g.add(hump);
   } else if (type === 'splitter') {
     /* ДЕЛЯЩИЙСЯ: bloated, lumpy, ready to burst */
     chest.scale.set(1.25, 1.2, 1.25);

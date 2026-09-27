@@ -1283,10 +1283,11 @@ const Game = {
       case 'KeyT':
         if (this.mode === CS.MODE.RANGE && !IS_TOUCH) this.toggleAimTrain(!this.aim);
         break;
-      // shooting dummy: V turns it on/off, C opens the weapon picker,
-      // [ and ] cycle the weapon without opening anything
+      // shooting dummy: V turns it on/off (range), C opens the weapon picker;
+      // outside the range V launches the turret-drone gear instead
       case 'KeyV':
         if (this.mode === CS.MODE.RANGE) this.toggleShooterDummy();
+        else if (!this.paused) this.useTurretGear();
         break;
       case 'KeyC':
         if (this.mode === CS.MODE.RANGE) this.toggleShooterPick(!this.shooterPickOpen);
@@ -1303,13 +1304,6 @@ const Game = {
         break;
       case 'KeyZ':
         if (this.mode === CS.MODE.RANGE && this.enemySpawnOpen) this.cycleSpawnHp(1);
-        break;
-      /* ---- environment: place the selected buildable ---- */
-      case 'KeyK':
-        if (this.mode !== CS.MODE.RANGE && !this.paused) this.placeBuildable();
-        break;
-      case 'KeyL':
-        if (!this.paused) this.cycleBuildable();
         break;
       case 'KeyO':
         if (!this.paused) this.cycleTimeOfDay();
@@ -3159,7 +3153,7 @@ const Game = {
     const free = this.isFreeShop();
 
     /* Consumables: ammo refill, kamikaze drone, grenades and the medkit upgrade. */
-    if (g.ammo || g.medkit || g.medkitBox || g.drone || g.grenade || g.buildable) {
+    if (g.ammo || g.medkit || g.medkitBox || g.drone || g.grenade || g.buildable || g.turretGear) {
       if (!free && this.player.money < g.price) { Audio3D_SFX.deny(); UI.toast('Не хватает денег'); return; }
       // the field kit is limited unless the medkit-box upgrade was bought
       if (g.medkit && !this.player.medkitUnlimited && (this.player.medkits || 0) >= CFG.medkitMax) {
@@ -3190,27 +3184,33 @@ const Game = {
         this.player.builds[g.buildable] = cur + 1;
         Store.data.buildable = g.buildable; Store.save();
       }
+      else if (g.turretGear) {
+        this.player.turretDrone = (this.player.turretDrone || 0) + 1;
+      }
       Audio3D_SFX.buy();
       const extra = g.medkitBox ? ' — лимит аптечек снят'
         : g.medkit ? ' (' + this.player.medkits + ' в запасе)'
           : g.drone ? ' (' + this.player.drone + ' в запасе)'
-            : g.grenade ? ' (' + this.player.grenades[g.grenade] + ' шт · G — бросок)'
-              : g.buildable ? ' (' + this.player.builds[g.buildable] + ' шт · K — поставить)' : '';
+            : g.turretGear ? ' (' + this.player.turretDrone + ' заряд · V — вылет)'
+              : g.grenade ? ' (' + this.player.grenades[g.grenade] + ' шт · G — бросок)'
+                : g.buildable ? ' (' + this.player.builds[g.buildable] + ' шт · K — поставить)' : '';
       UI.toast('Куплено: ' + g.name + extra, '#57d16a');
       UI.renderBuy(this.player, this.buyTimer);
       if (this.mode === CS.MODE.ONLINE) this.broadcastScore();
       return;
     }
 
-    /* Armour: the heavy suit has more AP and soaks more, so it can be bought
-       even when normal armour was already owned. */
+    /* Armour: each tier has more AP and soaks more, so it can be bought even
+       when a weaker suit was already owned. The energy suit is the best. */
     if (g.heavy) {
-      if (this.player.heavyArmor && this.player.armor >= g.ap) { Audio3D_SFX.deny(); UI.toast('Уже куплено'); return; }
+      const currentBest = this.player.energyArmor ? 'energy' : this.player.heavyArmor ? 'heavy' : null;
+      if (currentBest === 'energy' || (currentBest === 'heavy' && !g.energy)) { Audio3D_SFX.deny(); UI.toast('Уже куплено'); return; }
       if (!free && this.player.money < g.price) { Audio3D_SFX.deny(); UI.toast('Не хватает денег'); return; }
       if (!free) this.player.money -= g.price;
+      if (g.energy) this.player.energyArmor = true;
+      else this.player.heavyArmor = true;
       this.player.armor = g.ap;
       this.player.helmet = true;
-      this.player.heavyArmor = true;
       Audio3D_SFX.buy();
       UI.toast('Куплено: ' + g.name + ' · AP ' + g.ap, '#57d16a');
       UI.renderBuy(this.player, this.buyTimer);
@@ -3218,11 +3218,10 @@ const Game = {
       return;
     }
 
-    if (this.player.armor >= 100 && (!g.helmet || this.player.helmet) && !this.player.heavyArmor) { Audio3D_SFX.deny(); UI.toast('Уже куплено'); return; }
+    if (this.player.armor >= 100 && (!g.helmet || this.player.helmet) && !this.player.heavyArmor && !this.player.energyArmor) { Audio3D_SFX.deny(); UI.toast('Уже куплено'); return; }
     if (!free && this.player.money < g.price) { Audio3D_SFX.deny(); UI.toast('Не хватает денег'); return; }
     if (!free) this.player.money -= g.price;
     this.player.armor = g.ap;
-    this.player.heavyArmor = false;      // the basic suits do not grant the bonus
     if (g.helmet) this.player.helmet = true;
     Audio3D_SFX.buy();
     UI.toast('Куплено: ' + g.name, '#57d16a');
@@ -3890,7 +3889,6 @@ const Game = {
     if (wave >= 6) pool.push({ t: 'flying', w: Math.min(4, (wave - 5) * .55) });
     if (wave >= 7) pool.push({ t: 'brute', w: Math.min(3, (wave - 5) * .4) });
     /* new specials — each unlocked a couple of waves apart */
-    if (wave >= 6) pool.push({ t: 'digger', w: Math.min(3, (wave - 5) * .4) });
     if (wave >= 7) pool.push({ t: 'splitter', w: Math.min(3, (wave - 6) * .38) });
     if (wave >= 8) pool.push({ t: 'shielder', w: Math.min(3, (wave - 7) * .36) });
     if (wave >= 9) pool.push({ t: 'healer', w: Math.min(2, (wave - 8) * .30) });
@@ -4758,8 +4756,19 @@ const Game = {
         p.fireCd = 60 / def.rpm;
         p.flashT = .05;
         if (def.special === 'tesla') return this.fireTesla(def, muzzle, origin, dir);
-        if (def.special === 'portal') { this.placePortal(def, origin, dir); return; }
-        if (def.special === 'turret') { this.toggleTurretDrone(def); return; }
+      },
+
+      /* ДРОН-ТУРЕЛЬ now lives in GEAR: V launches/recalls it */
+      useTurretGear() {
+        const p = this.player;
+        if (!p || !p.alive) return false;
+        if (this.mode === CS.MODE.MENU || this.paused) return false;
+        if (this.roundState === 'buy' && this.mode !== CS.MODE.RANGE) { UI.toast('Турель доступна только в бою', '#f5d33c'); Audio3D_SFX.deny(); return false; }
+        if (this.turretDrone) { this.removeTurretDrone(); p.turretDrone = (p.turretDrone || 0) + 1; UI.toast('Дрон-турель отозван (заряд возвращён)', '#ff9d21'); return true; }
+        if (!(p.turretDrone > 0)) { UI.toast('Дрона-турели нет — купите в магазине (B)', '#f5d33c'); Audio3D_SFX.deny(); return false; }
+        p.turretDrone--;
+        this.toggleTurretDrone({ dmg: 46, turretDmg: 48, turretCd: .16, turretRange: 46 });
+        return true;
       },
 
       /* ТЕСЛА-ПУШКА: hits the first target, then arcs from it to the nearest
@@ -5594,8 +5603,8 @@ const Game = {
     if (!p.alive) return;
     let actual = dmg;
     if (p.armor > 0) {
-      // reinforced armour soaks a larger share of the hit (and has more AP)
-      const absorbFrac = p.heavyArmor ? .75 : .5;
+      // reinforced armour soaks a larger share of the hit; the energy suit is best
+      const absorbFrac = p.energyArmor ? .88 : p.heavyArmor ? .75 : .5;
       const absorbed = Math.min(p.armor, actual * absorbFrac);
       p.armor -= absorbed;
       actual -= absorbed;
@@ -6474,8 +6483,6 @@ const Game = {
       this.updateChronoFields(dt);   // time-dilation bubbles
       this.updateHives(dt);          // hives hatching their swarm
       this.updatePortals(dt);        // mirror-gate teleport + lifetime
-      this.updateHazards(dt);        // lava / spikes / presses
-      this.updateBuildables(dt);     // placed turrets / barricades / mines
       this.updateTurretDrone(dt);    // companion turret auto-fire
     }
 

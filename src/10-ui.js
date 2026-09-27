@@ -577,12 +577,10 @@ const UI = {
           cant = (!free && player.money < g.price) || n >= 4;
           stats = [['В ЗАПАСЕ', n + '/4'], ['КЛАВИША', 'G'], ['СМЕНА', 'J']];
           desc = g.desc;
-        } else if (g.buildable) {
-          player.builds = player.builds || { turret: 0, barricade: 0, mine: 0 };
-          const n = player.builds[g.buildable] || 0;
-          owned = false;
-          cant = (!free && player.money < g.price) || n >= 3;
-          stats = [['В ЗАПАСЕ', n + '/3'], ['КЛАВИША', 'K'], ['СМЕНА', 'L']];
+        } else if (g.turretGear) {
+          owned = !!player.turretDrone;
+          cant = !free && player.money < g.price;
+          stats = [['ЗАРЯДОВ', player.turretDrone || 0], ['УРОН', 48], ['КЛАВИША', 'V']];
           desc = g.desc;
         } else if (g.ammo) {
           owned = false;
@@ -590,9 +588,10 @@ const UI = {
           stats = [['ЭФФЕКТ', '100%'], ['ВСЕ СТВОЛЫ', 'ДА']];
           desc = g.desc;
         } else if (g.heavy) {
-          owned = !!player.heavyArmor && player.armor >= g.ap;
-          cant = !free && player.money < g.price;
-          stats = [['AP', g.ap], ['ПОГЛОЩ.', '75%'], ['ШЛЕМ', 'ДА']];
+          owned = g.energy ? !!player.energyArmor : (!!player.heavyArmor && !player.energyArmor && player.armor >= g.ap);
+          cant = (!free && player.money < g.price) || (g.energy ? !!player.energyArmor : (!!player.energyArmor));
+          const absorb = g.energy ? '88%' : '75%';
+          stats = [['AP', g.ap], ['ПОГЛОЩ.', absorb], ['ШЛЕМ', 'ДА']];
           desc = g.desc;
         } else {
           owned = (gid === 'kevlar' && player.armor >= 100 && !player.helmet) || (gid === 'kevlarHelmet' && player.armor >= 100 && player.helmet);

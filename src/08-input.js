@@ -556,20 +556,6 @@ function initSettings() {
     if (o2) o2.textContent = fmt(S[key]);
   });
 
-  // traps & weather on/off
-  const tr = document.getElementById('sTraps'), ot = document.getElementById('oTraps');
-  const trNames = ['Выкл', 'Вкл'];
-  if (tr) {
-    tr.value = S.trapsEnabled === 0 ? 0 : 1;
-    if (ot) ot.textContent = trNames[parseInt(tr.value, 10)];
-    tr.addEventListener('input', () => {
-      S.trapsEnabled = parseInt(tr.value, 10);
-      if (ot) ot.textContent = trNames[S.trapsEnabled];
-      Store.save();
-      if (window.Game && Game.mode !== CS.MODE.MENU) Game.buildArenaOnTheFly(MAP.id);
-    });
-  }
-
   applySetting('sens', S.sens);
   applySetting('fov', S.fov);
   applySetting('vol', S.vol);

@@ -5102,8 +5102,10 @@ const Game = {
             target: targets[i % Math.max(1, targets.length)] || null, dmg: 420
           });
         }
-        Audio3D_SFX.explosionAt(eye.x, eye.y, eye.z);
+        const snd = this.mechMuzzleWorldPos('left');
+        Audio3D_SFX.explosionAt(snd.x, snd.y, snd.z);
         UI.toast('Залп ракет!', '#4ad6ff');
+        this._podRecoil = .8;
         return true;
       },
       updateMechMissiles(dt) {
@@ -5179,10 +5181,50 @@ const Game = {
         // ARE the weapons. Hide it so no floating gun sits on screen.
         if (p.vmGroup) p.vmGroup.visible = false;
         // spin the minigun cluster when firing the minigun
-        const cluster = this.mechBody.userData.barrels;
+        const ud = this.mechBody.userData;
+        const cluster = ud.barrels;
         if (cluster) {
           this._mechSpin = (this._mechSpin || 0) + dt * (p.spinT > .1 ? 34 : 0);
           cluster.rotation.z = this._mechSpin;
+        }
+        /* ---- animate the arms ---- */
+        this._mechT = (this._mechT || 0) + dt;
+        const t = this._mechT;
+        const hspeed = Math.hypot(p.vel.x, p.vel.z);
+        const walk = U.clamp(hspeed / CFG.walkSpeed, 0, 1.4);
+        // pitch the whole mech slightly with the aim (arms follow the look)
+        const aimPitch = U.clamp(p.pitch, -1, 1);
+        // walking bob + idle sway
+        const bob = Math.sin(t * (4 + walk * 5)) * (.012 + walk * .022);
+        const sway = Math.cos(t * 2.1) * .010;
+        // recoil springs for each arm (fired when that weapon fires)
+        this._mgRecoil = Math.max(0, (this._mgRecoil || 0) - dt * 6);
+        this._lzRecoil = Math.max(0, (this._lzRecoil || 0) - dt * 8);
+        this._podRecoil = Math.max(0, (this._podRecoil || 0) - dt * 5);
+        const mgKick = this._mgRecoil, lzKick = this._lzRecoil, podKick = this._podRecoil;
+        const minigunOn = p.inv[2] && p.inv[2].id === 'mechMinigun' && p.triggerDown && p.spinT > .1;
+        if (minigunOn) this._mgRecoil = Math.min(1, this._mgRecoil + dt * 10);
+
+        if (ud.mgArm) {
+          const b = ud.mgArm.userData.basePos;
+          ud.mgArm.position.set(
+            b.x + sway * .5,
+            b.y + bob + aimPitch * .12 + mgKick * .05,
+            b.z + mgKick * .16);
+          ud.mgArm.rotation.x = -aimPitch * .5 - mgKick * .12;
+        }
+        if (ud.lzArm) {
+          const b = ud.lzArm.userData.basePos;
+          ud.lzArm.position.set(
+            b.x - sway * .5,
+            b.y + bob * .8 + aimPitch * .12 + lzKick * .05 + podKick * .10,
+            b.z + lzKick * .14);
+          ud.lzArm.rotation.x = -aimPitch * .5 - lzKick * .10;
+        }
+        if (ud.pod) {
+          const b = ud.pod.userData.basePos || ud.pod.position;
+          ud.pod.position.y = 3.00 + podKick * .16 + bob;
+          ud.pod.rotation.x = -aimPitch * .4;
         }
       },
       /* ЛКМ fires the minigun, ПКМ fires the laser, both independent and held */
@@ -5199,6 +5241,7 @@ const Game = {
             if (p.fireCd <= 0 && p.deployT <= 0 && p.reloadT <= 0) {
               this.fireWeaponAt('mechMinigun', def, mg, 'right');
               p.fireCd = 60 / def.rpm;
+              this._mgRecoil = .5;
             }
           }
         } else if (mg && mg.id === 'mechMinigun') {
@@ -5213,6 +5256,7 @@ const Game = {
           if (p.fireCd2 <= 0 && lz.mag > 0 && p.deployT <= 0) {
             this.fireWeaponAt('mechLaser', def, lz, 'left');
             p.fireCd2 = 60 / def.rpm;
+            this._lzRecoil = .7;
           }
         }
       },

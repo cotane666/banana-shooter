@@ -110,30 +110,56 @@ class Effects {
   }
 
   /* ---------- continuous beam (laser cannon) ----------
-     One persistent mesh per colour, repositioned every frame while the trigger
-     is held. `hold` keeps it alive for this frame; without it the beam hides. */
+     A layered beam (white-hot core + coloured body + wide halo) that pulses
+     while held, with a bright muzzle bloom, a big impact burst and travelling
+     rings that race along it. One persistent group is reused every frame. */
   holdBeam(from, to, color) {
+    const c = color || 0xff6a2a;
     if (!this._beam) {
       this._beam = new THREE.Group();
-      // hot white-ish core
-      this._beamCore = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 1, 10),
-        new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: .95, blending: THREE.AdditiveBlending, depthWrite: false }));
-      // coloured body
-      this._beamBody = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 1, 12),
-        new THREE.MeshBasicMaterial({ color: 0xff6a2a, transparent: true, opacity: .6, blending: THREE.AdditiveBlending, depthWrite: false }));
-      // soft wide halo
-      this._beamGlow = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 1, 12),
-        new THREE.MeshBasicMaterial({ color: 0xff6a2a, transparent: true, opacity: .26, blending: THREE.AdditiveBlending, depthWrite: false }));
-      for (const m of [this._beamCore, this._beamBody, this._beamGlow]) m.renderOrder = 3;
-      this._beam.add(this._beamGlow); this._beam.add(this._beamBody); this._beam.add(this._beamCore);
+      const mk = (r, col, op, seg) => {
+        const m = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 1, seg || 12),
+          new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: op, blending: THREE.AdditiveBlending, depthWrite: false }));
+        m.renderOrder = 3;
+        return m;
+      };
+      this._beamGlow = mk(1, c, .22, 14);        // wide soft halo
+      this._beamBody = mk(1, c, .62);            // coloured body
+      this._beamCore = mk(1, 0xffffff, .96, 14); // white-hot core
+      this._beam.add(this._beamGlow, this._beamBody, this._beamCore);
+      // nozzle bloom at the muzzle (a small glowing sphere)
+      this._beamMuzzle = new THREE.Mesh(new THREE.SphereGeometry(1, 12, 10),
+        new THREE.MeshBasicMaterial({ color: 0xfff0d0, transparent: true, opacity: .9, blending: THREE.AdditiveBlending, depthWrite: false }));
+      this._beamMuzzle.renderOrder = 4;
+      this._beam.add(this._beamMuzzle);
+      // travelling energy rings
+      this._beamRings = [];
+      for (let i = 0; i < 5; i++) {
+        const ring = new THREE.Mesh(new THREE.TorusGeometry(1, .16, 6, 18),
+          new THREE.MeshBasicMaterial({ color: 0xfff2d6, transparent: true, opacity: .85, blending: THREE.AdditiveBlending, depthWrite: false }));
+        ring.renderOrder = 4;
+        this._beam.add(ring);
+        this._beamRings.push({ mesh: ring, t: i / 5 });
+      }
       this.scene.add(this._beam);
     }
+    // keep the colour in sync (bosses/plasma may pass their own)
+    this._beamBody.material.color.setHex(c);
+    this._beamGlow.material.color.setHex(c);
+
     const dx = to.x - from.x, dy = to.y - from.y, dz = to.z - from.z;
     const len = Math.sqrt(dx * dx + dy * dy + dz * dz);
     if (len < .05) { this._beam.visible = false; return; }
     this._beam.visible = true;
     const mid = { x: (from.x + to.x) / 2, y: (from.y + to.y) / 2, z: (from.z + to.z) / 2 };
-    const layers = [[this._beamCore, .028, .95], [this._beamBody, .075, .6], [this._beamGlow, .16, .26]];
+    // a lively pulse so the beam "breathes"
+    const puls = .5 + .5 * Math.sin(this._t * 34);
+    const layers = [
+      [this._beamCore, .030 + puls * .008, .90 + puls * .08],
+      [this._beamBody, .080 + puls * .018, .52 + puls * .20],
+      [this._beamGlow, .175 + puls * .045, .18 + puls * .14]
+    ];
+    const dirv = new THREE.Vector3(to.x - from.x, to.y - from.y, to.z - from.z).normalize();
     for (const [m, r, op] of layers) {
       m.position.set(mid.x, mid.y, mid.z);
       m.scale.set(r, len, r);
@@ -141,11 +167,31 @@ class Effects {
       m.rotateX(Math.PI / 2);
       m.material.opacity = op;
     }
-    const c = color || 0xff6a2a;
-    this._beamBody.material.color.setHex(c);
-    this._beamGlow.material.color.setHex(c);
-    // sparks at the point of contact, refreshed every frame
-    this.particle(to.x, to.y, to.z, U.rand(-3, 3), U.rand(2, 8), U.rand(-3, 3), U.rand(.08, .2), 'spark', U.rand(.15, .35));
+    // muzzle bloom, gently pulsing
+    this._beamMuzzle.position.set(from.x, from.y, from.z);
+    this._beamMuzzle.scale.setScalar(.16 + puls * .06);
+    this._beamMuzzle.material.opacity = .75 + puls * .2;
+    // rings race from the muzzle to the impact
+    for (const ring of this._beamRings) {
+      ring.t += .045;
+      if (ring.t > 1) ring.t -= 1;
+      const d = ring.t * len;
+      ring.mesh.position.set(from.x + dirv.x * d, from.y + dirv.y * d, from.z + dirv.z * d);
+      ring.mesh.lookAt(to.x, to.y, to.z);
+      ring.mesh.scale.setScalar(.10 + ring.t * .16);
+      ring.mesh.material.opacity = (.9 - ring.t * .6) * (.6 + puls * .4);
+    }
+    // sparks + a hot scorch bloom at the point of contact
+    if (Math.random() < .8) this.particle(to.x, to.y, to.z, U.rand(-3, 3), U.rand(2, 9), U.rand(-3, 3), U.rand(.08, .22), 'spark', U.rand(.15, .4));
+    if (!this._beamHit) {
+      this._beamHit = new THREE.Mesh(new THREE.SphereGeometry(1, 12, 10),
+        new THREE.MeshBasicMaterial({ color: 0xfff0d0, transparent: true, opacity: .8, blending: THREE.AdditiveBlending, depthWrite: false }));
+      this._beamHit.renderOrder = 4;
+      this._beam.add(this._beamHit);
+    }
+    this._beamHit.position.set(to.x, to.y, to.z);
+    this._beamHit.scale.setScalar(.22 + puls * .12);
+    this._beamHit.material.opacity = .55 + puls * .35;
   }
 
   endBeam() { if (this._beam) this._beam.visible = false; }

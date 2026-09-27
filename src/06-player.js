@@ -426,13 +426,14 @@ function buildWeaponModel(id) {
     }
 
     /* ---------------- ЛАЗЕРНАЯ ПУШКА: divided-barrel laser cannon ----------------
-       Matches the reference: a long olive-grey slab frame, a big red generator
-       drum, a rear grille and a scope. The barrel is SPLIT lengthwise into two
-       long half-shells that orbit a glowing red-hot core — that divided part is
-       the one that spins (its group is named `barrels`, see applyBarrelSpin). */
+       A long olive-grey slab frame with a scope, a copper generator drum and a
+       rear grille. The barrel is SPLIT lengthwise: two long half-shells orbit a
+       glowing red-hot core with ribbed teeth between them, and that divided part
+       spins (its group is named `barrels`, see applyBarrelSpin). Added detail:
+       glowing energy coils, a copper trim ring, vent slots and an emitter lens. */
     case 'laserCannon': {
-      const OLIV = 0xa7ac96, OLIV2 = 0x8a8f78, DARK = 0x2a2e26,
-            HOT = 0xff5a2a, GLOW = 0xffb060, RED = 0xd83424, BLUE = 0x8fd8ff;
+      const OLIV = 0xb2b6a0, OLIV2 = 0x8f947c, DARK = 0x2a2e26, BLACK = 0x161a17,
+            HOT = 0xff6a2a, GLOW = 0xffc070, RED = 0xff3a1a, COPPER = 0xc98a3c, BLUE = 0x8fd8ff;
       // a basic-material (self-lit) cylinder, used for all the glowing parts
       const glowCyl = (r, len, color, z, seg) => {
         const geo = new THREE.CylinderGeometry(r, r, len, seg || 12);
@@ -442,64 +443,93 @@ function buildWeaponModel(id) {
         return m;
       };
       /* ---- static frame ---- */
-      add(B(.160, .145, .46, OLIV, 0, .005, -.10));                 // rear receiver housing
-      add(B(.128, .070, .32, OLIV2, 0, .092, -.12));                // top deck
-      add(B(.176, .110, .16, OLIV2, 0, -.006, -.36));               // mid collar
-      add(B(.150, .026, .62, OLIV2, 0, -.088, -.60));               // under-rail
+      add(B(.164, .150, .48, OLIV, 0, .005, -.10));                 // rear receiver housing
+      add(B(.150, .020, .48, OLIV2, 0, .082, -.10));                // housing top bevel
+      add(B(.130, .070, .34, OLIV2, 0, .095, -.12));                // top deck
+      add(B(.182, .116, .17, OLIV2, 0, -.006, -.36));               // mid collar
+      add(B(.156, .028, .64, OLIV2, 0, -.090, -.60));               // under-rail
+      // angled side cheek plates (front of the receiver)
+      [-1, 1].forEach(sgn => {
+        add(B(.026, .10, .22, OLIV2, sgn * .084, -.02, -.30, sgn * .12));
+        add(B(.014, .058, .16, DARK, sgn * .096, .05, -.28));       // dark inset panel
+        add(B(.010, .010, .05, HOT, sgn * .100, .07, -.33));        // glowing screw
+      });
+      // copper trim ring around the collar
+      add(CYL(.095, .022, COPPER, 0, 0, -.44, 20));
       // scope / sight block with a glowing screen
-      add(B(.078, .058, .13, OLIV2, 0, .152, -.06));
-      add(B(.062, .040, .012, BLUE, 0, .154, -.128));               // glowing screen
-      add(B(.030, .030, .05, DARK, 0, .152, .02));
-      add(B(.026, .026, .026, HOT, 0, .176, .02));
-      // rear heat-sink with a grille
-      add(B(.152, .170, .13, DARK, 0, .000, .19));
-      add(B(.152, .150, .05, OLIV2, 0, .000, .258));
-      for (let i = 0; i < 4; i++) add(B(.142, .012, .014, 0x14171a, 0, -.052 + i * .038, .132));
+      add(B(.080, .062, .14, OLIV2, 0, .158, -.06));
+      add(B(.064, .042, .012, BLUE, 0, .160, -.130));               // glowing screen
+      add(B(.070, .010, .14, DARK, 0, .190, -.06));                 // scope hood
+      add(B(.032, .032, .05, DARK, 0, .156, .02));
+      add(B(.028, .028, .028, HOT, 0, .182, .02));
+      // rear heat-sink with a grille and copper bolts
+      add(B(.156, .176, .14, DARK, 0, .000, .20));
+      add(B(.156, .154, .05, OLIV2, 0, .000, .272));
+      for (let i = 0; i < 4; i++) add(B(.146, .012, .014, BLACK, 0, -.056 + i * .040, .140));
+      add(CYL(.012, .02, COPPER, .05, .066, .272, 8));
+      add(CYL(.012, .02, COPPER, -.05, .066, .272, 8));
       // support rod running back to the heat-sink
-      add(CYL(.019, .30, OLIV2, 0, .062, .07, 8));
-      // front muzzle block + sight
-      add(B(.156, .140, .15, OLIV2, 0, .006, -1.16));
-      add(B(.032, .085, .028, DARK, 0, .122, -1.14));
-      add(B(.026, .026, .026, HOT, 0, .154, -1.14));
+      add(CYL(.019, .30, OLIV2, 0, .066, .07, 8));
+      // front muzzle block + sights
+      add(B(.160, .146, .16, OLIV2, 0, .006, -1.16));
+      add(B(.034, .090, .030, DARK, 0, .126, -1.14));
+      add(B(.028, .028, .028, HOT, 0, .160, -1.14));
       // retaining rings that hold the rotating barrel
-      add(CYL(.107, .050, OLIV2, 0, 0, -.38, 16));
-      add(CYL(.107, .050, OLIV2, 0, 0, -1.08, 16));
-      // the big red generator drum just behind the barrel
-      add(CYL(.098, .075, DARK, 0, 0, -.28, 18));
-      add(glowCyl(.082, .014, RED, -.322, 18));
-      add(glowCyl(.060, .016, 0xff8a6a, -.328, 18));
+      add(CYL(.110, .052, OLIV2, 0, 0, -.38, 20));
+      add(CYL(.110, .052, OLIV2, 0, 0, -1.08, 20));
+      add(CYL(.094, .030, COPPER, 0, 0, -.56, 20));
+      // the big copper generator drum just behind the barrel
+      add(CYL(.100, .080, DARK, 0, 0, -.28, 20));
+      add(CYL(.104, .030, COPPER, 0, 0, -.248, 20));
+      add(glowCyl(.084, .014, RED, -.324, 20));
+      add(glowCyl(.062, .016, 0xff9a5a, -.330, 20));
       for (let i = 0; i < 6; i++) {
         const a = (i / 6) * Math.PI * 2;
-        add(B(.030, .010, .010, GLOW, Math.cos(a) * .045, Math.sin(a) * .045, -.330));
+        add(B(.030, .011, .011, GLOW, Math.cos(a) * .046, Math.sin(a) * .046, -.332));
       }
       // cooling fins under the receiver
-      for (let i = 0; i < 5; i++) add(B(.100, .020, .014, DARK, 0, -.062, -.46 - i * .050));
-      // pistol grip + trigger guard
-      add(B(.054, .155, .064, DARK, 0, -.118, -.05, .16));
-      add(B(.042, .016, .11, DARK, 0, -.064, -.09));
+      for (let i = 0; i < 5; i++) add(B(.104, .022, .014, DARK, 0, -.064, -.46 - i * .050));
+      // pistol grip + trigger guard + a glowing ammo-cell
+      add(B(.056, .158, .066, DARK, 0, -.120, -.05, .16));
+      add(B(.044, .016, .11, DARK, 0, -.066, -.09));
+      add(B(.030, .052, .022, GLOW, 0, -.070, .02));
       /* ---- ROTATING split barrel: two half-shells orbiting a hot core ---- */
       const barrels = new THREE.Group();
-      barrels.add(glowCyl(.028, .78, RED, -.73, 14));               // core rod
-      barrels.add(glowCyl(.019, .76, GLOW, -.73, 14));              // brighter inner
-      // segmented rings around the core (the ribbed teeth from the reference)
+      barrels.add(glowCyl(.030, .80, RED, -.74, 16));               // core rod
+      barrels.add(glowCyl(.020, .78, GLOW, -.74, 16));              // brighter inner
+      // ribbed teeth rings around the core
       for (let i = 0; i < 12; i++) {
         const z = -.40 - i * .060;
-        barrels.add(CYL(.047, .017, HOT, 0, 0, z, 12));
-        barrels.add(B(.100, .013, .015, GLOW, 0, 0, z));
-        barrels.add(B(.015, .100, .013, GLOW, 0, 0, z));
+        barrels.add(CYL(.050, .018, HOT, 0, 0, z, 14));
+        barrels.add(B(.104, .014, .016, GLOW, 0, 0, z));
+        barrels.add(B(.016, .104, .014, GLOW, 0, 0, z));
+      }
+      // glowing energy coils wound along the core
+      for (let i = 0; i < 9; i++) {
+        const z = -.42 - i * .078;
+        const coil = new THREE.Mesh(new THREE.TorusGeometry(.038, .008, 6, 16),
+          new THREE.MeshBasicMaterial({ color: i % 2 ? GLOW : HOT }));
+        coil.position.z = z; barrels.add(coil);
       }
       // the two long half-shells (they spin around the core as one divided part)
       const halfShell = (sgn) => {
         const s = new THREE.Group();
-        s.add(B(.156, .058, .78, OLIV, 0, sgn * .086, 0));
-        s.add(B(.150, .020, .80, OLIV2, 0, sgn * .052, 0));
-        for (let i = 0; i < 10; i++) s.add(B(.150, .018, .015, HOT, 0, sgn * .038, -.36 + i * .080));
-        s.position.z = -.73;
+        s.add(B(.060, .062, .80, OLIV, sgn * .078, 0, 0));          // sculpted side shell
+        s.add(B(.052, .050, .82, OLIV2, sgn * .050, 0, 0));         // inner shell
+        s.add(B(.026, .012, .80, BLACK, sgn * .104, -.020, 0));     // dark stripe
+        for (let i = 0; i < 10; i++) s.add(B(.020, .018, .016, HOT, sgn * .096, 0, -.36 + i * .080));
+        s.position.z = -.74;
         return s;
       };
       barrels.add(halfShell(1), halfShell(-1));
+      // vent slots on top of the barrel shroud
+      for (let i = 0; i < 6; i++) barrels.add(B(.030, .008, .030, BLACK, 0, .088, -.46 - i * .09));
       barrels.name = 'barrels';
       g.add(barrels);
+      // emitter lens at the very tip
+      const lens = new THREE.Mesh(new THREE.SphereGeometry(.034, 12, 10),
+        new THREE.MeshBasicMaterial({ color: 0xfff0d0 }));
+      lens.position.set(0, 0, -1.235); g.add(lens);
       break;
     }
 

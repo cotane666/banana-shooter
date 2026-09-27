@@ -21,7 +21,7 @@ const UI = {
       'btnCopy', 'dmgDirs', 'android', 'ios', 'credits', 'crPlayer', 'crStats',
       'matchEnd', 'meTitle', 'meWinner', 'meScore', 'meDetail', 'btnMatchAgain', 'btnMatchMenu',
       'mapChips', 'playerChips', 'hpChips', 'hordeChips', 'lobbyMaps', 'lobbyPlayers', 'lobbyHp', 'lobbyFree', 'lobbyRounds',
-      'offCountChips', 'offHpChips', 'offFreeChips', 'custom', 'lobbyShop', 'lobbyShopItems',
+      'offCountChips', 'offHpChips', 'offFreeChips', 'offModeChips', 'offCustomBox', 'offHordeBox', 'custom', 'lobbyShop', 'lobbyShopItems',
       'medkitTag', 'droneTag', 'shieldTag', 'heatTag', 'missileHud', 'mhTime', 'mhReadout',
       'sdScreen', 'sdGrid', 'sdSearch', 'sdToggle2', 'sdClose', 'sdConfig',
       'esScreen', 'esGrid', 'esSearch', 'esCount', 'esClear', 'esClose', 'esConfig'];
@@ -178,6 +178,23 @@ const UI = {
         this.el.offFreeChips.appendChild(b);
       });
     }
+    /* offline mode picker: ordinary, horde ×10, free horde, custom */
+    if (this.el.offModeChips) {
+      const modes = [
+        { id: 'normal', b: 'ОБЫЧНЫЙ', i: 'классические волны' },
+        { id: 'horde', b: 'ОРДА ×10', i: 'много, но хилые' },
+        { id: 'freehorde', b: 'БЕСПЛАТНАЯ ОРДА', i: 'орда ×10 + всё бесплатно' },
+        { id: 'custom', b: 'СВОЙ', i: 'свои множители' }
+      ];
+      this.el.offModeChips.innerHTML = '';
+      modes.forEach(m => {
+        const b = document.createElement('button');
+        b.dataset.mode = m.id;
+        b.innerHTML = '<b>' + m.b + '</b><i>' + m.i + '</i>';
+        b.addEventListener('click', () => { Store.data.offMode = m.id; Store.save(); this.refreshChips(); Audio3D_SFX.uiClick(); });
+        this.el.offModeChips.appendChild(b);
+      });
+    }
     /* shop-category toggles for online rooms (multi-select) */
     const fillShop = (wrap) => {
       if (!wrap) return;
@@ -243,6 +260,12 @@ const UI = {
     mark(this.el.offCountChips, 'v', parseFloat(S.offCount) || 1);
     mark(this.el.offHpChips, 'v', parseFloat(S.offHp) || 1);
     mark(this.el.offFreeChips, 'v', Number(S.offFree) || 0);
+    const mode = S.offMode || 'normal';
+    if (this.el.offModeChips) {
+      Array.from(this.el.offModeChips.children).forEach(b => b.classList.toggle('on', b.dataset.mode === mode));
+    }
+    if (this.el.offCustomBox) this.el.offCustomBox.classList.toggle('hidden', mode !== 'custom');
+    if (this.el.offHordeBox) this.el.offHordeBox.classList.toggle('hidden', mode !== 'horde' && mode !== 'freehorde');
     // shop toggles: a category is "on" when it is allowed
     if (this.el.lobbyShop) {
       const allow = (typeof Game !== 'undefined' && Game.shopAllow) ? Game.shopAllow : MATCH.defaultShopAllow();

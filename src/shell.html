@@ -34,10 +34,7 @@
     <div class="tagline">БАНАНОВЫЙ ШУТЕР &nbsp;•&nbsp; ЗОМБИ И ДУЭЛЬ</div>
 
     <div class="menu-btns">
-      <button class="mbtn primary" id="btnOffline"><b>ОФФЛАЙН</b><i>Волны зомби — зарабатывай счёт</i></button>
-      <button class="mbtn" id="btnHorde"><b>ОРДА ×10</b><i>В 10 раз больше зомби, но они хилые</i></button>
-      <button class="mbtn" id="btnFreeHorde"><b>БЕСПЛАТНАЯ ОРДА</b><i>Орда ×10 и всё оружие бесплатно</i></button>
-      <button class="mbtn" id="btnCustom"><b>СВОЙ ОФФЛАЙН</b><i>Свои множители зомби и здоровья · платно или бесплатно</i></button>
+      <button class="mbtn primary" id="btnOffline"><b>ОФФЛАЙН</b><i>Волны зомби · обычный, орда ×10, бесплатная орда, свой режим</i></button>
       <button class="mbtn" id="btnRange"><b>ПОЛИГОН</b><i>Всё оружие бесплатно · манекены и урон в секунду</i></button>
       <button class="mbtn" id="btnOnline"><b>ОНЛАЙН</b><i>Бой против друзей: 2–4 игрока, выбор карты</i></button>
       <button class="mbtn" id="btnMatch"><b>ПАРАМЕТРЫ МАТЧА</b><i>Карта · число игроков · здоровье</i></button>
@@ -51,25 +48,36 @@
   </div>
 </div>
 
-<!-- ============ CUSTOM OFFLINE ============ -->
+<!-- ============ OFFLINE (mode picker) ============ -->
 <div id="custom" class="screen hidden">
   <div class="panel">
-    <h2>СВОЙ ОФФЛАЙН</h2>
-    <div class="hintbox" style="margin-top:0">
-      Настройте, сколько зомби приходит за волну и насколько они крепкие, и
-      играйте с платным или бесплатным магазином. Значения запоминаются.
+    <h2>ОФФЛАЙН</h2>
+    <div class="fld">Режим
+      <div class="chips" id="offModeChips"></div>
     </div>
-    <div class="fld">Зомби за волну
-      <div class="chips" id="offCountChips"></div>
+    <div id="offCustomBox" class="hidden">
+      <div class="hintbox" style="margin-top:0">
+        Настройте, сколько зомби приходит за волну и насколько они крепкие, и
+        играйте с платным или бесплатным магазином. Значения запоминаются.
+      </div>
+      <div class="fld">Зомби за волну
+        <div class="chips" id="offCountChips"></div>
+      </div>
+      <div class="fld">Здоровье зомби
+        <div class="chips" id="offHpChips"></div>
+      </div>
+      <div class="fld">Магазин
+        <div class="chips" id="offFreeChips"></div>
+      </div>
     </div>
-    <div class="fld">Здоровье зомби
-      <div class="chips" id="offHpChips"></div>
-    </div>
-    <div class="fld">Магазин
-      <div class="chips" id="offFreeChips"></div>
+    <div id="offHordeBox" class="hidden">
+      <div class="hintbox" style="margin-top:0">
+        ОРДА ×10: в 10 раз больше зомби, но они хилые. БЕСПЛАТНАЯ ОРДА — то же,
+        но всё оружие в магазине бесплатно.
+      </div>
     </div>
     <div class="btnrow">
-      <button class="mbtn primary" id="btnCustomStart"><b>НАЧАТЬ</b><i>Запустить свой оффлайн</i></button>
+      <button class="mbtn primary" id="btnCustomStart"><b>НАЧАТЬ</b><i>Запустить выбранный оффлайн</i></button>
       <button class="mbtn small" id="btnCustomBack">НАЗАД</button>
     </div>
   </div>
@@ -104,8 +112,12 @@
       <input type="range" id="sTsens" min="0.4" max="4" step="0.05" value="1.5"></label>
     <label class="slider">Угол обзора (FOV) <output id="oFov">80</output>
       <input type="range" id="sFov" min="60" max="110" step="1" value="80"></label>
-    <label class="slider">Громкость <output id="oVol">60</output>
+    <label class="slider">Общая громкость <output id="oVol">60</output>
       <input type="range" id="sVol" min="0" max="100" step="1" value="60"></label>
+    <label class="slider">Громкость выстрелов и звуков <output id="oSfx">100</output>
+      <input type="range" id="sSfx" min="0" max="100" step="1" value="100"></label>
+    <label class="slider">Громкость музыки <output id="oMus">70</output>
+      <input type="range" id="sMus" min="0" max="100" step="1" value="70"></label>
     <label class="slider">Музыка <output id="oMusic">Вкл</output>
       <input type="range" id="sMusic" min="0" max="1" step="1" value="1"></label>
     <label class="slider">Качество теней <output id="oQual">Среднее</output>
@@ -350,6 +362,10 @@
       <input type="range" id="sSens2" min="0.3" max="8" step="0.05" value="2.2"></label>
     <label class="slider">Громкость <output id="oVol2">60</output>
       <input type="range" id="sVol2" min="0" max="100" step="1" value="60"></label>
+    <label class="slider">Звуки <output id="oSfx2">100</output>
+      <input type="range" id="sSfx2" min="0" max="100" step="1" value="100"></label>
+    <label class="slider">Музыка (громкость) <output id="oMus2">70</output>
+      <input type="range" id="sMus2" min="0" max="100" step="1" value="70"></label>
     <label class="slider">Музыка <output id="oMusic2">Вкл</output>
       <input type="range" id="sMusic2" min="0" max="1" step="1" value="1"></label>
     <div class="btnrow">

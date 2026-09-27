@@ -737,10 +737,7 @@ html.touch .fld input{padding:10px;font-size:15px}
     <div class="tagline">БАНАНОВЫЙ ШУТЕР &nbsp;•&nbsp; ЗОМБИ И ДУЭЛЬ</div>
 
     <div class="menu-btns">
-      <button class="mbtn primary" id="btnOffline"><b>ОФФЛАЙН</b><i>Волны зомби — зарабатывай счёт</i></button>
-      <button class="mbtn" id="btnHorde"><b>ОРДА ×10</b><i>В 10 раз больше зомби, но они хилые</i></button>
-      <button class="mbtn" id="btnFreeHorde"><b>БЕСПЛАТНАЯ ОРДА</b><i>Орда ×10 и всё оружие бесплатно</i></button>
-      <button class="mbtn" id="btnCustom"><b>СВОЙ ОФФЛАЙН</b><i>Свои множители зомби и здоровья · платно или бесплатно</i></button>
+      <button class="mbtn primary" id="btnOffline"><b>ОФФЛАЙН</b><i>Волны зомби · обычный, орда ×10, бесплатная орда, свой режим</i></button>
       <button class="mbtn" id="btnRange"><b>ПОЛИГОН</b><i>Всё оружие бесплатно · манекены и урон в секунду</i></button>
       <button class="mbtn" id="btnOnline"><b>ОНЛАЙН</b><i>Бой против друзей: 2–4 игрока, выбор карты</i></button>
       <button class="mbtn" id="btnMatch"><b>ПАРАМЕТРЫ МАТЧА</b><i>Карта · число игроков · здоровье</i></button>
@@ -754,25 +751,36 @@ html.touch .fld input{padding:10px;font-size:15px}
   </div>
 </div>
 
-<!-- ============ CUSTOM OFFLINE ============ -->
+<!-- ============ OFFLINE (mode picker) ============ -->
 <div id="custom" class="screen hidden">
   <div class="panel">
-    <h2>СВОЙ ОФФЛАЙН</h2>
-    <div class="hintbox" style="margin-top:0">
-      Настройте, сколько зомби приходит за волну и насколько они крепкие, и
-      играйте с платным или бесплатным магазином. Значения запоминаются.
+    <h2>ОФФЛАЙН</h2>
+    <div class="fld">Режим
+      <div class="chips" id="offModeChips"></div>
     </div>
-    <div class="fld">Зомби за волну
-      <div class="chips" id="offCountChips"></div>
+    <div id="offCustomBox" class="hidden">
+      <div class="hintbox" style="margin-top:0">
+        Настройте, сколько зомби приходит за волну и насколько они крепкие, и
+        играйте с платным или бесплатным магазином. Значения запоминаются.
+      </div>
+      <div class="fld">Зомби за волну
+        <div class="chips" id="offCountChips"></div>
+      </div>
+      <div class="fld">Здоровье зомби
+        <div class="chips" id="offHpChips"></div>
+      </div>
+      <div class="fld">Магазин
+        <div class="chips" id="offFreeChips"></div>
+      </div>
     </div>
-    <div class="fld">Здоровье зомби
-      <div class="chips" id="offHpChips"></div>
-    </div>
-    <div class="fld">Магазин
-      <div class="chips" id="offFreeChips"></div>
+    <div id="offHordeBox" class="hidden">
+      <div class="hintbox" style="margin-top:0">
+        ОРДА ×10: в 10 раз больше зомби, но они хилые. БЕСПЛАТНАЯ ОРДА — то же,
+        но всё оружие в магазине бесплатно.
+      </div>
     </div>
     <div class="btnrow">
-      <button class="mbtn primary" id="btnCustomStart"><b>НАЧАТЬ</b><i>Запустить свой оффлайн</i></button>
+      <button class="mbtn primary" id="btnCustomStart"><b>НАЧАТЬ</b><i>Запустить выбранный оффлайн</i></button>
       <button class="mbtn small" id="btnCustomBack">НАЗАД</button>
     </div>
   </div>
@@ -807,8 +815,12 @@ html.touch .fld input{padding:10px;font-size:15px}
       <input type="range" id="sTsens" min="0.4" max="4" step="0.05" value="1.5"></label>
     <label class="slider">Угол обзора (FOV) <output id="oFov">80</output>
       <input type="range" id="sFov" min="60" max="110" step="1" value="80"></label>
-    <label class="slider">Громкость <output id="oVol">60</output>
+    <label class="slider">Общая громкость <output id="oVol">60</output>
       <input type="range" id="sVol" min="0" max="100" step="1" value="60"></label>
+    <label class="slider">Громкость выстрелов и звуков <output id="oSfx">100</output>
+      <input type="range" id="sSfx" min="0" max="100" step="1" value="100"></label>
+    <label class="slider">Громкость музыки <output id="oMus">70</output>
+      <input type="range" id="sMus" min="0" max="100" step="1" value="70"></label>
     <label class="slider">Музыка <output id="oMusic">Вкл</output>
       <input type="range" id="sMusic" min="0" max="1" step="1" value="1"></label>
     <label class="slider">Качество теней <output id="oQual">Среднее</output>
@@ -1053,6 +1065,10 @@ html.touch .fld input{padding:10px;font-size:15px}
       <input type="range" id="sSens2" min="0.3" max="8" step="0.05" value="2.2"></label>
     <label class="slider">Громкость <output id="oVol2">60</output>
       <input type="range" id="sVol2" min="0" max="100" step="1" value="60"></label>
+    <label class="slider">Звуки <output id="oSfx2">100</output>
+      <input type="range" id="sSfx2" min="0" max="100" step="1" value="100"></label>
+    <label class="slider">Музыка (громкость) <output id="oMus2">70</output>
+      <input type="range" id="sMus2" min="0" max="100" step="1" value="70"></label>
     <label class="slider">Музыка <output id="oMusic2">Вкл</output>
       <input type="range" id="sMusic2" min="0" max="1" step="1" value="1"></label>
     <div class="btnrow">
@@ -1532,7 +1548,7 @@ const Store = {
   key: 'cs3d.save.v1',
   data: { sens: 2.2, fov: 80, vol: 60, quality: 1, touchSens: 1.5, name: '', best: 0, bestWave: 0, killsTotal: 0, matches: 0, wins: 0, signalSrv: 0, aimBest: 0, aimAutoFire: 1,
           map: 'arena', players: 2, maxHP: 100, aimAssist: 1, horde: 0, clears: 0, freeplay: 0, rounds: 3, playTime: 0,
-          offCount: 1, offHp: 1, offFree: 0, shopAllow: {}, shopItems: {}, music: 1 },
+          offCount: 1, offHp: 1, offFree: 0, offMode: 'normal', shopAllow: {}, shopItems: {}, music: 1, sfxVol: 100, musicVol: 70 },
   load() {
     try { const r = localStorage.getItem(this.key); if (r) Object.assign(this.data, JSON.parse(r)); } catch (e) { }
     return this.data;
@@ -3166,20 +3182,31 @@ function navLineClear(nav, a, b) {
    05 — AUDIO (WebAudio, fully synthesised — no asset files)
    ============================================================ */
 const Audio3D_SFX = {
-  ctx: null, master: null, muted: false, vol: .6, listener: { x: 0, y: 0, z: 0, fx: 0, fz: -1 },
+  ctx: null, master: null, sfx: null, musicBus: null, muted: false, vol: .6, sfxVol: 1, musicVol: 1,
+  listener: { x: 0, y: 0, z: 0, fx: 0, fz: -1 },
 
   init() {
     if (this.ctx) return;
     const AC = window.AudioContext || window.webkitAudioContext;
     if (!AC) return;
     this.ctx = new AC();
+    // master (overall) -> destination; two sub-buses so effects and music can
+    // be balanced (or muted) independently of each other
     this.master = this.ctx.createGain();
     this.master.gain.value = this.vol;
     this.master.connect(this.ctx.destination);
+    this.sfx = this.ctx.createGain();
+    this.sfx.gain.value = this.sfxVol;
+    this.sfx.connect(this.master);
+    this.musicBus = this.ctx.createGain();
+    this.musicBus.gain.value = this.musicVol;
+    this.musicBus.connect(this.master);
     this.noiseBuf = this._makeNoise(1.0);
   },
   resume() { if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume(); },
   setVol(v) { this.vol = v; if (this.master) this.master.gain.value = v; },
+  setSfxVol(v) { this.sfxVol = v; if (this.sfx) this.sfx.gain.value = v; },
+  setMusicVol(v) { this.musicVol = v; if (this.musicBus) this.musicBus.gain.value = v; },
   setListener(x, y, z, fx, fz) { this.listener.x = x; this.listener.y = y; this.listener.z = z; this.listener.fx = fx; this.listener.fz = fz; },
 
   _makeNoise(sec) {
@@ -3223,8 +3250,8 @@ const Audio3D_SFX = {
     const pan = this.ctx.createStereoPanner ? this.ctx.createStereoPanner() : null;
     const out = this.ctx.createGain();
     out.gain.value = sp.gain;
-    if (pan) { pan.pan.value = sp.pan; out.connect(pan); pan.connect(this.master); }
-    else out.connect(this.master);
+    if (pan) { pan.pan.value = sp.pan; out.connect(pan); pan.connect(this.sfx); }
+    else out.connect(this.sfx);
 
     // noise burst
     const src = this.ctx.createBufferSource();
@@ -3261,7 +3288,7 @@ const Audio3D_SFX = {
     const t = this.ctx.currentTime;
     const out = this.ctx.createGain(); out.gain.value = sp.gain;
     const pan = this.ctx.createStereoPanner ? this.ctx.createStereoPanner() : null;
-    if (pan) { pan.pan.value = sp.pan; out.connect(pan); pan.connect(this.master); } else out.connect(this.master);
+    if (pan) { pan.pan.value = sp.pan; out.connect(pan); pan.connect(this.sfx); } else out.connect(this.sfx);
     // whoosh: band-swept noise
     const src = this.ctx.createBufferSource();
     src.buffer = this.noiseBuf;
@@ -3294,7 +3321,7 @@ const Audio3D_SFX = {
     const t = this.ctx.currentTime;
     const out = this.ctx.createGain(); out.gain.value = sp.gain * .5;
     const pan = this.ctx.createStereoPanner ? this.ctx.createStereoPanner() : null;
-    if (pan) { pan.pan.value = sp.pan; out.connect(pan); pan.connect(this.master); } else out.connect(this.master);
+    if (pan) { pan.pan.value = sp.pan; out.connect(pan); pan.connect(this.sfx); } else out.connect(this.sfx);
     const o = this.ctx.createOscillator();
     o.type = 'sawtooth';
     o.frequency.setValueAtTime(70, t);
@@ -3316,7 +3343,7 @@ const Audio3D_SFX = {
     const t = this.ctx.currentTime;
     const out = this.ctx.createGain(); out.gain.value = sp.gain;
     const pan = this.ctx.createStereoPanner ? this.ctx.createStereoPanner() : null;
-    if (pan) { pan.pan.value = sp.pan; out.connect(pan); pan.connect(this.master); } else out.connect(this.master);
+    if (pan) { pan.pan.value = sp.pan; out.connect(pan); pan.connect(this.sfx); } else out.connect(this.sfx);
     // deep boom
     const o = this.ctx.createOscillator();
     o.type = 'sine';
@@ -3346,7 +3373,7 @@ const Audio3D_SFX = {
     const t = this.ctx.currentTime;
     const pan = this.ctx.createStereoPanner ? this.ctx.createStereoPanner() : null;
     const out = this.ctx.createGain(); out.gain.value = sp.gain * .9;
-    if (pan) { pan.pan.value = sp.pan; out.connect(pan); pan.connect(this.master); } else out.connect(this.master);
+    if (pan) { pan.pan.value = sp.pan; out.connect(pan); pan.connect(this.sfx); } else out.connect(this.sfx);
 
     // "BOING": a fast downward-then-up pitch bend with a wobble
     const o = this.ctx.createOscillator();
@@ -3395,7 +3422,7 @@ const Audio3D_SFX = {
     const t = this.ctx.currentTime;
     const out = this.ctx.createGain(); out.gain.value = sp.gain * .8;
     const pan = this.ctx.createStereoPanner ? this.ctx.createStereoPanner() : null;
-    if (pan) { pan.pan.value = sp.pan; out.connect(pan); pan.connect(this.master); } else out.connect(this.master);
+    if (pan) { pan.pan.value = sp.pan; out.connect(pan); pan.connect(this.sfx); } else out.connect(this.sfx);
     const o = this.ctx.createOscillator();
     o.type = 'sine';
     o.frequency.setValueAtTime(420, t);
@@ -3416,7 +3443,7 @@ const Audio3D_SFX = {
     const t = this.ctx.currentTime;
     const pan = this.ctx.createStereoPanner ? this.ctx.createStereoPanner() : null;
     const out = this.ctx.createGain(); out.gain.value = sp.gain;
-    if (pan) { pan.pan.value = sp.pan; out.connect(pan); pan.connect(this.master); } else out.connect(this.master);
+    if (pan) { pan.pan.value = sp.pan; out.connect(pan); pan.connect(this.sfx); } else out.connect(this.sfx);
     const o = this.ctx.createOscillator();
     o.type = type || 'square'; o.frequency.setValueAtTime(freq, t);
     if (slideTo) o.frequency.exponentialRampToValueAtTime(slideTo, t + dur);
@@ -3452,7 +3479,7 @@ const Audio3D_SFX = {
     const t = this.ctx.currentTime;
     const pan = this.ctx.createStereoPanner ? this.ctx.createStereoPanner() : null;
     const out = this.ctx.createGain(); out.gain.value = sp.gain * .9;
-    if (pan) { pan.pan.value = sp.pan; out.connect(pan); pan.connect(this.master); } else out.connect(this.master);
+    if (pan) { pan.pan.value = sp.pan; out.connect(pan); pan.connect(this.sfx); } else out.connect(this.sfx);
     const o = this.ctx.createOscillator();
     o.type = 'sawtooth';
     o.frequency.setValueAtTime(2600, t);
@@ -3474,7 +3501,7 @@ const Audio3D_SFX = {
     const t = this.ctx.currentTime;
     const out = this.ctx.createGain(); out.gain.value = sp.gain * .55;
     const pan = this.ctx.createStereoPanner ? this.ctx.createStereoPanner() : null;
-    if (pan) { pan.pan.value = sp.pan; out.connect(pan); pan.connect(this.master); } else out.connect(this.master);
+    if (pan) { pan.pan.value = sp.pan; out.connect(pan); pan.connect(this.sfx); } else out.connect(this.sfx);
     const o = this.ctx.createOscillator();
     o.type = 'sawtooth';
     o.frequency.setValueAtTime(90, t);
@@ -3494,7 +3521,7 @@ const Audio3D_SFX = {
     const t = this.ctx.currentTime;
     const out = this.ctx.createGain(); out.gain.value = Math.max(sp.gain, .25);
     const pan = this.ctx.createStereoPanner ? this.ctx.createStereoPanner() : null;
-    if (pan) { pan.pan.value = sp.pan; out.connect(pan); pan.connect(this.master); } else out.connect(this.master);
+    if (pan) { pan.pan.value = sp.pan; out.connect(pan); pan.connect(this.sfx); } else out.connect(this.sfx);
     // low saw rumble
     const o = this.ctx.createOscillator(); o.type = 'sawtooth';
     o.frequency.setValueAtTime(140, t);
@@ -3536,7 +3563,7 @@ const Audio3D_SFX = {
     const g = this.ctx.createGain();
     g.gain.setValueAtTime(.22, t);
     g.gain.exponentialRampToValueAtTime(.001, t + .55);
-    src.connect(bp); bp.connect(g); g.connect(this.master);
+    src.connect(bp); bp.connect(g); g.connect(this.sfx);
     src.start(t); src.stop(t + .58);
   },
 
@@ -3555,7 +3582,7 @@ const Audio3D_SFX = {
     const t = this.ctx.currentTime;
     const pan = this.ctx.createStereoPanner ? this.ctx.createStereoPanner() : null;
     const out = this.ctx.createGain(); out.gain.value = sp.gain * 1.15;
-    if (pan) { pan.pan.value = sp.pan; out.connect(pan); pan.connect(this.master); } else out.connect(this.master);
+    if (pan) { pan.pan.value = sp.pan; out.connect(pan); pan.connect(this.sfx); } else out.connect(this.sfx);
     // two detuned saws → a rough propeller drone
     [86, 129].forEach((f, i) => {
       const o = this.ctx.createOscillator();
@@ -3587,7 +3614,7 @@ const Audio3D_SFX = {
     const t = this.ctx.currentTime;
     const pan = this.ctx.createStereoPanner ? this.ctx.createStereoPanner() : null;
     const out = this.ctx.createGain(); out.gain.value = sp.gain * .8;
-    if (pan) { pan.pan.value = sp.pan; out.connect(pan); pan.connect(this.master); } else out.connect(this.master);
+    if (pan) { pan.pan.value = sp.pan; out.connect(pan); pan.connect(this.sfx); } else out.connect(this.sfx);
     const base = kind === 'brute' ? 52 : kind === 'runner' ? 170 : kind === 'tank' ? 44
       : kind === 'flying' ? 240 : kind === 'robot' ? 66 : kind === 'spitter' ? 130 : 96;
     const o = this.ctx.createOscillator();
@@ -3613,7 +3640,7 @@ const Audio3D_SFX = {
     const g = this.ctx.createGain();
     g.gain.setValueAtTime(.11 * sp.gain, t);
     g.gain.exponentialRampToValueAtTime(.001, t + .1);
-    src.connect(lp); lp.connect(g); g.connect(this.master);
+    src.connect(lp); lp.connect(g); g.connect(this.sfx);
     src.start(t); src.stop(t + .12);
   },
   waveStart() { [0, 130, 260].forEach((d, i) => setTimeout(() => this.tone([440, 587, 880][i], .22, 'square', .13), d)); },
@@ -3647,7 +3674,7 @@ const Audio3D_SFX = {
     if (!th) return;
     this.musicStop();
     const out = this.ctx.createGain(); out.gain.value = .0001;
-    out.connect(this.master);
+    out.connect(this.musicBus);
     const t0 = this.ctx.currentTime;
     out.gain.linearRampToValueAtTime(th.gain || .45, t0 + (name === 'menu' ? 1.6 : .8));
     this._music = { name, out, th, step: 0, timer: null, next: t0 + .1 };
@@ -3745,7 +3772,7 @@ const Audio3D_SFX = {
     src.buffer = this.noiseBuf; src.loop = true;
     const lp = this.ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 320; lp.Q.value = .7;
     const g = this.ctx.createGain(); g.gain.value = .045;
-    src.connect(lp); lp.connect(g); g.connect(this.master);
+    src.connect(lp); lp.connect(g); g.connect(this.sfx);
     src.start();
     this.amb = { src, g };
   },
@@ -6737,9 +6764,34 @@ function initSettings() {
   if (mOuts[0]) mOuts[0].textContent = musicNames[S.music === 0 ? 0 : 1];
   if (mOuts[1]) mOuts[1].textContent = musicNames[S.music === 0 ? 0 : 1];
 
+  // separate volumes: SFX (shots, hits, explosions) and music, on top of master
+  const volPairs = [
+    ['sSfx', 'oSfx', 'sSfx2', 'oSfx2', 'sfxVol', (v) => String(Math.round(v))],
+    ['sMus', 'oMus', 'sMus2', 'oMus2', 'musicVol', (v) => String(Math.round(v))]
+  ];
+  volPairs.forEach(([si, oi, si2, oi2, key, fmt]) => {
+    const s = document.getElementById(si), o = document.getElementById(oi);
+    const s2 = document.getElementById(si2), o2 = document.getElementById(oi2);
+    const set = (val, src) => {
+      S[key] = val;
+      if (o) o.textContent = fmt(val);
+      if (o2) o2.textContent = fmt(val);
+      if (s && src !== s) s.value = val;
+      if (s2 && src !== s2) s2.value = val;
+      applySetting(key, val);
+      Store.save();
+    };
+    if (s) { s.value = S[key]; s.addEventListener('input', () => set(parseInt(s.value, 10), s)); }
+    if (s2) { s2.value = S[key]; s2.addEventListener('input', () => set(parseInt(s2.value, 10), s2)); }
+    if (o) o.textContent = fmt(S[key]);
+    if (o2) o2.textContent = fmt(S[key]);
+  });
+
   applySetting('sens', S.sens);
   applySetting('fov', S.fov);
   applySetting('vol', S.vol);
+  applySetting('sfxVol', S.sfxVol);
+  applySetting('musicVol', S.musicVol);
   if (typeof Audio3D_SFX !== 'undefined') Audio3D_SFX.musicOff = S.music === 0;
 }
 
@@ -6749,6 +6801,8 @@ function applySetting(key, v) {
   // non-existent global, so the touch-sensitivity slider silently did nothing.
   else if (key === 'touchSens') { if (typeof TouchUI !== 'undefined') TouchUI.setSens(v); }
   else if (key === 'vol') Audio3D_SFX.setVol(v / 100);
+  else if (key === 'sfxVol') Audio3D_SFX.setSfxVol(v / 100);
+  else if (key === 'musicVol') Audio3D_SFX.setMusicVol(v / 100);
   else if (key === 'fov') { if (window.Game) Game.baseFov = v; }
 }
 
@@ -7308,7 +7362,7 @@ const UI = {
       'btnCopy', 'dmgDirs', 'android', 'ios', 'credits', 'crPlayer', 'crStats',
       'matchEnd', 'meTitle', 'meWinner', 'meScore', 'meDetail', 'btnMatchAgain', 'btnMatchMenu',
       'mapChips', 'playerChips', 'hpChips', 'hordeChips', 'lobbyMaps', 'lobbyPlayers', 'lobbyHp', 'lobbyFree', 'lobbyRounds',
-      'offCountChips', 'offHpChips', 'offFreeChips', 'custom', 'lobbyShop', 'lobbyShopItems',
+      'offCountChips', 'offHpChips', 'offFreeChips', 'offModeChips', 'offCustomBox', 'offHordeBox', 'custom', 'lobbyShop', 'lobbyShopItems',
       'medkitTag', 'droneTag', 'shieldTag', 'heatTag', 'missileHud', 'mhTime', 'mhReadout',
       'sdScreen', 'sdGrid', 'sdSearch', 'sdToggle2', 'sdClose', 'sdConfig',
       'esScreen', 'esGrid', 'esSearch', 'esCount', 'esClear', 'esClose', 'esConfig'];
@@ -7465,6 +7519,23 @@ const UI = {
         this.el.offFreeChips.appendChild(b);
       });
     }
+    /* offline mode picker: ordinary, horde ×10, free horde, custom */
+    if (this.el.offModeChips) {
+      const modes = [
+        { id: 'normal', b: 'ОБЫЧНЫЙ', i: 'классические волны' },
+        { id: 'horde', b: 'ОРДА ×10', i: 'много, но хилые' },
+        { id: 'freehorde', b: 'БЕСПЛАТНАЯ ОРДА', i: 'орда ×10 + всё бесплатно' },
+        { id: 'custom', b: 'СВОЙ', i: 'свои множители' }
+      ];
+      this.el.offModeChips.innerHTML = '';
+      modes.forEach(m => {
+        const b = document.createElement('button');
+        b.dataset.mode = m.id;
+        b.innerHTML = '<b>' + m.b + '</b><i>' + m.i + '</i>';
+        b.addEventListener('click', () => { Store.data.offMode = m.id; Store.save(); this.refreshChips(); Audio3D_SFX.uiClick(); });
+        this.el.offModeChips.appendChild(b);
+      });
+    }
     /* shop-category toggles for online rooms (multi-select) */
     const fillShop = (wrap) => {
       if (!wrap) return;
@@ -7530,6 +7601,12 @@ const UI = {
     mark(this.el.offCountChips, 'v', parseFloat(S.offCount) || 1);
     mark(this.el.offHpChips, 'v', parseFloat(S.offHp) || 1);
     mark(this.el.offFreeChips, 'v', Number(S.offFree) || 0);
+    const mode = S.offMode || 'normal';
+    if (this.el.offModeChips) {
+      Array.from(this.el.offModeChips.children).forEach(b => b.classList.toggle('on', b.dataset.mode === mode));
+    }
+    if (this.el.offCustomBox) this.el.offCustomBox.classList.toggle('hidden', mode !== 'custom');
+    if (this.el.offHordeBox) this.el.offHordeBox.classList.toggle('hidden', mode !== 'horde' && mode !== 'freehorde');
     // shop toggles: a category is "on" when it is allowed
     if (this.el.lobbyShop) {
       const allow = (typeof Game !== 'undefined' && Game.shopAllow) ? Game.shopAllow : MATCH.defaultShopAllow();
@@ -9718,12 +9795,16 @@ const Game = {
      UI WIRING
      ============================================================ */
   bindUI() {
-    bindClick('btnOffline', () => this.startOffline());
-    bindClick('btnHorde', () => this.startOffline(true));
-    bindClick('btnFreeHorde', () => this.startOffline(true, true));
-    bindClick('btnCustom', () => { UI.show('custom'); UI.refreshChips(); });
+    bindClick('btnOffline', () => { UI.show('custom'); UI.refreshChips(); });
+    bindClick('btnRange', () => this.startRange());
     bindClick('btnCustomBack', () => UI.show('menu'));
-    bindClick('btnCustomStart', () => this.startOffline(false, false, true));
+    bindClick('btnCustomStart', () => {
+      const mode = Store.data.offMode || 'normal';
+      if (mode === 'custom') this.startOffline(false, false, true);
+      else if (mode === 'freehorde') this.startOffline(true, true, false, true);
+      else if (mode === 'horde') this.startOffline(true, false, false, true);
+      else this.startOffline(false, false, false, true);
+    });
     bindClick('btnCreditsClose', () => this.closeCredits());
     bindClick('btnMatchAgain', () => this.rematchOnline());
     bindClick('btnMatchMenu', () => this.backToMenuFromMatch());
@@ -9773,7 +9854,7 @@ const Game = {
     bindClick('btnLeave', () => this.stopToMenu());
     bindClick('btnReset', () => {
       if (confirm('Сбросить весь прогресс и настройки?')) {
-        Store.data = { sens: 2.2, fov: 80, vol: 60, quality: 1, touchSens: 1.5, name: '', best: 0, bestWave: 0, killsTotal: 0, matches: 0, wins: 0, signalSrv: 0, aimBest: 0, aimAutoFire: 1, map: 'arena', players: 2, maxHP: 100, aimAssist: 1, horde: 0, clears: 0, freeplay: 0, rounds: 3, playTime: 0, offCount: 1, offHp: 1, offFree: 0, shopAllow: {}, shopItems: {}, music: 1 };
+        Store.data = { sens: 2.2, fov: 80, vol: 60, quality: 1, touchSens: 1.5, name: '', best: 0, bestWave: 0, killsTotal: 0, matches: 0, wins: 0, signalSrv: 0, aimBest: 0, aimAutoFire: 1, map: 'arena', players: 2, maxHP: 100, aimAssist: 1, horde: 0, clears: 0, freeplay: 0, rounds: 3, playTime: 0, offCount: 1, offHp: 1, offFree: 0, shopAllow: {}, shopItems: {}, music: 1, sfxVol: 100, musicVol: 70 };
         this.shopAllow = MATCH.defaultShopAllow();
         Store.save();
         UI.refreshChips(); UI.renderMenuStats(); UI.toast('Прогресс сброшен');
@@ -10031,7 +10112,7 @@ const Game = {
   /* ============================================================
      MODE START / STOP
      ============================================================ */
-  startOffline(horde, free, custom) {
+  startOffline(horde, free, custom, forcePreset) {
     this.stopToMenu(true);
     this.mode = CS.MODE.OFFLINE;
     this._campaignDone = false;
@@ -10041,6 +10122,8 @@ const Game = {
     this.offlineDead = false;
     this.offlineDeadT = 0;
     this._creditsOpen = false;
+    // a fresh run clears any checkpoint; resumeFromCheckpoint restores it after
+    this._checkpoint = null;
     // CUSTOM mode reads its own multipliers from the settings.
     this.customOffline = custom === true;
     if (this.customOffline) {
@@ -10058,8 +10141,11 @@ const Game = {
     this.ensureMap(Store.data.map);
     this.matchHP = Store.data.maxHP || 100;
     // ОРДА ×10: force the mass mode from the menu button, otherwise honour the
-    // choice made in the settings panel. (Ignored in custom mode.)
-    if (!this.customOffline) this.hordeMode = (horde === true) || (horde !== false && Store.data.horde === 1);
+    // choice made in the settings panel. (Ignored in custom mode.) `forcePreset`
+    // pins the preset chosen on the unified ОФФЛАЙН screen.
+    if (!this.customOffline) {
+      this.hordeMode = forcePreset ? (horde === true) : ((horde === true) || (horde !== false && Store.data.horde === 1));
+    }
     this.offline = {
       wave: 0, toSpawn: 0, spawnedThisWave: 0, totalThisWave: 0,
       betweenWaves: false, breakT: 0, alive: 0, kills: 0, startTime: U.now(),
@@ -11922,6 +12008,11 @@ const Game = {
     o.toSpawn = count;
     o.betweenWaves = false;
     o.waveStart = U.now();
+    // a checkpoint every 20 waves — death then resumes from here
+    if (o.wave % 20 === 0) {
+      this.saveCheckpoint(o.wave);
+      UI.toast('ЧЕКПОИНТ сохранён: волна ' + o.wave, '#57d16a');
+    }
     Bus.emit('waveStart', o.wave);
   },
 
@@ -14018,10 +14109,57 @@ const Game = {
     this._offeredRestart = true;
     if (this._campaignWon) {
       UI.center('ИГРА ПРОЙДЕНА!', 'Пройдено раз: ' + (Store.data.clears || 0) + ' · Enter — сыграть снова', 600);
+    } else if (this._checkpoint) {
+      UI.center('ВЫ ПОГИБЛИ', 'Enter — заново · C — с чекпоинта (волна ' + this._checkpoint.wave + ') · Tab — статистика', 600);
     } else {
       UI.center('ВЫ ПОГИБЛИ', 'Enter — начать заново · Tab — статистика', 600);
     }
     this._restartPending = true;
+  },
+
+  /* Save a checkpoint every 20 waves so a death is not a total restart. */
+  saveCheckpoint(wave) {
+    this._checkpoint = {
+      wave: wave,
+      player: this.player,
+      money: this.player.money,
+      score: this.player.score,
+      inv1: this.player.inv[1] ? this.player.inv[1].id : null,
+      inv2: this.player.inv[2] ? { id: this.player.inv[2].id, mag: this.player.inv[2].mag, reserve: this.player.inv[2].reserve } : null,
+      armor: this.player.armor, helmet: this.player.helmet, heavy: !!this.player.heavyArmor,
+      medkits: this.player.medkits || 0, medkitUnlimited: !!this.player.medkitUnlimited,
+      drone: this.player.drone || 0, droneOwned: !!this.player.droneOwned
+    };
+  },
+
+  /* Resume from the last checkpoint: rebuild the run around the saved state and
+     jump straight back to the checked wave rather than wave 1. */
+  resumeFromCheckpoint() {
+    const cp = this._checkpoint;
+    if (!cp) return false;
+    const horde = this.hordeMode, free = this.freePlay, custom = this.customOffline;
+    this.startOffline(horde, free, custom, true);
+    const o = this.offline;
+    o.wave = Math.max(0, cp.wave - 1);         // startWave() increments
+    const p = this.player;
+    p.money = cp.money; p.score = cp.score;
+    p.armor = cp.armor; p.helmet = cp.helmet; p.heavyArmor = cp.heavy;
+    p.medkits = cp.medkits; p.medkitUnlimited = cp.medkitUnlimited;
+    p.drone = cp.drone; p.droneOwned = cp.droneOwned;
+    if (cp.inv1) p.give(cp.inv1);
+    if (cp.inv2) {
+      p.give(cp.inv2.id);
+      const w = p.inv[2];
+      if (w) { if (cp.inv2.mag !== undefined && w.mag !== Infinity) w.mag = cp.inv2.mag; if (cp.inv2.reserve !== undefined) w.reserve = cp.inv2.reserve; }
+    }
+    if (cp.inv2) { p.slot = 2; } else if (cp.inv1) { p.slot = 1; }
+    p.buildViewModel(); this.attachViewModel();
+    // skip the buy phase and jump into the wave
+    this.roundState = 'live';
+    this.startWave();
+    UI.toast('ЧЕКПОИНТ: волна ' + cp.wave, '#57d16a');
+    this._restartPending = false; this._offeredRestart = false; this.offlineDead = false; this.offlineDeadT = 0;
+    return true;
   },
 
   cameraUpdate(dt) {
@@ -14275,6 +14413,11 @@ const Game = {
       this._restartPending = false; this._offeredRestart = false; this.offlineDead = false; this.offlineDeadT = 0;
       // keep the custom mode (and read fresh multipliers), otherwise the presets
       this.startOffline(wasHorde, wasFree, wasCustom);
+    }
+    // C = resume from the last checkpoint (only while the death/restart prompt is up)
+    if (this._restartPending && !this._creditsOpen && !this._campaignWon && this._checkpoint && Input.keys['KeyC']) {
+      Input.keys['KeyC'] = false;
+      this.resumeFromCheckpoint();
     }
     // after the final online round, Enter returns to the menu
     if (this._matchOverPending && (Input.keys['Enter'] || Input.keys['NumpadEnter'])) {

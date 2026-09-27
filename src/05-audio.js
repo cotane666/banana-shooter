@@ -2,20 +2,31 @@
    05 — AUDIO (WebAudio, fully synthesised — no asset files)
    ============================================================ */
 const Audio3D_SFX = {
-  ctx: null, master: null, muted: false, vol: .6, listener: { x: 0, y: 0, z: 0, fx: 0, fz: -1 },
+  ctx: null, master: null, sfx: null, musicBus: null, muted: false, vol: .6, sfxVol: 1, musicVol: 1,
+  listener: { x: 0, y: 0, z: 0, fx: 0, fz: -1 },
 
   init() {
     if (this.ctx) return;
     const AC = window.AudioContext || window.webkitAudioContext;
     if (!AC) return;
     this.ctx = new AC();
+    // master (overall) -> destination; two sub-buses so effects and music can
+    // be balanced (or muted) independently of each other
     this.master = this.ctx.createGain();
     this.master.gain.value = this.vol;
     this.master.connect(this.ctx.destination);
+    this.sfx = this.ctx.createGain();
+    this.sfx.gain.value = this.sfxVol;
+    this.sfx.connect(this.master);
+    this.musicBus = this.ctx.createGain();
+    this.musicBus.gain.value = this.musicVol;
+    this.musicBus.connect(this.master);
     this.noiseBuf = this._makeNoise(1.0);
   },
   resume() { if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume(); },
   setVol(v) { this.vol = v; if (this.master) this.master.gain.value = v; },
+  setSfxVol(v) { this.sfxVol = v; if (this.sfx) this.sfx.gain.value = v; },
+  setMusicVol(v) { this.musicVol = v; if (this.musicBus) this.musicBus.gain.value = v; },
   setListener(x, y, z, fx, fz) { this.listener.x = x; this.listener.y = y; this.listener.z = z; this.listener.fx = fx; this.listener.fz = fz; },
 
   _makeNoise(sec) {
@@ -59,8 +70,8 @@ const Audio3D_SFX = {
     const pan = this.ctx.createStereoPanner ? this.ctx.createStereoPanner() : null;
     const out = this.ctx.createGain();
     out.gain.value = sp.gain;
-    if (pan) { pan.pan.value = sp.pan; out.connect(pan); pan.connect(this.master); }
-    else out.connect(this.master);
+    if (pan) { pan.pan.value = sp.pan; out.connect(pan); pan.connect(this.sfx); }
+    else out.connect(this.sfx);
 
     // noise burst
     const src = this.ctx.createBufferSource();
@@ -97,7 +108,7 @@ const Audio3D_SFX = {
     const t = this.ctx.currentTime;
     const out = this.ctx.createGain(); out.gain.value = sp.gain;
     const pan = this.ctx.createStereoPanner ? this.ctx.createStereoPanner() : null;
-    if (pan) { pan.pan.value = sp.pan; out.connect(pan); pan.connect(this.master); } else out.connect(this.master);
+    if (pan) { pan.pan.value = sp.pan; out.connect(pan); pan.connect(this.sfx); } else out.connect(this.sfx);
     // whoosh: band-swept noise
     const src = this.ctx.createBufferSource();
     src.buffer = this.noiseBuf;
@@ -130,7 +141,7 @@ const Audio3D_SFX = {
     const t = this.ctx.currentTime;
     const out = this.ctx.createGain(); out.gain.value = sp.gain * .5;
     const pan = this.ctx.createStereoPanner ? this.ctx.createStereoPanner() : null;
-    if (pan) { pan.pan.value = sp.pan; out.connect(pan); pan.connect(this.master); } else out.connect(this.master);
+    if (pan) { pan.pan.value = sp.pan; out.connect(pan); pan.connect(this.sfx); } else out.connect(this.sfx);
     const o = this.ctx.createOscillator();
     o.type = 'sawtooth';
     o.frequency.setValueAtTime(70, t);
@@ -152,7 +163,7 @@ const Audio3D_SFX = {
     const t = this.ctx.currentTime;
     const out = this.ctx.createGain(); out.gain.value = sp.gain;
     const pan = this.ctx.createStereoPanner ? this.ctx.createStereoPanner() : null;
-    if (pan) { pan.pan.value = sp.pan; out.connect(pan); pan.connect(this.master); } else out.connect(this.master);
+    if (pan) { pan.pan.value = sp.pan; out.connect(pan); pan.connect(this.sfx); } else out.connect(this.sfx);
     // deep boom
     const o = this.ctx.createOscillator();
     o.type = 'sine';
@@ -182,7 +193,7 @@ const Audio3D_SFX = {
     const t = this.ctx.currentTime;
     const pan = this.ctx.createStereoPanner ? this.ctx.createStereoPanner() : null;
     const out = this.ctx.createGain(); out.gain.value = sp.gain * .9;
-    if (pan) { pan.pan.value = sp.pan; out.connect(pan); pan.connect(this.master); } else out.connect(this.master);
+    if (pan) { pan.pan.value = sp.pan; out.connect(pan); pan.connect(this.sfx); } else out.connect(this.sfx);
 
     // "BOING": a fast downward-then-up pitch bend with a wobble
     const o = this.ctx.createOscillator();
@@ -231,7 +242,7 @@ const Audio3D_SFX = {
     const t = this.ctx.currentTime;
     const out = this.ctx.createGain(); out.gain.value = sp.gain * .8;
     const pan = this.ctx.createStereoPanner ? this.ctx.createStereoPanner() : null;
-    if (pan) { pan.pan.value = sp.pan; out.connect(pan); pan.connect(this.master); } else out.connect(this.master);
+    if (pan) { pan.pan.value = sp.pan; out.connect(pan); pan.connect(this.sfx); } else out.connect(this.sfx);
     const o = this.ctx.createOscillator();
     o.type = 'sine';
     o.frequency.setValueAtTime(420, t);
@@ -252,7 +263,7 @@ const Audio3D_SFX = {
     const t = this.ctx.currentTime;
     const pan = this.ctx.createStereoPanner ? this.ctx.createStereoPanner() : null;
     const out = this.ctx.createGain(); out.gain.value = sp.gain;
-    if (pan) { pan.pan.value = sp.pan; out.connect(pan); pan.connect(this.master); } else out.connect(this.master);
+    if (pan) { pan.pan.value = sp.pan; out.connect(pan); pan.connect(this.sfx); } else out.connect(this.sfx);
     const o = this.ctx.createOscillator();
     o.type = type || 'square'; o.frequency.setValueAtTime(freq, t);
     if (slideTo) o.frequency.exponentialRampToValueAtTime(slideTo, t + dur);
@@ -288,7 +299,7 @@ const Audio3D_SFX = {
     const t = this.ctx.currentTime;
     const pan = this.ctx.createStereoPanner ? this.ctx.createStereoPanner() : null;
     const out = this.ctx.createGain(); out.gain.value = sp.gain * .9;
-    if (pan) { pan.pan.value = sp.pan; out.connect(pan); pan.connect(this.master); } else out.connect(this.master);
+    if (pan) { pan.pan.value = sp.pan; out.connect(pan); pan.connect(this.sfx); } else out.connect(this.sfx);
     const o = this.ctx.createOscillator();
     o.type = 'sawtooth';
     o.frequency.setValueAtTime(2600, t);
@@ -310,7 +321,7 @@ const Audio3D_SFX = {
     const t = this.ctx.currentTime;
     const out = this.ctx.createGain(); out.gain.value = sp.gain * .55;
     const pan = this.ctx.createStereoPanner ? this.ctx.createStereoPanner() : null;
-    if (pan) { pan.pan.value = sp.pan; out.connect(pan); pan.connect(this.master); } else out.connect(this.master);
+    if (pan) { pan.pan.value = sp.pan; out.connect(pan); pan.connect(this.sfx); } else out.connect(this.sfx);
     const o = this.ctx.createOscillator();
     o.type = 'sawtooth';
     o.frequency.setValueAtTime(90, t);
@@ -330,7 +341,7 @@ const Audio3D_SFX = {
     const t = this.ctx.currentTime;
     const out = this.ctx.createGain(); out.gain.value = Math.max(sp.gain, .25);
     const pan = this.ctx.createStereoPanner ? this.ctx.createStereoPanner() : null;
-    if (pan) { pan.pan.value = sp.pan; out.connect(pan); pan.connect(this.master); } else out.connect(this.master);
+    if (pan) { pan.pan.value = sp.pan; out.connect(pan); pan.connect(this.sfx); } else out.connect(this.sfx);
     // low saw rumble
     const o = this.ctx.createOscillator(); o.type = 'sawtooth';
     o.frequency.setValueAtTime(140, t);
@@ -372,7 +383,7 @@ const Audio3D_SFX = {
     const g = this.ctx.createGain();
     g.gain.setValueAtTime(.22, t);
     g.gain.exponentialRampToValueAtTime(.001, t + .55);
-    src.connect(bp); bp.connect(g); g.connect(this.master);
+    src.connect(bp); bp.connect(g); g.connect(this.sfx);
     src.start(t); src.stop(t + .58);
   },
 
@@ -391,7 +402,7 @@ const Audio3D_SFX = {
     const t = this.ctx.currentTime;
     const pan = this.ctx.createStereoPanner ? this.ctx.createStereoPanner() : null;
     const out = this.ctx.createGain(); out.gain.value = sp.gain * 1.15;
-    if (pan) { pan.pan.value = sp.pan; out.connect(pan); pan.connect(this.master); } else out.connect(this.master);
+    if (pan) { pan.pan.value = sp.pan; out.connect(pan); pan.connect(this.sfx); } else out.connect(this.sfx);
     // two detuned saws → a rough propeller drone
     [86, 129].forEach((f, i) => {
       const o = this.ctx.createOscillator();
@@ -423,7 +434,7 @@ const Audio3D_SFX = {
     const t = this.ctx.currentTime;
     const pan = this.ctx.createStereoPanner ? this.ctx.createStereoPanner() : null;
     const out = this.ctx.createGain(); out.gain.value = sp.gain * .8;
-    if (pan) { pan.pan.value = sp.pan; out.connect(pan); pan.connect(this.master); } else out.connect(this.master);
+    if (pan) { pan.pan.value = sp.pan; out.connect(pan); pan.connect(this.sfx); } else out.connect(this.sfx);
     const base = kind === 'brute' ? 52 : kind === 'runner' ? 170 : kind === 'tank' ? 44
       : kind === 'flying' ? 240 : kind === 'robot' ? 66 : kind === 'spitter' ? 130 : 96;
     const o = this.ctx.createOscillator();
@@ -449,7 +460,7 @@ const Audio3D_SFX = {
     const g = this.ctx.createGain();
     g.gain.setValueAtTime(.11 * sp.gain, t);
     g.gain.exponentialRampToValueAtTime(.001, t + .1);
-    src.connect(lp); lp.connect(g); g.connect(this.master);
+    src.connect(lp); lp.connect(g); g.connect(this.sfx);
     src.start(t); src.stop(t + .12);
   },
   waveStart() { [0, 130, 260].forEach((d, i) => setTimeout(() => this.tone([440, 587, 880][i], .22, 'square', .13), d)); },
@@ -483,7 +494,7 @@ const Audio3D_SFX = {
     if (!th) return;
     this.musicStop();
     const out = this.ctx.createGain(); out.gain.value = .0001;
-    out.connect(this.master);
+    out.connect(this.musicBus);
     const t0 = this.ctx.currentTime;
     out.gain.linearRampToValueAtTime(th.gain || .45, t0 + (name === 'menu' ? 1.6 : .8));
     this._music = { name, out, th, step: 0, timer: null, next: t0 + .1 };
@@ -581,7 +592,7 @@ const Audio3D_SFX = {
     src.buffer = this.noiseBuf; src.loop = true;
     const lp = this.ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 320; lp.Q.value = .7;
     const g = this.ctx.createGain(); g.gain.value = .045;
-    src.connect(lp); lp.connect(g); g.connect(this.master);
+    src.connect(lp); lp.connect(g); g.connect(this.sfx);
     src.start();
     this.amb = { src, g };
   },

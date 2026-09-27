@@ -533,9 +533,34 @@ function initSettings() {
   if (mOuts[0]) mOuts[0].textContent = musicNames[S.music === 0 ? 0 : 1];
   if (mOuts[1]) mOuts[1].textContent = musicNames[S.music === 0 ? 0 : 1];
 
+  // separate volumes: SFX (shots, hits, explosions) and music, on top of master
+  const volPairs = [
+    ['sSfx', 'oSfx', 'sSfx2', 'oSfx2', 'sfxVol', (v) => String(Math.round(v))],
+    ['sMus', 'oMus', 'sMus2', 'oMus2', 'musicVol', (v) => String(Math.round(v))]
+  ];
+  volPairs.forEach(([si, oi, si2, oi2, key, fmt]) => {
+    const s = document.getElementById(si), o = document.getElementById(oi);
+    const s2 = document.getElementById(si2), o2 = document.getElementById(oi2);
+    const set = (val, src) => {
+      S[key] = val;
+      if (o) o.textContent = fmt(val);
+      if (o2) o2.textContent = fmt(val);
+      if (s && src !== s) s.value = val;
+      if (s2 && src !== s2) s2.value = val;
+      applySetting(key, val);
+      Store.save();
+    };
+    if (s) { s.value = S[key]; s.addEventListener('input', () => set(parseInt(s.value, 10), s)); }
+    if (s2) { s2.value = S[key]; s2.addEventListener('input', () => set(parseInt(s2.value, 10), s2)); }
+    if (o) o.textContent = fmt(S[key]);
+    if (o2) o2.textContent = fmt(S[key]);
+  });
+
   applySetting('sens', S.sens);
   applySetting('fov', S.fov);
   applySetting('vol', S.vol);
+  applySetting('sfxVol', S.sfxVol);
+  applySetting('musicVol', S.musicVol);
   if (typeof Audio3D_SFX !== 'undefined') Audio3D_SFX.musicOff = S.music === 0;
 }
 
@@ -545,6 +570,8 @@ function applySetting(key, v) {
   // non-existent global, so the touch-sensitivity slider silently did nothing.
   else if (key === 'touchSens') { if (typeof TouchUI !== 'undefined') TouchUI.setSens(v); }
   else if (key === 'vol') Audio3D_SFX.setVol(v / 100);
+  else if (key === 'sfxVol') Audio3D_SFX.setSfxVol(v / 100);
+  else if (key === 'musicVol') Audio3D_SFX.setMusicVol(v / 100);
   else if (key === 'fov') { if (window.Game) Game.baseFov = v; }
 }
 

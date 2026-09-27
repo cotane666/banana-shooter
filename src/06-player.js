@@ -545,28 +545,53 @@ function buildWeaponModel(id) {
 
     /* ---------------- RPG-7: rocket launcher ---------------- */
     case 'rpg': {
-      add(CYL(.052, 1.02, PAL.oliv, 0, .020, -.40, 14));              // long launch tube
-      add(CYL(.060, .10, PAL.black, 0, .020, .08, 14));               // rear flare
-      add(CYL(.086, .14, PAL.oliv, 0, .020, -.92, 14));               // muzzle bell
-      add(CYL(.074, .03, PAL.black, 0, .020, -.985, 14));             // muzzle rim
-      add(B(.055, .062, .20, PAL.black, 0, .020, -.14));              // heat shield band
-      for (let i = 0; i < 4; i++) add(B(.057, .010, .012, PAL.gun, 0, .020, -.22 + i * .05));   // wood grips on band
-      add(B(.048, .054, .18, PAL.wood, 0, .020, .16));                // wooden rear grip
-      add(B(.048, .054, .14, PAL.wood, 0, .020, -.44));               // wooden foregrip
-      add(CYL(.030, .24, PAL.steel, 0, .098, -.46, 10));              // optic tube
-      add(CYL(.036, .05, PAL.gun, 0, .098, -.34, 10));                // eyepiece
-      add(CYL(.038, .05, PAL.gun, 0, .098, -.58, 10));                // objective
-      add(B(.024, .062, .022, PAL.black, 0, .058, -.44));             // scope mount
-      // loaded rocket: a cone poking out of the muzzle
-      add(CYL(.040, .16, PAL.gun, 0, .020, -1.04, 12));               // rocket body
-      const cone = new THREE.Mesh(new THREE.ConeGeometry(.062, .16, 12), gunMat(0x8a3b2a));
-      cone.position.set(0, .020, -1.19); cone.rotation.x = -Math.PI / 2;
+      const WOOD = PAL.wood, STEEL = PAL.steel, DARK = PAL.black, OLIVE = PAL.oliv;
+      add(CYL(.052, 1.02, OLIVE, 0, .020, -.40, 16));                // long launch tube
+      // tube seams / rings
+      for (let i = 0; i < 5; i++) add(CYL(.054, .014, DARK, 0, .020, -.88 + i * .20, 16));
+      add(CYL(.060, .10, DARK, 0, .020, .08, 16));                   // rear flare
+      add(CYL(.070, .05, DARK, 0, .020, .135, 16));                  // rear rim
+      add(CYL(.086, .14, OLIVE, 0, .020, -.92, 16));                 // muzzle bell
+      add(CYL(.074, .03, DARK, 0, .020, -.985, 16));                 // muzzle rim
+      add(CYL(.090, .02, DARK, 0, .020, -1.0, 16));                  // muzzle lip
+      // heat-shield / grip band with wooden panels
+      add(B(.055, .062, .22, DARK, 0, .020, -.14));                  // heat shield band
+      add(B(.058, .048, .06, WOOD, 0, .020, -.05));
+      add(B(.058, .048, .06, WOOD, 0, .020, -.23));
+      add(BOLTS(2, .16, .011, STEEL, .030, .020, -.14, 'z'));        // band bolts
+      // wooden grips
+      add(B(.052, .058, .20, WOOD, 0, .020, .16));                   // wooden rear grip
+      add(B(.048, .054, .16, WOOD, 0, .020, -.46));                  // wooden foregrip
+      add(B(.052, .014, .18, DARK, 0, .048, .16));                   // grip strap
+      // iron sights (folding)
+      add(B(.026, .052, .022, DARK, 0, .066, .05));                  // rear sight
+      add(B(.014, .020, .014, STEEL, 0, .066, .05));
+      add(B(.028, .060, .024, DARK, 0, .066, -.74));                 // front sight tower
+      add(B(.012, .030, .012, STEEL, 0, .092, -.74));
+      // optical sight (PGO-7 style)
+      add(CYL(.030, .26, STEEL, 0, .104, -.46, 12));                 // optic tube
+      add(CYL(.036, .05, PAL.gun, 0, .104, -.33, 12));               // eyepiece
+      add(CYL(.038, .05, PAL.gun, 0, .104, -.60, 12));               // objective
+      add(CYL(.034, .012, PAL.glass, 0, .104, -.615, 12));           // lens
+      add(B(.022, .022, .05, PAL.gun, .030, .104, -.50));            // windage turret
+      add(B(.024, .064, .024, DARK, 0, .060, -.46));                 // scope mount
+      add(B(.026, .070, .022, DARK, 0, .060, -.56));                 // scope mount (front)
+      // loaded rocket: body + pointed warhead with a booster
+      add(CYL(.040, .18, PAL.gun, 0, .020, -1.04, 14));              // rocket body
+      for (let i = 0; i < 3; i++) add(CYL(.042, .012, DARK, 0, .020, -1.00 + i * .05, 14));
+      const cone = new THREE.Mesh(new THREE.ConeGeometry(.062, .18, 16), gunMat(0x8a3b2a));
+      cone.position.set(0, .020, -1.21); cone.rotation.x = -Math.PI / 2;
       add(cone);                                                      // warhead
-      add(B(.028, .040, .12, PAL.black, 0, -.030, -.06));             // trigger group
-      add(B(.030, .050, .07, PAL.black, 0, -.060, -.02));             // pistol grip
-      add(B(.012, .022, .012, PAL.steel, 0, -.046, -.05));            // trigger
-      add(CYL(.014, .06, PAL.steel, 0, .078, .10, 8));                // rear iron sight
-      add(B(.024, .030, .024, PAL.black, 0, .078, -.02));             // front iron sight
+      add(B(.016, .016, .016, 0x1a1a1a, 0, .020, -1.30));            // fuze tip
+      // trigger group + grip
+      add(B(.028, .042, .13, DARK, 0, -.030, -.06));                 // trigger housing
+      add(B(.030, .052, .07, PAL.poly, 0, -.062, -.02, .18));        // pistol grip
+      add(B(.012, .024, .012, STEEL, 0, -.046, -.05));               // trigger
+      add(B(.022, .030, .024, DARK, 0, .078, -.02));                 // front iron sight
+      add(CYL(.014, .06, STEEL, 0, .078, .10, 10));                  // rear sight base
+      add(B(.010, .020, .022, STEEL, .032, .020, -.14));             // sling loop
+      add(B(.020, .020, .040, DARK, 0, .020, -.60));                 // band bracket
+      add(CYL(.010, .14, DARK, 0, .058, -.14, 8));                   // top carry handle bar
       break;
     }
 

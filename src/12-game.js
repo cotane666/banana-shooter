@@ -842,7 +842,8 @@ const Game = {
   /* ---- engine ---- */
   renderer: null, scene: null, camera: null, vmScene: null, vmCamera: null,
   world: null, effects: null, horde: null, player: null, dummies: [], targets: [], aim: null,
-  dummyProjectiles: [],
+  dummyProjectiles: [], enemyShots: [],
+  _bossAbilityLock: 0,
   running: false, mode: CS.MODE.MENU, paused: false,
   baseFov: 80, _last: 0, _loopBound: null, _acc: 0,
   remotePlayers: [], remote: null,
@@ -1143,6 +1144,7 @@ const Game = {
     Bus.on('touchUseDrone', () => { if (this.drone) this.detonateDrone(false); else this.launchDrone(); });
     Bus.on('zombieHit', (z, part, dmg, dir) => this.onZombieHit(z, part, dmg, dir));
     Bus.on('zombieGrowl', z => Audio3D_SFX.growl(z.pos.x, z.pos.y + 1.4, z.pos.z, z.type));
+    Bus.on('zombieShoot', (z, from) => this.onZombieShoot(z, from));
 
     // network events
     Net.on('hello', m => this.onPeerHello(m));
@@ -1644,6 +1646,228 @@ const Game = {
     this.dummyProjectiles.length = 0;
   },
 
+  /* ============================================================
+     RANGED ENEMIES: acid spit / plasma bolts
+     A small pool of flying orbs fired by spitters, the robot zombie and some
+     boss abilities. They are purely offensive: they only ever hurt the local
+     player (offline), and are cleared whenever the world is torn down.
+     ============================================================ */
+  onZombieShoot(z, from) {
+    const def = z && z.def;
+    if (!def || !def.shoot || !from) return;
+    const p = this.player;
+    if (!p || !p.alive) return;
+    // aim at the player's chest with a little lead so strafing is not a free win
+    const tx = p.pos.x + (p.vel ? p.vel.x * .18 : 0);
+    const tz = p.pos.z + (p.vel ? p.vel.z * .18 : 0);
+    const aim = { x: tx, y: p.pos.y + 1.1, z: tz };
+    const d = dirTo(from, aim);
+    const speed = def.shootSpeed || 24;
+    const plasma = def.shoot === 'plasma';
+    const mesh = plasma ? buildPlasmaBolt() : buildAcidBlob();
+    mesh.position.set(from.x, from.y, from.z);
+    this.scene.add(mesh);
+    this.enemyShots.push({
+      mesh, kind: def.shoot, life: 6,
+      pos: { x: from.x, y: from.y, z: from.z },
+      vel: { x: d.dir.x * speed, y: d.dir.y * speed, z: d.dir.z * speed },
+      grav: def.shootGrav || 0,
+      dmg: def.shootDmg || 12,
+      headMul: def.headMul || 1.6
+    });
+    if (plasma) Audio3D_SFX.shot('laser', from.x, from.y, from.z);
+    else Audio3D_SFX.shot('banana', from.x, from.y, from.z);
+    this.effects.muzzleSmoke(from.x, from.y, from.z, d.dir);
+    if (this.enemyShots.length > 40) {
+      const old = this.enemyShots.shift();
+      if (old.mesh.parent) old.mesh.parent.remove(old.mesh);
+    }
+  },
+
+  updateEnemyShots(dt) {
+    const list = this.enemyShots;
+    if (!list || !list.length) return;
+    const world = this.world;
+    const p = this.player;
+    for (let i = list.length - 1; i >= 0; i--) {
+      const pr = list[i];
+      pr.life -= dt;
+      pr.vel.y -= pr.grav * dt;
+      const nx = pr.pos.x + pr.vel.x * dt, ny = pr.pos.y + pr.vel.y * dt, nz = pr.pos.z + pr.vel.z * dt;
+      const segLen = Math.hypot(nx - pr.pos.x, ny - pr.pos.y, nz - pr.pos.z);
+      const dir = segLen > 1e-6
+        ? { x: (nx - pr.pos.x) / segLen, y: (ny - pr.pos.y) / segLen, z: (nz - pr.pos.z) / segLen }
+        : { x: 0, y: -1, z: 0 };
+      // ---- the player ----
+      let hitP = false;
+      if (p && p.alive) {
+        const oc = { x: p.pos.x - pr.pos.x, y: (p.pos.y + 1.0) - pr.pos.y, z: p.pos.z - pr.pos.z };
+        const d2 = oc.x * oc.x + oc.y * oc.y + oc.z * oc.z;
+        if (d2 < 1.0) hitP = true;               // already overlapping the body
+        else {
+          const tca = oc.x * dir.x + oc.y * dir.y + oc.z * dir.z;
+          if (tca > 0 && tca <= segLen + .45) {
+            const perp2 = d2 - tca * tca;
+            if (perp2 < .52 * .52) hitP = true;
+          }
+        }
+      }
+      const wallHits = world.raycastAll(pr.pos, dir, segLen + .1);
+      const wall = wallHits.length ? wallHits[0] : null;
+      const impact = (hitP && (!wall || segLen <= wall.t))
+        ? { x: pr.pos.x + dir.x * segLen, y: pr.pos.y + dir.y * segLen, z: pr.pos.z + dir.z * segLen }
+        : (wall ? wall.point : null);
+      if (impact) {
+        if (pr.kind === 'plasma') this.effects.laser(pr.pos, impact);
+        else { this.effects.bananaSplat(impact.x, impact.y, impact.z); }
+        if (hitP && p.alive) this.damageFromDummy(pr.dmg, impact, null);
+        this.removeEnemyShot(i);
+        continue;
+      }
+      if (pr.life <= 0 || pr.pos.y < -3) { this.removeEnemyShot(i); continue; }
+      pr.pos.x = nx; pr.pos.y = ny; pr.pos.z = nz;
+      pr.mesh.position.set(pr.pos.x, pr.pos.y, pr.pos.z);
+      const vl = Math.hypot(pr.vel.x, pr.vel.y, pr.vel.z) || 1;
+      pr.mesh.lookAt(pr.pos.x + pr.vel.x / vl, pr.pos.y + pr.vel.y / vl, pr.pos.z + pr.vel.z / vl);
+    }
+  },
+
+  removeEnemyShot(i) {
+    const pr = this.enemyShots[i];
+    if (pr && pr.mesh.parent) pr.mesh.parent.remove(pr.mesh);
+    this.enemyShots.splice(i, 1);
+  },
+
+  clearEnemyShots() {
+    if (!this.enemyShots) return;
+    for (const pr of this.enemyShots) { if (pr.mesh.parent) pr.mesh.parent.remove(pr.mesh); }
+    this.enemyShots.length = 0;
+  },
+
+  /* ============================================================
+     BOSS ABILITIES
+     Each boss rolls one of its `abilities` on a timer:
+       summon    — calls a handful of fresh zombies around itself
+       shockwave — a telegraphed ground slam that knocks the player back
+       charge    — a fast rush that deals heavy contact damage
+       barrage   — a fan of plasma bolts
+     ============================================================ */
+  updateBosses(dt) {
+    if (!this.horde) return;
+    const p = this.player;
+    if (!p || !p.alive) return;
+    for (const z of this.horde.list) {
+      if (!z.isBoss || !z.alive || z.dying) continue;
+      const def = z.def;
+      if (!def.abilities || !def.abilities.length) continue;
+      z.abilityCd = (z.abilityCd || 0) - dt;
+      if (z.abilityCd > 0) continue;
+      // a short global pause so several bosses never detonate at once
+      if (this._bossAbilityLock > 0) continue;
+      z.abilityCd = (def.abilityCd || 8) * U.rand(.8, 1.25);
+      this._bossAbilityLock = 1.6;
+      this.doBossAbility(z, U.pick(def.abilities));
+    }
+    if (this._bossAbilityLock > 0) this._bossAbilityLock -= dt;
+  },
+
+  doBossAbility(z, kind) {
+    const p = this.player;
+    if (kind === 'summon') {
+      const n = Math.min(6, 3 + Math.floor((z.scale - 2) * 2));
+      const pool = ['walker', 'runner', 'crawler'];
+      if (z.scale > 2.5) pool.push('tank', 'spitter');
+      for (let i = 0; i < n; i++) {
+        const a = U.rand(0, Math.PI * 2), r = U.rand(3, 6);
+        const x = z.pos.x + Math.cos(a) * r, y = z.pos.z + Math.sin(a) * r;
+        const s = this.horde.spawn(U.pick(pool), x, y);
+        if (this.offHpMul != null) s.maxHealth *= this.offHpMul;
+        else if (this.hordeMode && !this.freePlay) s.maxHealth *= CFG.hordeHpMul;
+        s.health = s.maxHealth;
+      }
+      this.bossTell(z, 'ПРИЗЫВ ПОДМОГИ', '#c24bff');
+      Audio3D_SFX.growl(z.pos.x, z.pos.y, z.pos.z, 'brute');
+      return;
+    }
+    if (kind === 'shockwave') {
+      this.effects.explosion(z.pos.x, z.pos.y + .4, z.pos.z, 6.5, [0xffb347, 0x2a1a0a]);
+      Audio3D_SFX.explosionAt(z.pos.x, z.pos.y, z.pos.z);
+      const ds = Math.hypot(p.pos.x - z.pos.x, p.pos.z - z.pos.z);
+      if (ds <= 8.5) {
+        const k = 1 - ds / 8.5;
+        if (!this.playerShieldUp()) {
+          this.applyDamageToSelf(Math.max(5, (z.dmg || 40) * .6 * k), { x: z.pos.x, y: z.pos.y, z: z.pos.z });
+          // knock the player back
+          const ax = p.pos.x - z.pos.x, az = p.pos.z - z.pos.z;
+          const l = Math.max(.001, Math.hypot(ax, az));
+          p.vel.x += (ax / l) * 12 * k; p.vel.z += (az / l) * 12 * k;
+          if (p.onGround) p.vel.y = Math.max(p.vel.y, 3.5 * k);
+        } else this.reflectAtDummy({ x: z.pos.x, y: z.pos.y, z: z.pos.z }, z.dmg || 40, false);
+      }
+      this.bossTell(z, 'УДАРНАЯ ВОЛНА', '#ff9d21');
+      return;
+    }
+    if (kind === 'charge') {
+      z.abilityTimer = 2.2;                          // drives the rush in updateBossCharge
+      z.chargeDir = { x: p.pos.x - z.pos.x, z: p.pos.z - z.pos.z };
+      const l = Math.hypot(z.chargeDir.x, z.chargeDir.z) || 1;
+      z.chargeDir.x /= l; z.chargeDir.z /= l;
+      this.bossTell(z, 'РЫВОК', '#e33a2e');
+      Audio3D_SFX.growl(z.pos.x, z.pos.y, z.pos.z, 'runner');
+      return;
+    }
+    if (kind === 'barrage') {
+      const n = 7;
+      const baseYaw = Math.atan2(p.pos.x - z.pos.x, p.pos.z - z.pos.z);
+      for (let i = 0; i < n; i++) {
+        const spread = (i - (n - 1) / 2) * .13;
+        const from = { x: z.pos.x, y: z.pos.y + 1.6 * z.scale, z: z.pos.z };
+        const dir = { x: Math.sin(baseYaw + spread), y: .06, z: Math.cos(baseYaw + spread) };
+        const mesh = buildPlasmaBolt();
+        mesh.position.set(from.x, from.y, from.z);
+        this.scene.add(mesh);
+        this.enemyShots.push({
+          mesh, kind: 'plasma', life: 6,
+          pos: { x: from.x, y: from.y, z: from.z },
+          vel: { x: dir.x * 30, y: dir.y * 30, z: dir.z * 30 },
+          grav: 0, dmg: Math.round((z.dmg || 50) * .45), headMul: 1.4
+        });
+      }
+      Audio3D_SFX.shot('laser', z.pos.x, z.pos.y + 2, z.pos.z);
+      this.bossTell(z, 'ЗАЛП', '#4ad6ff');
+      return;
+    }
+  },
+
+  /* keep executing an active charge rush */
+  updateBossCharges(dt) {
+    if (!this.horde) return;
+    const p = this.player;
+    for (const z of this.horde.list) {
+      if (!z || !z.alive || z.dying || !z.chargeDir) continue;
+      z.abilityTimer -= dt;
+      if (z.abilityTimer <= 0) { z.chargeDir = null; continue; }
+      const spd = (z.speed || 2) * 3.4;
+      z.pos.x = U.clamp(z.pos.x + z.chargeDir.x * spd * dt, -MAP.size / 2 + 2, MAP.size / 2 - 2);
+      z.pos.z = U.clamp(z.pos.z + z.chargeDir.z * spd * dt, -MAP.size / 2 + 2, MAP.size / 2 - 2);
+      z.group.position.set(z.pos.x, z.pos.y, z.pos.z);
+      if (p && p.alive) {
+        const ds = Math.hypot(p.pos.x - z.pos.x, p.pos.z - z.pos.z);
+        if (ds < 1.6 + z.radius) {
+          z.chargeDir = null;
+          if (!this.playerShieldUp()) this.applyDamageToSelf((z.dmg || 50) * .9, { x: z.pos.x, y: z.pos.y, z: z.pos.z });
+          else this.reflectAtDummy({ x: z.pos.x, y: z.pos.y, z: z.pos.z }, z.dmg || 50, true);
+        }
+      }
+    }
+  },
+
+  bossTell(z, text, color) {
+    UI.toast('БОСС: ' + text, color || '#c24bff');
+    this.effects.laser({ x: z.pos.x, y: z.pos.y + z.height + .4, z: z.pos.z },
+      { x: z.pos.x, y: z.pos.y + z.height + 4, z: z.pos.z });
+  },
+
   clearDummies() {
     if (!this.dummies) return;
     for (const d of this.dummies) d.dispose(this.scene);
@@ -2030,6 +2254,7 @@ const Game = {
     const clearWorld = () => {
       this.clearProjectiles();
       this.clearDummyProjectiles();
+      this.clearEnemyShots();
       this.clearDummies();
       this.clearTargets();
       this.clearDrone();
@@ -2753,6 +2978,8 @@ const Game = {
        at once instead of one, each with a much smaller health pool so the fight
        stays winnable with the reduced damage window. */
     const bossType = this.bossForWave(o.wave);
+    // a mini-boss (the robot zombie) joins every third wave from wave 8 on
+    o.miniBossPending = this.isMiniBossWave(o.wave) ? 1 : 0;
     if (bossType) {
       o.bossType = bossType;
       o.bossPending = this.hordeMode ? 5 : 1;
@@ -2763,7 +2990,15 @@ const Game = {
       Audio3D_SFX.waveStart();
     } else {
       o.bossType = null;
-      UI.center((this.hordeMode ? 'ОРДА ' : 'ВОЛНА ') + o.wave, count + ' противников', 2.0);
+      let title = (this.hordeMode ? 'ОРДА ' : 'ВОЛНА ') + o.wave;
+      let sub = count + ' противников';
+      if (o.miniBossPending) {
+        count = Math.round(count * .85);
+        o.totalThisWave = count;
+        sub = count + ' противников · МИНИ-БОСС: ' + ZOMBIES.robot.name;
+        UI.toast('МИНИ-БОСС: ' + ZOMBIES.robot.name, '#4ad6ff');
+      }
+      UI.center(title, sub, 2.0);
       UI.toast((this.hordeMode ? 'Орда ' : 'Волна ') + o.wave + ' — ' + count + ' зомби', '#e33a2e');
       Audio3D_SFX.waveStart();
     }
@@ -2803,10 +3038,13 @@ const Game = {
     if (wave >= 2) pool.push({ t: 'runner', w: Math.min(7, wave * .9) });
     if (wave >= 3) pool.push({ t: 'crawler', w: Math.min(5, wave * .6) });
     if (wave >= 4) pool.push({ t: 'tank', w: Math.min(4, wave * .45) });
-    if (wave >= 5) pool.push({ t: 'spitter', w: Math.min(4, wave * .4) });
+    if (wave >= 5) pool.push({ t: 'spitter', w: Math.min(5, wave * .5) });
+    if (wave >= 6) pool.push({ t: 'flying', w: Math.min(4, (wave - 5) * .55) });
     if (wave >= 7) pool.push({ t: 'brute', w: Math.min(3, (wave - 5) * .4) });
     return pool;
   },
+  /* the armoured robot mini-boss is a rare special, from wave 8 onward */
+  isMiniBossWave(wave) { return wave >= 8 && (wave - 8) % 3 === 0; },
   pickZombieType(wave) {
     const pool = this.waveTypesFor(wave);
     let total = 0; pool.forEach(p => total += p.w);
@@ -3000,6 +3238,19 @@ const Game = {
         Audio3D_SFX.growl(this.player.pos.x, this.player.pos.y, this.player.pos.z, 'brute');
       }
       return;
+    }
+
+    // the armoured robot mini-boss leads the wave in, right before the horde
+    if (o.miniBossPending > 0 && o.spawnedThisWave === 0) {
+      o.miniBossPending = 0;
+      const s = this.horde.spawnRandom('robot', this.player.pos.x, this.player.pos.z, 30);
+      const hpMul = (this.offHpMul != null) ? this.offHpMul
+        : ((this.hordeMode && !this.freePlay) ? CFG.hordeHpMul : 1);
+      s.maxHealth *= hpMul; s.health = s.maxHealth;
+      s.dmg *= (1 + (o.wave - 1) * .05);
+      s.isMiniBoss = true;
+      Audio3D_SFX.growl(s.pos.x, s.pos.y, s.pos.z, 'brute');
+      UI.toast('РОБОТ-ЗОМБИ в бою', '#4ad6ff');
     }
 
     // spawn queue
@@ -4725,6 +4976,7 @@ const Game = {
 
     // ---- AI ----
     if (this.horde) this.horde.update(dt, p);
+    if (this.mode === CS.MODE.OFFLINE) { this.updateBosses(dt); this.updateBossCharges(dt); }
 
     // ---- effects ----
     if (this.effects) this.effects.update(dt);
@@ -4732,6 +4984,7 @@ const Game = {
     // ---- flying bananas ----
     this.updateProjectiles(dt);
     if (this.mode === CS.MODE.RANGE) this.updateDummyProjectiles(dt);
+    if (this.mode === CS.MODE.OFFLINE) this.updateEnemyShots(dt);
     if (this.mode === CS.MODE.ONLINE) this.updateRemoteProjectiles(dt);
 
     // ---- networking ----
@@ -4968,8 +5221,8 @@ const Game = {
       if (this.roundState === 'live' && !o.betweenWaves) {
         if (o.bossPending > 0) objective = waveWord + o.wave + ' · БОСС x' + o.bossPending + ' приближается';
         else {
-          const boss = this.horde.list.filter(z => z.alive && !z.dying && z.isBoss)[0];
-          objective = boss ? 'БОСС: ' + boss.def.name + ' · ' + Math.max(0, Math.round(boss.health)) + ' HP'
+          const boss = this.horde.list.filter(z => z.alive && !z.dying && (z.isBoss || z.isMiniBoss))[0];
+          objective = boss ? (boss.isMiniBoss ? 'МИНИ-БОСС: ' : 'БОСС: ') + boss.def.name + ' · ' + Math.max(0, Math.round(boss.health)) + ' HP'
                            : waveWord + o.wave + ' · осталось ' + (o.toSpawn + this.horde.aliveCount);
         }
       }
@@ -5038,7 +5291,7 @@ const Game = {
     let boss = null;
     if (this.mode === CS.MODE.OFFLINE && this.horde) {
       for (const z of this.horde.list) {
-        if (z.alive && !z.dying && z.isBoss) { if (!boss || z.health > boss.health) boss = z; }
+        if (z.alive && !z.dying && (z.isBoss || z.isMiniBoss)) { if (!boss || z.health > boss.health) boss = z; }
       }
     }
     if (!boss) { el.classList.add('hidden'); return; }

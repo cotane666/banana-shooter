@@ -86,6 +86,59 @@ function buildZombieMesh(type) {
   } else if (type === 'spitter') {
     chest.scale.set(.9, 1.15, .9);
     head.scale.set(1.25, 1.25, 1.25);
+    // a bloated acid sac on the chest so the "spitter" reads at a glance
+    const sac = new THREE.Mesh(new THREE.SphereGeometry(.20, 8, 7),
+      new THREE.MeshLambertMaterial({ color: 0x9fd23a, emissive: 0x2a3d0a }));
+    sac.position.set(0, .18, -.16);
+    torso.add(sac);
+  } else if (type === 'flying') {
+    /* flying: lean frame with wide membrane wings and a tail */
+    torso.rotation.x = .35;
+    chest.scale.set(.85, 1.05, .9);
+    armL.scale.set(1.25, .9, 1.25); armR.scale.set(1.25, .9, 1.25);
+    legL.scale.set(1, .75, 1); legR.scale.set(1, .75, 1);
+    const wingMat = new THREE.MeshLambertMaterial({ color: 0x3c5a6b, side: THREE.DoubleSide });
+    const makeWing = (sgn) => {
+      const wing = new THREE.Mesh(new THREE.PlaneGeometry(1.5, .95), wingMat);
+      wing.position.set(sgn * .78, 1.42, .10);
+      wing.rotation.z = sgn * -.35;
+      wing.rotation.x = -.25;
+      wing.castShadow = true;
+      g.add(wing);
+      return wing;
+    };
+    parts.wingL = makeWing(-1); parts.wingR = makeWing(1);
+    // stinger tail
+    const tail = new THREE.Mesh(new THREE.ConeGeometry(.10, .55, 6), new THREE.MeshLambertMaterial({ color: 0x2b3f4a }));
+    tail.position.set(0, 1.06, .32); tail.rotation.x = 1.5;
+    g.add(tail);
+  } else if (type === 'robot') {
+    /* robot zombie: armoured, all-metal body with a glowing power core and a
+       shoulder-mounted cannon that matches the plasma it fires */
+    const metal = new THREE.MeshLambertMaterial({ color: 0x9aa4ae, metalness: .8 });
+    const dark = new THREE.MeshLambertMaterial({ color: 0x3a424b });
+    chest.material = metal; pelvis.material = dark;
+    skull.material = metal; jaw.material = dark;
+    armL.material = dark; armR.material = metal;
+    legL.material = dark; legR.material = dark;
+    chest.scale.set(1.35, 1.1, 1.25);
+    pelvis.scale.set(1.2, 1.0, 1.15);
+    armL.scale.set(1.35, 1.05, 1.35); armR.scale.set(1.35, 1.05, 1.35);
+    legL.scale.set(1.35, 1.05, 1.35); legR.scale.set(1.35, 1.05, 1.35);
+    // glowing power core
+    const core = new THREE.Mesh(new THREE.SphereGeometry(.17, 8, 6),
+      new THREE.MeshBasicMaterial({ color: 0x4ad6ff }));
+    core.position.set(0, .18, -.18); torso.add(core);
+    // eye visor
+    const visor = new THREE.Mesh(new THREE.BoxGeometry(.30, .07, .05),
+      new THREE.MeshBasicMaterial({ color: 0xff3a2a }));
+    visor.position.set(0, .04, -.17); head.add(visor);
+    // shoulder cannon
+    const cannon = new THREE.Mesh(new THREE.CylinderGeometry(.09, .11, .80, 10), metal);
+    cannon.rotation.x = Math.PI / 2;
+    cannon.position.set(.55, 1.52, -.30);
+    g.add(cannon);
+    parts.cannon = cannon;
   } else if (ZOMBIES[type] && ZOMBIES[type].boss) {
     /* Bosses: bulkier frame, spiked shoulders and a burning core so they read
        as a threat even from across the arena. */
@@ -140,6 +193,13 @@ class Zombie {
     this.growlCd = U.rand(1, 8);
     this.height = 1.75 * this.scale;
     this.radius = .40 * this.scale;
+    /* ranged ability (spitters, the robot zombie) — cooldown and a tiny aim
+       timer so they lead the shot, plus flying / boss-ability state */
+    this.shootCd = this.def.shoot ? U.rand(1.0, 2.2) : 0;
+    this.aimT = 0;
+    this.flying = !!this.def.flying;
+    this.flyBob = U.rand(0, 6.28);
+    this.armor = this.def.armor || 0;
     this.pathCd = U.rand(0, .4);
     this.waypoint = null;
     this.losT = U.rand(0, .25);
@@ -179,7 +239,9 @@ class Zombie {
     let mul = 1;
     if (part === 'head') mul = CFG.headshotMultiplier;
     else if (part === 'legs') mul = CFG.limbMultiplier;
-    const dmg = amount * mul;
+    let dmg = amount * mul;
+    // armoured enemies (the robot zombie) soak a share of every hit
+    if (this.armor > 0) dmg *= (1 - this.armor);
     this.health -= dmg;
     this.hitFlash = .12;
     this.staggerT = Math.max(this.staggerT, part === 'head' ? .16 : .07);
@@ -217,6 +279,7 @@ class Zombie {
     this.attackCd = Math.max(0, this.attackCd - dt);
     this.staggerT = Math.max(0, this.staggerT - dt);
     this.hitFlash = Math.max(0, this.hitFlash - dt);
+    if (this.shootCd > 0) this.shootCd -= dt;
 
     if (this.frozen) {
       this.applyVisual(dt, 0);
@@ -294,10 +357,53 @@ class Zombie {
       speedMul = 0;
     }
 
+    /* ---- ranged attack: acid spit / plasma bolt ---- */
+    if (this.def.shoot && this.shootCd <= 0) {
+      const sr = this.def.shootRange || 16;
+      const hasLOS = Math.abs(toP.y) < 6 && distXZ < sr;
+      if (hasLOS) {
+        this.shootCd = (this.def.shootCd || 2.4) * U.rand(.85, 1.2);
+        this.aimT = .30;                    // brief wind-up, then the shot
+        this.muzzleFrom = { x: this.pos.x, y: this.pos.y + 1.25 * this.scale, z: this.pos.z };
+      } else if (this.shootCd < 0) {
+        this.shootCd = 0;                   // do not bank fire while out of sight
+      }
+    }
+    if (this.aimT > 0) {
+      this.aimT -= dt;
+      speedMul = Math.min(speedMul, .35);
+      if (this.aimT <= 0 && Bus.emit) {
+        Bus.emit('zombieShoot', this, this.muzzleFrom || { x: this.pos.x, y: this.pos.y + 1.25 * this.scale, z: this.pos.z });
+      }
+    }
+
     // ---- gravity & movement ----
     if (!this.onGround) this.vel.y -= CFG.gravity * dt;
     const speed = this.speed * speedMul * (this.staggerT > 0 ? .35 : 1);
     const moveX = dirX * speed, moveZ = dirZ * speed;
+
+    /* flying: skim above the floor toward a hover height over the player */
+    if (this.flying) {
+      const hoverY = (ctx.world.groundAt(this.pos.x, this.pos.z, this.pos.y + 6) || 0) + (this.def.hover || 2.6);
+      this.flyBob += dt * 2.4;
+      const targetY = (distXZ < 16 ? hoverY - 0.8 : hoverY) + Math.sin(this.flyBob) * .22;
+      this.pos.y = U.lerp(this.pos.y, targetY, 1 - Math.pow(.02, dt));
+      this.pos.x = U.clamp(this.pos.x + moveX * dt, -MAP.size / 2 + 2, MAP.size / 2 - 2);
+      this.pos.z = U.clamp(this.pos.z + moveZ * dt, -MAP.size / 2 + 2, MAP.size / 2 - 2);
+      this.growlCd -= dt;
+      if (this.growlCd <= 0) {
+        this.growlCd = U.rand(4, 13);
+        if (distXZ < 30) Bus.emit('zombieGrowl', this);
+      }
+      this.applyVisual(dt, speed);
+      // wing flap
+      if (this.parts.wingL) {
+        const f = Math.sin(this.walkPhase * 2.2) * .55;
+        this.parts.wingL.rotation.z = -.35 - f;
+        this.parts.wingR.rotation.z = .35 + f;
+      }
+      return;
+    }
 
     // vertical snap: follow ground height (simple, avoids complex collision)
     const ahead = { x: this.pos.x + moveX * dt * 3, z: this.pos.z + moveZ * dt * 3 };

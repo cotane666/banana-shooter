@@ -349,7 +349,8 @@ const Audio3D_SFX = {
     const pan = this.ctx.createStereoPanner ? this.ctx.createStereoPanner() : null;
     const out = this.ctx.createGain(); out.gain.value = sp.gain * .8;
     if (pan) { pan.pan.value = sp.pan; out.connect(pan); pan.connect(this.master); } else out.connect(this.master);
-    const base = kind === 'brute' ? 52 : kind === 'runner' ? 170 : kind === 'tank' ? 44 : 96;
+    const base = kind === 'brute' ? 52 : kind === 'runner' ? 170 : kind === 'tank' ? 44
+      : kind === 'flying' ? 240 : kind === 'robot' ? 66 : kind === 'spitter' ? 130 : 96;
     const o = this.ctx.createOscillator();
     o.type = 'sawtooth';
     o.frequency.setValueAtTime(base * (.85 + Math.random() * .4), t);

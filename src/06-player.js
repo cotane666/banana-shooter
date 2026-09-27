@@ -733,6 +733,35 @@ function buildBananaProjectile() {
   return g;
 }
 
+/* A glob of acid thrown by a spitter: a sickly green sphere with a soft glow */
+function buildAcidBlob() {
+  const g = new THREE.Group();
+  const blob = new THREE.Mesh(new THREE.SphereGeometry(.13, 10, 8),
+    new THREE.MeshLambertMaterial({ color: 0x9fd23a, emissive: 0x35500e }));
+  g.add(blob);
+  const halo = new THREE.Mesh(new THREE.SphereGeometry(.20, 8, 6),
+    new THREE.MeshBasicMaterial({ color: 0x7fbf2a, transparent: true, opacity: .35, blending: THREE.AdditiveBlending, depthWrite: false }));
+  g.add(halo);
+  return g;
+}
+
+/* A robot zombie's plasma bolt: a hot cyan core in a bright halo */
+function buildPlasmaBolt() {
+  const g = new THREE.Group();
+  const core = new THREE.Mesh(new THREE.SphereGeometry(.10, 10, 8),
+    new THREE.MeshBasicMaterial({ color: 0xbdf0ff }));
+  g.add(core);
+  const halo = new THREE.Mesh(new THREE.SphereGeometry(.18, 10, 8),
+    new THREE.MeshBasicMaterial({ color: 0x4ad6ff, transparent: true, opacity: .55, blending: THREE.AdditiveBlending, depthWrite: false }));
+  g.add(halo);
+  const tail = new THREE.Mesh(new THREE.ConeGeometry(.07, .30, 8),
+    new THREE.MeshBasicMaterial({ color: 0x4ad6ff, transparent: true, opacity: .45, blending: THREE.AdditiveBlending, depthWrite: false }));
+  tail.rotation.x = Math.PI / 2;
+  tail.position.z = .22;
+  g.add(tail);
+  return g;
+}
+
 /* A small kamikaze drone: a flat body with four arms, spinning rotors, a camera
    pod and a red warhead light on the nose. Points along -Z like the weapons. */
 let _droneGeo = null;

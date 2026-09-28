@@ -454,7 +454,7 @@ const ACHIEVEMENTS = [
   { id: 'e_kill10',   name: 'РАЗМИНКА',        desc: 'Убить 10 зомби за забег',        check: s => s.kills >= 10 },
   { id: 'e_wave3',    name: 'ТРЕТЬЯ ВОЛНА',    desc: 'Дожить до 3 волны',              check: s => s.wave >= 3 },
   { id: 'e_head1',    name: 'ТОЧНЫЙ ГЛАЗ',     desc: 'Убить в голову',                 check: s => s.headshots >= 1 },
-  { id: 'e_money1k',  name: 'КОПЕЙКА',         desc: 'Накопить $1 000',                check: s => s.money >= 1000 },
+  { id: 'e_money1k',  name: 'ЖИВУЧИЙ СТАРТ',   desc: 'Отбить 3 волны, не потеряв ни капли HP', check: s => s.noDamageWaves >= 3 },
   { id: 'e_score5k',  name: 'ПЕРВЫЕ ОЧКИ',     desc: 'Набрать 5 000 очков',            check: s => s.score >= 5000 },
   { id: 'e_kill50',   name: 'ПОЛСОТНИ',        desc: '50 зомби за забег',              check: s => s.kills >= 50 },
   { id: 'e_time60',   name: 'МАРАФОНЕЦ',       desc: 'Пережить 1 минуту',              check: s => s.playTime >= 60 },
@@ -463,7 +463,7 @@ const ACHIEVEMENTS = [
   { id: 'm_kill200',  name: 'ДВЕСТИ',          desc: '200 зомби за забег',             check: s => s.kills >= 200 },
   { id: 'm_head25',   name: 'В ГОЛОВУ',        desc: '25 убийств в голову',            check: s => s.headshots >= 25 },
   { id: 'm_money10k', name: 'КАПИТАЛ',         desc: 'Накопить $10 000',               check: s => s.money >= 10000 },
-  { id: 'm_score25k', name: 'НАБИРАЕМ',        desc: 'Набрать 25 000 очков',           check: s => s.score >= 25000 },
+  { id: 'm_score25k', name: 'НЕОСТОРОЖНЫЙ',    desc: 'Выстрелить 5000 раз и промазать 4000', check: s => s.shots >= 5000 && s.misses >= 4000 },
   { id: 'm_acc40',    name: 'СТАБИЛЬНОСТЬ',    desc: 'Точность 40%+ (200+ выстрелов)', check: s => s.shots >= 200 && s.accuracy >= 40 },
   { id: 'm_mech10',   name: 'ПИЛОТ',           desc: '10 убийств из мехакостюма',      check: s => s.mechKills >= 10 },
   { id: 'm_knife5',   name: 'ТИХАЯ СМЕРТЬ',    desc: '5 убийств ножом',                check: s => s.knifeKills >= 5 },
@@ -478,7 +478,7 @@ const ACHIEVEMENTS = [
   { id: 'h_wave35',   name: 'ТРИДЦАТЬ ПЯТЬ',   desc: 'Дожить до 35 волны',             check: s => s.wave >= 35 },
   { id: 'h_kill800',  name: 'ВОСЕМЬСОТ',       desc: '800 зомби за забег',             check: s => s.kills >= 800 },
   { id: 'h_head75',   name: 'ХИРУРГ',          desc: '75 убийств в голову',            check: s => s.headshots >= 75 },
-  { id: 'h_score75k', name: 'СЕМЬДЕСЯТ ПЯТЬ ТЫСЯЧ', desc: '75 000 очков',              check: s => s.score >= 75000 },
+  { id: 'h_score75k', name: 'ЗОМБИ-БОСС',      desc: 'Убить мини-босса',               check: s => s.miniBossKills >= 1 },
   { id: 'h_boss8',    name: 'ГРОЗА',           desc: 'Убить 8 боссов за забег',        check: s => s.bossKills >= 8 },
   { id: 'h_mech50',   name: 'МЕТАЛЛОЛОМ',      desc: '50 убийств из мехакостюма',      check: s => s.mechKills >= 50 },
   { id: 'h_knife25',  name: 'МАСТЕР НОЖА',     desc: '25 убийств ножом',               check: s => s.knifeKills >= 25 },
@@ -488,16 +488,18 @@ const ACHIEVEMENTS = [
   { id: 'h_med30',    name: 'ЛАЗАРЕТ',         desc: 'Использовать 30 аптечек',        check: s => s.medkitsUsed >= 30 },
   { id: 'h_perfect20', name: 'НЕПОБЕДИМЫЙ',    desc: '20 волн без смерти',             check: s => s.perfectWaves >= 20 },
   { id: 'h_total5k',  name: 'ПЯТЬ ТЫСЯЧ',      desc: '5 000 зомби всего',              check: s => s.killsTotal >= 5000 },
-  { id: 'h_rich100k', name: 'МИЛЛИОНЕР',       desc: 'Накопить $100 000',              check: s => s.money >= 100000 },
+  { id: 'h_rich100k', name: 'РАСТРАТА',        desc: 'Потратить $50 000 за забег',     check: s => s.spent >= 50000 },
   { id: 'h_time1200', name: 'СТОЙКИЙ',         desc: 'Пережить 20 минут в забеге',     check: s => s.playTime >= 1200 },
   { id: 'h_win10',    name: 'ОНЛАЙН-БОЕЦ',     desc: '10 побед в онлайне',             check: s => s.wins >= 10 },
-  /* ИНТЕРЕСНЫЕ: скорострельные и на выносливость */
+  /* ИНТЕРЕСНЫЕ: скорострельные, аккуратные и на выносливость */
   { id: 'x_rampage',  name: 'РАЗДЕЛЯЮЩИЙ ХАОС', desc: '100 убийств за 5 секунд',       check: s => s.fastKills >= 100 },
+  { id: 'm_noReload', name: 'БЕЗ ПЕРЕЗАРЯДКИ', desc: '20 волн без единой перезарядки', check: s => s.wavesNoReload >= 20 },
+  { id: 'h_pacifist', name: 'ПАЦИФИСТ',        desc: '10 волн без единого выстрела',   check: s => s.wavesNoShots >= 10 },
   /* --- very hard --- */
   { id: 'v_wave75',   name: 'СЕМЬДЕСЯТ ПЯТЬ',  desc: 'Дожить до 75 волны',             check: s => s.wave >= 75 },
   { id: 'v_kill1500', name: 'ТЫСЯЧА ПЯТЬСОТ',  desc: '1 500 зомби за забег',           check: s => s.kills >= 1500 },
   { id: 'v_head200',  name: 'АНГЕЛ СМЕРТИ',    desc: '200 убийств в голову',           check: s => s.headshots >= 200 },
-  { id: 'v_score250k', name: 'ЧЕТВЕРТЬ МИЛЛИОНА', desc: '250 000 очков',               check: s => s.score >= 250000 },
+  { id: 'v_score250k', name: 'БЕЗУПРЕЧНЫЙ',    desc: 'Пройти 100 волн без единой смерти', check: s => s.perfectWaves >= 100 },
   { id: 'v_perfect40', name: 'ЖЕЛЕЗНЫЙ',       desc: '40 волн без смерти',             check: s => s.perfectWaves >= 40 },
   { id: 'v_boss15',   name: 'ПОГЛОТИТЕЛЬ БОССОВ', desc: '15 боссов за забег',          check: s => s.bossKills >= 15 },
   { id: 'v_streak10', name: 'ДЕСЯТЬ В ГОЛОВУ', desc: '10 хедшотов подряд',             check: s => s.bestHeadStreak >= 10 },
@@ -505,7 +507,7 @@ const ACHIEVEMENTS = [
   { id: 'v_total20k', name: 'ДВАДЦАТЬ ТЫСЯЧ',  desc: '20 000 зомби всего',             check: s => s.killsTotal >= 20000 },
   { id: 'v_clear5',   name: 'ПЯТЬ ПРОХОДОВ',   desc: 'Пройти игру 5 раз',              check: s => s.clears >= 5 },
   { id: 'x_speedrun', name: 'СПЕШКА',          desc: 'Пройти игру быстрее 1 ч 30 мин', check: s => s.fastClear >= 1 },
-  { id: 'v_win50',    name: 'ЛЕГЕНДА ОНЛАЙНА', desc: '50 побед в онлайне',             check: s => s.wins >= 50 },
+  { id: 'v_win50',    name: 'ВЕТЕРАН ВОЙНЫ',   desc: 'Выйти в топ-3 рейтинга сервера',  check: s => s.top3 >= 1 },
   { id: 'x_marathon', name: 'ЖЕЛЕЗНАЯ ВЫДЕРЖКА', desc: 'Пережить 45 минут одним забегом', check: s => s.runTime >= 2700 },
   { id: 'v_time3600', name: 'ЧАС В ПЕКЛЕ',     desc: 'Пережить 60 минут в забеге',     check: s => s.playTime >= 3600 },
   /* ============================================================
@@ -528,7 +530,13 @@ const ACHIEVEMENTS = [
   { id: 'hv2_atomic',  name: 'КОНЕЦ СВЕТА',    desc: '60 убийств из атомного РПГ',     check: s => s.atomicKills >= 60 },
   { id: 'hv2_yhs',     name: 'СВЕРХАРСЕНАЛ',   desc: '2 500 убийств из Y.H.S',         check: s => s.yhsKills >= 2500 },
   { id: 'hv2_rocket',  name: 'СТАЯ',           desc: '250 убийств из ракетницы',       check: s => s.rocketKills >= 250 },
-  { id: 'hv2_shield',  name: 'ОТРАЖАТЕЛЬ',     desc: '80 убийств с поднятым щитом',    check: s => s.shieldKills >= 80 }
+  { id: 'hv2_shield',  name: 'ОТРАЖАТЕЛЬ',     desc: '80 убийств с поднятым щитом',    check: s => s.shieldKills >= 80 },
+  /* ============================================================
+     ПЛАТИНОВОЕ ФИНАЛЬНОЕ ДОСТИЖЕНИЕ — венец коллекции. Чтобы его получить,
+     нужно выполнить ВСЕ остальные достижения (кроме него самого). Награда —
+     «ГАЛАКТИКА»: очень красивый скин на оружие и на персонажа.
+     ============================================================ */
+  { id: 'platinum_all', name: 'ВЛАДЫКА ГАЛАКТИКИ', desc: 'Выполнить все остальные достижения', check: s => s.otherAchievementsDone === true }
 ];
 
 /* ============================================================
@@ -545,26 +553,28 @@ const ACH_PROGRESS = {
   rich: ['money', 50000], survive: ['playTime', 900],
   /* easy */
   e_kill10: ['kills', 10], e_wave3: ['wave', 3], e_head1: ['headshots', 1],
-  e_money1k: ['money', 1000], e_score5k: ['score', 5000], e_kill50: ['kills', 50],
+  e_money1k: ['noDamageWaves', 3], e_score5k: ['score', 5000], e_kill50: ['kills', 50],
   e_time60: ['playTime', 60],
   /* medium */
   m_wave15: ['wave', 15], m_kill200: ['kills', 200], m_head25: ['headshots', 25],
-  m_money10k: ['money', 10000], m_score25k: ['score', 25000],
+  m_money10k: ['money', 10000],
   m_mech10: ['mechKills', 10], m_knife5: ['knifeKills', 5], m_streak3: ['bestHeadStreak', 3],
   m_med5: ['medkitsUsed', 5], m_wavekill25: ['maxWaveKills', 25], m_time300: ['playTime', 300],
   m_boss3: ['bossKills', 3], m_deaths10: ['perfectWaves', 10], m_total1k: ['killsTotal', 1000],
+  m_noReload: ['wavesNoReload', 20],
   /* hard */
   h_wave35: ['wave', 35], h_kill800: ['kills', 800], h_head75: ['headshots', 75],
-  h_score75k: ['score', 75000], h_boss8: ['bossKills', 8], h_mech50: ['mechKills', 50],
+  h_score75k: ['miniBossKills', 1], h_boss8: ['bossKills', 8], h_mech50: ['mechKills', 50],
   h_knife25: ['knifeKills', 25], h_streak6: ['bestHeadStreak', 6],
   h_wavekill60: ['maxWaveKills', 60], h_med30: ['medkitsUsed', 30],
   h_perfect20: ['perfectWaves', 20], h_total5k: ['killsTotal', 5000],
-  h_rich100k: ['money', 100000], h_time1200: ['playTime', 1200], h_win10: ['wins', 10],
+  h_rich100k: ['spent', 50000], h_time1200: ['playTime', 1200], h_win10: ['wins', 10],
+  h_pacifist: ['wavesNoShots', 10],
   /* very hard */
   v_wave75: ['wave', 75], v_kill1500: ['kills', 1500], v_head200: ['headshots', 200],
-  v_score250k: ['score', 250000], v_perfect40: ['perfectWaves', 40], v_boss15: ['bossKills', 15],
+  v_score250k: ['perfectWaves', 100], v_perfect40: ['perfectWaves', 40], v_boss15: ['bossKills', 15],
   v_streak10: ['bestHeadStreak', 10], v_total20k: ['killsTotal', 20000],
-  v_clear5: ['clears', 5], v_win50: ['wins', 50], v_time3600: ['playTime', 3600],
+  v_clear5: ['clears', 5], v_win50: ['top3', 1], v_time3600: ['playTime', 3600],
   /* интересные: скорострельные и на выносливость */
   x_rampage: ['fastKills', 100], x_speedrun: ['fastClear', 1], x_marathon: ['runTime', 2700],
   /* heavy arsenal (both sets) */
@@ -594,6 +604,17 @@ function achProgress(a, s) {
     const have = s.fastClear || 0, goal = 1;
     return { have: have, goal: goal, frac: have >= 1 ? 1 : 0 };
   }
+  /* НЕОСТОРОЖНЫЙ: нужно И выстрелить много, И много промазать — берём минимум долей */
+  if (a.id === 'm_score25k') {
+    const shots = s.shots || 0, misses = s.misses || 0;
+    const frac = Math.min(shots / 5000, misses / 4000);
+    return { have: Math.min(shots, misses), goal: 4000, frac: U.clamp(frac, 0, 1), label: Math.round(misses) + ' промахов' };
+  }
+  /* финальное платиновое достижение: прогресс = доля ВЫПОЛНЕННЫХ остальных */
+  if (a.id === 'platinum_all') {
+    const done = s.otherDone || 0, total = s.otherTotal || 1;
+    return { have: done, goal: total, frac: U.clamp(done / total, 0, 1) };
+  }
   const spec = ACH_PROGRESS[a.id];
   if (!spec) return { have: 0, goal: 1, frac: 0 };
   const have = Math.max(0, s[spec[0]] || 0), goal = spec[1];
@@ -603,6 +624,22 @@ function achProgress(a, s) {
 function achProgressText(have, goal) {
   const f = n => Math.round(n).toLocaleString('ru-RU');
   return f(have) + ' / ' + f(goal);
+}
+/* how many achievements (excluding the platinum one) are done, and whether all
+   of them are — the condition behind the final platinum reward. */
+function achOtherDone(ach) {
+  ach = ach || {};
+  let n = 0;
+  for (let i = 0; i < ACHIEVEMENTS.length; i++) {
+    const id = ACHIEVEMENTS[i].id;
+    if (id === 'platinum_all') continue;
+    if (ach[id]) n++;
+  }
+  return n;
+}
+function achAllOthersDone(ach) {
+  const total = ACHIEVEMENTS.length - 1;
+  return achOtherDone(ach) >= total;
 }
 
 /* ============================================================
@@ -616,9 +653,11 @@ const SKIN_RARITIES = {
   uncommon:  { id: 'uncommon',  label: 'НЕОБЫЧНЫЙ',   color: 0x57d16a, deco: 'stripe', glow: .32, beads: 0 },
   rare:      { id: 'rare',      label: 'РЕДКИЙ',      color: 0x4aa3ff, deco: 'vent',   glow: .46, beads: 2 },
   epic:      { id: 'epic',      label: 'ЭПИЧЕСКИЙ',   color: 0xb27bff, deco: 'plasma', glow: .62, beads: 3 },
-  legendary: { id: 'legendary', label: 'ЛЕГЕНДАРНЫЙ', color: 0xffb020, deco: 'legend', glow: .80, beads: 4 }
+  legendary: { id: 'legendary', label: 'ЛЕГЕНДАРНЫЙ', color: 0xffb020, deco: 'legend', glow: .80, beads: 4 },
+  /* платина — только для финального достижения «ВЛАДЫКА ГАЛАКТИКИ» */
+  platinum:  { id: 'platinum',  label: 'ПЛАТИНОВЫЙ',  color: 0xd896ff, deco: 'galaxy', glow: 1.0, beads: 8 }
 };
-const SKIN_RARITY_ORDER = ['common', 'uncommon', 'rare', 'epic', 'legendary'];
+const SKIN_RARITY_ORDER = ['common', 'uncommon', 'rare', 'epic', 'legendary', 'platinum'];
 
 /* palettes are grouped by rarity so a rarer skin always looks fancier.
    Each palette now gives a FULL multi-part scheme: separate colours for the
@@ -668,7 +707,11 @@ const SKIN_PALETTES = [
   { rar: 'legendary', heavy: 1, pat: 'wood',    body: 0x2a1a0c, steel: 0xffd0a0, mag: 0x1a0f06, grip: 0x0c0703, accent: 0xd8a060, glow: 0xffc080, shot: 0xffe0b0 },
   { rar: 'legendary', heavy: 1, pat: 'brick',   body: 0x2a1414, steel: 0xffb0b0, mag: 0x180a0a, grip: 0x0c0505, accent: 0xff5040, glow: 0xff8070, shot: 0xffb0a0 },
   { rar: 'legendary', heavy: 1, pat: 'noise',   body: 0x101820, steel: 0xa0c0e0, mag: 0x080e14, grip: 0x040608, accent: 0x80b0ff, glow: 0xa0d0ff, shot: 0xc0e0ff },
-  { rar: 'legendary', heavy: 1, pat: 'checker', body: 0x1a1a1a, steel: 0xf0f0f0, mag: 0x0e0e0e, grip: 0x060606, accent: 0xc0c0c0, glow: 0xe0e0ff, shot: 0xffffff }
+  { rar: 'legendary', heavy: 1, pat: 'checker', body: 0x1a1a1a, steel: 0xf0f0f0, mag: 0x0e0e0e, grip: 0x060606, accent: 0xc0c0c0, glow: 0xe0e0ff, shot: 0xffffff },
+  /* ПЛАТИНА — единственный экземпляр, для финального достижения «ВЛАДЫКА
+     ГАЛАКТИКИ». Полноценная модель строится в applyGalaxySkin; эти цвета —
+     запасные для карточек/трассеров. */
+  { rar: 'platinum', pat: 'galaxy', body: 0x0a0416, steel: 0xb83cff, mag: 0x150822, grip: 0x0a0414, accent: 0xd896ff, glow: 0xd896ff, shot: 0xe8c8ff }
 ];
 const _PAL_BY_RAR = {};
 SKIN_PALETTES.forEach(p => { (_PAL_BY_RAR[p.rar] = _PAL_BY_RAR[p.rar] || []).push(p); });
@@ -676,13 +719,13 @@ SKIN_PALETTES.forEach(p => { (_PAL_BY_RAR[p.rar] = _PAL_BY_RAR[p.rar] || []).pus
 /* which rarity an achievement's reward skin has */
 function skinRarityFor(achId) {
   // heavy-arsenal goals are the fanciest; the second set is all legendary
+  if (achId === 'platinum_all') return 'platinum';
   if (achId.startsWith('hv2_')) return 'legendary';
   if (achId.startsWith('hv_')) return (achId === 'hv_atomic' || achId === 'hv_yhs' || achId === 'hv_shield' || achId === 'hv_cannon') ? 'legendary' : 'epic';
   // new goal tiers by their id prefix
   if (achId === 'x_rampage' || achId === 'x_speedrun') return 'legendary';
   if (achId === 'x_marathon') return 'epic';
   if (achId.startsWith('v_')) return 'legendary';
-  if (achId.startsWith('h_')) return 'epic';
   if (achId.startsWith('m_')) return 'rare';
   if (achId.startsWith('e_')) return 'uncommon';
   // the original 11 are hand-graded
@@ -701,7 +744,11 @@ const SKINS = (() => {
     const rar = skinRarityFor(a.id);
     const rd = SKIN_RARITIES[rar];
     let pal, deco = rd.deco, beads = rd.beads;
-    if (a.id.startsWith('hv_') || a.id.startsWith('hv2_')) {
+    if (rar === 'platinum') {
+      /* «ГАЛАКТИКА» — единственная в своём роде, не зависит от палитр */
+      pal = SKIN_PALETTES.filter(p => p.rar === 'platinum')[0];
+      deco = 'galaxy'; beads = 8;
+    } else if (a.id.startsWith('hv_') || a.id.startsWith('hv2_')) {
       // each heavy weapon gets its OWN exclusive heavy palette + fancier deco
       const pool = SKIN_PALETTES.filter(p => p.heavy && p.rar === rar);
       const k = (hvUsed[rar] = (hvUsed[rar] || 0));
@@ -785,7 +832,8 @@ const Store = {
           offCount: 1, offHp: 1, offFree: 0, offMode: 'normal', offMods: {}, offModsRun: 0, offModPick: 0, checkpoint: null, shopAllow: {}, shopItems: {}, music: 1, sfxVol: 100, musicVol: 70,
           grenade: 'frag', buildable: 'turret', weather: 'day', trapsEnabled: 1, offCountExact: 10, offCountFixed: 0,
           timeOfDay: 'day', skyWeather: 'clear', envAuto: 0, envOff: 0, envAutoSpeed: 1,
-          ach: {}, runs: [], skinOn: {},
+          ach: {}, runs: [], skinOn: {}, skinChar: '',
+          /* галактический скин персонажа открыт вместе с платиновым достижением */
           /* one saved run per offline mode: { normal|horde|freehorde|custom|bossrush|daily|endless: checkpoint } */
           checkpoints: {} },
   load() {

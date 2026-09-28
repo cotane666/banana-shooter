@@ -241,6 +241,37 @@ function _skinDraw(c, pattern, glow) {
       x.save(); x.translate(Math.random() * S, Math.random() * S); x.rotate(-0.5 + Math.random());
       x.fillRect(0, 0, 4 + Math.random() * 6, 26 + Math.random() * 30); x.restore();
     }
+  } else if (pattern === 'galaxy') {
+    /* ГАЛАКТИКА — по референсу: глубокий чёрно-фиолетовый космос, светящиеся
+       туманности и звёзды (фиолетовый/пурпурный + белые искры). */
+    const grd = x.createLinearGradient(0, 0, S, S);
+    grd.addColorStop(0, '#05010c'); grd.addColorStop(.5, '#12042a'); grd.addColorStop(1, '#03000a');
+    x.fillStyle = grd; x.fillRect(0, 0, S, S);
+    // туманности: мягкие пурпурные и фиолетовые облака
+    const nebulae = ['#7a1fd0', '#b83cff', '#4a12a0', '#c060ff', '#5e1fb8'];
+    for (let i = 0; i < 26; i++) {
+      const cx = Math.random() * S, cy = Math.random() * S, r = 10 + Math.random() * 34;
+      const g2 = x.createRadialGradient(cx, cy, 0, cx, cy, r);
+      const col = nebulae[i % nebulae.length];
+      g2.addColorStop(0, col); g2.addColorStop(1, 'rgba(0,0,0,0)');
+      x.globalAlpha = .18 + Math.random() * .30;
+      x.fillStyle = g2; x.beginPath(); x.arc(cx, cy, r, 0, 6.29); x.fill();
+    }
+    x.globalAlpha = 1;
+    // звёзды: яркие точки с лёгким ореолом
+    for (let i = 0; i < 150; i++) {
+      const sx = Math.random() * S, sy = Math.random() * S, sr = Math.random() < .85 ? .7 : 1.4;
+      x.globalAlpha = .5 + Math.random() * .5;
+      x.fillStyle = Math.random() < .3 ? '#efd8ff' : '#ffffff';
+      x.beginPath(); x.arc(sx, sy, sr, 0, 6.29); x.fill();
+    }
+    // несколько крупных сияющих звёзд-крестов
+    for (let i = 0; i < 6; i++) {
+      const sx = Math.random() * S, sy = Math.random() * S;
+      x.globalAlpha = .9; x.strokeStyle = '#f0d8ff'; x.lineWidth = 1;
+      x.beginPath(); x.moveTo(sx - 5, sy); x.lineTo(sx + 5, sy); x.moveTo(sx, sy - 5); x.lineTo(sx, sy + 5); x.stroke();
+    }
+    x.globalAlpha = 1;
   }
 }
 
@@ -260,6 +291,19 @@ function _skinTexture(pattern, glowHex) {
   return t;
 }
 
+/* called every frame for each visible galaxy skin so the rings/dust animate */
+function animateGalaxySkin(group, dt) {
+  if (!group || !group.userData || !group.userData.galaxy) return;
+  const gx = group.userData.galaxy;
+  gx.t += dt;
+  if (gx.rings) { gx.rings[0].rotation.z += dt * .9; gx.rings[1].rotation.z -= dt * .6; }
+  if (gx.dust) gx.dust.rotation.y += dt * .5;
+  if (gx.shards) for (let i = 0; i < gx.shards.length; i++) {
+    gx.shards[i].rotation.x += dt * (1 + i * .2);
+    gx.shards[i].rotation.y += dt * .8;
+  }
+}
+
 /* ============================================================
    WEAPON SKINS — applied on top of a freshly built weapon model.
    A skin gives the gun a procedural TEXTURE and repaints its PARTS in separate
@@ -269,6 +313,8 @@ function _skinTexture(pattern, glowHex) {
    ============================================================ */
 function applyWeaponSkin(group, skin) {
   if (!group || !skin) return group;
+  /* ПЛАТИНОВЫЙ скин «ГАЛАКТИКА» — особый: полностью другая модель оружия */
+  if (skin.rarity === 'platinum' || skin.id === 'sk_platinum') return applyGalaxySkin(group);
   const tex = skin.pattern ? _skinTexture(skin.pattern, skin.accent || skin.glow) : null;
 
   /* Source palette colour → the skin's part colour. Different original parts map
@@ -379,7 +425,7 @@ function applyWeaponSkin(group, skin) {
    uncommon and rare keep the normal yellow-orange tracers. */
 function skinShotColor(skin) {
   if (!skin) return null;
-  if (skin.rarity !== 'epic' && skin.rarity !== 'legendary') return null;
+  if (skin.rarity !== 'epic' && skin.rarity !== 'legendary' && skin.rarity !== 'platinum') return null;
   return skin.shot !== undefined ? skin.shot : skin.glow;
 }
 
@@ -2138,7 +2184,200 @@ function buildMechMissile() {
   return g;
 }
 
-/* A small kamikaze drone: a flat body with four arms, spinning rotors, a camera
+/* a glowing dot sprite for the galaxy skin's orbiting dust (a small additive
+   plane that always faces the camera is overkill — a simple soft canvas works) */
+let _galaxyDotTex = null;
+function galaxyDotTexture() {
+  if (_galaxyDotTex) return _galaxyDotTex;
+  const c = makeCanvas(32); const x = c.getContext('2d');
+  const g = x.createRadialGradient(16, 16, 0, 16, 16, 16);
+  g.addColorStop(0, 'rgba(255,255,255,1)'); g.addColorStop(.4, 'rgba(216,150,255,.8)'); g.addColorStop(1, 'rgba(120,40,200,0)');
+  x.fillStyle = g; x.fillRect(0, 0, 32, 32);
+  _galaxyDotTex = new THREE.CanvasTexture(c);
+  return _galaxyDotTex;
+}
+/* a starfield band: a soft arc of glowing specks used behind the ring */
+let _galaxyBandTex = null;
+function galaxyBandTexture() {
+  if (_galaxyBandTex) return _galaxyBandTex;
+  const c = makeCanvas(128); const x = c.getContext('2d');
+  x.fillStyle = 'rgba(0,0,0,0)'; x.fillRect(0, 0, 128, 128);
+  for (let i = 0; i < 220; i++) {
+    const px = Math.random() * 128, py = Math.random() * 128;
+    x.globalAlpha = .2 + Math.random() * .8;
+    x.fillStyle = Math.random() < .5 ? '#e8c8ff' : '#ffffff';
+    x.fillRect(px, py, Math.random() < .8 ? 1 : 2, Math.random() < .8 ? 1 : 2);
+  }
+  _galaxyBandTex = new THREE.CanvasTexture(c);
+  return _galaxyBandTex;
+}
+/* ============================================================
+   GALAXY SKIN — a one-off, hand-authored look (not palette-driven). The gun is
+   rebuilt with galaxy geometry: a glowing nebula core, TWO tilted particle
+   rings, floating crystal shards and a drift of star dust that spins. It is the
+   reward for finishing every other achievement.
+   ============================================================ */
+const GALAXY_COLORS = {
+  dark: 0x0a0416, deep: 0x1b0a38, purple: 0x7a1fd0, violet: 0xb83cff,
+  bright: 0xd896ff, white: 0xf0e0ff, star: 0xffffff
+};
+function _galaxyRing(radius, tube, color, opacity) {
+  const mat = new THREE.MeshBasicMaterial({
+    color: color, transparent: true, opacity: opacity, blending: THREE.AdditiveBlending,
+    depthWrite: false, side: THREE.DoubleSide
+  });
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(radius, tube, 8, 40), mat);
+  return ring;
+}
+function applyGalaxySkin(group) {
+  if (!group) return group;
+  const C = GALAXY_COLORS;
+  const tex = _skinTexture('galaxy', C.violet);
+  /* repaint the solid parts in deep nebula colours, keeping some brightness */
+  group.traverse(o => {
+    if (!o.isMesh || !o.material || !o.material.color) return;
+    if (o.material.isMeshBasicMaterial) return;        // lamps keep their look
+    const l = o.material.color.r * .3 + o.material.color.g * .59 + o.material.color.b * .11;
+    const c = new THREE.Color(l > .55 ? C.bright : l > .3 ? C.violet : C.deep);
+    c.multiplyScalar(U.clamp(.5 + l * 1.2, .35, 1.3));
+    o.material.color.copy(c);
+    if (tex) {
+      const t2 = tex.clone(); t2.needsUpdate = true;
+      t2.wrapS = t2.wrapT = THREE.RepeatWrapping; t2.repeat.set(2, 2);
+      o.material.map = t2;
+    }
+    o.material.needsUpdate = true;
+  });
+
+  const fx = new THREE.Group();
+  fx.name = 'galaxyFX';
+  /* --- glowing nebula core along the body --- */
+  const core = new THREE.Mesh(
+    new THREE.CapsuleGeometry(.028, .30, 4, 10),
+    new THREE.MeshBasicMaterial({ color: C.violet, transparent: true, opacity: .55, blending: THREE.AdditiveBlending, depthWrite: false })
+  );
+  core.position.set(0, .02, -.12); core.rotation.x = Math.PI / 2;
+  fx.add(core);
+  const heart = new THREE.Mesh(
+    new THREE.SphereGeometry(.05, 12, 10),
+    new THREE.MeshBasicMaterial({ color: C.white, transparent: true, opacity: .8, blending: THREE.AdditiveBlending, depthWrite: false })
+  );
+  heart.position.set(0, .02, .02);
+  fx.add(heart);
+  /* --- two tilted particle rings (the signature galaxy look) --- */
+  const ringA = _galaxyRing(.20, .010, C.violet, .7);
+  ringA.rotation.set(1.25, .3, .2);
+  fx.add(ringA);
+  const ringB = _galaxyRing(.30, .007, C.bright, .55);
+  ringB.rotation.set(1.05, -.5, .6);
+  fx.add(ringB);
+  /* a faint starfield disc behind the rings */
+  const disc = new THREE.Mesh(new THREE.CircleGeometry(.42, 40),
+    new THREE.MeshBasicMaterial({ map: galaxyBandTexture(), transparent: true, opacity: .5, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
+  disc.position.set(0, .02, -.12); disc.rotation.set(1.2, .2, 0);
+  fx.add(disc);
+  /* --- floating crystal shards --- */
+  for (let i = 0; i < 4; i++) {
+    const sh = new THREE.Mesh(new THREE.OctahedronGeometry(.028 + Math.random() * .012, 0),
+      new THREE.MeshBasicMaterial({ color: i % 2 ? C.bright : C.violet, transparent: true, opacity: .85, blending: THREE.AdditiveBlending, depthWrite: false }));
+    const a = (i / 4) * Math.PI * 2;
+    sh.position.set(Math.cos(a) * .24, .02 + Math.sin(a * 1.7) * .06, -.12 + Math.sin(a) * .18);
+    fx.add(sh);
+  }
+  /* --- orbiting star dust --- */
+  const dustGeo = new THREE.BufferGeometry();
+  const N = 46, dp = new Float32Array(N * 3);
+  for (let i = 0; i < N; i++) {
+    const a = Math.random() * Math.PI * 2, r = .12 + Math.random() * .26;
+    dp[i * 3] = Math.cos(a) * r; dp[i * 3 + 1] = .02 + (Math.random() - .5) * .14; dp[i * 3 + 2] = -.12 + Math.sin(a) * r;
+  }
+  dustGeo.setAttribute('position', new THREE.BufferAttribute(dp, 3));
+  const dust = new THREE.Points(dustGeo, new THREE.PointsMaterial({
+    map: galaxyDotTexture(), color: C.white, size: .03, transparent: true, opacity: .9,
+    blending: THREE.AdditiveBlending, depthWrite: false, sizeAttenuation: true
+  }));
+  fx.add(dust);
+  /* the rings/dust spin slowly and a soft violet light pulses at the core */
+  const light = new THREE.PointLight(C.violet, .8, 2.4, 2);
+  light.position.set(0, .04, -.10);
+  fx.add(light);
+  group.add(fx);
+  group.userData.galaxy = { rings: [ringA, ringB], dust: dust, shards: fx.children.filter(c => c.geometry && c.geometry.type === 'OctahedronGeometry'), t: 0 };
+  group.userData.skin = { id: 'sk_platinum', name: 'ГАЛАКТИКА', rarity: 'platinum', rarityLabel: 'ПЛАТИНОВЫЙ', glow: C.violet, pattern: 'galaxy', shot: C.bright, accent: C.violet, deco: 'galaxy' };
+  return group;
+}
+
+/* ============================================================
+   GALAXY CHARACTER SKIN — «космический» солдат: доспех перекрашен в небулу,
+   вокруг тела вращаются звёздные кольца и висит звёздная пыль, а внутри
+   пульсирует фиолетовое ядро. Награда вместе с платиновым скином оружия.
+   ============================================================ */
+function applyGalaxyCharacter(group) {
+  if (!group) return group;
+  const C = GALAXY_COLORS;
+  const tex = _skinTexture('galaxy', C.violet);
+  group.traverse(o => {
+    if (!o.isMesh || !o.material || !o.material.color) return;
+    if (o.material.isMeshBasicMaterial) return;
+    const l = o.material.color.r * .3 + o.material.color.g * .59 + o.material.color.b * .11;
+    const c = new THREE.Color(l > .62 ? C.bright : l > .34 ? C.violet : C.deep);
+    c.multiplyScalar(U.clamp(.45 + l * 1.1, .3, 1.25));
+    o.material.color.copy(c);
+    if (tex) {
+      const t2 = tex.clone(); t2.needsUpdate = true;
+      t2.wrapS = t2.wrapT = THREE.RepeatWrapping; t2.repeat.set(2, 2);
+      o.material.map = t2;
+    }
+    o.material.needsUpdate = true;
+  });
+  const fx = new THREE.Group();
+  fx.name = 'galaxyCharFX';
+  /* a glowing heart at the chest + a soft light */
+  const heart = new THREE.Mesh(new THREE.SphereGeometry(.07, 12, 10),
+    new THREE.MeshBasicMaterial({ color: C.white, transparent: true, opacity: .75, blending: THREE.AdditiveBlending, depthWrite: false }));
+  heart.position.set(0, 1.30, .05);
+  fx.add(heart);
+  const core = new THREE.Mesh(new THREE.SphereGeometry(.16, 12, 10),
+    new THREE.MeshBasicMaterial({ color: C.violet, transparent: true, opacity: .3, blending: THREE.AdditiveBlending, depthWrite: false }));
+  core.position.set(0, 1.22, 0);
+  fx.add(core);
+  const light = new THREE.PointLight(C.violet, .9, 3.2, 2);
+  light.position.set(0, 1.3, 0);
+  fx.add(light);
+  /* two big tilted rings around the body (like the weapon's, but larger) */
+  const ringA = _galaxyRing(.62, .016, C.violet, .55);
+  ringA.position.set(0, 1.05, 0); ringA.rotation.set(1.35, .2, 0);
+  fx.add(ringA);
+  const ringB = _galaxyRing(.80, .010, C.bright, .4);
+  ringB.position.set(0, 1.05, 0); ringB.rotation.set(1.15, -.6, .5);
+  fx.add(ringB);
+  /* star dust orbiting the body */
+  const dustGeo = new THREE.BufferGeometry();
+  const N = 70, dp = new Float32Array(N * 3);
+  for (let i = 0; i < N; i++) {
+    const a = Math.random() * Math.PI * 2, r = .5 + Math.random() * .5;
+    dp[i * 3] = Math.cos(a) * r; dp[i * 3 + 1] = .15 + Math.random() * 1.7; dp[i * 3 + 2] = Math.sin(a) * r;
+  }
+  dustGeo.setAttribute('position', new THREE.BufferAttribute(dp, 3));
+  const dust = new THREE.Points(dustGeo, new THREE.PointsMaterial({
+    map: galaxyDotTexture(), color: C.white, size: .05, transparent: true, opacity: .85,
+    blending: THREE.AdditiveBlending, depthWrite: false, sizeAttenuation: true
+  }));
+  fx.add(dust);
+  group.add(fx);
+  group.userData.galaxyChar = { rings: [ringA, ringB], dust: dust, heart: heart, core: core, fx: fx, t: 0 };
+  return group;
+}
+function animateGalaxyCharacter(group, dt) {
+  if (!group || !group.userData || !group.userData.galaxyChar) return;
+  const gx = group.userData.galaxyChar;
+  gx.t += dt;
+  if (gx.rings) { gx.rings[0].rotation.z += dt * .5; gx.rings[1].rotation.z -= dt * .35; }
+  if (gx.dust) gx.dust.rotation.y += dt * .3;
+  if (gx.core) gx.core.material.opacity = .22 + .12 * Math.sin(gx.t * 2);
+}
+
+/* a small kamikaze drone: a flat body with four arms, spinning rotors, a camera
    pod and a red warhead light on the nose. Points along -Z like the weapons. */
 let _droneGeo = null;
 function buildDroneModel() {
@@ -2873,6 +3112,7 @@ class Player {
     if (def.mag === Infinity) return false;
     if (this.reloadT > 0 || this.deployT > 0) return false;
     if (w.mag >= def.mag || w.reserve <= 0) return false;
+    this.reloads = (this.reloads || 0) + 1;
     this.reloadTotal = def.mag <= 12 ? 2.2 : def.mag <= 30 ? 2.5 : 3.6;
     this.reloadT = this.reloadTotal;
     this._reloadTick = 0;

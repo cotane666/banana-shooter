@@ -536,6 +536,10 @@ html.touch #rangePanel{display:none !important}
 .skincard.rar-epic{box-shadow:inset 0 0 0 1px rgba(178,123,255,.25)}
 .skincard.rar-legendary{box-shadow:inset 0 0 0 1px rgba(255,176,32,.35),0 0 12px rgba(255,176,32,.14)}
 .skincard.rar-legendary:not(.locked){background:linear-gradient(180deg,#241a07,#12100a)}
+.skincard.rar-platinum{box-shadow:inset 0 0 0 1px rgba(216,150,255,.5),0 0 18px rgba(184,60,255,.35)}
+.skincard.rar-platinum:not(.locked){background:linear-gradient(180deg,#1a0930,#0a0416)}
+.achcard.plat{border-left-color:#d896ff !important;background:linear-gradient(180deg,#1d0a36,#0d0518) !important}
+.achcard.plat b{color:#e6c2ff}
 .skin-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(132px,1fr));gap:8px;
   max-height:38vh;overflow:auto;padding-right:4px}
 .skincard{background:linear-gradient(180deg,#151a1f,#0f1317);border:1px solid var(--line);

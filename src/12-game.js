@@ -647,8 +647,25 @@ class RemotePlayer {
     this.mechJet = false;
     this._mechDashT = 0;
     this._mechJetT = 0;
+    /* галактический скин персонажа, если у соперника он надет */
+    this.galaxyChar = false;
   }
 
+  /* The peer wears the platinum galactic character skin: repaint the soldier in
+     nebula colours and add the orbiting rings. Applied once. */
+  setGalaxyChar(on) {
+    on = !!on;
+    if (on === this.galaxyChar) return;
+    this.galaxyChar = on;
+    if (on) {
+      if (!this.mesh.userData.galaxyChar) applyGalaxyCharacter(this.mesh);
+    } else {
+      // turning it off is rare; rebuild a clean soldier
+      const parts = this.mesh.userData.parts;
+      if (this.mesh.userData.galaxyChar && this.mesh.userData.galaxyChar.fx) this.mesh.remove(this.mesh.userData.galaxyChar.fx);
+      this.mesh.userData.galaxyChar = null;
+    }
+  }
   /* Attach (or swap) the weapon model in the right hand for this slot.
      `id` comes from the peer's state packet; `skinId` is the worn skin, so the
      opponent sees the same painted weapon. `heldGroups` lists the weapon ids we
@@ -677,6 +694,8 @@ class RemotePlayer {
     w.scale.setScalar(.95);
     armR.add(w);
     this.weaponGroup = w;
+    /* the galaxy gun needs its rings/dust animated each frame */
+    this._galaxyGun = !!w.userData.galaxy;
   }
 
   /* МЕХАКОСТЮМ: swap the soldier for a mech chassis. `on` comes from the peer's
@@ -1516,22 +1535,46 @@ const Game = {
          время ТЕКУЩЕГО забега (playTime включает и прошлые сохранённые этапы) */
       fastKills: this._fastKills || 0,
       fastClear: this._fastClears || 0,
-      runTime: this.offline ? (U.now() - this.offline.startTime) / 1000 : 0
+      runTime: this.offline ? (U.now() - this.offline.startTime) / 1000 : 0,
+      /* новые интересные счётчики */
+      miniBossKills: this._miniBossKills || 0,
+      spent: p ? (p.moneySpent || 0) : 0,
+      misses: p ? Math.max(0, (p.bulletsFired | 0) - (p.bulletsHit | 0)) : 0,
+      wavesNoReload: this._wavesNoReload || 0,
+      wavesNoShots: this._wavesNoShots || 0,
+      top3: Store.data.top3 || 0,
+      /* финальное платиновое достижение: сколько остальных уже выполнено */
+      otherDone: (typeof achOtherDone === 'function') ? achOtherDone(Store.data.ach) : 0,
+      otherTotal: ACHIEVEMENTS.length - 1,
+      otherAchievementsDone: (typeof achAllOthersDone === 'function') ? achAllOthersDone(Store.data.ach) : false
     };
   },
   checkAchievements() {
-    const s = this.statsSnapshot();
     const ach = Store.data.ach = Store.data.ach || {};
     let earned = false;
-    ACHIEVEMENTS.forEach(a => {
-      if (ach[a.id]) return;
-      if (a.check(s)) {
-        ach[a.id] = 1; earned = true;
-        UI.toast('ДОСТИЖЕНИЕ: ' + a.name + ' — ' + a.desc, '#ffd24a');
-        UI.feed('<span class="z">🏆 ' + a.name + '</span>');
-        Audio3D_SFX.buy();
+    const grant = a => {
+      ach[a.id] = 1; earned = true;
+      UI.toast('ДОСТИЖЕНИЕ: ' + a.name + ' — ' + a.desc, '#ffd24a');
+      UI.feed('<span class="z">🏆 ' + a.name + '</span>');
+      Audio3D_SFX.buy();
+      /* финальное: вместе с ним открывается галактический скин персонажа */
+      if (a.id === 'platinum_all') {
+        Store.data.skinChar = 'galaxy';
+        UI.center('ВЛАДЫКА ГАЛАКТИКИ', 'Открыт скин «ГАЛАКТИКА» на оружие и персонажа', 4.5);
+        UI.feed('<span class="z">🌌 Открыт галактический скин персонажа</span>');
       }
+    };
+    const s = this.statsSnapshot();
+    ACHIEVEMENTS.forEach(a => {
+      if (ach[a.id] || a.id === 'platinum_all') return;   // platinum handled last
+      if (a.check(s)) grant(a);
     });
+    /* платина зависит от ВСЕХ остальных, которые могли быть выданы прямо сейчас,
+       поэтому её проверяем ПОСЛЕ цикла по свежему состоянию ach */
+    if (!ach['platinum_all']) {
+      const pa = ACHIEVEMENTS.find(a => a.id === 'platinum_all');
+      if (pa && achAllOthersDone(ach)) grant(pa);
+    }
     if (earned) Store.save();
     return earned;
   },
@@ -2019,6 +2062,7 @@ const Game = {
     this._waveKills = 0; this._waveHurt = false; this._runDeaths = 0;
     this._hvKills = {}; this._shieldKills = 0;
     this._fastKills = 0; this._killTimes = []; this._fastClears = 0;
+    this._miniBossKills = 0; this._wavesNoReload = 0; this._wavesNoShots = 0;
     // NOTE: the checkpoint is deliberately NOT cleared here. It is dropped only
     // by an explicit "НОВАЯ ИГРА" (or after being consumed), so leaving to the
     // menu and returning can still resume the run.
@@ -3506,7 +3550,7 @@ const Game = {
     if (this.player.has(id)) { Audio3D_SFX.deny(); UI.toast('Уже куплено'); return; }
     const free = this.isFreeShop();
     if (!free && this.player.money < w.price) { Audio3D_SFX.deny(); UI.toast('Не хватает денег'); return; }
-    if (!free) this.player.money -= w.price;
+    if (!free) { this.player.money -= w.price; this.player.moneySpent = (this.player.moneySpent || 0) + w.price; }
     this.player.give(id);
     this.player.slot = w.slot;
     this.player.deployT = .5;
@@ -3537,7 +3581,7 @@ const Game = {
       }
       // the box is a one-off upgrade: it simply removes the medkit cap
       if (g.medkitBox && this.player.medkitUnlimited) { Audio3D_SFX.deny(); UI.toast('Уже куплено'); return; }
-      if (!free) this.player.money -= g.price;
+      if (!free) { this.player.money -= g.price; this.player.moneySpent = (this.player.moneySpent || 0) + g.price; }
       if (g.ammo) this.refillAmmo();
       else if (g.medkit) this.player.medkits = (this.player.medkits || 0) + 1;
       else if (g.medkitBox) { this.player.medkitUnlimited = true; }
@@ -3586,7 +3630,7 @@ const Game = {
       const currentBest = this.player.energyArmor ? 'energy' : this.player.heavyArmor ? 'heavy' : null;
       if (currentBest === 'energy' || (currentBest === 'heavy' && !g.energy)) { Audio3D_SFX.deny(); UI.toast('Уже куплено'); return; }
       if (!free && this.player.money < g.price) { Audio3D_SFX.deny(); UI.toast('Не хватает денег'); return; }
-      if (!free) this.player.money -= g.price;
+      if (!free) { this.player.money -= g.price; this.player.moneySpent = (this.player.moneySpent || 0) + g.price; }
       if (g.energy) this.player.energyArmor = true;
       else this.player.heavyArmor = true;
       this.player.armor = g.ap;
@@ -3600,7 +3644,7 @@ const Game = {
 
     if (this.player.armor >= 100 && (!g.helmet || this.player.helmet) && !this.player.heavyArmor && !this.player.energyArmor) { Audio3D_SFX.deny(); UI.toast('Уже куплено'); return; }
     if (!free && this.player.money < g.price) { Audio3D_SFX.deny(); UI.toast('Не хватает денег'); return; }
-    if (!free) this.player.money -= g.price;
+    if (!free) { this.player.money -= g.price; this.player.moneySpent = (this.player.moneySpent || 0) + g.price; }
     this.player.armor = g.ap;
     if (g.helmet) this.player.helmet = true;
     Audio3D_SFX.buy();
@@ -4212,6 +4256,9 @@ const Game = {
     o.toSpawn = count;
     o.betweenWaves = false;
     o.waveStart = U.now();
+    /* для целей «без перезарядки / без выстрела» запоминаем счётчики на старте волны */
+    this._reloadsAtWaveStart = (this.player && this.player.reloads) || 0;
+    this._shotsAtWaveStart = (this.player && (this.player.bulletsFired | 0)) || 0;
     // a checkpoint every 20 waves — death then resumes from here
     if (o.wave % 20 === 0) {
       this.saveCheckpoint(o.wave);
@@ -4567,6 +4614,13 @@ const Game = {
          perfectWaves = cleared without dying yet, noDamageWaves = cleared unhurt */
       if (this._runDeaths === 0) this._perfectWaves = (this._perfectWaves || 0) + 1;
       if (!this._waveHurt) this._noDamageWaves = (this._noDamageWaves || 0) + 1;
+      /* волны без перезарядки / без единого выстрела */
+      const reloadsNow = (this.player && this.player.reloads) || 0;
+      const shotsNow = (this.player && (this.player.bulletsFired | 0)) || 0;
+      if (reloadsNow === (this._reloadsAtWaveStart || 0)) this._wavesNoReload = (this._wavesNoReload || 0) + 1;
+      else this._wavesNoReload = 0;
+      if (shotsNow === (this._shotsAtWaveStart || 0)) this._wavesNoShots = (this._wavesNoShots || 0) + 1;
+      else this._wavesNoShots = 0;
       this._waveKills = 0; this._waveHurt = false;
       Audio3D_SFX.roundEnd(true);
       /* clearing wave 100 means the campaign is finished */
@@ -6965,6 +7019,7 @@ const Game = {
       const anyLeft = this.horde && this.horde.list.some(o => o !== z && (o.isBoss || o.isMiniBoss) && o.alive && !o.dying);
       if (!anyLeft) this.refreshMusic();
       if (z.isBoss) { this._bossKills = (this._bossKills || 0) + 1; }
+      if (z.isMiniBoss) { this._miniBossKills = (this._miniBossKills || 0) + 1; }
     }
     this.checkAchievements();
     UI.feed('<b>' + U.esc(p.name) + '</b> <span class="z">✖ ' + def.name + (headshot ? ' (в голову)' : '') + '</span> +$' + def.money);
@@ -7150,6 +7205,7 @@ const Game = {
       hp: Math.round(p.health), ar: Math.round(p.armor), sl: p.slot,
       wi: wpn ? wpn.id : null,                 // held weapon, so the model can show it
       sk: (wpn && (Store.data.skinOn || {})[wpn.id]) || null,   // worn skin, shown to peers
+      cs: (Store.data.skinChar === 'galaxy') ? 1 : 0,           // galactic character skin
       mg: wpn && wpn.mag !== Infinity ? wpn.mag : null,
       sp: +(p.spinT || 0).toFixed(2),           // minigun spin-up, for the barrels
       mc: p.mechSuit ? 1 : 0,                   // in the mech: show the chassis remotely
@@ -7184,6 +7240,7 @@ const Game = {
     // show the weapon the peer is actually holding (including the minigun spin)
     // and the SKIN they wear, so painted weapons are visible in a duel
     rp.setWeapon(s.wi, s.sk);
+    rp.setGalaxyChar(s.cs === 1);
     rp.spinT = (s.sp !== undefined) ? s.sp : 0;
     // in the mech: hide the soldier and show the chassis instead
     rp.setMech(s.mc);
@@ -7872,6 +7929,13 @@ const Game = {
     // ---- environment ----
     this.updateEnvCycle(dt);
     this.updateWeather(dt);
+
+    // ---- galaxy skins: spin the rings/dust on the viewmodel and every peer ----
+    if (this.player && this.player.vmInner) animateGalaxySkin(this.player.vmInner, dt);
+    if (this.remotePlayers) for (const rp of this.remotePlayers) {
+      if (rp.weaponGroup) animateGalaxySkin(rp.weaponGroup, dt);
+      if (rp.mesh && rp.mesh.userData && rp.mesh.userData.galaxyChar) animateGalaxyCharacter(rp.mesh, dt);
+    }
 
     // ---- achievements screen: refresh its progress bars while it is open ----
     this._achTick = (this._achTick || 0) - dt;

@@ -1009,7 +1009,7 @@ const UI = {
         const pct = on ? 100 : Math.round(pr.frac * 100);
         const barCol = on ? '#ffd24a' : rcol;
         const readout = on ? 'ВЫПОЛНЕНО' : (pr.suffix ? achProgressText(pr.have, pr.goal) + pr.suffix : achProgressText(pr.have, pr.goal));
-        return '<div class="achcard' + (on ? ' on' : '') + '" data-ach="' + a.id + '"><b><span class="sw" style="display:inline-block;width:10px;height:10px;' +
+        return '<div class="achcard' + (on ? ' on' : '') + (sk && sk.rarity === 'platinum' ? ' plat' : '') + '" data-ach="' + a.id + '"><b><span class="sw" style="display:inline-block;width:10px;height:10px;' +
           'border-radius:2px;margin-right:6px;vertical-align:-1px;border:1px solid rgba(255,255,255,.3);background:' + swatch + '"></span>' +
           (on ? '🏆 ' : '🔒 ') + U.esc(a.name) + '</b><i>' + U.esc(a.desc) + '</i>' +
           '<div class="achprog"><div class="achbar"><span style="width:' + pct + '%;background:' + barCol + '"></span></div>' +
@@ -1176,9 +1176,19 @@ const Skins = {
   renderTargets() {
     const el = $('skinTargetChips');
     if (!el) return;
+    const galOn = Store.data.skinChar === 'galaxy';
     el.innerHTML = '<button data-t="weapon"' + (this.target === 'weapon' ? ' class="on"' : '') + '>ОРУЖИЕ</button>' +
-      '<button data-t="player"' + (this.target === 'player' ? ' class="on"' : '') + '>ПЕРСОНАЖ</button>';
-    Array.from(el.children).forEach(b => b.addEventListener('click', () => { this.target = b.dataset.t; this.renderTargets(); this.rebuild(); }));
+      '<button data-t="player"' + (this.target === 'player' ? ' class="on"' : '') + '>ПЕРСОНАЖ</button>' +
+      '<button data-t="galchar"' + (galOn ? ' class="on"' : '') + ' style="margin-left:8px">ГАЛАКТИКА: ' + (galOn ? 'ВКЛ' : 'ВЫКЛ') + '</button>';
+    Array.from(el.children).forEach(b => b.addEventListener('click', () => {
+      if (b.dataset.t === 'galchar') {
+        if (!(Store.data.ach || {})['platinum_all']) { UI.toast('Скин открывается за достижение «ВЛАДЫКА ГАЛАКТИКИ»', '#d896ff'); Audio3D_SFX.deny(); return; }
+        Store.data.skinChar = Store.data.skinChar === 'galaxy' ? '' : 'galaxy';
+        Store.save(); this.renderTargets(); this.rebuild();
+        Audio3D_SFX.uiClick(); return;
+      }
+      this.target = b.dataset.t; this.renderTargets(); this.rebuild();
+    }));
   },
 
   renderWeaponList() {
@@ -1232,6 +1242,7 @@ const Skins = {
     if (this.target === 'player') {
       // a soldier holding the previewed weapon, so the skin is seen in context
       const soldier = buildSoldierMesh('ct');
+      if (Store.data.skinChar === 'galaxy' && typeof applyGalaxyCharacter === 'function') applyGalaxyCharacter(soldier);
       const gun = buildWeaponModel(this.weaponId);
       if (skin) applyWeaponSkin(gun, skin);
       const armR = soldier.userData.parts && soldier.userData.parts.armR;
@@ -1255,6 +1266,11 @@ const Skins = {
     this._raf = requestAnimationFrame(() => this.loop());
     if (UI.current !== 'skins' || !this.renderer) { this._raf && cancelAnimationFrame(this._raf); this._raf = 0; return; }
     this.resize();
+    // animate galaxy skins in the preview (rings / dust / character)
+    if (this._base) for (const c of this._base.children) {
+      if (typeof animateGalaxySkin === 'function') animateGalaxySkin(c, 1 / 60);
+      if (typeof animateGalaxyCharacter === 'function') animateGalaxyCharacter(c, 1 / 60);
+    }
     // idle auto-spin plus manual rotation
     if (!this.dragging) this._spin += .004;
     this.root.rotation.y = this.rotY + this._spin;

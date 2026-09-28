@@ -551,6 +551,10 @@ html.touch #rangePanel{display:none !important}
 .skincard.rar-epic{box-shadow:inset 0 0 0 1px rgba(178,123,255,.25)}
 .skincard.rar-legendary{box-shadow:inset 0 0 0 1px rgba(255,176,32,.35),0 0 12px rgba(255,176,32,.14)}
 .skincard.rar-legendary:not(.locked){background:linear-gradient(180deg,#241a07,#12100a)}
+.skincard.rar-platinum{box-shadow:inset 0 0 0 1px rgba(216,150,255,.5),0 0 18px rgba(184,60,255,.35)}
+.skincard.rar-platinum:not(.locked){background:linear-gradient(180deg,#1a0930,#0a0416)}
+.achcard.plat{border-left-color:#d896ff !important;background:linear-gradient(180deg,#1d0a36,#0d0518) !important}
+.achcard.plat b{color:#e6c2ff}
 .skin-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(132px,1fr));gap:8px;
   max-height:38vh;overflow:auto;padding-right:4px}
 .skincard{background:linear-gradient(180deg,#151a1f,#0f1317);border:1px solid var(--line);
@@ -1872,7 +1876,7 @@ const ACHIEVEMENTS = [
   { id: 'e_kill10',   name: 'РАЗМИНКА',        desc: 'Убить 10 зомби за забег',        check: s => s.kills >= 10 },
   { id: 'e_wave3',    name: 'ТРЕТЬЯ ВОЛНА',    desc: 'Дожить до 3 волны',              check: s => s.wave >= 3 },
   { id: 'e_head1',    name: 'ТОЧНЫЙ ГЛАЗ',     desc: 'Убить в голову',                 check: s => s.headshots >= 1 },
-  { id: 'e_money1k',  name: 'КОПЕЙКА',         desc: 'Накопить $1 000',                check: s => s.money >= 1000 },
+  { id: 'e_money1k',  name: 'ЖИВУЧИЙ СТАРТ',   desc: 'Отбить 3 волны, не потеряв ни капли HP', check: s => s.noDamageWaves >= 3 },
   { id: 'e_score5k',  name: 'ПЕРВЫЕ ОЧКИ',     desc: 'Набрать 5 000 очков',            check: s => s.score >= 5000 },
   { id: 'e_kill50',   name: 'ПОЛСОТНИ',        desc: '50 зомби за забег',              check: s => s.kills >= 50 },
   { id: 'e_time60',   name: 'МАРАФОНЕЦ',       desc: 'Пережить 1 минуту',              check: s => s.playTime >= 60 },
@@ -1881,7 +1885,7 @@ const ACHIEVEMENTS = [
   { id: 'm_kill200',  name: 'ДВЕСТИ',          desc: '200 зомби за забег',             check: s => s.kills >= 200 },
   { id: 'm_head25',   name: 'В ГОЛОВУ',        desc: '25 убийств в голову',            check: s => s.headshots >= 25 },
   { id: 'm_money10k', name: 'КАПИТАЛ',         desc: 'Накопить $10 000',               check: s => s.money >= 10000 },
-  { id: 'm_score25k', name: 'НАБИРАЕМ',        desc: 'Набрать 25 000 очков',           check: s => s.score >= 25000 },
+  { id: 'm_score25k', name: 'НЕОСТОРОЖНЫЙ',    desc: 'Выстрелить 5000 раз и промазать 4000', check: s => s.shots >= 5000 && s.misses >= 4000 },
   { id: 'm_acc40',    name: 'СТАБИЛЬНОСТЬ',    desc: 'Точность 40%+ (200+ выстрелов)', check: s => s.shots >= 200 && s.accuracy >= 40 },
   { id: 'm_mech10',   name: 'ПИЛОТ',           desc: '10 убийств из мехакостюма',      check: s => s.mechKills >= 10 },
   { id: 'm_knife5',   name: 'ТИХАЯ СМЕРТЬ',    desc: '5 убийств ножом',                check: s => s.knifeKills >= 5 },
@@ -1896,7 +1900,7 @@ const ACHIEVEMENTS = [
   { id: 'h_wave35',   name: 'ТРИДЦАТЬ ПЯТЬ',   desc: 'Дожить до 35 волны',             check: s => s.wave >= 35 },
   { id: 'h_kill800',  name: 'ВОСЕМЬСОТ',       desc: '800 зомби за забег',             check: s => s.kills >= 800 },
   { id: 'h_head75',   name: 'ХИРУРГ',          desc: '75 убийств в голову',            check: s => s.headshots >= 75 },
-  { id: 'h_score75k', name: 'СЕМЬДЕСЯТ ПЯТЬ ТЫСЯЧ', desc: '75 000 очков',              check: s => s.score >= 75000 },
+  { id: 'h_score75k', name: 'ЗОМБИ-БОСС',      desc: 'Убить мини-босса',               check: s => s.miniBossKills >= 1 },
   { id: 'h_boss8',    name: 'ГРОЗА',           desc: 'Убить 8 боссов за забег',        check: s => s.bossKills >= 8 },
   { id: 'h_mech50',   name: 'МЕТАЛЛОЛОМ',      desc: '50 убийств из мехакостюма',      check: s => s.mechKills >= 50 },
   { id: 'h_knife25',  name: 'МАСТЕР НОЖА',     desc: '25 убийств ножом',               check: s => s.knifeKills >= 25 },
@@ -1906,16 +1910,18 @@ const ACHIEVEMENTS = [
   { id: 'h_med30',    name: 'ЛАЗАРЕТ',         desc: 'Использовать 30 аптечек',        check: s => s.medkitsUsed >= 30 },
   { id: 'h_perfect20', name: 'НЕПОБЕДИМЫЙ',    desc: '20 волн без смерти',             check: s => s.perfectWaves >= 20 },
   { id: 'h_total5k',  name: 'ПЯТЬ ТЫСЯЧ',      desc: '5 000 зомби всего',              check: s => s.killsTotal >= 5000 },
-  { id: 'h_rich100k', name: 'МИЛЛИОНЕР',       desc: 'Накопить $100 000',              check: s => s.money >= 100000 },
+  { id: 'h_rich100k', name: 'РАСТРАТА',        desc: 'Потратить $50 000 за забег',     check: s => s.spent >= 50000 },
   { id: 'h_time1200', name: 'СТОЙКИЙ',         desc: 'Пережить 20 минут в забеге',     check: s => s.playTime >= 1200 },
   { id: 'h_win10',    name: 'ОНЛАЙН-БОЕЦ',     desc: '10 побед в онлайне',             check: s => s.wins >= 10 },
-  /* ИНТЕРЕСНЫЕ: скорострельные и на выносливость */
+  /* ИНТЕРЕСНЫЕ: скорострельные, аккуратные и на выносливость */
   { id: 'x_rampage',  name: 'РАЗДЕЛЯЮЩИЙ ХАОС', desc: '100 убийств за 5 секунд',       check: s => s.fastKills >= 100 },
+  { id: 'm_noReload', name: 'БЕЗ ПЕРЕЗАРЯДКИ', desc: '20 волн без единой перезарядки', check: s => s.wavesNoReload >= 20 },
+  { id: 'h_pacifist', name: 'ПАЦИФИСТ',        desc: '10 волн без единого выстрела',   check: s => s.wavesNoShots >= 10 },
   /* --- very hard --- */
   { id: 'v_wave75',   name: 'СЕМЬДЕСЯТ ПЯТЬ',  desc: 'Дожить до 75 волны',             check: s => s.wave >= 75 },
   { id: 'v_kill1500', name: 'ТЫСЯЧА ПЯТЬСОТ',  desc: '1 500 зомби за забег',           check: s => s.kills >= 1500 },
   { id: 'v_head200',  name: 'АНГЕЛ СМЕРТИ',    desc: '200 убийств в голову',           check: s => s.headshots >= 200 },
-  { id: 'v_score250k', name: 'ЧЕТВЕРТЬ МИЛЛИОНА', desc: '250 000 очков',               check: s => s.score >= 250000 },
+  { id: 'v_score250k', name: 'БЕЗУПРЕЧНЫЙ',    desc: 'Пройти 100 волн без единой смерти', check: s => s.perfectWaves >= 100 },
   { id: 'v_perfect40', name: 'ЖЕЛЕЗНЫЙ',       desc: '40 волн без смерти',             check: s => s.perfectWaves >= 40 },
   { id: 'v_boss15',   name: 'ПОГЛОТИТЕЛЬ БОССОВ', desc: '15 боссов за забег',          check: s => s.bossKills >= 15 },
   { id: 'v_streak10', name: 'ДЕСЯТЬ В ГОЛОВУ', desc: '10 хедшотов подряд',             check: s => s.bestHeadStreak >= 10 },
@@ -1923,7 +1929,7 @@ const ACHIEVEMENTS = [
   { id: 'v_total20k', name: 'ДВАДЦАТЬ ТЫСЯЧ',  desc: '20 000 зомби всего',             check: s => s.killsTotal >= 20000 },
   { id: 'v_clear5',   name: 'ПЯТЬ ПРОХОДОВ',   desc: 'Пройти игру 5 раз',              check: s => s.clears >= 5 },
   { id: 'x_speedrun', name: 'СПЕШКА',          desc: 'Пройти игру быстрее 1 ч 30 мин', check: s => s.fastClear >= 1 },
-  { id: 'v_win50',    name: 'ЛЕГЕНДА ОНЛАЙНА', desc: '50 побед в онлайне',             check: s => s.wins >= 50 },
+  { id: 'v_win50',    name: 'ВЕТЕРАН ВОЙНЫ',   desc: 'Выйти в топ-3 рейтинга сервера',  check: s => s.top3 >= 1 },
   { id: 'x_marathon', name: 'ЖЕЛЕЗНАЯ ВЫДЕРЖКА', desc: 'Пережить 45 минут одним забегом', check: s => s.runTime >= 2700 },
   { id: 'v_time3600', name: 'ЧАС В ПЕКЛЕ',     desc: 'Пережить 60 минут в забеге',     check: s => s.playTime >= 3600 },
   /* ============================================================
@@ -1946,7 +1952,13 @@ const ACHIEVEMENTS = [
   { id: 'hv2_atomic',  name: 'КОНЕЦ СВЕТА',    desc: '60 убийств из атомного РПГ',     check: s => s.atomicKills >= 60 },
   { id: 'hv2_yhs',     name: 'СВЕРХАРСЕНАЛ',   desc: '2 500 убийств из Y.H.S',         check: s => s.yhsKills >= 2500 },
   { id: 'hv2_rocket',  name: 'СТАЯ',           desc: '250 убийств из ракетницы',       check: s => s.rocketKills >= 250 },
-  { id: 'hv2_shield',  name: 'ОТРАЖАТЕЛЬ',     desc: '80 убийств с поднятым щитом',    check: s => s.shieldKills >= 80 }
+  { id: 'hv2_shield',  name: 'ОТРАЖАТЕЛЬ',     desc: '80 убийств с поднятым щитом',    check: s => s.shieldKills >= 80 },
+  /* ============================================================
+     ПЛАТИНОВОЕ ФИНАЛЬНОЕ ДОСТИЖЕНИЕ — венец коллекции. Чтобы его получить,
+     нужно выполнить ВСЕ остальные достижения (кроме него самого). Награда —
+     «ГАЛАКТИКА»: очень красивый скин на оружие и на персонажа.
+     ============================================================ */
+  { id: 'platinum_all', name: 'ВЛАДЫКА ГАЛАКТИКИ', desc: 'Выполнить все остальные достижения', check: s => s.otherAchievementsDone === true }
 ];
 
 /* ============================================================
@@ -1963,26 +1975,28 @@ const ACH_PROGRESS = {
   rich: ['money', 50000], survive: ['playTime', 900],
   /* easy */
   e_kill10: ['kills', 10], e_wave3: ['wave', 3], e_head1: ['headshots', 1],
-  e_money1k: ['money', 1000], e_score5k: ['score', 5000], e_kill50: ['kills', 50],
+  e_money1k: ['noDamageWaves', 3], e_score5k: ['score', 5000], e_kill50: ['kills', 50],
   e_time60: ['playTime', 60],
   /* medium */
   m_wave15: ['wave', 15], m_kill200: ['kills', 200], m_head25: ['headshots', 25],
-  m_money10k: ['money', 10000], m_score25k: ['score', 25000],
+  m_money10k: ['money', 10000],
   m_mech10: ['mechKills', 10], m_knife5: ['knifeKills', 5], m_streak3: ['bestHeadStreak', 3],
   m_med5: ['medkitsUsed', 5], m_wavekill25: ['maxWaveKills', 25], m_time300: ['playTime', 300],
   m_boss3: ['bossKills', 3], m_deaths10: ['perfectWaves', 10], m_total1k: ['killsTotal', 1000],
+  m_noReload: ['wavesNoReload', 20],
   /* hard */
   h_wave35: ['wave', 35], h_kill800: ['kills', 800], h_head75: ['headshots', 75],
-  h_score75k: ['score', 75000], h_boss8: ['bossKills', 8], h_mech50: ['mechKills', 50],
+  h_score75k: ['miniBossKills', 1], h_boss8: ['bossKills', 8], h_mech50: ['mechKills', 50],
   h_knife25: ['knifeKills', 25], h_streak6: ['bestHeadStreak', 6],
   h_wavekill60: ['maxWaveKills', 60], h_med30: ['medkitsUsed', 30],
   h_perfect20: ['perfectWaves', 20], h_total5k: ['killsTotal', 5000],
-  h_rich100k: ['money', 100000], h_time1200: ['playTime', 1200], h_win10: ['wins', 10],
+  h_rich100k: ['spent', 50000], h_time1200: ['playTime', 1200], h_win10: ['wins', 10],
+  h_pacifist: ['wavesNoShots', 10],
   /* very hard */
   v_wave75: ['wave', 75], v_kill1500: ['kills', 1500], v_head200: ['headshots', 200],
-  v_score250k: ['score', 250000], v_perfect40: ['perfectWaves', 40], v_boss15: ['bossKills', 15],
+  v_score250k: ['perfectWaves', 100], v_perfect40: ['perfectWaves', 40], v_boss15: ['bossKills', 15],
   v_streak10: ['bestHeadStreak', 10], v_total20k: ['killsTotal', 20000],
-  v_clear5: ['clears', 5], v_win50: ['wins', 50], v_time3600: ['playTime', 3600],
+  v_clear5: ['clears', 5], v_win50: ['top3', 1], v_time3600: ['playTime', 3600],
   /* интересные: скорострельные и на выносливость */
   x_rampage: ['fastKills', 100], x_speedrun: ['fastClear', 1], x_marathon: ['runTime', 2700],
   /* heavy arsenal (both sets) */
@@ -2012,6 +2026,17 @@ function achProgress(a, s) {
     const have = s.fastClear || 0, goal = 1;
     return { have: have, goal: goal, frac: have >= 1 ? 1 : 0 };
   }
+  /* НЕОСТОРОЖНЫЙ: нужно И выстрелить много, И много промазать — берём минимум долей */
+  if (a.id === 'm_score25k') {
+    const shots = s.shots || 0, misses = s.misses || 0;
+    const frac = Math.min(shots / 5000, misses / 4000);
+    return { have: Math.min(shots, misses), goal: 4000, frac: U.clamp(frac, 0, 1), label: Math.round(misses) + ' промахов' };
+  }
+  /* финальное платиновое достижение: прогресс = доля ВЫПОЛНЕННЫХ остальных */
+  if (a.id === 'platinum_all') {
+    const done = s.otherDone || 0, total = s.otherTotal || 1;
+    return { have: done, goal: total, frac: U.clamp(done / total, 0, 1) };
+  }
   const spec = ACH_PROGRESS[a.id];
   if (!spec) return { have: 0, goal: 1, frac: 0 };
   const have = Math.max(0, s[spec[0]] || 0), goal = spec[1];
@@ -2021,6 +2046,22 @@ function achProgress(a, s) {
 function achProgressText(have, goal) {
   const f = n => Math.round(n).toLocaleString('ru-RU');
   return f(have) + ' / ' + f(goal);
+}
+/* how many achievements (excluding the platinum one) are done, and whether all
+   of them are — the condition behind the final platinum reward. */
+function achOtherDone(ach) {
+  ach = ach || {};
+  let n = 0;
+  for (let i = 0; i < ACHIEVEMENTS.length; i++) {
+    const id = ACHIEVEMENTS[i].id;
+    if (id === 'platinum_all') continue;
+    if (ach[id]) n++;
+  }
+  return n;
+}
+function achAllOthersDone(ach) {
+  const total = ACHIEVEMENTS.length - 1;
+  return achOtherDone(ach) >= total;
 }
 
 /* ============================================================
@@ -2034,9 +2075,11 @@ const SKIN_RARITIES = {
   uncommon:  { id: 'uncommon',  label: 'НЕОБЫЧНЫЙ',   color: 0x57d16a, deco: 'stripe', glow: .32, beads: 0 },
   rare:      { id: 'rare',      label: 'РЕДКИЙ',      color: 0x4aa3ff, deco: 'vent',   glow: .46, beads: 2 },
   epic:      { id: 'epic',      label: 'ЭПИЧЕСКИЙ',   color: 0xb27bff, deco: 'plasma', glow: .62, beads: 3 },
-  legendary: { id: 'legendary', label: 'ЛЕГЕНДАРНЫЙ', color: 0xffb020, deco: 'legend', glow: .80, beads: 4 }
+  legendary: { id: 'legendary', label: 'ЛЕГЕНДАРНЫЙ', color: 0xffb020, deco: 'legend', glow: .80, beads: 4 },
+  /* платина — только для финального достижения «ВЛАДЫКА ГАЛАКТИКИ» */
+  platinum:  { id: 'platinum',  label: 'ПЛАТИНОВЫЙ',  color: 0xd896ff, deco: 'galaxy', glow: 1.0, beads: 8 }
 };
-const SKIN_RARITY_ORDER = ['common', 'uncommon', 'rare', 'epic', 'legendary'];
+const SKIN_RARITY_ORDER = ['common', 'uncommon', 'rare', 'epic', 'legendary', 'platinum'];
 
 /* palettes are grouped by rarity so a rarer skin always looks fancier.
    Each palette now gives a FULL multi-part scheme: separate colours for the
@@ -2086,7 +2129,11 @@ const SKIN_PALETTES = [
   { rar: 'legendary', heavy: 1, pat: 'wood',    body: 0x2a1a0c, steel: 0xffd0a0, mag: 0x1a0f06, grip: 0x0c0703, accent: 0xd8a060, glow: 0xffc080, shot: 0xffe0b0 },
   { rar: 'legendary', heavy: 1, pat: 'brick',   body: 0x2a1414, steel: 0xffb0b0, mag: 0x180a0a, grip: 0x0c0505, accent: 0xff5040, glow: 0xff8070, shot: 0xffb0a0 },
   { rar: 'legendary', heavy: 1, pat: 'noise',   body: 0x101820, steel: 0xa0c0e0, mag: 0x080e14, grip: 0x040608, accent: 0x80b0ff, glow: 0xa0d0ff, shot: 0xc0e0ff },
-  { rar: 'legendary', heavy: 1, pat: 'checker', body: 0x1a1a1a, steel: 0xf0f0f0, mag: 0x0e0e0e, grip: 0x060606, accent: 0xc0c0c0, glow: 0xe0e0ff, shot: 0xffffff }
+  { rar: 'legendary', heavy: 1, pat: 'checker', body: 0x1a1a1a, steel: 0xf0f0f0, mag: 0x0e0e0e, grip: 0x060606, accent: 0xc0c0c0, glow: 0xe0e0ff, shot: 0xffffff },
+  /* ПЛАТИНА — единственный экземпляр, для финального достижения «ВЛАДЫКА
+     ГАЛАКТИКИ». Полноценная модель строится в applyGalaxySkin; эти цвета —
+     запасные для карточек/трассеров. */
+  { rar: 'platinum', pat: 'galaxy', body: 0x0a0416, steel: 0xb83cff, mag: 0x150822, grip: 0x0a0414, accent: 0xd896ff, glow: 0xd896ff, shot: 0xe8c8ff }
 ];
 const _PAL_BY_RAR = {};
 SKIN_PALETTES.forEach(p => { (_PAL_BY_RAR[p.rar] = _PAL_BY_RAR[p.rar] || []).push(p); });
@@ -2094,13 +2141,13 @@ SKIN_PALETTES.forEach(p => { (_PAL_BY_RAR[p.rar] = _PAL_BY_RAR[p.rar] || []).pus
 /* which rarity an achievement's reward skin has */
 function skinRarityFor(achId) {
   // heavy-arsenal goals are the fanciest; the second set is all legendary
+  if (achId === 'platinum_all') return 'platinum';
   if (achId.startsWith('hv2_')) return 'legendary';
   if (achId.startsWith('hv_')) return (achId === 'hv_atomic' || achId === 'hv_yhs' || achId === 'hv_shield' || achId === 'hv_cannon') ? 'legendary' : 'epic';
   // new goal tiers by their id prefix
   if (achId === 'x_rampage' || achId === 'x_speedrun') return 'legendary';
   if (achId === 'x_marathon') return 'epic';
   if (achId.startsWith('v_')) return 'legendary';
-  if (achId.startsWith('h_')) return 'epic';
   if (achId.startsWith('m_')) return 'rare';
   if (achId.startsWith('e_')) return 'uncommon';
   // the original 11 are hand-graded
@@ -2119,7 +2166,11 @@ const SKINS = (() => {
     const rar = skinRarityFor(a.id);
     const rd = SKIN_RARITIES[rar];
     let pal, deco = rd.deco, beads = rd.beads;
-    if (a.id.startsWith('hv_') || a.id.startsWith('hv2_')) {
+    if (rar === 'platinum') {
+      /* «ГАЛАКТИКА» — единственная в своём роде, не зависит от палитр */
+      pal = SKIN_PALETTES.filter(p => p.rar === 'platinum')[0];
+      deco = 'galaxy'; beads = 8;
+    } else if (a.id.startsWith('hv_') || a.id.startsWith('hv2_')) {
       // each heavy weapon gets its OWN exclusive heavy palette + fancier deco
       const pool = SKIN_PALETTES.filter(p => p.heavy && p.rar === rar);
       const k = (hvUsed[rar] = (hvUsed[rar] || 0));
@@ -2203,7 +2254,8 @@ const Store = {
           offCount: 1, offHp: 1, offFree: 0, offMode: 'normal', offMods: {}, offModsRun: 0, offModPick: 0, checkpoint: null, shopAllow: {}, shopItems: {}, music: 1, sfxVol: 100, musicVol: 70,
           grenade: 'frag', buildable: 'turret', weather: 'day', trapsEnabled: 1, offCountExact: 10, offCountFixed: 0,
           timeOfDay: 'day', skyWeather: 'clear', envAuto: 0, envOff: 0, envAutoSpeed: 1,
-          ach: {}, runs: [], skinOn: {},
+          ach: {}, runs: [], skinOn: {}, skinChar: '',
+          /* галактический скин персонажа открыт вместе с платиновым достижением */
           /* one saved run per offline mode: { normal|horde|freehorde|custom|bossrush|daily|endless: checkpoint } */
           checkpoints: {} },
   load() {
@@ -5109,6 +5161,37 @@ function _skinDraw(c, pattern, glow) {
       x.save(); x.translate(Math.random() * S, Math.random() * S); x.rotate(-0.5 + Math.random());
       x.fillRect(0, 0, 4 + Math.random() * 6, 26 + Math.random() * 30); x.restore();
     }
+  } else if (pattern === 'galaxy') {
+    /* ГАЛАКТИКА — по референсу: глубокий чёрно-фиолетовый космос, светящиеся
+       туманности и звёзды (фиолетовый/пурпурный + белые искры). */
+    const grd = x.createLinearGradient(0, 0, S, S);
+    grd.addColorStop(0, '#05010c'); grd.addColorStop(.5, '#12042a'); grd.addColorStop(1, '#03000a');
+    x.fillStyle = grd; x.fillRect(0, 0, S, S);
+    // туманности: мягкие пурпурные и фиолетовые облака
+    const nebulae = ['#7a1fd0', '#b83cff', '#4a12a0', '#c060ff', '#5e1fb8'];
+    for (let i = 0; i < 26; i++) {
+      const cx = Math.random() * S, cy = Math.random() * S, r = 10 + Math.random() * 34;
+      const g2 = x.createRadialGradient(cx, cy, 0, cx, cy, r);
+      const col = nebulae[i % nebulae.length];
+      g2.addColorStop(0, col); g2.addColorStop(1, 'rgba(0,0,0,0)');
+      x.globalAlpha = .18 + Math.random() * .30;
+      x.fillStyle = g2; x.beginPath(); x.arc(cx, cy, r, 0, 6.29); x.fill();
+    }
+    x.globalAlpha = 1;
+    // звёзды: яркие точки с лёгким ореолом
+    for (let i = 0; i < 150; i++) {
+      const sx = Math.random() * S, sy = Math.random() * S, sr = Math.random() < .85 ? .7 : 1.4;
+      x.globalAlpha = .5 + Math.random() * .5;
+      x.fillStyle = Math.random() < .3 ? '#efd8ff' : '#ffffff';
+      x.beginPath(); x.arc(sx, sy, sr, 0, 6.29); x.fill();
+    }
+    // несколько крупных сияющих звёзд-крестов
+    for (let i = 0; i < 6; i++) {
+      const sx = Math.random() * S, sy = Math.random() * S;
+      x.globalAlpha = .9; x.strokeStyle = '#f0d8ff'; x.lineWidth = 1;
+      x.beginPath(); x.moveTo(sx - 5, sy); x.lineTo(sx + 5, sy); x.moveTo(sx, sy - 5); x.lineTo(sx, sy + 5); x.stroke();
+    }
+    x.globalAlpha = 1;
   }
 }
 
@@ -5128,6 +5211,19 @@ function _skinTexture(pattern, glowHex) {
   return t;
 }
 
+/* called every frame for each visible galaxy skin so the rings/dust animate */
+function animateGalaxySkin(group, dt) {
+  if (!group || !group.userData || !group.userData.galaxy) return;
+  const gx = group.userData.galaxy;
+  gx.t += dt;
+  if (gx.rings) { gx.rings[0].rotation.z += dt * .9; gx.rings[1].rotation.z -= dt * .6; }
+  if (gx.dust) gx.dust.rotation.y += dt * .5;
+  if (gx.shards) for (let i = 0; i < gx.shards.length; i++) {
+    gx.shards[i].rotation.x += dt * (1 + i * .2);
+    gx.shards[i].rotation.y += dt * .8;
+  }
+}
+
 /* ============================================================
    WEAPON SKINS — applied on top of a freshly built weapon model.
    A skin gives the gun a procedural TEXTURE and repaints its PARTS in separate
@@ -5137,6 +5233,8 @@ function _skinTexture(pattern, glowHex) {
    ============================================================ */
 function applyWeaponSkin(group, skin) {
   if (!group || !skin) return group;
+  /* ПЛАТИНОВЫЙ скин «ГАЛАКТИКА» — особый: полностью другая модель оружия */
+  if (skin.rarity === 'platinum' || skin.id === 'sk_platinum') return applyGalaxySkin(group);
   const tex = skin.pattern ? _skinTexture(skin.pattern, skin.accent || skin.glow) : null;
 
   /* Source palette colour → the skin's part colour. Different original parts map
@@ -5247,7 +5345,7 @@ function applyWeaponSkin(group, skin) {
    uncommon and rare keep the normal yellow-orange tracers. */
 function skinShotColor(skin) {
   if (!skin) return null;
-  if (skin.rarity !== 'epic' && skin.rarity !== 'legendary') return null;
+  if (skin.rarity !== 'epic' && skin.rarity !== 'legendary' && skin.rarity !== 'platinum') return null;
   return skin.shot !== undefined ? skin.shot : skin.glow;
 }
 
@@ -7006,7 +7104,200 @@ function buildMechMissile() {
   return g;
 }
 
-/* A small kamikaze drone: a flat body with four arms, spinning rotors, a camera
+/* a glowing dot sprite for the galaxy skin's orbiting dust (a small additive
+   plane that always faces the camera is overkill — a simple soft canvas works) */
+let _galaxyDotTex = null;
+function galaxyDotTexture() {
+  if (_galaxyDotTex) return _galaxyDotTex;
+  const c = makeCanvas(32); const x = c.getContext('2d');
+  const g = x.createRadialGradient(16, 16, 0, 16, 16, 16);
+  g.addColorStop(0, 'rgba(255,255,255,1)'); g.addColorStop(.4, 'rgba(216,150,255,.8)'); g.addColorStop(1, 'rgba(120,40,200,0)');
+  x.fillStyle = g; x.fillRect(0, 0, 32, 32);
+  _galaxyDotTex = new THREE.CanvasTexture(c);
+  return _galaxyDotTex;
+}
+/* a starfield band: a soft arc of glowing specks used behind the ring */
+let _galaxyBandTex = null;
+function galaxyBandTexture() {
+  if (_galaxyBandTex) return _galaxyBandTex;
+  const c = makeCanvas(128); const x = c.getContext('2d');
+  x.fillStyle = 'rgba(0,0,0,0)'; x.fillRect(0, 0, 128, 128);
+  for (let i = 0; i < 220; i++) {
+    const px = Math.random() * 128, py = Math.random() * 128;
+    x.globalAlpha = .2 + Math.random() * .8;
+    x.fillStyle = Math.random() < .5 ? '#e8c8ff' : '#ffffff';
+    x.fillRect(px, py, Math.random() < .8 ? 1 : 2, Math.random() < .8 ? 1 : 2);
+  }
+  _galaxyBandTex = new THREE.CanvasTexture(c);
+  return _galaxyBandTex;
+}
+/* ============================================================
+   GALAXY SKIN — a one-off, hand-authored look (not palette-driven). The gun is
+   rebuilt with galaxy geometry: a glowing nebula core, TWO tilted particle
+   rings, floating crystal shards and a drift of star dust that spins. It is the
+   reward for finishing every other achievement.
+   ============================================================ */
+const GALAXY_COLORS = {
+  dark: 0x0a0416, deep: 0x1b0a38, purple: 0x7a1fd0, violet: 0xb83cff,
+  bright: 0xd896ff, white: 0xf0e0ff, star: 0xffffff
+};
+function _galaxyRing(radius, tube, color, opacity) {
+  const mat = new THREE.MeshBasicMaterial({
+    color: color, transparent: true, opacity: opacity, blending: THREE.AdditiveBlending,
+    depthWrite: false, side: THREE.DoubleSide
+  });
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(radius, tube, 8, 40), mat);
+  return ring;
+}
+function applyGalaxySkin(group) {
+  if (!group) return group;
+  const C = GALAXY_COLORS;
+  const tex = _skinTexture('galaxy', C.violet);
+  /* repaint the solid parts in deep nebula colours, keeping some brightness */
+  group.traverse(o => {
+    if (!o.isMesh || !o.material || !o.material.color) return;
+    if (o.material.isMeshBasicMaterial) return;        // lamps keep their look
+    const l = o.material.color.r * .3 + o.material.color.g * .59 + o.material.color.b * .11;
+    const c = new THREE.Color(l > .55 ? C.bright : l > .3 ? C.violet : C.deep);
+    c.multiplyScalar(U.clamp(.5 + l * 1.2, .35, 1.3));
+    o.material.color.copy(c);
+    if (tex) {
+      const t2 = tex.clone(); t2.needsUpdate = true;
+      t2.wrapS = t2.wrapT = THREE.RepeatWrapping; t2.repeat.set(2, 2);
+      o.material.map = t2;
+    }
+    o.material.needsUpdate = true;
+  });
+
+  const fx = new THREE.Group();
+  fx.name = 'galaxyFX';
+  /* --- glowing nebula core along the body --- */
+  const core = new THREE.Mesh(
+    new THREE.CapsuleGeometry(.028, .30, 4, 10),
+    new THREE.MeshBasicMaterial({ color: C.violet, transparent: true, opacity: .55, blending: THREE.AdditiveBlending, depthWrite: false })
+  );
+  core.position.set(0, .02, -.12); core.rotation.x = Math.PI / 2;
+  fx.add(core);
+  const heart = new THREE.Mesh(
+    new THREE.SphereGeometry(.05, 12, 10),
+    new THREE.MeshBasicMaterial({ color: C.white, transparent: true, opacity: .8, blending: THREE.AdditiveBlending, depthWrite: false })
+  );
+  heart.position.set(0, .02, .02);
+  fx.add(heart);
+  /* --- two tilted particle rings (the signature galaxy look) --- */
+  const ringA = _galaxyRing(.20, .010, C.violet, .7);
+  ringA.rotation.set(1.25, .3, .2);
+  fx.add(ringA);
+  const ringB = _galaxyRing(.30, .007, C.bright, .55);
+  ringB.rotation.set(1.05, -.5, .6);
+  fx.add(ringB);
+  /* a faint starfield disc behind the rings */
+  const disc = new THREE.Mesh(new THREE.CircleGeometry(.42, 40),
+    new THREE.MeshBasicMaterial({ map: galaxyBandTexture(), transparent: true, opacity: .5, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
+  disc.position.set(0, .02, -.12); disc.rotation.set(1.2, .2, 0);
+  fx.add(disc);
+  /* --- floating crystal shards --- */
+  for (let i = 0; i < 4; i++) {
+    const sh = new THREE.Mesh(new THREE.OctahedronGeometry(.028 + Math.random() * .012, 0),
+      new THREE.MeshBasicMaterial({ color: i % 2 ? C.bright : C.violet, transparent: true, opacity: .85, blending: THREE.AdditiveBlending, depthWrite: false }));
+    const a = (i / 4) * Math.PI * 2;
+    sh.position.set(Math.cos(a) * .24, .02 + Math.sin(a * 1.7) * .06, -.12 + Math.sin(a) * .18);
+    fx.add(sh);
+  }
+  /* --- orbiting star dust --- */
+  const dustGeo = new THREE.BufferGeometry();
+  const N = 46, dp = new Float32Array(N * 3);
+  for (let i = 0; i < N; i++) {
+    const a = Math.random() * Math.PI * 2, r = .12 + Math.random() * .26;
+    dp[i * 3] = Math.cos(a) * r; dp[i * 3 + 1] = .02 + (Math.random() - .5) * .14; dp[i * 3 + 2] = -.12 + Math.sin(a) * r;
+  }
+  dustGeo.setAttribute('position', new THREE.BufferAttribute(dp, 3));
+  const dust = new THREE.Points(dustGeo, new THREE.PointsMaterial({
+    map: galaxyDotTexture(), color: C.white, size: .03, transparent: true, opacity: .9,
+    blending: THREE.AdditiveBlending, depthWrite: false, sizeAttenuation: true
+  }));
+  fx.add(dust);
+  /* the rings/dust spin slowly and a soft violet light pulses at the core */
+  const light = new THREE.PointLight(C.violet, .8, 2.4, 2);
+  light.position.set(0, .04, -.10);
+  fx.add(light);
+  group.add(fx);
+  group.userData.galaxy = { rings: [ringA, ringB], dust: dust, shards: fx.children.filter(c => c.geometry && c.geometry.type === 'OctahedronGeometry'), t: 0 };
+  group.userData.skin = { id: 'sk_platinum', name: 'ГАЛАКТИКА', rarity: 'platinum', rarityLabel: 'ПЛАТИНОВЫЙ', glow: C.violet, pattern: 'galaxy', shot: C.bright, accent: C.violet, deco: 'galaxy' };
+  return group;
+}
+
+/* ============================================================
+   GALAXY CHARACTER SKIN — «космический» солдат: доспех перекрашен в небулу,
+   вокруг тела вращаются звёздные кольца и висит звёздная пыль, а внутри
+   пульсирует фиолетовое ядро. Награда вместе с платиновым скином оружия.
+   ============================================================ */
+function applyGalaxyCharacter(group) {
+  if (!group) return group;
+  const C = GALAXY_COLORS;
+  const tex = _skinTexture('galaxy', C.violet);
+  group.traverse(o => {
+    if (!o.isMesh || !o.material || !o.material.color) return;
+    if (o.material.isMeshBasicMaterial) return;
+    const l = o.material.color.r * .3 + o.material.color.g * .59 + o.material.color.b * .11;
+    const c = new THREE.Color(l > .62 ? C.bright : l > .34 ? C.violet : C.deep);
+    c.multiplyScalar(U.clamp(.45 + l * 1.1, .3, 1.25));
+    o.material.color.copy(c);
+    if (tex) {
+      const t2 = tex.clone(); t2.needsUpdate = true;
+      t2.wrapS = t2.wrapT = THREE.RepeatWrapping; t2.repeat.set(2, 2);
+      o.material.map = t2;
+    }
+    o.material.needsUpdate = true;
+  });
+  const fx = new THREE.Group();
+  fx.name = 'galaxyCharFX';
+  /* a glowing heart at the chest + a soft light */
+  const heart = new THREE.Mesh(new THREE.SphereGeometry(.07, 12, 10),
+    new THREE.MeshBasicMaterial({ color: C.white, transparent: true, opacity: .75, blending: THREE.AdditiveBlending, depthWrite: false }));
+  heart.position.set(0, 1.30, .05);
+  fx.add(heart);
+  const core = new THREE.Mesh(new THREE.SphereGeometry(.16, 12, 10),
+    new THREE.MeshBasicMaterial({ color: C.violet, transparent: true, opacity: .3, blending: THREE.AdditiveBlending, depthWrite: false }));
+  core.position.set(0, 1.22, 0);
+  fx.add(core);
+  const light = new THREE.PointLight(C.violet, .9, 3.2, 2);
+  light.position.set(0, 1.3, 0);
+  fx.add(light);
+  /* two big tilted rings around the body (like the weapon's, but larger) */
+  const ringA = _galaxyRing(.62, .016, C.violet, .55);
+  ringA.position.set(0, 1.05, 0); ringA.rotation.set(1.35, .2, 0);
+  fx.add(ringA);
+  const ringB = _galaxyRing(.80, .010, C.bright, .4);
+  ringB.position.set(0, 1.05, 0); ringB.rotation.set(1.15, -.6, .5);
+  fx.add(ringB);
+  /* star dust orbiting the body */
+  const dustGeo = new THREE.BufferGeometry();
+  const N = 70, dp = new Float32Array(N * 3);
+  for (let i = 0; i < N; i++) {
+    const a = Math.random() * Math.PI * 2, r = .5 + Math.random() * .5;
+    dp[i * 3] = Math.cos(a) * r; dp[i * 3 + 1] = .15 + Math.random() * 1.7; dp[i * 3 + 2] = Math.sin(a) * r;
+  }
+  dustGeo.setAttribute('position', new THREE.BufferAttribute(dp, 3));
+  const dust = new THREE.Points(dustGeo, new THREE.PointsMaterial({
+    map: galaxyDotTexture(), color: C.white, size: .05, transparent: true, opacity: .85,
+    blending: THREE.AdditiveBlending, depthWrite: false, sizeAttenuation: true
+  }));
+  fx.add(dust);
+  group.add(fx);
+  group.userData.galaxyChar = { rings: [ringA, ringB], dust: dust, heart: heart, core: core, fx: fx, t: 0 };
+  return group;
+}
+function animateGalaxyCharacter(group, dt) {
+  if (!group || !group.userData || !group.userData.galaxyChar) return;
+  const gx = group.userData.galaxyChar;
+  gx.t += dt;
+  if (gx.rings) { gx.rings[0].rotation.z += dt * .5; gx.rings[1].rotation.z -= dt * .35; }
+  if (gx.dust) gx.dust.rotation.y += dt * .3;
+  if (gx.core) gx.core.material.opacity = .22 + .12 * Math.sin(gx.t * 2);
+}
+
+/* a small kamikaze drone: a flat body with four arms, spinning rotors, a camera
    pod and a red warhead light on the nose. Points along -Z like the weapons. */
 let _droneGeo = null;
 function buildDroneModel() {
@@ -7741,6 +8032,7 @@ class Player {
     if (def.mag === Infinity) return false;
     if (this.reloadT > 0 || this.deployT > 0) return false;
     if (w.mag >= def.mag || w.reserve <= 0) return false;
+    this.reloads = (this.reloads || 0) + 1;
     this.reloadTotal = def.mag <= 12 ? 2.2 : def.mag <= 30 ? 2.5 : 3.6;
     this.reloadT = this.reloadTotal;
     this._reloadTick = 0;
@@ -11781,7 +12073,7 @@ const UI = {
         const pct = on ? 100 : Math.round(pr.frac * 100);
         const barCol = on ? '#ffd24a' : rcol;
         const readout = on ? 'ВЫПОЛНЕНО' : (pr.suffix ? achProgressText(pr.have, pr.goal) + pr.suffix : achProgressText(pr.have, pr.goal));
-        return '<div class="achcard' + (on ? ' on' : '') + '" data-ach="' + a.id + '"><b><span class="sw" style="display:inline-block;width:10px;height:10px;' +
+        return '<div class="achcard' + (on ? ' on' : '') + (sk && sk.rarity === 'platinum' ? ' plat' : '') + '" data-ach="' + a.id + '"><b><span class="sw" style="display:inline-block;width:10px;height:10px;' +
           'border-radius:2px;margin-right:6px;vertical-align:-1px;border:1px solid rgba(255,255,255,.3);background:' + swatch + '"></span>' +
           (on ? '🏆 ' : '🔒 ') + U.esc(a.name) + '</b><i>' + U.esc(a.desc) + '</i>' +
           '<div class="achprog"><div class="achbar"><span style="width:' + pct + '%;background:' + barCol + '"></span></div>' +
@@ -11948,9 +12240,19 @@ const Skins = {
   renderTargets() {
     const el = $('skinTargetChips');
     if (!el) return;
+    const galOn = Store.data.skinChar === 'galaxy';
     el.innerHTML = '<button data-t="weapon"' + (this.target === 'weapon' ? ' class="on"' : '') + '>ОРУЖИЕ</button>' +
-      '<button data-t="player"' + (this.target === 'player' ? ' class="on"' : '') + '>ПЕРСОНАЖ</button>';
-    Array.from(el.children).forEach(b => b.addEventListener('click', () => { this.target = b.dataset.t; this.renderTargets(); this.rebuild(); }));
+      '<button data-t="player"' + (this.target === 'player' ? ' class="on"' : '') + '>ПЕРСОНАЖ</button>' +
+      '<button data-t="galchar"' + (galOn ? ' class="on"' : '') + ' style="margin-left:8px">ГАЛАКТИКА: ' + (galOn ? 'ВКЛ' : 'ВЫКЛ') + '</button>';
+    Array.from(el.children).forEach(b => b.addEventListener('click', () => {
+      if (b.dataset.t === 'galchar') {
+        if (!(Store.data.ach || {})['platinum_all']) { UI.toast('Скин открывается за достижение «ВЛАДЫКА ГАЛАКТИКИ»', '#d896ff'); Audio3D_SFX.deny(); return; }
+        Store.data.skinChar = Store.data.skinChar === 'galaxy' ? '' : 'galaxy';
+        Store.save(); this.renderTargets(); this.rebuild();
+        Audio3D_SFX.uiClick(); return;
+      }
+      this.target = b.dataset.t; this.renderTargets(); this.rebuild();
+    }));
   },
 
   renderWeaponList() {
@@ -12004,6 +12306,7 @@ const Skins = {
     if (this.target === 'player') {
       // a soldier holding the previewed weapon, so the skin is seen in context
       const soldier = buildSoldierMesh('ct');
+      if (Store.data.skinChar === 'galaxy' && typeof applyGalaxyCharacter === 'function') applyGalaxyCharacter(soldier);
       const gun = buildWeaponModel(this.weaponId);
       if (skin) applyWeaponSkin(gun, skin);
       const armR = soldier.userData.parts && soldier.userData.parts.armR;
@@ -12027,6 +12330,11 @@ const Skins = {
     this._raf = requestAnimationFrame(() => this.loop());
     if (UI.current !== 'skins' || !this.renderer) { this._raf && cancelAnimationFrame(this._raf); this._raf = 0; return; }
     this.resize();
+    // animate galaxy skins in the preview (rings / dust / character)
+    if (this._base) for (const c of this._base.children) {
+      if (typeof animateGalaxySkin === 'function') animateGalaxySkin(c, 1 / 60);
+      if (typeof animateGalaxyCharacter === 'function') animateGalaxyCharacter(c, 1 / 60);
+    }
     // idle auto-spin plus manual rotation
     if (!this.dragging) this._spin += .004;
     this.root.rotation.y = this.rotY + this._spin;
@@ -13312,8 +13620,25 @@ class RemotePlayer {
     this.mechJet = false;
     this._mechDashT = 0;
     this._mechJetT = 0;
+    /* галактический скин персонажа, если у соперника он надет */
+    this.galaxyChar = false;
   }
 
+  /* The peer wears the platinum galactic character skin: repaint the soldier in
+     nebula colours and add the orbiting rings. Applied once. */
+  setGalaxyChar(on) {
+    on = !!on;
+    if (on === this.galaxyChar) return;
+    this.galaxyChar = on;
+    if (on) {
+      if (!this.mesh.userData.galaxyChar) applyGalaxyCharacter(this.mesh);
+    } else {
+      // turning it off is rare; rebuild a clean soldier
+      const parts = this.mesh.userData.parts;
+      if (this.mesh.userData.galaxyChar && this.mesh.userData.galaxyChar.fx) this.mesh.remove(this.mesh.userData.galaxyChar.fx);
+      this.mesh.userData.galaxyChar = null;
+    }
+  }
   /* Attach (or swap) the weapon model in the right hand for this slot.
      `id` comes from the peer's state packet; `skinId` is the worn skin, so the
      opponent sees the same painted weapon. `heldGroups` lists the weapon ids we
@@ -13342,6 +13667,8 @@ class RemotePlayer {
     w.scale.setScalar(.95);
     armR.add(w);
     this.weaponGroup = w;
+    /* the galaxy gun needs its rings/dust animated each frame */
+    this._galaxyGun = !!w.userData.galaxy;
   }
 
   /* МЕХАКОСТЮМ: swap the soldier for a mech chassis. `on` comes from the peer's
@@ -14181,22 +14508,46 @@ const Game = {
          время ТЕКУЩЕГО забега (playTime включает и прошлые сохранённые этапы) */
       fastKills: this._fastKills || 0,
       fastClear: this._fastClears || 0,
-      runTime: this.offline ? (U.now() - this.offline.startTime) / 1000 : 0
+      runTime: this.offline ? (U.now() - this.offline.startTime) / 1000 : 0,
+      /* новые интересные счётчики */
+      miniBossKills: this._miniBossKills || 0,
+      spent: p ? (p.moneySpent || 0) : 0,
+      misses: p ? Math.max(0, (p.bulletsFired | 0) - (p.bulletsHit | 0)) : 0,
+      wavesNoReload: this._wavesNoReload || 0,
+      wavesNoShots: this._wavesNoShots || 0,
+      top3: Store.data.top3 || 0,
+      /* финальное платиновое достижение: сколько остальных уже выполнено */
+      otherDone: (typeof achOtherDone === 'function') ? achOtherDone(Store.data.ach) : 0,
+      otherTotal: ACHIEVEMENTS.length - 1,
+      otherAchievementsDone: (typeof achAllOthersDone === 'function') ? achAllOthersDone(Store.data.ach) : false
     };
   },
   checkAchievements() {
-    const s = this.statsSnapshot();
     const ach = Store.data.ach = Store.data.ach || {};
     let earned = false;
-    ACHIEVEMENTS.forEach(a => {
-      if (ach[a.id]) return;
-      if (a.check(s)) {
-        ach[a.id] = 1; earned = true;
-        UI.toast('ДОСТИЖЕНИЕ: ' + a.name + ' — ' + a.desc, '#ffd24a');
-        UI.feed('<span class="z">🏆 ' + a.name + '</span>');
-        Audio3D_SFX.buy();
+    const grant = a => {
+      ach[a.id] = 1; earned = true;
+      UI.toast('ДОСТИЖЕНИЕ: ' + a.name + ' — ' + a.desc, '#ffd24a');
+      UI.feed('<span class="z">🏆 ' + a.name + '</span>');
+      Audio3D_SFX.buy();
+      /* финальное: вместе с ним открывается галактический скин персонажа */
+      if (a.id === 'platinum_all') {
+        Store.data.skinChar = 'galaxy';
+        UI.center('ВЛАДЫКА ГАЛАКТИКИ', 'Открыт скин «ГАЛАКТИКА» на оружие и персонажа', 4.5);
+        UI.feed('<span class="z">🌌 Открыт галактический скин персонажа</span>');
       }
+    };
+    const s = this.statsSnapshot();
+    ACHIEVEMENTS.forEach(a => {
+      if (ach[a.id] || a.id === 'platinum_all') return;   // platinum handled last
+      if (a.check(s)) grant(a);
     });
+    /* платина зависит от ВСЕХ остальных, которые могли быть выданы прямо сейчас,
+       поэтому её проверяем ПОСЛЕ цикла по свежему состоянию ach */
+    if (!ach['platinum_all']) {
+      const pa = ACHIEVEMENTS.find(a => a.id === 'platinum_all');
+      if (pa && achAllOthersDone(ach)) grant(pa);
+    }
     if (earned) Store.save();
     return earned;
   },
@@ -14684,6 +15035,7 @@ const Game = {
     this._waveKills = 0; this._waveHurt = false; this._runDeaths = 0;
     this._hvKills = {}; this._shieldKills = 0;
     this._fastKills = 0; this._killTimes = []; this._fastClears = 0;
+    this._miniBossKills = 0; this._wavesNoReload = 0; this._wavesNoShots = 0;
     // NOTE: the checkpoint is deliberately NOT cleared here. It is dropped only
     // by an explicit "НОВАЯ ИГРА" (or after being consumed), so leaving to the
     // menu and returning can still resume the run.
@@ -16171,7 +16523,7 @@ const Game = {
     if (this.player.has(id)) { Audio3D_SFX.deny(); UI.toast('Уже куплено'); return; }
     const free = this.isFreeShop();
     if (!free && this.player.money < w.price) { Audio3D_SFX.deny(); UI.toast('Не хватает денег'); return; }
-    if (!free) this.player.money -= w.price;
+    if (!free) { this.player.money -= w.price; this.player.moneySpent = (this.player.moneySpent || 0) + w.price; }
     this.player.give(id);
     this.player.slot = w.slot;
     this.player.deployT = .5;
@@ -16202,7 +16554,7 @@ const Game = {
       }
       // the box is a one-off upgrade: it simply removes the medkit cap
       if (g.medkitBox && this.player.medkitUnlimited) { Audio3D_SFX.deny(); UI.toast('Уже куплено'); return; }
-      if (!free) this.player.money -= g.price;
+      if (!free) { this.player.money -= g.price; this.player.moneySpent = (this.player.moneySpent || 0) + g.price; }
       if (g.ammo) this.refillAmmo();
       else if (g.medkit) this.player.medkits = (this.player.medkits || 0) + 1;
       else if (g.medkitBox) { this.player.medkitUnlimited = true; }
@@ -16251,7 +16603,7 @@ const Game = {
       const currentBest = this.player.energyArmor ? 'energy' : this.player.heavyArmor ? 'heavy' : null;
       if (currentBest === 'energy' || (currentBest === 'heavy' && !g.energy)) { Audio3D_SFX.deny(); UI.toast('Уже куплено'); return; }
       if (!free && this.player.money < g.price) { Audio3D_SFX.deny(); UI.toast('Не хватает денег'); return; }
-      if (!free) this.player.money -= g.price;
+      if (!free) { this.player.money -= g.price; this.player.moneySpent = (this.player.moneySpent || 0) + g.price; }
       if (g.energy) this.player.energyArmor = true;
       else this.player.heavyArmor = true;
       this.player.armor = g.ap;
@@ -16265,7 +16617,7 @@ const Game = {
 
     if (this.player.armor >= 100 && (!g.helmet || this.player.helmet) && !this.player.heavyArmor && !this.player.energyArmor) { Audio3D_SFX.deny(); UI.toast('Уже куплено'); return; }
     if (!free && this.player.money < g.price) { Audio3D_SFX.deny(); UI.toast('Не хватает денег'); return; }
-    if (!free) this.player.money -= g.price;
+    if (!free) { this.player.money -= g.price; this.player.moneySpent = (this.player.moneySpent || 0) + g.price; }
     this.player.armor = g.ap;
     if (g.helmet) this.player.helmet = true;
     Audio3D_SFX.buy();
@@ -16877,6 +17229,9 @@ const Game = {
     o.toSpawn = count;
     o.betweenWaves = false;
     o.waveStart = U.now();
+    /* для целей «без перезарядки / без выстрела» запоминаем счётчики на старте волны */
+    this._reloadsAtWaveStart = (this.player && this.player.reloads) || 0;
+    this._shotsAtWaveStart = (this.player && (this.player.bulletsFired | 0)) || 0;
     // a checkpoint every 20 waves — death then resumes from here
     if (o.wave % 20 === 0) {
       this.saveCheckpoint(o.wave);
@@ -17232,6 +17587,13 @@ const Game = {
          perfectWaves = cleared without dying yet, noDamageWaves = cleared unhurt */
       if (this._runDeaths === 0) this._perfectWaves = (this._perfectWaves || 0) + 1;
       if (!this._waveHurt) this._noDamageWaves = (this._noDamageWaves || 0) + 1;
+      /* волны без перезарядки / без единого выстрела */
+      const reloadsNow = (this.player && this.player.reloads) || 0;
+      const shotsNow = (this.player && (this.player.bulletsFired | 0)) || 0;
+      if (reloadsNow === (this._reloadsAtWaveStart || 0)) this._wavesNoReload = (this._wavesNoReload || 0) + 1;
+      else this._wavesNoReload = 0;
+      if (shotsNow === (this._shotsAtWaveStart || 0)) this._wavesNoShots = (this._wavesNoShots || 0) + 1;
+      else this._wavesNoShots = 0;
       this._waveKills = 0; this._waveHurt = false;
       Audio3D_SFX.roundEnd(true);
       /* clearing wave 100 means the campaign is finished */
@@ -19630,6 +19992,7 @@ const Game = {
       const anyLeft = this.horde && this.horde.list.some(o => o !== z && (o.isBoss || o.isMiniBoss) && o.alive && !o.dying);
       if (!anyLeft) this.refreshMusic();
       if (z.isBoss) { this._bossKills = (this._bossKills || 0) + 1; }
+      if (z.isMiniBoss) { this._miniBossKills = (this._miniBossKills || 0) + 1; }
     }
     this.checkAchievements();
     UI.feed('<b>' + U.esc(p.name) + '</b> <span class="z">✖ ' + def.name + (headshot ? ' (в голову)' : '') + '</span> +$' + def.money);
@@ -19815,6 +20178,7 @@ const Game = {
       hp: Math.round(p.health), ar: Math.round(p.armor), sl: p.slot,
       wi: wpn ? wpn.id : null,                 // held weapon, so the model can show it
       sk: (wpn && (Store.data.skinOn || {})[wpn.id]) || null,   // worn skin, shown to peers
+      cs: (Store.data.skinChar === 'galaxy') ? 1 : 0,           // galactic character skin
       mg: wpn && wpn.mag !== Infinity ? wpn.mag : null,
       sp: +(p.spinT || 0).toFixed(2),           // minigun spin-up, for the barrels
       mc: p.mechSuit ? 1 : 0,                   // in the mech: show the chassis remotely
@@ -19849,6 +20213,7 @@ const Game = {
     // show the weapon the peer is actually holding (including the minigun spin)
     // and the SKIN they wear, so painted weapons are visible in a duel
     rp.setWeapon(s.wi, s.sk);
+    rp.setGalaxyChar(s.cs === 1);
     rp.spinT = (s.sp !== undefined) ? s.sp : 0;
     // in the mech: hide the soldier and show the chassis instead
     rp.setMech(s.mc);
@@ -20537,6 +20902,13 @@ const Game = {
     // ---- environment ----
     this.updateEnvCycle(dt);
     this.updateWeather(dt);
+
+    // ---- galaxy skins: spin the rings/dust on the viewmodel and every peer ----
+    if (this.player && this.player.vmInner) animateGalaxySkin(this.player.vmInner, dt);
+    if (this.remotePlayers) for (const rp of this.remotePlayers) {
+      if (rp.weaponGroup) animateGalaxySkin(rp.weaponGroup, dt);
+      if (rp.mesh && rp.mesh.userData && rp.mesh.userData.galaxyChar) animateGalaxyCharacter(rp.mesh, dt);
+    }
 
     // ---- achievements screen: refresh its progress bars while it is open ----
     this._achTick = (this._achTick || 0) - dt;

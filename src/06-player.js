@@ -96,52 +96,148 @@ function DOT(r, color, x, y, z) {
 }
 
 /* ============================================================
-   WEAPON SKINS — applied on top of a freshly built weapon model.
-   Parts are recoloured INDIVIDUALLY (receiver, steel, magazine, grip/polymer,
-   wood) so the gun reads as a real paint job instead of one flat colour. Rarity
-   controls how much extra hardware, glow and lighting is bolted on.
+   WEAPON SKIN TEXTURES
+   Each skin can carry a procedural PATTERN (carbon weave, camo, hex grid,
+   hazard stripes, plasma cells…) so skins differ in more than colour. Cached
+   per pattern+glow so a whole match reuses a handful of small canvases.
    ============================================================ */
-function _skinShade(hex, tint, mix) {
-  // blend a source colour toward the skin colour, keeping its relative lightness
-  const c = new THREE.Color(hex);
-  const l = (c.r + c.g + c.b) / 3;
-  const t = new THREE.Color(tint);
-  // scale the tint by how light the source was, so dark parts stay dark
-  const k = .45 + l * 1.2;
-  t.multiplyScalar(Math.min(1.25, k));
-  return c.lerp(t, mix);
+const _skinTexCache = {};
+function _skinTexture(pattern, glowHex) {
+  if (!pattern || pattern === 'none') return null;
+  const key = pattern + '_' + glowHex;
+  if (_skinTexCache[key]) return _skinTexCache[key];
+  const S = 128;
+  const c = makeCanvas(S);
+  const x = c.getContext('2d');
+  const glow = '#' + (glowHex >>> 0).toString(16).padStart(6, '0');
+  const dark = 'rgba(0,0,0,.45)';
+  x.fillStyle = 'rgba(255,255,255,.06)'; x.fillRect(0, 0, S, S);
+  if (pattern === 'carbon') {
+    // woven carbon: two diagonal directions of darker cells
+    for (let y = 0; y < S; y += 8) for (let xx = 0; xx < S; xx += 8) {
+      if (((xx / 8) + (y / 8)) % 2 === 0) { x.fillStyle = dark; x.fillRect(xx, y, 8, 8); }
+      else { x.fillStyle = 'rgba(255,255,255,.05)'; x.fillRect(xx, y, 8, 8); }
+    }
+    x.strokeStyle = 'rgba(255,255,255,.10)';
+    for (let i = 0; i < S; i += 8) { x.beginPath(); x.moveTo(i, 0); x.lineTo(i, S); x.stroke(); }
+  } else if (pattern === 'camo') {
+    // blotchy camo spots
+    for (let i = 0; i < 26; i++) {
+      x.fillStyle = i % 3 === 0 ? 'rgba(0,0,0,.42)' : (i % 3 === 1 ? 'rgba(255,255,255,.10)' : 'rgba(0,0,0,.22)');
+      x.beginPath();
+      x.ellipse(Math.random() * S, Math.random() * S, 10 + Math.random() * 18, 8 + Math.random() * 14, Math.random() * 3, 0, 6.29);
+      x.fill();
+    }
+  } else if (pattern === 'hex') {
+    // a honeycomb of thin lines, with a few lit cells
+    x.strokeStyle = 'rgba(255,255,255,.18)'; x.lineWidth = 2;
+    const r = 9;
+    for (let row = 0; row * r * 1.6 < S + r; row++) {
+      for (let col = 0; col * r * 1.8 < S + r; col++) {
+        const cx = col * r * 1.8 + (row % 2 ? r * .9 : 0), cy = row * r * 1.55;
+        x.beginPath();
+        for (let k = 0; k < 6; k++) { const a = k / 6 * 6.283; x.lineTo(cx + Math.cos(a) * r, cy + Math.sin(a) * r); }
+        x.closePath(); x.stroke();
+        if (Math.random() < .12) { x.fillStyle = glow; x.globalAlpha = .5; x.fill(); x.globalAlpha = 1; }
+      }
+    }
+  } else if (pattern === 'hazard') {
+    // diagonal warning stripes with a glow edge
+    x.save(); x.translate(S / 2, S / 2); x.rotate(-Math.PI / 4); x.translate(-S / 2, -S / 2);
+    for (let i = -S; i < S * 2; i += 22) {
+      x.fillStyle = (i / 22) % 2 === 0 ? 'rgba(0,0,0,.5)' : 'rgba(255,255,255,.07)';
+      x.fillRect(i, -S, 11, S * 3);
+    }
+    x.restore();
+  } else if (pattern === 'grid') {
+    // fine technical grid + small marks
+    x.strokeStyle = 'rgba(255,255,255,.12)'; x.lineWidth = 1;
+    for (let i = 0; i <= S; i += 16) { x.beginPath(); x.moveTo(i, 0); x.lineTo(i, S); x.moveTo(0, i); x.lineTo(S, i); x.stroke(); }
+    x.fillStyle = glow; x.globalAlpha = .35;
+    for (let i = 0; i < 8; i++) x.fillRect(8 + (i * 29) % (S - 16), 8 + (i * 53) % (S - 16), 6, 2);
+    x.globalAlpha = 1;
+  } else if (pattern === 'plasma') {
+    // dark cells with bright seams and a couple of hot cores
+    for (let y = 0; y < S; y += 16) for (let xx = 0; xx < S; xx += 16) {
+      x.fillStyle = 'rgba(0,0,0,.5)'; x.fillRect(xx + 1, y + 1, 14, 14);
+      x.strokeStyle = 'rgba(255,255,255,.14)'; x.strokeRect(xx + 1, y + 1, 14, 14);
+    }
+    for (let i = 0; i < 5; i++) {
+      const gx = 8 + (i * 31) % (S - 16), gy = 8 + (i * 47) % (S - 16);
+      const g = x.createRadialGradient(gx, gy, 0, gx, gy, 9);
+      g.addColorStop(0, glow); g.addColorStop(1, 'rgba(0,0,0,0)');
+      x.fillStyle = g; x.fillRect(gx - 9, gy - 9, 18, 18);
+    }
+  } else if (pattern === 'scale') {
+    // overlapping armour scales
+    for (let row = 0; row * 14 < S + 14; row++) {
+      for (let col = 0; col * 16 < S + 16; col++) {
+        const cx = col * 16 + (row % 2 ? 8 : 0), cy = row * 14;
+        x.fillStyle = 'rgba(0,0,0,.30)';
+        x.beginPath(); x.arc(cx, cy, 9, 0, Math.PI); x.fill();
+        x.strokeStyle = 'rgba(255,255,255,.16)'; x.stroke();
+      }
+    }
+  } else if (pattern === 'prism') {
+    // faceted triangular shards with occasional bright faces
+    for (let i = 0; i < 40; i++) {
+      const px = Math.random() * S, py = Math.random() * S, s2 = 12 + Math.random() * 18;
+      x.beginPath(); x.moveTo(px, py); x.lineTo(px + s2, py + Math.random() * s2); x.lineTo(px + Math.random() * s2, py + s2); x.closePath();
+      x.fillStyle = Math.random() < .25 ? glow : 'rgba(0,0,0,.28)';
+      x.globalAlpha = .55; x.fill(); x.globalAlpha = 1;
+      x.strokeStyle = 'rgba(255,255,255,.12)'; x.stroke();
+    }
+  } else if (pattern === 'wood') {
+    // long grain lines
+    x.strokeStyle = 'rgba(0,0,0,.30)'; x.lineWidth = 1;
+    for (let i = 0; i < S; i += 5) { x.beginPath(); x.moveTo(0, i); x.bezierCurveTo(S * .3, i + 3, S * .6, i - 3, S, i); x.stroke(); }
+  } else if (pattern === 'tiger') {
+    // tiger-ish slashes
+    x.fillStyle = 'rgba(0,0,0,.42)';
+    for (let i = 0; i < 12; i++) {
+      x.save(); x.translate(Math.random() * S, Math.random() * S); x.rotate(-0.5 + Math.random());
+      x.fillRect(0, 0, 4 + Math.random() * 6, 26 + Math.random() * 30); x.restore();
+    }
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.colorSpace = THREE.SRGBColorSpace;
+  _skinTexCache[key] = t;
+  return t;
 }
+
+/* ============================================================
+   WEAPON SKINS — applied on top of a freshly built weapon model.
+   The SURFACE is defined by a procedural TEXTURE (pattern), and the skin's
+   colour shows up as GLOW: emissive tint, self-lit lamps, a point light and the
+   shot colour. The base metal keeps its original tones so the gun still reads as
+   a real weapon with a pattern applied — not a flat recolour.
+   ============================================================ */
 function applyWeaponSkin(group, skin) {
   if (!group || !skin) return group;
   const mix = U.clamp(skin.glowMul !== undefined ? skin.glowMul : .5, .18, .85);
-  const emis = mix * .55;
+  const emis = mix * .5;
   const glowC = new THREE.Color(skin.glow);
+  const tex = skin.pattern ? _skinTexture(skin.pattern, skin.glow) : null;
 
-  // original palette colours → the skin's part colour
-  const partOf = (hex) => {
-    if (hex === 0x8b939d || hex === 0x646c76) return skin.steel;      // steel / accent
-    if (hex === 0x3a4046) return skin.mag;                            // magazine
-    if (hex === 0x353a40) return skin.grip;                           // polymer grip
-    if (hex === 0x9c6a36 || hex === 0xa8926a) return skin.mag;        // wood furniture
-    if (hex === 0x5d6247) return skin.body;                           // olive stock
-    if (hex === 0x0e1114) return null;                                // glass stays
-    return skin.body;                                                 // receiver / black
-  };
   const seen = [];
   group.traverse(o => {
     if (!o.isMesh) return;
     const m = o.material;
     if (!m || !m.color) return;
     const hex = m.color.getHex();
-    if (m.isMeshBasicMaterial) {
-      // a self-lit lamp/dot: keep it lit but in the skin's glow colour
-      m.color.copy(glowC);
-      return;
+    if (m.isMeshBasicMaterial) { m.color.copy(glowC); return; }   // lamps → the skin glow
+    /* texture is the whole surface look; the colour only glows */
+    if (tex) {
+      const rep = (hex === 0x0e1114) ? 3 : 2;
+      const t2 = tex.clone(); t2.needsUpdate = true;
+      t2.wrapS = t2.wrapT = THREE.RepeatWrapping;
+      t2.repeat.set(rep, rep);
+      m.map = t2;
     }
-    const target = partOf(hex);
-    if (target === null) return;
-    m.color.copy(_skinShade(hex, target, mix));
+    // a faint glow tint keeps the base metal readable while the skin colour sings
     if (m.emissive) m.emissive.setHex(skin.glow).multiplyScalar(emis);
+    m.needsUpdate = true;
     seen.push(o);
   });
 

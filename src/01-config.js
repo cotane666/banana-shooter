@@ -529,36 +529,39 @@ const SKIN_RARITY_ORDER = ['common', 'uncommon', 'rare', 'epic', 'legendary'];
    receiver (body), barrel/steel, magazine, grip/polymer and accents — plus a
    glow colour used for lights, tracers and the muzzle flash. */
 const SKIN_PALETTES = [
-  /* common — muted field finishes */
-  { rar: 'common', body: 0x6c757f, steel: 0x8b939d, mag: 0x5a626b, grip: 0x424a52, accent: 0x9aa4ae, glow: 0x9aa4ae, shot: 0xffe6b0 },
-  { rar: 'common', body: 0x5d6247, steel: 0x7d8558, mag: 0x4c5039, grip: 0x3d4030, accent: 0xa8c25a, glow: 0xa8c25a, shot: 0xd8f0a0 },
-  { rar: 'common', body: 0xb09a63, steel: 0xc7b47e, mag: 0x8f7c4d, grip: 0x6e5f3b, accent: 0xffe08a, glow: 0xffe08a, shot: 0xfff0c0 },
+  /* common — muted field finishes. NOTE: parts use DIFFERENT HUES (a coloured
+     receiver, a light metallic barrel/steel, a near-black grip and a bright
+     accent), so the gun reads as a real multi-colour paint job, not one tone.
+     `pat` is the TEXTURE pattern — the strongest visual identity of a skin. */
+  { rar: 'common', pat: 'grid',   body: 0x5d6247, steel: 0xb8bcc0, mag: 0x3a3d2c, grip: 0x1d1f16, accent: 0xa8c25a, glow: 0xa8c25a, shot: 0xd8f0a0 },
+  { rar: 'common', pat: 'carbon', body: 0x6c757f, steel: 0xd6dde4, mag: 0x3f464d, grip: 0x22272d, accent: 0x9aa4ae, glow: 0x9aa4ae, shot: 0xffe6b0 },
+  { rar: 'common', pat: 'wood',   body: 0xb09a63, steel: 0xe0d6bc, mag: 0x6b5a38, grip: 0x332b1c, accent: 0xffe08a, glow: 0xffe08a, shot: 0xfff0c0 },
   /* uncommon — two-tone battle paints */
-  { rar: 'uncommon', body: 0x2f343b, steel: 0x9aa4ae, mag: 0x1f2328, grip: 0x15181c, accent: 0xff9d21, glow: 0xff9d21, shot: 0xffc060 },
-  { rar: 'uncommon', body: 0x9e2b2b, steel: 0xb85a5a, mag: 0x6f1f1f, grip: 0x4a1414, accent: 0xff5a4a, glow: 0xff5a4a, shot: 0xff9070 },
-  { rar: 'uncommon', body: 0x6fb6d6, steel: 0xa8d4e8, mag: 0x4f8ba8, grip: 0x37616f, accent: 0x9fe6ff, glow: 0x9fe6ff, shot: 0xd0f4ff },
+  { rar: 'uncommon', pat: 'hazard', body: 0x2f343b, steel: 0x9aa4ae, mag: 0x181c21, grip: 0x0d1013, accent: 0xff9d21, glow: 0xff9d21, shot: 0xffc060 },
+  { rar: 'uncommon', pat: 'tiger',  body: 0x9e2b2b, steel: 0xc9c9cf, mag: 0x4a1414, grip: 0x1e1010, accent: 0xff5a4a, glow: 0xff5a4a, shot: 0xff9070 },
+  { rar: 'uncommon', pat: 'camo',   body: 0x6fb6d6, steel: 0xe8f4fa, mag: 0x2f5f78, grip: 0x17323e, accent: 0x9fe6ff, glow: 0x9fe6ff, shot: 0xd0f4ff },
   /* rare — saturated finishes with vents */
-  { rar: 'rare', body: 0x5d8f2e, steel: 0x8fbf5a, mag: 0x41641f, grip: 0x2e4715, accent: 0x9bff57, glow: 0x9bff57, shot: 0xc8ff90 },
-  { rar: 'rare', body: 0x2b7f8f, steel: 0x63c0d0, mag: 0x1e5b67, grip: 0x144049, accent: 0x4ad6ff, glow: 0x4ad6ff, shot: 0xa0f0ff },
-  { rar: 'rare', body: 0x6b4a9e, steel: 0xa07fd0, mag: 0x4b3370, grip: 0x342350, accent: 0xb27bff, glow: 0xb27bff, shot: 0xd8b0ff },
+  { rar: 'rare', pat: 'hazard', body: 0x5d8f2e, steel: 0xc9d4c0, mag: 0x2c4a14, grip: 0x16220c, accent: 0x9bff57, glow: 0x9bff57, shot: 0xc8ff90 },
+  { rar: 'rare', pat: 'hex',    body: 0x2b7f8f, steel: 0xd6e2e6, mag: 0x0f3a45, grip: 0x08202a, accent: 0x4ad6ff, glow: 0x4ad6ff, shot: 0xa0f0ff },
+  { rar: 'rare', pat: 'scale',  body: 0x6b4a9e, steel: 0xddd6ec, mag: 0x3a2456, grip: 0x1a1030, accent: 0xb27bff, glow: 0xb27bff, shot: 0xd8b0ff },
   /* epic — plasma-charged, glowing cells */
-  { rar: 'epic', body: 0x5a2a8a, steel: 0xb08fe0, mag: 0x3c1c5e, grip: 0x27133d, accent: 0xe06bff, glow: 0xe06bff, shot: 0xf0a0ff },
-  { rar: 'epic', body: 0x2f6f9e, steel: 0x8fd8e8, mag: 0x1e4a6b, grip: 0x143347, accent: 0x7ffff0, glow: 0x7ffff0, shot: 0xb0fff8 },
-  { rar: 'epic', body: 0x8f3a1e, steel: 0xe0a070, mag: 0x602612, grip: 0x401a0c, accent: 0xff7a1a, glow: 0xff7a1a, shot: 0xffb060 },
+  { rar: 'epic', pat: 'plasma', body: 0x5a2a8a, steel: 0xe8e8f2, mag: 0x2c1244, grip: 0x160a26, accent: 0xe06bff, glow: 0xe06bff, shot: 0xf0a0ff },
+  { rar: 'epic', pat: 'hex',    body: 0x2f6f9e, steel: 0xd6f6ff, mag: 0x163a52, grip: 0x0a1e2c, accent: 0x7ffff0, glow: 0x7ffff0, shot: 0xb0fff8 },
+  { rar: 'epic', pat: 'plasma', body: 0x8f3a1e, steel: 0xe8b488, mag: 0x3c1a0c, grip: 0x1c0c06, accent: 0xff7a1a, glow: 0xff7a1a, shot: 0xffb060 },
   /* legendary — gold / prismatic / void, fully dressed */
-  { rar: 'legendary', body: 0xc8a24a, steel: 0xf0d894, mag: 0x8f7130, grip: 0x5e4a1e, accent: 0xffd06a, glow: 0xffd06a, shot: 0xffe89a },
-  { rar: 'legendary', body: 0xb8b8d8, steel: 0xffffff, mag: 0x8080a8, grip: 0x585878, accent: 0xff6ad6, glow: 0xff6ad6, shot: 0xffb0f0 },
-  { rar: 'legendary', body: 0x3a2458, steel: 0xb090e0, mag: 0x241238, grip: 0x140a24, accent: 0xc060ff, glow: 0xc060ff, shot: 0xe0a0ff },
+  { rar: 'legendary', pat: 'prism', body: 0xc8a24a, steel: 0xfff0c0, mag: 0x6b5220, grip: 0x2a2010, accent: 0xffd06a, glow: 0xffd06a, shot: 0xffe89a },
+  { rar: 'legendary', pat: 'prism', body: 0xb8b8d8, steel: 0xffffff, mag: 0x585878, grip: 0x24243a, accent: 0xff6ad6, glow: 0xff6ad6, shot: 0xffb0f0 },
+  { rar: 'legendary', pat: 'plasma', body: 0x3a2458, steel: 0xc0a0f0, mag: 0x1a0e2a, grip: 0x0a0616, accent: 0xc060ff, glow: 0xc060ff, shot: 0xe0a0ff },
   /* epic — heavy-arsenal exclusive finishes (bigger guns get bolder looks) */
-  { rar: 'epic', heavy: 1, body: 0x0f2a4a, steel: 0x5aa8ff, mag: 0x08203c, grip: 0x061426, accent: 0x4ad6ff, glow: 0x4ad6ff, shot: 0xa0f0ff },
-  { rar: 'epic', heavy: 1, body: 0x4a1020, steel: 0xff5a6a, mag: 0x330a16, grip: 0x22060f, accent: 0xff2a4a, glow: 0xff2a4a, shot: 0xff8090 },
-  { rar: 'epic', heavy: 1, body: 0x14401e, steel: 0x7dff8a, mag: 0x0d2c14, grip: 0x091d0d, accent: 0x39ff5a, glow: 0x39ff5a, shot: 0x9bffb0 },
-  { rar: 'epic', heavy: 1, body: 0x3a3a44, steel: 0xc8c8d8, mag: 0x272730, grip: 0x17171e, accent: 0xd8d8ff, glow: 0xe8e8ff, shot: 0xf0f0ff },
+  { rar: 'epic', heavy: 1, pat: 'hex',    body: 0x123a5c, steel: 0xa8d8ff, mag: 0x08203c, grip: 0x04101e, accent: 0x4ad6ff, glow: 0x4ad6ff, shot: 0xa0f0ff },
+  { rar: 'epic', heavy: 1, pat: 'scale',  body: 0x4a1020, steel: 0xffb0b8, mag: 0x2a0810, grip: 0x140408, accent: 0xff2a4a, glow: 0xff2a4a, shot: 0xff8090 },
+  { rar: 'epic', heavy: 1, pat: 'hazard', body: 0x14401e, steel: 0xb8ffc0, mag: 0x082a12, grip: 0x04160a, accent: 0x39ff5a, glow: 0x39ff5a, shot: 0x9bffb0 },
+  { rar: 'epic', heavy: 1, pat: 'carbon', body: 0x3a3a44, steel: 0xececf8, mag: 0x1e1e26, grip: 0x0e0e12, accent: 0xd8d8ff, glow: 0xe8e8ff, shot: 0xf0f0ff },
   /* legendary — heavy-arsenal exclusive, the very best-looking kit */
-  { rar: 'legendary', heavy: 1, body: 0x1a1405, steel: 0xffd06a, mag: 0x0f0b02, grip: 0x080501, accent: 0xffb020, glow: 0xffd06a, shot: 0xffe89a },
-  { rar: 'legendary', heavy: 1, body: 0x2a0a3a, steel: 0xe06bff, mag: 0x1a0526, grip: 0x110318, accent: 0xff6ad6, glow: 0xff6ad6, shot: 0xffb0f0 },
-  { rar: 'legendary', heavy: 1, body: 0x04141a, steel: 0x40ffe0, mag: 0x020c10, grip: 0x010608, accent: 0x00ffd0, glow: 0x40ffe0, shot: 0xa0fff0 },
-  { rar: 'legendary', heavy: 1, body: 0x2a0a0a, steel: 0xff8a2a, mag: 0x1a0606, grip: 0x100404, accent: 0xff6a1a, glow: 0xff8a2a, shot: 0xffc080 }
+  { rar: 'legendary', heavy: 1, pat: 'prism',  body: 0x2a2010, steel: 0xffe0a0, mag: 0x140f05, grip: 0x0a0803, accent: 0xffb020, glow: 0xffd06a, shot: 0xffe89a },
+  { rar: 'legendary', heavy: 1, pat: 'plasma', body: 0x2a0a3a, steel: 0xf0b0ff, mag: 0x180620, grip: 0x0c0312, accent: 0xff6ad6, glow: 0xff6ad6, shot: 0xffb0f0 },
+  { rar: 'legendary', heavy: 1, pat: 'hex',    body: 0x06202a, steel: 0x90fff0, mag: 0x021014, grip: 0x010608, accent: 0x00ffd0, glow: 0x40ffe0, shot: 0xa0fff0 },
+  { rar: 'legendary', heavy: 1, pat: 'scale',  body: 0x2a0a0a, steel: 0xffc080, mag: 0x1a0606, grip: 0x100404, accent: 0xff6a1a, glow: 0xff8a2a, shot: 0xffc080 }
 ];
 const _PAL_BY_RAR = {};
 SKIN_PALETTES.forEach(p => { (_PAL_BY_RAR[p.rar] = _PAL_BY_RAR[p.rar] || []).push(p); });
@@ -610,6 +613,7 @@ const SKINS = (() => {
       rarityLabel: rd.label,
       rarityColor: rd.color,
       heavy: !!pal.heavy,
+      pattern: pal.pat || null,
       /* full multi-part scheme */
       body: pal.body, steel: pal.steel, mag: pal.mag, grip: pal.grip,
       accent: pal.accent, glow: pal.glow, shot: pal.shot,

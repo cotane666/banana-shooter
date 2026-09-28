@@ -1926,23 +1926,23 @@ const ACHIEVEMENTS = [
      HEAVY ARSENAL — one goal per heavy weapon (they also each unlock a
      dedicated heavy-weapon skin below).
      ============================================================ */
-  { id: 'hv_minigun', name: 'СВИНЦОВЫЙ ДОЖДЬ', desc: '300 убийств из минигана',        check: s => s.minigunKills >= 300 },
-  { id: 'hv_rpg',     name: 'ПОДРЫВНИК',       desc: '60 убийств из РПГ',              check: s => s.rpgKills >= 60 },
-  { id: 'hv_laser',   name: 'ЛУЧЕВОЙ',         desc: '60 убийств из лазерной винтовки', check: s => s.laserKills >= 60 },
-  { id: 'hv_cannon',  name: 'ПЕРЕГРЕВ',        desc: '30 убийств из лазерной пушки',   check: s => s.cannonKills >= 30 },
-  { id: 'hv_atomic',  name: 'ЯДЕРНЫЙ ГРИБ',    desc: '10 убийств из атомного РПГ',     check: s => s.atomicKills >= 10 },
-  { id: 'hv_yhs',     name: 'АРСЕНАЛ',         desc: '500 убийств из Y.H.S',           check: s => s.yhsKills >= 500 },
-  { id: 'hv_rocket',  name: 'САМОНАВЕДЕНИЕ',   desc: '40 убийств из ракетницы',        check: s => s.rocketKills >= 40 },
-  { id: 'hv_shield',  name: 'НЕСОКРУШИМЫЙ',    desc: '10 убийств с поднятым щитом',    check: s => s.shieldKills >= 10 },
+  { id: 'hv_minigun', name: 'СВИНЦОВЫЙ ДОЖДЬ', desc: '600 убийств из минигана',        check: s => s.minigunKills >= 600 },
+  { id: 'hv_rpg',     name: 'ПОДРЫВНИК',       desc: '150 убийств из РПГ',             check: s => s.rpgKills >= 150 },
+  { id: 'hv_laser',   name: 'ЛУЧЕВОЙ',         desc: '150 убийств из лазерной винтовки', check: s => s.laserKills >= 150 },
+  { id: 'hv_cannon',  name: 'ПЕРЕГРЕВ',        desc: '80 убийств из лазерной пушки',   check: s => s.cannonKills >= 80 },
+  { id: 'hv_atomic',  name: 'ЯДЕРНЫЙ ГРИБ',    desc: '25 убийств из атомного РПГ',     check: s => s.atomicKills >= 25 },
+  { id: 'hv_yhs',     name: 'АРСЕНАЛ',         desc: '1 000 убийств из Y.H.S',         check: s => s.yhsKills >= 1000 },
+  { id: 'hv_rocket',  name: 'САМОНАВЕДЕНИЕ',   desc: '100 убийств из ракетницы',       check: s => s.rocketKills >= 100 },
+  { id: 'hv_shield',  name: 'НЕСОКРУШИМЫЙ',    desc: '25 убийств с поднятым щитом',    check: s => s.shieldKills >= 25 },
   /* второй набор на каждый тяжёлый ствол — ещё по скину на каждое оружие */
-  { id: 'hv2_minigun', name: 'ШКВАЛ',          desc: '800 убийств из минигана',        check: s => s.minigunKills >= 800 },
-  { id: 'hv2_rpg',     name: 'АРТИЛЛЕРИЯ',     desc: '150 убийств из РПГ',             check: s => s.rpgKills >= 150 },
-  { id: 'hv2_laser',   name: 'СВЕТОВОЙ МЕЧ',   desc: '150 убийств из лазерной винтовки', check: s => s.laserKills >= 150 },
-  { id: 'hv2_cannon',  name: 'ЛУЧ СМЕРТИ',     desc: '80 убийств из лазерной пушки',   check: s => s.cannonKills >= 80 },
-  { id: 'hv2_atomic',  name: 'КОНЕЦ СВЕТА',    desc: '30 убийств из атомного РПГ',     check: s => s.atomicKills >= 30 },
-  { id: 'hv2_yhs',     name: 'СВЕРХАРСЕНАЛ',   desc: '1200 убийств из Y.H.S',          check: s => s.yhsKills >= 1200 },
-  { id: 'hv2_rocket',  name: 'СТАЯ',           desc: '100 убийств из ракетницы',       check: s => s.rocketKills >= 100 },
-  { id: 'hv2_shield',  name: 'ОТРАЖАТЕЛЬ',     desc: '40 убийств с поднятым щитом',    check: s => s.shieldKills >= 40 }
+  { id: 'hv2_minigun', name: 'ШКВАЛ',          desc: '1 600 убийств из минигана',      check: s => s.minigunKills >= 1600 },
+  { id: 'hv2_rpg',     name: 'АРТИЛЛЕРИЯ',     desc: '300 убийств из РПГ',             check: s => s.rpgKills >= 300 },
+  { id: 'hv2_laser',   name: 'СВЕТОВОЙ МЕЧ',   desc: '300 убийств из лазерной винтовки', check: s => s.laserKills >= 300 },
+  { id: 'hv2_cannon',  name: 'ЛУЧ СМЕРТИ',     desc: '200 убийств из лазерной пушки',  check: s => s.cannonKills >= 200 },
+  { id: 'hv2_atomic',  name: 'КОНЕЦ СВЕТА',    desc: '60 убийств из атомного РПГ',     check: s => s.atomicKills >= 60 },
+  { id: 'hv2_yhs',     name: 'СВЕРХАРСЕНАЛ',   desc: '2 500 убийств из Y.H.S',         check: s => s.yhsKills >= 2500 },
+  { id: 'hv2_rocket',  name: 'СТАЯ',           desc: '250 убийств из ракетницы',       check: s => s.rocketKills >= 250 },
+  { id: 'hv2_shield',  name: 'ОТРАЖАТЕЛЬ',     desc: '80 убийств с поднятым щитом',    check: s => s.shieldKills >= 80 }
 ];
 
 /* ============================================================
@@ -1980,12 +1980,12 @@ const ACH_PROGRESS = {
   v_streak10: ['bestHeadStreak', 10], v_total20k: ['killsTotal', 20000],
   v_clear5: ['clears', 5], v_win50: ['wins', 50], v_time3600: ['playTime', 3600],
   /* heavy arsenal (both sets) */
-  hv_minigun: ['minigunKills', 300], hv_rpg: ['rpgKills', 60], hv_laser: ['laserKills', 60],
-  hv_cannon: ['cannonKills', 30], hv_atomic: ['atomicKills', 10], hv_yhs: ['yhsKills', 500],
-  hv_rocket: ['rocketKills', 40], hv_shield: ['shieldKills', 10],
-  hv2_minigun: ['minigunKills', 800], hv2_rpg: ['rpgKills', 150], hv2_laser: ['laserKills', 150],
-  hv2_cannon: ['cannonKills', 80], hv2_atomic: ['atomicKills', 30], hv2_yhs: ['yhsKills', 1200],
-  hv2_rocket: ['rocketKills', 100], hv2_shield: ['shieldKills', 40]
+  hv_minigun: ['minigunKills', 600], hv_rpg: ['rpgKills', 150], hv_laser: ['laserKills', 150],
+  hv_cannon: ['cannonKills', 80], hv_atomic: ['atomicKills', 25], hv_yhs: ['yhsKills', 1000],
+  hv_rocket: ['rocketKills', 100], hv_shield: ['shieldKills', 25],
+  hv2_minigun: ['minigunKills', 1600], hv2_rpg: ['rpgKills', 300], hv2_laser: ['laserKills', 300],
+  hv2_cannon: ['cannonKills', 200], hv2_atomic: ['atomicKills', 60], hv2_yhs: ['yhsKills', 2500],
+  hv2_rocket: ['rocketKills', 250], hv2_shield: ['shieldKills', 80]
 };
 /* compound accuracy goals: a minimum number of shots AND an accuracy % */
 const ACH_ACC = {

@@ -1899,28 +1899,31 @@ const SKIN_RARITIES = {
 };
 const SKIN_RARITY_ORDER = ['common', 'uncommon', 'rare', 'epic', 'legendary'];
 
-/* palettes are grouped by rarity so a rarer skin always looks fancier */
+/* palettes are grouped by rarity so a rarer skin always looks fancier.
+   Each palette now gives a FULL multi-part scheme: separate colours for the
+   receiver (body), barrel/steel, magazine, grip/polymer and accents — plus a
+   glow colour used for lights, tracers and the muzzle flash. */
 const SKIN_PALETTES = [
   /* common — muted field finishes */
-  { rar: 'common',   tint: [0x4d545c, 0x6c757f], glow: 0x9aa4ae },
-  { rar: 'common',   tint: [0x4d545c, 0x5d6247], glow: 0xa8c25a },
-  { rar: 'common',   tint: [0x4d545c, 0xb09a63], glow: 0xffe08a },
+  { rar: 'common', body: 0x6c757f, steel: 0x8b939d, mag: 0x5a626b, grip: 0x424a52, accent: 0x9aa4ae, glow: 0x9aa4ae, shot: 0xffe6b0 },
+  { rar: 'common', body: 0x5d6247, steel: 0x7d8558, mag: 0x4c5039, grip: 0x3d4030, accent: 0xa8c25a, glow: 0xa8c25a, shot: 0xd8f0a0 },
+  { rar: 'common', body: 0xb09a63, steel: 0xc7b47e, mag: 0x8f7c4d, grip: 0x6e5f3b, accent: 0xffe08a, glow: 0xffe08a, shot: 0xfff0c0 },
   /* uncommon — two-tone battle paints */
-  { rar: 'uncommon', tint: [0x4d545c, 0x23262b], glow: 0xff9d21 },
-  { rar: 'uncommon', tint: [0x4d545c, 0x9e2b2b], glow: 0xff5a4a },
-  { rar: 'uncommon', tint: [0x4d545c, 0x6fb6d6], glow: 0x9fe6ff },
+  { rar: 'uncommon', body: 0x2f343b, steel: 0x9aa4ae, mag: 0x1f2328, grip: 0x15181c, accent: 0xff9d21, glow: 0xff9d21, shot: 0xffc060 },
+  { rar: 'uncommon', body: 0x9e2b2b, steel: 0xb85a5a, mag: 0x6f1f1f, grip: 0x4a1414, accent: 0xff5a4a, glow: 0xff5a4a, shot: 0xff9070 },
+  { rar: 'uncommon', body: 0x6fb6d6, steel: 0xa8d4e8, mag: 0x4f8ba8, grip: 0x37616f, accent: 0x9fe6ff, glow: 0x9fe6ff, shot: 0xd0f4ff },
   /* rare — saturated finishes with vents */
-  { rar: 'rare',     tint: [0x4d545c, 0x5d8f2e], glow: 0x9bff57 },
-  { rar: 'rare',     tint: [0x4d545c, 0x2b7f8f], glow: 0x4ad6ff },
-  { rar: 'rare',     tint: [0x4d545c, 0x6b4a9e], glow: 0xb27bff },
+  { rar: 'rare', body: 0x5d8f2e, steel: 0x8fbf5a, mag: 0x41641f, grip: 0x2e4715, accent: 0x9bff57, glow: 0x9bff57, shot: 0xc8ff90 },
+  { rar: 'rare', body: 0x2b7f8f, steel: 0x63c0d0, mag: 0x1e5b67, grip: 0x144049, accent: 0x4ad6ff, glow: 0x4ad6ff, shot: 0xa0f0ff },
+  { rar: 'rare', body: 0x6b4a9e, steel: 0xa07fd0, mag: 0x4b3370, grip: 0x342350, accent: 0xb27bff, glow: 0xb27bff, shot: 0xd8b0ff },
   /* epic — plasma-charged, glowing cells */
-  { rar: 'epic',     tint: [0x4d545c, 0x8a2be2], glow: 0xe06bff },
-  { rar: 'epic',     tint: [0x4d545c, 0x2f6f9e], glow: 0x7ffff0 },
-  { rar: 'epic',     tint: [0x4d545c, 0x8f3a1e], glow: 0xff7a1a },
+  { rar: 'epic', body: 0x5a2a8a, steel: 0xb08fe0, mag: 0x3c1c5e, grip: 0x27133d, accent: 0xe06bff, glow: 0xe06bff, shot: 0xf0a0ff },
+  { rar: 'epic', body: 0x2f6f9e, steel: 0x8fd8e8, mag: 0x1e4a6b, grip: 0x143347, accent: 0x7ffff0, glow: 0x7ffff0, shot: 0xb0fff8 },
+  { rar: 'epic', body: 0x8f3a1e, steel: 0xe0a070, mag: 0x602612, grip: 0x401a0c, accent: 0xff7a1a, glow: 0xff7a1a, shot: 0xffb060 },
   /* legendary — gold / prismatic / void, fully dressed */
-  { rar: 'legendary', tint: [0x4d545c, 0xc8a24a], glow: 0xffd06a },
-  { rar: 'legendary', tint: [0x4d545c, 0xb8b8d8], glow: 0xff6ad6 },
-  { rar: 'legendary', tint: [0x4d545c, 0x2a1b40], glow: 0xc060ff }
+  { rar: 'legendary', body: 0xc8a24a, steel: 0xf0d894, mag: 0x8f7130, grip: 0x5e4a1e, accent: 0xffd06a, glow: 0xffd06a, shot: 0xffe89a },
+  { rar: 'legendary', body: 0xb8b8d8, steel: 0xffffff, mag: 0x8080a8, grip: 0x585878, accent: 0xff6ad6, glow: 0xff6ad6, shot: 0xffb0f0 },
+  { rar: 'legendary', body: 0x3a2458, steel: 0xb090e0, mag: 0x241238, grip: 0x140a24, accent: 0xc060ff, glow: 0xc060ff, shot: 0xe0a0ff }
 ];
 const _PAL_BY_RAR = {};
 SKIN_PALETTES.forEach(p => { (_PAL_BY_RAR[p.rar] = _PAL_BY_RAR[p.rar] || []).push(p); });
@@ -1957,9 +1960,10 @@ const SKINS = (() => {
       rarity: rar,
       rarityLabel: rd.label,
       rarityColor: rd.color,
-      style: pal.tint[1],
-      tint: pal.tint,
-      glow: pal.glow,
+      /* full multi-part scheme */
+      body: pal.body, steel: pal.steel, mag: pal.mag, grip: pal.grip,
+      accent: pal.accent, glow: pal.glow, shot: pal.shot,
+      tint: [pal.body, pal.steel],            // kept for older callers
       deco: rd.deco,
       beads: rd.beads,
       glowMul: rd.glow
@@ -4763,73 +4767,119 @@ function DOT(r, color, x, y, z) {
 
 /* ============================================================
    WEAPON SKINS — applied on top of a freshly built weapon model.
-   Rarity drives how far the recolour goes AND how much decoration is bolted
-   on: a common skin is a subtle repaint, a legendary one is fully dressed.
+   Parts are recoloured INDIVIDUALLY (receiver, steel, magazine, grip/polymer,
+   wood) so the gun reads as a real paint job instead of one flat colour. Rarity
+   controls how much extra hardware, glow and lighting is bolted on.
    ============================================================ */
+function _skinShade(hex, tint, mix) {
+  // blend a source colour toward the skin colour, keeping its relative lightness
+  const c = new THREE.Color(hex);
+  const l = (c.r + c.g + c.b) / 3;
+  const t = new THREE.Color(tint);
+  // scale the tint by how light the source was, so dark parts stay dark
+  const k = .45 + l * 1.2;
+  t.multiplyScalar(Math.min(1.25, k));
+  return c.lerp(t, mix);
+}
 function applyWeaponSkin(group, skin) {
   if (!group || !skin) return group;
-  const to = skin.tint[1];
-  const mix = skin.glowMul !== undefined ? U.clamp(skin.glowMul, .12, .9) : .5;
-  const emis = mix * .5;                          // stronger glow for rarer skins
-  const GLOWKEEP = { 0x8affa0: 1, 0xffd06a: 1, 0x4ad6ff: 1, 0xb27bff: 1 };
-  const mapMat = (m) => {
+  const mix = U.clamp(skin.glowMul !== undefined ? skin.glowMul : .5, .18, .85);
+  const emis = mix * .55;
+  const glowC = new THREE.Color(skin.glow);
+
+  // original palette colours → the skin's part colour
+  const partOf = (hex) => {
+    if (hex === 0x8b939d || hex === 0x646c76) return skin.steel;      // steel / accent
+    if (hex === 0x3a4046) return skin.mag;                            // magazine
+    if (hex === 0x353a40) return skin.grip;                           // polymer grip
+    if (hex === 0x9c6a36 || hex === 0xa8926a) return skin.mag;        // wood furniture
+    if (hex === 0x5d6247) return skin.body;                           // olive stock
+    if (hex === 0x0e1114) return null;                                // glass stays
+    return skin.body;                                                 // receiver / black
+  };
+  const seen = [];
+  group.traverse(o => {
+    if (!o.isMesh) return;
+    const m = o.material;
     if (!m || !m.color) return;
     const hex = m.color.getHex();
-    if (GLOWKEEP[hex]) return;                    // leave sight dots / lamps alone
-    if (m.isMeshBasicMaterial) return;
-    const c = new THREE.Color(hex);
-    const t = new THREE.Color(to);
-    c.lerp(t, mix);                               // blend toward the skin tint
-    m.color.copy(c);
+    if (m.isMeshBasicMaterial) {
+      // a self-lit lamp/dot: keep it lit but in the skin's glow colour
+      m.color.copy(glowC);
+      return;
+    }
+    const target = partOf(hex);
+    if (target === null) return;
+    m.color.copy(_skinShade(hex, target, mix));
     if (m.emissive) m.emissive.setHex(skin.glow).multiplyScalar(emis);
-  };
-  group.traverse(o => { if (o.isMesh) mapMat(o.material); });
+    seen.push(o);
+  });
 
-  const accent = (w, h, d, x, y, z, k) => {
+  const addPart = (w, h, d, color, x, y, z, k) => {
     const b = new THREE.Mesh(new THREE.BoxGeometry(w, h, d),
-      new THREE.MeshLambertMaterial({ color: skin.glow, emissive: new THREE.Color(skin.glow).multiplyScalar((k || .5) * mix) }));
+      new THREE.MeshLambertMaterial({ color: color, emissive: glowC.clone().multiplyScalar((k || .5) * mix) }));
     b.position.set(x, y, z); group.add(b); return b;
+  };
+  const addGlowBox = (w, h, d, x, y, z, op) => {
+    const b = new THREE.Mesh(new THREE.BoxGeometry(w, h, d),
+      new THREE.MeshBasicMaterial({ color: skin.glow, transparent: true, opacity: op || .9, blending: THREE.AdditiveBlending, depthWrite: false }));
+    b.position.set(x, y, z); group.add(b); return b;
+  };
+  const addRing = (r, t, x, y, z) => {
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(r, t, 8, 16),
+      new THREE.MeshBasicMaterial({ color: skin.glow, transparent: true, opacity: .9, blending: THREE.AdditiveBlending, depthWrite: false }));
+    ring.rotation.x = Math.PI / 2; ring.position.set(x, y, z); group.add(ring); return ring;
   };
 
   const deco = skin.deco || 'none';
+  /* ---- every skin adds a small painted accent plate ---- */
+  addPart(.030, .008, .10, skin.accent, 0, .040, -.09, .4);
   if (deco === 'stripe') {
-    accent(.030, .010, .15, 0, .040, -.09, .6);          // a single top stripe
+    addGlowBox(.026, .006, .14, 0, .046, -.09, .8);
   } else if (deco === 'vent') {
-    for (let i = 0; i < 3; i++) accent(.052, .008, .014, 0, .030 + i * .012, -.05 - i * .022, .6);
-    accent(.020, .020, .020, 0, -.052, .02, .6);
+    for (let i = 0; i < 3; i++) addGlowBox(.050, .007, .013, 0, .030 + i * .013, -.05 - i * .022, .85);
+    addPart(.020, .020, .020, skin.accent, 0, -.052, .02, .6);
+    addPart(.036, .012, .05, skin.steel, 0, -.075, -.02, .3);        // foregrip block
   } else if (deco === 'plasma') {
-    // glowing side cells + a muzzle ring
-    [-1, 1].forEach(s => { accent(.012, .030, .070, s * .050, -.010, -.10, .8); });
-    const ring = new THREE.Mesh(new THREE.TorusGeometry(.030, .006, 8, 14),
-      new THREE.MeshBasicMaterial({ color: skin.glow, transparent: true, opacity: .85, blending: THREE.AdditiveBlending, depthWrite: false }));
-    ring.rotation.x = Math.PI / 2; ring.position.set(0, .015, -.20); group.add(ring);
-    for (let i = 0; i < 3; i++) accent(.040, .008, .014, 0, .030 + i * .012, -.05 - i * .022, .7);
+    [-1, 1].forEach(s => { addGlowBox(.012, .028, .062, s * .050, -.010, -.10, .9); });
+    addRing(.030, .006, 0, .015, -.20);
+    for (let i = 0; i < 3; i++) addGlowBox(.040, .008, .013, 0, .030 + i * .013, -.05 - i * .022, .9);
+    addPart(.070, .012, .16, skin.steel, 0, .048, -.07, .4);         // top rail plate
+    addPart(.020, .026, .026, skin.accent, 0, -.078, -.03, .5);
   } else if (deco === 'legend') {
-    // gold trim, glowing beads and a bright halo ring — the fanciest kit
-    accent(.030, .012, .17, 0, .042, -.09, 1);
-    accent(.022, .022, .022, 0, -.052, .02, 1);
-    for (let i = 0; i < 3; i++) accent(.048, .009, .016, 0, .030 + i * .013, -.05 - i * .024, .9);
-    const beads = skin.beads || 4;
-    for (let i = 0; i < beads; i++) {
-      const b = new THREE.Mesh(new THREE.SphereGeometry(.011, 8, 6),
-        new THREE.MeshBasicMaterial({ color: skin.glow }));
-      b.position.set(((i % 2) ? 1 : -1) * .052, -.005 + (i >> 1) * .014, -.14 + i * .03);
-      group.add(b);
-    }
-    const ring = new THREE.Mesh(new THREE.TorusGeometry(.034, .008, 8, 16),
-      new THREE.MeshBasicMaterial({ color: skin.glow, transparent: true, opacity: .9, blending: THREE.AdditiveBlending, depthWrite: false }));
-    ring.rotation.x = Math.PI / 2; ring.position.set(0, .015, -.22); group.add(ring);
+    addGlowBox(.028, .010, .16, 0, .048, -.09, 1);
+    addRing(.034, .008, 0, .015, -.22);
+    for (let i = 0; i < 3; i++) addGlowBox(.046, .008, .015, 0, .030 + i * .014, -.05 - i * .024, 1);
+    addPart(.072, .014, .18, skin.steel, 0, .050, -.06, .5);         // full top rail
+    addPart(.024, .030, .030, skin.accent, 0, -.080, -.03, .7);
+    addPart(.016, .016, .08, skin.accent, -.050, .048, -.06, .8);    // side plate L
+    addPart(.016, .016, .08, skin.accent, .050, .048, -.06, .8);     // side plate R
   }
-  // epic and legendary get their extra beads even if deco differs
-  if (deco !== 'legend' && skin.beads) {
-    for (let i = 0; i < skin.beads; i++) {
-      const b = new THREE.Mesh(new THREE.SphereGeometry(.010, 8, 6),
-        new THREE.MeshBasicMaterial({ color: skin.glow }));
-      b.position.set(((i % 2) ? 1 : -1) * .050, -.006 + (i >> 1) * .013, -.13 + i * .03);
-      group.add(b);
-    }
+  /* ---- glowing beads (rare and up) ---- */
+  const beads = skin.beads || 0;
+  for (let i = 0; i < beads; i++) {
+    const b = new THREE.Mesh(new THREE.SphereGeometry(.010, 8, 6),
+      new THREE.MeshBasicMaterial({ color: skin.glow }));
+    b.position.set(((i % 2) ? 1 : -1) * .050, -.005 + (i >> 1) * .014, -.13 + i * .03);
+    group.add(b);
   }
+  /* ---- rare+ glow light so the finish is visible in the dark ---- */
+  if (mix >= .45) {
+    const light = new THREE.PointLight(skin.glow, mix * 1.1, 2.2, 2);
+    light.position.set(0, .02, -.14);
+    group.add(light);
+  }
+  group.userData.skin = skin;
   return group;
+}
+
+/* the tracer / muzzle colour a skin gives a weapon's shots.
+   ONLY the rarest skins recolour shots: ЭПИЧЕСКИЙ and ЛЕГЕНДАРНЫЙ. Common,
+   uncommon and rare keep the normal yellow-orange tracers. */
+function skinShotColor(skin) {
+  if (!skin) return null;
+  if (skin.rarity !== 'epic' && skin.rarity !== 'legendary') return null;
+  return skin.shot !== undefined ? skin.shot : skin.glow;
 }
 
 function buildWeaponModel(id) {
@@ -6879,7 +6929,11 @@ class Player {
     const vm = buildWeaponModel(id);
     // apply the skin the player chose for this weapon (if any)
     const skinId = (Store.data.skinOn || {})[id];
-    if (skinId) { const sk = skinById(skinId); if (sk) applyWeaponSkin(vm, sk); }
+    let skin = null;
+    if (skinId) { skin = skinById(skinId); if (skin) applyWeaponSkin(vm, skin); }
+    // remember the shot colour the skin gives this weapon's tracers/flash
+    this.skinShot = skin ? skinShotColor(skin) : null;
+    this.skinGlow = skin ? skin.glow : null;
     vm.traverse(o => { if (o.isMesh) { o.castShadow = false; o.receiveShadow = false; o.renderOrder = 5; } });
     const group = new THREE.Group();
     group.add(vm);
@@ -6887,14 +6941,15 @@ class Player {
     const mz = new THREE.Object3D();
     mz.position.set(0, .015, vm.userData.muzzleZ !== undefined ? vm.userData.muzzleZ : -0.6);
     vm.add(mz);
-    // muzzle flash sprite
+    // muzzle flash sprite (tinted by the skin, if one is worn)
+    const flashColor = this.skinShot || 0xffdd88;
     const flash = new THREE.Mesh(new THREE.PlaneGeometry(.34, .34), new THREE.MeshBasicMaterial({
-      color: 0xffdd88, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false
+      color: flashColor, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false
     }));
     flash.position.copy(mz.position); flash.position.z -= .10;
     vm.add(flash);
     this.flashMesh = flash;
-    const light = new THREE.PointLight(0xffcc66, 0, 9, 2);
+    const light = new THREE.PointLight(flashColor, 0, 9, 2);
     light.position.copy(mz.position); light.position.z += .1;
     vm.add(light);
     this.flashLight = light;
@@ -9335,7 +9390,7 @@ class Effects {
   }
 
   /* ---------- tracer ---------- */
-  tracer(from, to, thick, bright) {
+  tracer(from, to, thick, bright, color) {
     if (this.tracers.length > 60) return;
     let m = this.tracerPool.pop();
     if (!m) { m = new THREE.Mesh(this.tracerGeo, this.tracerMat.clone()); }
@@ -9343,6 +9398,8 @@ class Effects {
     const len = Math.sqrt(dx * dx + dy * dy + dz * dz);
     if (len < .05) { this.tracerPool.push(m); return; }
     m.material = (bright === false ? this.tracerMat2 : this.tracerMat).clone();
+    // a skinned weapon tints its tracer, so coloured shots are visible to all
+    if (color) m.material.color.setHex(color);
     m.material.opacity = .9;
     m.position.set((from.x + to.x) / 2, (from.y + to.y) / 2, (from.z + to.z) / 2);
     m.scale.set(thick || 1, thick || 1, len);
@@ -12250,16 +12307,29 @@ function buildSoldierMesh(team) {
 
 /* ---------------- held weapon for a remote player ----------------
    The same weapon models the player sees in first person, cloned and cached by
-   weapon id. Clones share geometry and materials, so building one per player is
-   cheap; they are only rebuilt when that player actually changes weapon. */
+   weapon id. Without a skin the clone shares the cached (shared) materials, so
+   building one per player is cheap. WITH a skin the clone must own its materials
+   (a shared material would leak one player's paint onto everyone), so the
+   materials are duplicated and the skin is applied only to that copy. */
 const _soldierGunCache = {};
-function buildSoldierWeapon(id) {
+function _soldierGunBase(id) {
   if (!_soldierGunCache[id]) {
     const g = buildWeaponModel(id);
     g.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = false; } });
     _soldierGunCache[id] = g;
   }
-  return _soldierGunCache[id].clone(true);
+  return _soldierGunCache[id];
+}
+function buildSoldierWeapon(id, skinId) {
+  const base = _soldierGunBase(id);
+  const clone = base.clone(true);
+  if (!skinId) return clone;                 // no skin: shares materials with the cache
+  const sk = skinById(skinId);
+  if (!sk) return clone;
+  // give this clone its OWN materials so the paint cannot bleed onto the cache
+  clone.traverse(o => { if (o.isMesh && o.material) o.material = o.material.clone(); });
+  applyWeaponSkin(clone, sk);
+  return clone;
 }
 
 function makeNameplate(text) {
@@ -12777,19 +12847,24 @@ class RemotePlayer {
   }
 
   /* Attach (or swap) the weapon model in the right hand for this slot.
-     `id` comes from the peer's state packet; `heldGroups` lists the weapon ids
-     we have actually been told about, so we never invent a weapon. */
-  setWeapon(id) {
-    if (id === this._weaponId && this.weaponGroup) return;
+     `id` comes from the peer's state packet; `skinId` is the worn skin, so the
+     opponent sees the same painted weapon. `heldGroups` lists the weapon ids we
+     have actually been told about, so we never invent a weapon. */
+  setWeapon(id, skinId) {
+    if (id === this._weaponId && skinId === this._weaponSkinId && this.weaponGroup) return;
     this._weaponId = id || null;
+    this._weaponSkinId = skinId || null;
     const armR = this.mesh.userData.parts.armR;
     if (this.weaponGroup) {
       armR.remove(this.weaponGroup);
-      this.weaponGroup.traverse(o => { if (o.geometry) { /* cached geo, do not dispose */ } });
+      disposeGroup(this.weaponGroup);
       this.weaponGroup = null;
     }
     if (!id || !WEAPONS[id] || id === 'knife') return;
-    const w = buildSoldierWeapon(id);
+    /* `buildSoldierWeapon` returns a CLONE of a cached model, and the clone
+       shares materials with the cache — so a skin must be applied to a model
+       whose materials are per-instance, never to the shared cache. */
+    const w = buildSoldierWeapon(id, skinId);
     // The arm is raised forward with rotation.x = +1.30, which turns its local
     // -Z axis to point up. Rotating the weapon by -90° cancels that, so the
     // barrel ends up roughly horizontal and pointing ahead of the soldier
@@ -17035,6 +17110,9 @@ const Game = {
       blackhole: buildBlackHoleShell, chrono: buildChronoOrb
     }[kind];
     const mesh = builder ? builder() : buildBananaProjectile();
+    // an epic/legendary skin tints the projectile and its trail
+    const shotCol = p && p.skinShot ? p.skinShot : null;
+    if (shotCol) { const c = new THREE.Color(shotCol); mesh.traverse(o => { if (o.isMesh && o.material && o.material.color) o.material.color.lerp(c, .6); }); }
     mesh.position.set(origin.x, origin.y, origin.z);
     if (!isRocket && !isGuided) mesh.rotation.x = Math.PI / 2;   // bananas lie along the flight path
     this.scene.add(mesh);
@@ -18389,6 +18467,8 @@ const Game = {
     const p = this.player;
     const maxDist = def.range || 100;
     const end = { x: origin.x + dir.x * maxDist, y: origin.y + dir.y * maxDist, z: origin.z + dir.z * maxDist };
+    // the worn skin's rarest tiers tint this shot's tracer (null = normal colour)
+    const _shotCol = p && p.skinShot ? p.skinShot : null;
 
     // ---- melee ----
     if (isMelee) {
@@ -18494,7 +18574,7 @@ const Game = {
     if (droneHit && droneHit.t <= stopT && (!zHit || droneHit.t < zHit.t) && (!pvpHit || droneHit.t < pvpHit.t)) {
       p.bulletsHit++;
       this.hitRemoteDrone(droneHit.rp, droneHit.point);
-      this.effects.tracer(muzzleWorld, droneHit.point, 1, true);
+      this.effects.tracer(muzzleWorld, droneHit.point, 1, true, _shotCol);
       return;
     }
 
@@ -18508,7 +18588,7 @@ const Game = {
       this.sendPvpHit(dmg, pvpHit.part, hs, pvpHit.rp);
       this.hitEffect(pvpHit.point, dir, pvpHit.part, hs);
       Audio3D_SFX.hit(pvpHit.point.x, pvpHit.point.y, pvpHit.point.z, hs);
-      this.effects.tracer(muzzleWorld, pvpHit.point, 1, true);
+      this.effects.tracer(muzzleWorld, pvpHit.point, 1, true, _shotCol);
       this.effects.bloodBurst(pvpHit.point, dir, hs ? 14 : 8);
       if (Net.ping > 0) { /* ping-based compensation could go here */ }
       return;
@@ -18521,7 +18601,7 @@ const Game = {
       } else if (zHit.zombie.isTargetOnRange) {
         p.bulletsHit++;
         this.effects.impact(zHit.point, dir, 'concrete');
-        this.effects.tracer(muzzleWorld, zHit.point, 1, true);
+        this.effects.tracer(muzzleWorld, zHit.point, 1, true, _shotCol);
         Audio3D_SFX.hit(zHit.point.x, zHit.point.y, zHit.point.z, false);
         this.onTargetHit(zHit.zombie, zHit.part);
         return;
@@ -18532,7 +18612,7 @@ const Game = {
       p.damageDealt += dmg * (zHit.part === 'head' ? CFG.headshotMultiplier : zHit.part === 'legs' ? CFG.limbMultiplier : 1);
       this.hitEffect(zHit.point, dir, zHit.part, zHit.part === 'head');
       Audio3D_SFX.hit(zHit.point.x, zHit.point.y, zHit.point.z, zHit.part === 'head');
-      this.effects.tracer(muzzleWorld, zHit.point, 1, true);
+      this.effects.tracer(muzzleWorld, zHit.point, 1, true, _shotCol);
       return;
     }
 
@@ -18541,12 +18621,12 @@ const Game = {
 
     // hit geometry
     if (stopPoint) {
-      this.effects.tracer(muzzleWorld, stopPoint, 1, true);
+      this.effects.tracer(muzzleWorld, stopPoint, 1, true, _shotCol);
       const surf = (stopNormal && Math.abs(stopNormal.y) > .7) ? 'concrete' : 'concrete';
       this.effects.impact(stopPoint, stopNormal, surf);
       Audio3D_SFX.tone(140, .06, 'triangle', .05, stopPoint.x, stopPoint.y, stopPoint.z, 90);
     } else {
-      this.effects.tracer(muzzleWorld, end, 1, false);
+      this.effects.tracer(muzzleWorld, end, 1, false, _shotCol);
     }
   },
 
@@ -19059,6 +19139,7 @@ const Game = {
       alive: p.alive ? 1 : 0, cr: p.crouching ? 1 : 0,
       hp: Math.round(p.health), ar: Math.round(p.armor), sl: p.slot,
       wi: wpn ? wpn.id : null,                 // held weapon, so the model can show it
+      sk: (wpn && (Store.data.skinOn || {})[wpn.id]) || null,   // worn skin, shown to peers
       mg: wpn && wpn.mag !== Infinity ? wpn.mag : null,
       sp: +(p.spinT || 0).toFixed(2),           // minigun spin-up, for the barrels
       mc: p.mechSuit ? 1 : 0,                   // in the mech: show the chassis remotely
@@ -19091,7 +19172,8 @@ const Game = {
     if (s.hp !== undefined) rp.health = s.hp;
     rp.slot = s.sl;
     // show the weapon the peer is actually holding (including the minigun spin)
-    rp.setWeapon(s.wi);
+    // and the SKIN they wear, so painted weapons are visible in a duel
+    rp.setWeapon(s.wi, s.sk);
     rp.spinT = (s.sp !== undefined) ? s.sp : 0;
     // in the mech: hide the soldier and show the chassis instead
     rp.setMech(s.mc);
@@ -19114,6 +19196,9 @@ const Game = {
     // the muzzle sits at eye height; in the mech that is much higher
     const my = rp.mech ? CFG.mechEyeHeight - .6 : 1.35;
     const muzzle = { x: rp.pos.x, y: rp.pos.y + my, z: rp.pos.z };
+    // an epic/legendary skin on the peer's weapon tints their shots here too
+    const shotSk = rp._weaponSkinId ? skinById(rp._weaponSkinId) : null;
+    const shotCol = skinShotColor(shotSk);
 
     /* A launcher round (RPG rocket / banana) is a physical object, so fly a
        visible copy here too. The owner resolves the damage and broadcasts the
@@ -19137,7 +19222,7 @@ const Game = {
       let endT = maxDist, p = null, n = null;
       for (const h of wallHits) { endT = h.t; p = h.point; n = h.normal; break; }
       const end = p || { x: from.x + dir.x * endT, y: from.y + dir.y * endT, z: from.z + dir.z * endT };
-      this.effects.tracer(muzzle, end, 1.4, true);
+      this.effects.tracer(muzzle, end, 1.4, true, shotCol);
       if (p) this.effects.impact(p, n, 'concrete');
     }
     Audio3D_SFX.shot(def.sound || 'rifle', muzzle.x, muzzle.y, muzzle.z);
@@ -19197,6 +19282,11 @@ const Game = {
     const d = this.spreadDirection(dir, spread || 0, false);
     const isRocket = def.projectile === 'rocket';
     const mesh = isRocket ? buildRocketProjectile() : buildBananaProjectile();
+    // a skinned projectile is tinted with the owner's skin glow
+    const rp = this.remoteById(ownerId);
+    const sk = (rp && rp._weaponSkinId) ? skinById(rp._weaponSkinId) : null;
+    const col = sk ? skinShotColor(sk) : null;
+    if (col) { const c = new THREE.Color(col); mesh.traverse(o => { if (o.isMesh && o.material && o.material.color) o.material.color.lerp(c, .6); }); }
     mesh.position.set(origin.x, origin.y, origin.z);
     if (!isRocket) mesh.rotation.x = Math.PI / 2;
     this.scene.add(mesh);

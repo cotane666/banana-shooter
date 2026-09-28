@@ -512,28 +512,31 @@ const SKIN_RARITIES = {
 };
 const SKIN_RARITY_ORDER = ['common', 'uncommon', 'rare', 'epic', 'legendary'];
 
-/* palettes are grouped by rarity so a rarer skin always looks fancier */
+/* palettes are grouped by rarity so a rarer skin always looks fancier.
+   Each palette now gives a FULL multi-part scheme: separate colours for the
+   receiver (body), barrel/steel, magazine, grip/polymer and accents — plus a
+   glow colour used for lights, tracers and the muzzle flash. */
 const SKIN_PALETTES = [
   /* common — muted field finishes */
-  { rar: 'common',   tint: [0x4d545c, 0x6c757f], glow: 0x9aa4ae },
-  { rar: 'common',   tint: [0x4d545c, 0x5d6247], glow: 0xa8c25a },
-  { rar: 'common',   tint: [0x4d545c, 0xb09a63], glow: 0xffe08a },
+  { rar: 'common', body: 0x6c757f, steel: 0x8b939d, mag: 0x5a626b, grip: 0x424a52, accent: 0x9aa4ae, glow: 0x9aa4ae, shot: 0xffe6b0 },
+  { rar: 'common', body: 0x5d6247, steel: 0x7d8558, mag: 0x4c5039, grip: 0x3d4030, accent: 0xa8c25a, glow: 0xa8c25a, shot: 0xd8f0a0 },
+  { rar: 'common', body: 0xb09a63, steel: 0xc7b47e, mag: 0x8f7c4d, grip: 0x6e5f3b, accent: 0xffe08a, glow: 0xffe08a, shot: 0xfff0c0 },
   /* uncommon — two-tone battle paints */
-  { rar: 'uncommon', tint: [0x4d545c, 0x23262b], glow: 0xff9d21 },
-  { rar: 'uncommon', tint: [0x4d545c, 0x9e2b2b], glow: 0xff5a4a },
-  { rar: 'uncommon', tint: [0x4d545c, 0x6fb6d6], glow: 0x9fe6ff },
+  { rar: 'uncommon', body: 0x2f343b, steel: 0x9aa4ae, mag: 0x1f2328, grip: 0x15181c, accent: 0xff9d21, glow: 0xff9d21, shot: 0xffc060 },
+  { rar: 'uncommon', body: 0x9e2b2b, steel: 0xb85a5a, mag: 0x6f1f1f, grip: 0x4a1414, accent: 0xff5a4a, glow: 0xff5a4a, shot: 0xff9070 },
+  { rar: 'uncommon', body: 0x6fb6d6, steel: 0xa8d4e8, mag: 0x4f8ba8, grip: 0x37616f, accent: 0x9fe6ff, glow: 0x9fe6ff, shot: 0xd0f4ff },
   /* rare — saturated finishes with vents */
-  { rar: 'rare',     tint: [0x4d545c, 0x5d8f2e], glow: 0x9bff57 },
-  { rar: 'rare',     tint: [0x4d545c, 0x2b7f8f], glow: 0x4ad6ff },
-  { rar: 'rare',     tint: [0x4d545c, 0x6b4a9e], glow: 0xb27bff },
+  { rar: 'rare', body: 0x5d8f2e, steel: 0x8fbf5a, mag: 0x41641f, grip: 0x2e4715, accent: 0x9bff57, glow: 0x9bff57, shot: 0xc8ff90 },
+  { rar: 'rare', body: 0x2b7f8f, steel: 0x63c0d0, mag: 0x1e5b67, grip: 0x144049, accent: 0x4ad6ff, glow: 0x4ad6ff, shot: 0xa0f0ff },
+  { rar: 'rare', body: 0x6b4a9e, steel: 0xa07fd0, mag: 0x4b3370, grip: 0x342350, accent: 0xb27bff, glow: 0xb27bff, shot: 0xd8b0ff },
   /* epic — plasma-charged, glowing cells */
-  { rar: 'epic',     tint: [0x4d545c, 0x8a2be2], glow: 0xe06bff },
-  { rar: 'epic',     tint: [0x4d545c, 0x2f6f9e], glow: 0x7ffff0 },
-  { rar: 'epic',     tint: [0x4d545c, 0x8f3a1e], glow: 0xff7a1a },
+  { rar: 'epic', body: 0x5a2a8a, steel: 0xb08fe0, mag: 0x3c1c5e, grip: 0x27133d, accent: 0xe06bff, glow: 0xe06bff, shot: 0xf0a0ff },
+  { rar: 'epic', body: 0x2f6f9e, steel: 0x8fd8e8, mag: 0x1e4a6b, grip: 0x143347, accent: 0x7ffff0, glow: 0x7ffff0, shot: 0xb0fff8 },
+  { rar: 'epic', body: 0x8f3a1e, steel: 0xe0a070, mag: 0x602612, grip: 0x401a0c, accent: 0xff7a1a, glow: 0xff7a1a, shot: 0xffb060 },
   /* legendary — gold / prismatic / void, fully dressed */
-  { rar: 'legendary', tint: [0x4d545c, 0xc8a24a], glow: 0xffd06a },
-  { rar: 'legendary', tint: [0x4d545c, 0xb8b8d8], glow: 0xff6ad6 },
-  { rar: 'legendary', tint: [0x4d545c, 0x2a1b40], glow: 0xc060ff }
+  { rar: 'legendary', body: 0xc8a24a, steel: 0xf0d894, mag: 0x8f7130, grip: 0x5e4a1e, accent: 0xffd06a, glow: 0xffd06a, shot: 0xffe89a },
+  { rar: 'legendary', body: 0xb8b8d8, steel: 0xffffff, mag: 0x8080a8, grip: 0x585878, accent: 0xff6ad6, glow: 0xff6ad6, shot: 0xffb0f0 },
+  { rar: 'legendary', body: 0x3a2458, steel: 0xb090e0, mag: 0x241238, grip: 0x140a24, accent: 0xc060ff, glow: 0xc060ff, shot: 0xe0a0ff }
 ];
 const _PAL_BY_RAR = {};
 SKIN_PALETTES.forEach(p => { (_PAL_BY_RAR[p.rar] = _PAL_BY_RAR[p.rar] || []).push(p); });
@@ -570,9 +573,10 @@ const SKINS = (() => {
       rarity: rar,
       rarityLabel: rd.label,
       rarityColor: rd.color,
-      style: pal.tint[1],
-      tint: pal.tint,
-      glow: pal.glow,
+      /* full multi-part scheme */
+      body: pal.body, steel: pal.steel, mag: pal.mag, grip: pal.grip,
+      accent: pal.accent, glow: pal.glow, shot: pal.shot,
+      tint: [pal.body, pal.steel],            // kept for older callers
       deco: rd.deco,
       beads: rd.beads,
       glowMul: rd.glow

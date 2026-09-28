@@ -128,7 +128,7 @@ class Effects {
   }
 
   /* ---------- tracer ---------- */
-  tracer(from, to, thick, bright) {
+  tracer(from, to, thick, bright, color) {
     if (this.tracers.length > 60) return;
     let m = this.tracerPool.pop();
     if (!m) { m = new THREE.Mesh(this.tracerGeo, this.tracerMat.clone()); }
@@ -136,6 +136,8 @@ class Effects {
     const len = Math.sqrt(dx * dx + dy * dy + dz * dz);
     if (len < .05) { this.tracerPool.push(m); return; }
     m.material = (bright === false ? this.tracerMat2 : this.tracerMat).clone();
+    // a skinned weapon tints its tracer, so coloured shots are visible to all
+    if (color) m.material.color.setHex(color);
     m.material.opacity = .9;
     m.position.set((from.x + to.x) / 2, (from.y + to.y) / 2, (from.z + to.z) / 2);
     m.scale.set(thick || 1, thick || 1, len);

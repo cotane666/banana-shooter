@@ -110,16 +110,29 @@ function buildSoldierMesh(team) {
 
 /* ---------------- held weapon for a remote player ----------------
    The same weapon models the player sees in first person, cloned and cached by
-   weapon id. Clones share geometry and materials, so building one per player is
-   cheap; they are only rebuilt when that player actually changes weapon. */
+   weapon id. Without a skin the clone shares the cached (shared) materials, so
+   building one per player is cheap. WITH a skin the clone must own its materials
+   (a shared material would leak one player's paint onto everyone), so the
+   materials are duplicated and the skin is applied only to that copy. */
 const _soldierGunCache = {};
-function buildSoldierWeapon(id) {
+function _soldierGunBase(id) {
   if (!_soldierGunCache[id]) {
     const g = buildWeaponModel(id);
     g.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = false; } });
     _soldierGunCache[id] = g;
   }
-  return _soldierGunCache[id].clone(true);
+  return _soldierGunCache[id];
+}
+function buildSoldierWeapon(id, skinId) {
+  const base = _soldierGunBase(id);
+  const clone = base.clone(true);
+  if (!skinId) return clone;                 // no skin: shares materials with the cache
+  const sk = skinById(skinId);
+  if (!sk) return clone;
+  // give this clone its OWN materials so the paint cannot bleed onto the cache
+  clone.traverse(o => { if (o.isMesh && o.material) o.material = o.material.clone(); });
+  applyWeaponSkin(clone, sk);
+  return clone;
 }
 
 function makeNameplate(text) {
@@ -637,19 +650,24 @@ class RemotePlayer {
   }
 
   /* Attach (or swap) the weapon model in the right hand for this slot.
-     `id` comes from the peer's state packet; `heldGroups` lists the weapon ids
-     we have actually been told about, so we never invent a weapon. */
-  setWeapon(id) {
-    if (id === this._weaponId && this.weaponGroup) return;
+     `id` comes from the peer's state packet; `skinId` is the worn skin, so the
+     opponent sees the same painted weapon. `heldGroups` lists the weapon ids we
+     have actually been told about, so we never invent a weapon. */
+  setWeapon(id, skinId) {
+    if (id === this._weaponId && skinId === this._weaponSkinId && this.weaponGroup) return;
     this._weaponId = id || null;
+    this._weaponSkinId = skinId || null;
     const armR = this.mesh.userData.parts.armR;
     if (this.weaponGroup) {
       armR.remove(this.weaponGroup);
-      this.weaponGroup.traverse(o => { if (o.geometry) { /* cached geo, do not dispose */ } });
+      disposeGroup(this.weaponGroup);
       this.weaponGroup = null;
     }
     if (!id || !WEAPONS[id] || id === 'knife') return;
-    const w = buildSoldierWeapon(id);
+    /* `buildSoldierWeapon` returns a CLONE of a cached model, and the clone
+       shares materials with the cache — so a skin must be applied to a model
+       whose materials are per-instance, never to the shared cache. */
+    const w = buildSoldierWeapon(id, skinId);
     // The arm is raised forward with rotation.x = +1.30, which turns its local
     // -Z axis to point up. Rotating the weapon by -90° cancels that, so the
     // barrel ends up roughly horizontal and pointing ahead of the soldier
@@ -4895,6 +4913,9 @@ const Game = {
       blackhole: buildBlackHoleShell, chrono: buildChronoOrb
     }[kind];
     const mesh = builder ? builder() : buildBananaProjectile();
+    // an epic/legendary skin tints the projectile and its trail
+    const shotCol = p && p.skinShot ? p.skinShot : null;
+    if (shotCol) { const c = new THREE.Color(shotCol); mesh.traverse(o => { if (o.isMesh && o.material && o.material.color) o.material.color.lerp(c, .6); }); }
     mesh.position.set(origin.x, origin.y, origin.z);
     if (!isRocket && !isGuided) mesh.rotation.x = Math.PI / 2;   // bananas lie along the flight path
     this.scene.add(mesh);
@@ -6249,6 +6270,8 @@ const Game = {
     const p = this.player;
     const maxDist = def.range || 100;
     const end = { x: origin.x + dir.x * maxDist, y: origin.y + dir.y * maxDist, z: origin.z + dir.z * maxDist };
+    // the worn skin's rarest tiers tint this shot's tracer (null = normal colour)
+    const _shotCol = p && p.skinShot ? p.skinShot : null;
 
     // ---- melee ----
     if (isMelee) {
@@ -6354,7 +6377,7 @@ const Game = {
     if (droneHit && droneHit.t <= stopT && (!zHit || droneHit.t < zHit.t) && (!pvpHit || droneHit.t < pvpHit.t)) {
       p.bulletsHit++;
       this.hitRemoteDrone(droneHit.rp, droneHit.point);
-      this.effects.tracer(muzzleWorld, droneHit.point, 1, true);
+      this.effects.tracer(muzzleWorld, droneHit.point, 1, true, _shotCol);
       return;
     }
 
@@ -6368,7 +6391,7 @@ const Game = {
       this.sendPvpHit(dmg, pvpHit.part, hs, pvpHit.rp);
       this.hitEffect(pvpHit.point, dir, pvpHit.part, hs);
       Audio3D_SFX.hit(pvpHit.point.x, pvpHit.point.y, pvpHit.point.z, hs);
-      this.effects.tracer(muzzleWorld, pvpHit.point, 1, true);
+      this.effects.tracer(muzzleWorld, pvpHit.point, 1, true, _shotCol);
       this.effects.bloodBurst(pvpHit.point, dir, hs ? 14 : 8);
       if (Net.ping > 0) { /* ping-based compensation could go here */ }
       return;
@@ -6381,7 +6404,7 @@ const Game = {
       } else if (zHit.zombie.isTargetOnRange) {
         p.bulletsHit++;
         this.effects.impact(zHit.point, dir, 'concrete');
-        this.effects.tracer(muzzleWorld, zHit.point, 1, true);
+        this.effects.tracer(muzzleWorld, zHit.point, 1, true, _shotCol);
         Audio3D_SFX.hit(zHit.point.x, zHit.point.y, zHit.point.z, false);
         this.onTargetHit(zHit.zombie, zHit.part);
         return;
@@ -6392,7 +6415,7 @@ const Game = {
       p.damageDealt += dmg * (zHit.part === 'head' ? CFG.headshotMultiplier : zHit.part === 'legs' ? CFG.limbMultiplier : 1);
       this.hitEffect(zHit.point, dir, zHit.part, zHit.part === 'head');
       Audio3D_SFX.hit(zHit.point.x, zHit.point.y, zHit.point.z, zHit.part === 'head');
-      this.effects.tracer(muzzleWorld, zHit.point, 1, true);
+      this.effects.tracer(muzzleWorld, zHit.point, 1, true, _shotCol);
       return;
     }
 
@@ -6401,12 +6424,12 @@ const Game = {
 
     // hit geometry
     if (stopPoint) {
-      this.effects.tracer(muzzleWorld, stopPoint, 1, true);
+      this.effects.tracer(muzzleWorld, stopPoint, 1, true, _shotCol);
       const surf = (stopNormal && Math.abs(stopNormal.y) > .7) ? 'concrete' : 'concrete';
       this.effects.impact(stopPoint, stopNormal, surf);
       Audio3D_SFX.tone(140, .06, 'triangle', .05, stopPoint.x, stopPoint.y, stopPoint.z, 90);
     } else {
-      this.effects.tracer(muzzleWorld, end, 1, false);
+      this.effects.tracer(muzzleWorld, end, 1, false, _shotCol);
     }
   },
 
@@ -6919,6 +6942,7 @@ const Game = {
       alive: p.alive ? 1 : 0, cr: p.crouching ? 1 : 0,
       hp: Math.round(p.health), ar: Math.round(p.armor), sl: p.slot,
       wi: wpn ? wpn.id : null,                 // held weapon, so the model can show it
+      sk: (wpn && (Store.data.skinOn || {})[wpn.id]) || null,   // worn skin, shown to peers
       mg: wpn && wpn.mag !== Infinity ? wpn.mag : null,
       sp: +(p.spinT || 0).toFixed(2),           // minigun spin-up, for the barrels
       mc: p.mechSuit ? 1 : 0,                   // in the mech: show the chassis remotely
@@ -6951,7 +6975,8 @@ const Game = {
     if (s.hp !== undefined) rp.health = s.hp;
     rp.slot = s.sl;
     // show the weapon the peer is actually holding (including the minigun spin)
-    rp.setWeapon(s.wi);
+    // and the SKIN they wear, so painted weapons are visible in a duel
+    rp.setWeapon(s.wi, s.sk);
     rp.spinT = (s.sp !== undefined) ? s.sp : 0;
     // in the mech: hide the soldier and show the chassis instead
     rp.setMech(s.mc);
@@ -6974,6 +6999,9 @@ const Game = {
     // the muzzle sits at eye height; in the mech that is much higher
     const my = rp.mech ? CFG.mechEyeHeight - .6 : 1.35;
     const muzzle = { x: rp.pos.x, y: rp.pos.y + my, z: rp.pos.z };
+    // an epic/legendary skin on the peer's weapon tints their shots here too
+    const shotSk = rp._weaponSkinId ? skinById(rp._weaponSkinId) : null;
+    const shotCol = skinShotColor(shotSk);
 
     /* A launcher round (RPG rocket / banana) is a physical object, so fly a
        visible copy here too. The owner resolves the damage and broadcasts the
@@ -6997,7 +7025,7 @@ const Game = {
       let endT = maxDist, p = null, n = null;
       for (const h of wallHits) { endT = h.t; p = h.point; n = h.normal; break; }
       const end = p || { x: from.x + dir.x * endT, y: from.y + dir.y * endT, z: from.z + dir.z * endT };
-      this.effects.tracer(muzzle, end, 1.4, true);
+      this.effects.tracer(muzzle, end, 1.4, true, shotCol);
       if (p) this.effects.impact(p, n, 'concrete');
     }
     Audio3D_SFX.shot(def.sound || 'rifle', muzzle.x, muzzle.y, muzzle.z);
@@ -7057,6 +7085,11 @@ const Game = {
     const d = this.spreadDirection(dir, spread || 0, false);
     const isRocket = def.projectile === 'rocket';
     const mesh = isRocket ? buildRocketProjectile() : buildBananaProjectile();
+    // a skinned projectile is tinted with the owner's skin glow
+    const rp = this.remoteById(ownerId);
+    const sk = (rp && rp._weaponSkinId) ? skinById(rp._weaponSkinId) : null;
+    const col = sk ? skinShotColor(sk) : null;
+    if (col) { const c = new THREE.Color(col); mesh.traverse(o => { if (o.isMesh && o.material && o.material.color) o.material.color.lerp(c, .6); }); }
     mesh.position.set(origin.x, origin.y, origin.z);
     if (!isRocket) mesh.rotation.x = Math.PI / 2;
     this.scene.add(mesh);

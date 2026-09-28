@@ -491,6 +491,8 @@ const ACHIEVEMENTS = [
   { id: 'h_rich100k', name: 'МИЛЛИОНЕР',       desc: 'Накопить $100 000',              check: s => s.money >= 100000 },
   { id: 'h_time1200', name: 'СТОЙКИЙ',         desc: 'Пережить 20 минут в забеге',     check: s => s.playTime >= 1200 },
   { id: 'h_win10',    name: 'ОНЛАЙН-БОЕЦ',     desc: '10 побед в онлайне',             check: s => s.wins >= 10 },
+  /* ИНТЕРЕСНЫЕ: скорострельные и на выносливость */
+  { id: 'x_rampage',  name: 'РАЗДЕЛЯЮЩИЙ ХАОС', desc: '100 убийств за 5 секунд',       check: s => s.fastKills >= 100 },
   /* --- very hard --- */
   { id: 'v_wave75',   name: 'СЕМЬДЕСЯТ ПЯТЬ',  desc: 'Дожить до 75 волны',             check: s => s.wave >= 75 },
   { id: 'v_kill1500', name: 'ТЫСЯЧА ПЯТЬСОТ',  desc: '1 500 зомби за забег',           check: s => s.kills >= 1500 },
@@ -502,7 +504,9 @@ const ACHIEVEMENTS = [
   { id: 'v_acc70',    name: 'ИДЕАЛЬНЫЙ',       desc: 'Точность 70%+ (600+ выстрелов)', check: s => s.shots >= 600 && s.accuracy >= 70 },
   { id: 'v_total20k', name: 'ДВАДЦАТЬ ТЫСЯЧ',  desc: '20 000 зомби всего',             check: s => s.killsTotal >= 20000 },
   { id: 'v_clear5',   name: 'ПЯТЬ ПРОХОДОВ',   desc: 'Пройти игру 5 раз',              check: s => s.clears >= 5 },
+  { id: 'x_speedrun', name: 'СПЕШКА',          desc: 'Пройти игру быстрее 1 ч 30 мин', check: s => s.fastClear >= 1 },
   { id: 'v_win50',    name: 'ЛЕГЕНДА ОНЛАЙНА', desc: '50 побед в онлайне',             check: s => s.wins >= 50 },
+  { id: 'x_marathon', name: 'ЖЕЛЕЗНАЯ ВЫДЕРЖКА', desc: 'Пережить 45 минут одним забегом', check: s => s.runTime >= 2700 },
   { id: 'v_time3600', name: 'ЧАС В ПЕКЛЕ',     desc: 'Пережить 60 минут в забеге',     check: s => s.playTime >= 3600 },
   /* ============================================================
      HEAVY ARSENAL — one goal per heavy weapon (they also each unlock a
@@ -561,6 +565,8 @@ const ACH_PROGRESS = {
   v_score250k: ['score', 250000], v_perfect40: ['perfectWaves', 40], v_boss15: ['bossKills', 15],
   v_streak10: ['bestHeadStreak', 10], v_total20k: ['killsTotal', 20000],
   v_clear5: ['clears', 5], v_win50: ['wins', 50], v_time3600: ['playTime', 3600],
+  /* интересные: скорострельные и на выносливость */
+  x_rampage: ['fastKills', 100], x_speedrun: ['fastClear', 1], x_marathon: ['runTime', 2700],
   /* heavy arsenal (both sets) */
   hv_minigun: ['minigunKills', 600], hv_rpg: ['rpgKills', 150], hv_laser: ['laserKills', 150],
   hv_cannon: ['cannonKills', 80], hv_atomic: ['atomicKills', 25], hv_yhs: ['yhsKills', 1000],
@@ -581,6 +587,12 @@ function achProgress(a, s) {
     const shots = s.shots || 0, pct = s.accuracy || 0;
     const have = Math.min(shots / acc.shots, pct / acc.acc);
     return { have: Math.round(have * acc.shots), goal: acc.shots, frac: U.clamp(have, 0, 1), label: Math.round(pct) + '% / ' + acc.acc + '%' };
+  }
+  /* «быстрое прохождение» — цель по времени: пока не пройдено, показываем отсчёт
+     от лимита (чем меньше времени, тем больше прогресс) */
+  if (a.id === 'x_speedrun') {
+    const have = s.fastClear || 0, goal = 1;
+    return { have: have, goal: goal, frac: have >= 1 ? 1 : 0 };
   }
   const spec = ACH_PROGRESS[a.id];
   if (!spec) return { have: 0, goal: 1, frac: 0 };
@@ -667,6 +679,8 @@ function skinRarityFor(achId) {
   if (achId.startsWith('hv2_')) return 'legendary';
   if (achId.startsWith('hv_')) return (achId === 'hv_atomic' || achId === 'hv_yhs' || achId === 'hv_shield' || achId === 'hv_cannon') ? 'legendary' : 'epic';
   // new goal tiers by their id prefix
+  if (achId === 'x_rampage' || achId === 'x_speedrun') return 'legendary';
+  if (achId === 'x_marathon') return 'epic';
   if (achId.startsWith('v_')) return 'legendary';
   if (achId.startsWith('h_')) return 'epic';
   if (achId.startsWith('m_')) return 'rare';

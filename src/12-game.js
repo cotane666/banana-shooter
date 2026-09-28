@@ -1511,7 +1511,12 @@ const Game = {
       /* persistent lifetime totals */
       killsTotal: Store.data.killsTotal || 0,
       wins: Store.data.wins || 0,
-      clears: Store.data.clears || 0
+      clears: Store.data.clears || 0,
+      /* интересные цели: лучший «залп» убийств за 5 с, быстрые прохождения,
+         время ТЕКУЩЕГО забега (playTime включает и прошлые сохранённые этапы) */
+      fastKills: this._fastKills || 0,
+      fastClear: this._fastClears || 0,
+      runTime: this.offline ? (U.now() - this.offline.startTime) / 1000 : 0
     };
   },
   checkAchievements() {
@@ -2013,6 +2018,7 @@ const Game = {
     this._perfectWaves = 0; this._noDamageWaves = 0;
     this._waveKills = 0; this._waveHurt = false; this._runDeaths = 0;
     this._hvKills = {}; this._shieldKills = 0;
+    this._fastKills = 0; this._killTimes = []; this._fastClears = 0;
     // NOTE: the checkpoint is deliberately NOT cleared here. It is dropped only
     // by an explicit "НОВАЯ ИГРА" (or after being consumed), so leaving to the
     // menu and returning can still resume the run.
@@ -4592,6 +4598,12 @@ const Game = {
     Store.data.clears = (Store.data.clears || 0) + 1;
     Store.save();
     this.player.score += 50000;
+    /* сколько занял ЭТОТ забег? меньше 1 ч 30 мин — быстрому прохождению счёт */
+    const runSec = this.offline ? (U.now() - this.offline.startTime) / 1000 : 0;
+    if (runSec > 0 && runSec < 5400) {
+      this._fastClears = (this._fastClears || 0) + 1;
+      UI.feed('<span class="z">⚡ Быстрое прохождение: ' + U.time(runSec) + '</span>');
+    }
     this.recordRun();
     this.checkAchievements();
     // stop the wave flow: no break timer, no wave 101
@@ -6897,6 +6909,12 @@ const Game = {
     p.kills++;
     this._waveKills = (this._waveKills || 0) + 1;
     if (this._waveKills > (this._maxWaveKills || 0)) this._maxWaveKills = this._waveKills;
+    /* скоростная цель: сколько убийств уложилось в скользящее окно 5 секунд */
+    const now = U.now();
+    this._killTimes = this._killTimes || [];
+    this._killTimes.push(now);
+    while (this._killTimes.length && now - this._killTimes[0] > 5000) this._killTimes.shift();
+    if (this._killTimes.length > (this._fastKills || 0)) this._fastKills = this._killTimes.length;
     // which weapon did the killing blow? (mech kit / knife / heavy guns)
     const held = p.weapon && p.weapon.id;
     if (this.isMechActive()) this._mechKills = (this._mechKills || 0) + 1;

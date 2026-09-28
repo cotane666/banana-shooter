@@ -1008,7 +1008,7 @@ const UI = {
         const pr = achProgress(a, stats);
         const pct = on ? 100 : Math.round(pr.frac * 100);
         const barCol = on ? '#ffd24a' : rcol;
-        const readout = on ? 'ВЫПОЛНЕНО' : achProgressText(pr.have, pr.goal);
+        const readout = on ? 'ВЫПОЛНЕНО' : (pr.suffix ? achProgressText(pr.have, pr.goal) + pr.suffix : achProgressText(pr.have, pr.goal));
         return '<div class="achcard' + (on ? ' on' : '') + '" data-ach="' + a.id + '"><b><span class="sw" style="display:inline-block;width:10px;height:10px;' +
           'border-radius:2px;margin-right:6px;vertical-align:-1px;border:1px solid rgba(255,255,255,.3);background:' + swatch + '"></span>' +
           (on ? '🏆 ' : '🔒 ') + U.esc(a.name) + '</b><i>' + U.esc(a.desc) + '</i>' +

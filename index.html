@@ -536,6 +536,14 @@ html.touch #rangePanel{display:none !important}
   padding:9px 10px;font-family:inherit;font-size:12.5px;outline:none}
 .skinsel:focus{border-color:var(--or)}
 .skin-status{font-size:12px;color:var(--or2);letter-spacing:1px;min-height:18px}
+.skin-rar{display:flex;flex-wrap:wrap;gap:8px 12px;font-size:10.5px;letter-spacing:1px;font-weight:700}
+.skin-rar .rarstat{display:inline-flex;align-items:center;gap:5px}
+.skin-rar .rarstat i{display:inline-block;width:9px;height:9px;border-radius:2px}
+.skincard u.rar{display:block;text-decoration:none;font-size:9px;letter-spacing:1.6px;font-weight:800;
+  margin:1px 0 4px}
+.skincard.rar-epic{box-shadow:inset 0 0 0 1px rgba(178,123,255,.25)}
+.skincard.rar-legendary{box-shadow:inset 0 0 0 1px rgba(255,176,32,.35),0 0 12px rgba(255,176,32,.14)}
+.skincard.rar-legendary:not(.locked){background:linear-gradient(180deg,#241a07,#12100a)}
 .skin-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(132px,1fr));gap:8px;
   max-height:38vh;overflow:auto;padding-right:4px}
 .skincard{background:linear-gradient(180deg,#151a1f,#0f1317);border:1px solid var(--line);
@@ -1268,6 +1276,7 @@ html.touch .fld input{padding:10px;font-size:15px}
           <select id="skinWeaponSel" class="skinsel"></select>
         </div>
         <div class="skin-status" id="skinStatus">Выберите скин</div>
+        <div class="skin-rar" id="skinRarityBar"></div>
         <div class="skin-grid" id="skinGrid"></div>
       </div>
     </div>
@@ -1877,33 +1886,95 @@ const ACHIEVEMENTS = [
 
 /* ============================================================
    WEAPON SKINS
-   One skin per achievement (earned → unlocked). A skin recolours the weapon
-   and may add a small attachment, so the model visibly changes.
+   One skin per achievement (earned → unlocked). Each skin has a RARITY derived
+   from how hard its achievement is: harder → rarer → more decoration and a
+   stronger glow. Rarities: ОБЫЧНЫЙ → НЕОБЫЧНЫЙ → РЕДКИЙ → ЭПИЧЕСКИЙ → ЛЕГЕНДАРНЫЙ.
    ============================================================ */
+const SKIN_RARITIES = {
+  common:    { id: 'common',    label: 'ОБЫЧНЫЙ',     color: 0x9aa4ae, deco: 'none',   glow: .20, beads: 0 },
+  uncommon:  { id: 'uncommon',  label: 'НЕОБЫЧНЫЙ',   color: 0x57d16a, deco: 'stripe', glow: .32, beads: 0 },
+  rare:      { id: 'rare',      label: 'РЕДКИЙ',      color: 0x4aa3ff, deco: 'vent',   glow: .46, beads: 2 },
+  epic:      { id: 'epic',      label: 'ЭПИЧЕСКИЙ',   color: 0xb27bff, deco: 'plasma', glow: .62, beads: 3 },
+  legendary: { id: 'legendary', label: 'ЛЕГЕНДАРНЫЙ', color: 0xffb020, deco: 'legend', glow: .80, beads: 4 }
+};
+const SKIN_RARITY_ORDER = ['common', 'uncommon', 'rare', 'epic', 'legendary'];
+
+/* palettes are grouped by rarity so a rarer skin always looks fancier */
 const SKIN_PALETTES = [
-  { id: 'gold',     tint: [0x4d545c, 0xc8a24a], glow: 0xffd06a, deco: 'trim' },
-  { id: 'crimson',  tint: [0x4d545c, 0x9e2b2b], glow: 0xff5a4a, deco: null },
-  { id: 'toxic',    tint: [0x4d545c, 0x5d8f2e], glow: 0x9bff57, deco: 'vent' },
-  { id: 'ice',      tint: [0x4d545c, 0x6fb6d6], glow: 0x9fe6ff, deco: null },
-  { id: 'violet',   tint: [0x4d545c, 0x6b4a9e], glow: 0xb27bff, deco: 'trim' },
-  { id: 'carbon',   tint: [0x4d545c, 0x23262b], glow: 0xff9d21, deco: null },
-  { id: 'desert',   tint: [0x4d545c, 0xb09a63], glow: 0xffe08a, deco: 'vent' },
-  { id: 'neon',     tint: [0x4d545c, 0x2b7f8f], glow: 0x4ad6ff, deco: 'trim' }
+  /* common — muted field finishes */
+  { rar: 'common',   tint: [0x4d545c, 0x6c757f], glow: 0x9aa4ae },
+  { rar: 'common',   tint: [0x4d545c, 0x5d6247], glow: 0xa8c25a },
+  { rar: 'common',   tint: [0x4d545c, 0xb09a63], glow: 0xffe08a },
+  /* uncommon — two-tone battle paints */
+  { rar: 'uncommon', tint: [0x4d545c, 0x23262b], glow: 0xff9d21 },
+  { rar: 'uncommon', tint: [0x4d545c, 0x9e2b2b], glow: 0xff5a4a },
+  { rar: 'uncommon', tint: [0x4d545c, 0x6fb6d6], glow: 0x9fe6ff },
+  /* rare — saturated finishes with vents */
+  { rar: 'rare',     tint: [0x4d545c, 0x5d8f2e], glow: 0x9bff57 },
+  { rar: 'rare',     tint: [0x4d545c, 0x2b7f8f], glow: 0x4ad6ff },
+  { rar: 'rare',     tint: [0x4d545c, 0x6b4a9e], glow: 0xb27bff },
+  /* epic — plasma-charged, glowing cells */
+  { rar: 'epic',     tint: [0x4d545c, 0x8a2be2], glow: 0xe06bff },
+  { rar: 'epic',     tint: [0x4d545c, 0x2f6f9e], glow: 0x7ffff0 },
+  { rar: 'epic',     tint: [0x4d545c, 0x8f3a1e], glow: 0xff7a1a },
+  /* legendary — gold / prismatic / void, fully dressed */
+  { rar: 'legendary', tint: [0x4d545c, 0xc8a24a], glow: 0xffd06a },
+  { rar: 'legendary', tint: [0x4d545c, 0xb8b8d8], glow: 0xff6ad6 },
+  { rar: 'legendary', tint: [0x4d545c, 0x2a1b40], glow: 0xc060ff }
 ];
-const SKINS = ACHIEVEMENTS.map((a, i) => {
-  const palette = SKIN_PALETTES[i % SKIN_PALETTES.length];
-  return {
-    id: 'sk_' + a.id,
-    ach: a.id,
-    name: 'СКИН · ' + a.name,
-    style: palette.id,
-    tint: palette.tint,
-    glow: palette.glow,
-    deco: palette.deco || null
+const _PAL_BY_RAR = {};
+SKIN_PALETTES.forEach(p => { (_PAL_BY_RAR[p.rar] = _PAL_BY_RAR[p.rar] || []).push(p); });
+
+/* which rarity an achievement's reward skin has */
+function skinRarityFor(achId) {
+  // new goal tiers by their id prefix
+  if (achId.startsWith('v_')) return 'legendary';
+  if (achId.startsWith('h_')) return 'epic';
+  if (achId.startsWith('m_')) return 'rare';
+  if (achId.startsWith('e_')) return 'uncommon';
+  // the original 11 are hand-graded
+  const base = {
+    firstBlood: 'common', head10: 'uncommon', slayer100: 'uncommon',
+    boss1: 'uncommon', rich: 'rare', wave10: 'rare', survive: 'rare',
+    boss4: 'epic', slayer500: 'epic', wave25: 'epic', wave50: 'legendary'
   };
-});
+  return base[achId] || 'common';
+}
+
+const SKINS = (() => {
+  const used = {};
+  return ACHIEVEMENTS.map(a => {
+    const rar = skinRarityFor(a.id);
+    const pool = _PAL_BY_RAR[rar] || SKIN_PALETTES;
+    const k = (used[rar] = (used[rar] || 0));
+    used[rar]++;
+    const pal = pool[k % pool.length];
+    const rd = SKIN_RARITIES[rar];
+    return {
+      id: 'sk_' + a.id,
+      ach: a.id,
+      name: 'СКИН · ' + a.name,
+      rarity: rar,
+      rarityLabel: rd.label,
+      rarityColor: rd.color,
+      style: pal.tint[1],
+      tint: pal.tint,
+      glow: pal.glow,
+      deco: rd.deco,
+      beads: rd.beads,
+      glowMul: rd.glow
+    };
+  });
+})();
 function skinById(id) { for (let i = 0; i < SKINS.length; i++) if (SKINS[i].id === id) return SKINS[i]; return null; }
 function skinForAchievement(achId) { for (let i = 0; i < SKINS.length; i++) if (SKINS[i].ach === achId) return SKINS[i]; return null; }
+function skinRarityCounts() {
+  const c = {}; SKIN_RARITY_ORDER.forEach(r => c[r] = 0);
+  SKINS.forEach(s => c[s.rarity] = (c[s.rarity] || 0) + 1);
+  return c;
+}
+/* a CSS colour for a rarity (used by the UI cards) */
+function rarityHex(rar) { return '#' + (SKIN_RARITIES[rar] ? SKIN_RARITIES[rar].color : 0x39434c).toString(16).padStart(6, '0'); }
 
 /* ---------------- utils ---------------- */
 const U = {
@@ -4692,38 +4763,71 @@ function DOT(r, color, x, y, z) {
 
 /* ============================================================
    WEAPON SKINS — applied on top of a freshly built weapon model.
-   A skin recolours every "body" material toward its tint and can bolt on a
-   small attachment, so the same gun looks visibly different.
+   Rarity drives how far the recolour goes AND how much decoration is bolted
+   on: a common skin is a subtle repaint, a legendary one is fully dressed.
    ============================================================ */
 function applyWeaponSkin(group, skin) {
   if (!group || !skin) return group;
-  const base = skin.tint[0], to = skin.tint[1];
-  // a hue-shift: map the darkest metal toward the skin colour, keep accents
+  const to = skin.tint[1];
+  const mix = skin.glowMul !== undefined ? U.clamp(skin.glowMul, .12, .9) : .5;
+  const emis = mix * .5;                          // stronger glow for rarer skins
+  const GLOWKEEP = { 0x8affa0: 1, 0xffd06a: 1, 0x4ad6ff: 1, 0xb27bff: 1 };
   const mapMat = (m) => {
     if (!m || !m.color) return;
     const hex = m.color.getHex();
-    // only recolour the gunmetal family, leave sight dots / glows alone
-    if (hex === 0x8affa0 || hex === 0xffd06a || hex === 0x4ad6ff || hex === 0xb27bff) return;
+    if (GLOWKEEP[hex]) return;                    // leave sight dots / lamps alone
     if (m.isMeshBasicMaterial) return;
-    // blend the original toward the skin tint (keeps the model's shading)
     const c = new THREE.Color(hex);
     const t = new THREE.Color(to);
-    c.lerp(t, .62);
+    c.lerp(t, mix);                               // blend toward the skin tint
     m.color.copy(c);
-    if (m.emissive) m.emissive.setHex(skin.glow).multiplyScalar(.14);
+    if (m.emissive) m.emissive.setHex(skin.glow).multiplyScalar(emis);
   };
   group.traverse(o => { if (o.isMesh) mapMat(o.material); });
-  // a small attachment so the change is unmistakable
-  const box = (w, h, d, col, x, y, z) => {
+
+  const accent = (w, h, d, x, y, z, k) => {
     const b = new THREE.Mesh(new THREE.BoxGeometry(w, h, d),
-      new THREE.MeshLambertMaterial({ color: col, emissive: new THREE.Color(skin.glow).multiplyScalar(.35) }));
+      new THREE.MeshLambertMaterial({ color: skin.glow, emissive: new THREE.Color(skin.glow).multiplyScalar((k || .5) * mix) }));
     b.position.set(x, y, z); group.add(b); return b;
   };
-  if (skin.deco === 'trim') {
-    box(.028, .010, .16, skin.glow, 0, .040, -.09);           // glowing top rail strip
-    box(.020, .020, .020, skin.glow, 0, -.052, .02);          // side marker
-  } else if (skin.deco === 'vent') {
-    for (let i = 0; i < 3; i++) box(.052, .008, .014, skin.glow, 0, .030 + i * .012, -.05 - i * .022);
+
+  const deco = skin.deco || 'none';
+  if (deco === 'stripe') {
+    accent(.030, .010, .15, 0, .040, -.09, .6);          // a single top stripe
+  } else if (deco === 'vent') {
+    for (let i = 0; i < 3; i++) accent(.052, .008, .014, 0, .030 + i * .012, -.05 - i * .022, .6);
+    accent(.020, .020, .020, 0, -.052, .02, .6);
+  } else if (deco === 'plasma') {
+    // glowing side cells + a muzzle ring
+    [-1, 1].forEach(s => { accent(.012, .030, .070, s * .050, -.010, -.10, .8); });
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(.030, .006, 8, 14),
+      new THREE.MeshBasicMaterial({ color: skin.glow, transparent: true, opacity: .85, blending: THREE.AdditiveBlending, depthWrite: false }));
+    ring.rotation.x = Math.PI / 2; ring.position.set(0, .015, -.20); group.add(ring);
+    for (let i = 0; i < 3; i++) accent(.040, .008, .014, 0, .030 + i * .012, -.05 - i * .022, .7);
+  } else if (deco === 'legend') {
+    // gold trim, glowing beads and a bright halo ring — the fanciest kit
+    accent(.030, .012, .17, 0, .042, -.09, 1);
+    accent(.022, .022, .022, 0, -.052, .02, 1);
+    for (let i = 0; i < 3; i++) accent(.048, .009, .016, 0, .030 + i * .013, -.05 - i * .024, .9);
+    const beads = skin.beads || 4;
+    for (let i = 0; i < beads; i++) {
+      const b = new THREE.Mesh(new THREE.SphereGeometry(.011, 8, 6),
+        new THREE.MeshBasicMaterial({ color: skin.glow }));
+      b.position.set(((i % 2) ? 1 : -1) * .052, -.005 + (i >> 1) * .014, -.14 + i * .03);
+      group.add(b);
+    }
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(.034, .008, 8, 16),
+      new THREE.MeshBasicMaterial({ color: skin.glow, transparent: true, opacity: .9, blending: THREE.AdditiveBlending, depthWrite: false }));
+    ring.rotation.x = Math.PI / 2; ring.position.set(0, .015, -.22); group.add(ring);
+  }
+  // epic and legendary get their extra beads even if deco differs
+  if (deco !== 'legend' && skin.beads) {
+    for (let i = 0; i < skin.beads; i++) {
+      const b = new THREE.Mesh(new THREE.SphereGeometry(.010, 8, 6),
+        new THREE.MeshBasicMaterial({ color: skin.glow }));
+      b.position.set(((i % 2) ? 1 : -1) * .050, -.006 + (i >> 1) * .013, -.13 + i * .03);
+      group.add(b);
+    }
   }
   return group;
 }
@@ -10254,7 +10358,7 @@ const UI = {
       'offCountChips', 'offHpChips', 'offFreeChips', 'offModeChips', 'offCustomBox', 'offHordeBox', 'offSpecialBox', 'offCpBox', 'offCpInfo', 'offCpMode', 'offCpList', 'offCountExact', 'offCountFixed', 'btnOffContinue', 'custom', 'lobbyShop', 'lobbyShopItems',
       'modScreen', 'modGrid', 'modActive',
       'extras', 'achGrid', 'recTable', 'btnExtrasBack', 'weaponWheel', 'wwInner',
-      'skins', 'skinCanvas', 'skinGrid', 'skinStatus', 'skinWeaponSel', 'skinTargetChips', 'btnSkinsBack', 'btnSkins',
+      'skins', 'skinCanvas', 'skinGrid', 'skinStatus', 'skinWeaponSel', 'skinTargetChips', 'btnSkinsBack', 'btnSkins', 'skinRarityBar',
       'medkitTag', 'droneTag', 'grenadeTag', 'zResetTag', 'jetTag', 'dashTag', 'shieldTag', 'heatTag', 'missileHud', 'mhTime', 'mhReadout',
       'sdScreen', 'sdGrid', 'sdSearch', 'sdToggle2', 'sdClose', 'sdConfig',
       'esScreen', 'esGrid', 'esSearch', 'esCount', 'esClear', 'esClose', 'esConfig'];
@@ -11179,10 +11283,11 @@ const UI = {
         const on = !!ach[a.id];
         const sk = skinForAchievement(a.id);
         const swatch = sk ? ('#' + sk.glow.toString(16).padStart(6, '0')) : '#39434c';
+        const rcol = sk ? rarityHex(sk.rarity) : '#39434c';
         return '<div class="achcard' + (on ? ' on' : '') + '"><b><span class="sw" style="display:inline-block;width:10px;height:10px;' +
           'border-radius:2px;margin-right:6px;vertical-align:-1px;border:1px solid rgba(255,255,255,.3);background:' + swatch + '"></span>' +
           (on ? '🏆 ' : '🔒 ') + U.esc(a.name) + '</b><i>' + U.esc(a.desc) + '</i>' +
-          (sk ? '<i style="display:block;margin-top:3px;color:#8a95a1">Награда: ' + U.esc(sk.name.replace('СКИН · ', 'Скин ')) + '</i>' : '') +
+          (sk ? '<i style="display:block;margin-top:3px;color:' + rcol + '">Награда: скин · ' + U.esc(sk.rarityLabel) + '</i>' : '') +
           '</div>';
       }).join('');
     }
@@ -11281,11 +11386,26 @@ const Skins = {
     this.init();
     this.renderTargets();
     this.renderWeaponList();
+    this.renderRarityBar();
     this.renderGrid();
     UI.show('skins');
     this._spin = 0;
     this.resize();
     if (!this._raf) this.loop();
+  },
+  /* a small legend showing how many skins of each rarity exist / are owned */
+  renderRarityBar() {
+    const el = $('skinRarityBar');
+    if (!el) return;
+    const ach = Store.data.ach || {};
+    const counts = skinRarityCounts();
+    el.innerHTML = SKIN_RARITY_ORDER.map(r => {
+      const total = counts[r] || 0;
+      const owned = SKINS.filter(s => s.rarity === r && ach[s.ach]).length;
+      const c = rarityHex(r);
+      return '<span class="rarstat" style="color:' + c + '"><i style="background:' + c + '"></i>' +
+        SKIN_RARITIES[r].label + ' ' + owned + '/' + total + '</span>';
+    }).join('');
   },
   close() { if (this._raf) { cancelAnimationFrame(this._raf); this._raf = 0; } if (typeof TouchUI !== 'undefined' && IS_TOUCH) TouchUI.update(); },
 
@@ -11326,8 +11446,11 @@ const Skins = {
       const unlocked = !!ach[sk.ach];
       const on = skinOn[this.weaponId] === sk.id;
       const swatch = '#' + sk.glow.toString(16).padStart(6, '0');
-      return '<div class="skincard' + (unlocked ? '' : ' locked') + (on ? ' on' : '') + '" data-sk="' + sk.id + '">' +
+      const rcol = rarityHex(sk.rarity);
+      return '<div class="skincard rar-' + sk.rarity + (unlocked ? '' : ' locked') + (on ? ' on' : '') + '" data-sk="' + sk.id + '"' +
+        ' style="border-left-color:' + rcol + '">' +
         '<b><span class="sw" style="background:' + swatch + '"></span>' + U.esc(sk.name.replace('СКИН · ', '')) + '</b>' +
+        '<u class="rar" style="color:' + rcol + '">' + U.esc(sk.rarityLabel) + '</u>' +
         '<i>' + (unlocked ? (on ? 'ВЫБРАН' : 'ОТКРЫТ · нажмите') : '🔒 ' + U.esc(ACHIEVEMENTS.find(a => a.id === sk.ach).desc)) + '</i></div>';
     }).join('');
     Array.from(el.children).forEach(card => card.addEventListener('click', () => {
@@ -11343,7 +11466,7 @@ const Skins = {
       this.skinId = Store.data.skinOn[this.weaponId] || null;
       this.renderGrid(); this.rebuild();
       const el2 = $('skinStatus');
-      if (el2) el2.textContent = Store.data.skinOn[this.weaponId] ? ('Надет: ' + sk.name) : 'Скин снят';
+      if (el2) el2.textContent = Store.data.skinOn[this.weaponId] ? ('Надет: ' + sk.name + ' · ' + sk.rarityLabel) : 'Скин снят';
       if (Game && Game.player) Game.player.buildViewModel();
     }));
   },

@@ -97,38 +97,71 @@ function DOT(r, color, x, y, z) {
 
 /* ============================================================
    WEAPON SKINS — applied on top of a freshly built weapon model.
-   A skin recolours every "body" material toward its tint and can bolt on a
-   small attachment, so the same gun looks visibly different.
+   Rarity drives how far the recolour goes AND how much decoration is bolted
+   on: a common skin is a subtle repaint, a legendary one is fully dressed.
    ============================================================ */
 function applyWeaponSkin(group, skin) {
   if (!group || !skin) return group;
-  const base = skin.tint[0], to = skin.tint[1];
-  // a hue-shift: map the darkest metal toward the skin colour, keep accents
+  const to = skin.tint[1];
+  const mix = skin.glowMul !== undefined ? U.clamp(skin.glowMul, .12, .9) : .5;
+  const emis = mix * .5;                          // stronger glow for rarer skins
+  const GLOWKEEP = { 0x8affa0: 1, 0xffd06a: 1, 0x4ad6ff: 1, 0xb27bff: 1 };
   const mapMat = (m) => {
     if (!m || !m.color) return;
     const hex = m.color.getHex();
-    // only recolour the gunmetal family, leave sight dots / glows alone
-    if (hex === 0x8affa0 || hex === 0xffd06a || hex === 0x4ad6ff || hex === 0xb27bff) return;
+    if (GLOWKEEP[hex]) return;                    // leave sight dots / lamps alone
     if (m.isMeshBasicMaterial) return;
-    // blend the original toward the skin tint (keeps the model's shading)
     const c = new THREE.Color(hex);
     const t = new THREE.Color(to);
-    c.lerp(t, .62);
+    c.lerp(t, mix);                               // blend toward the skin tint
     m.color.copy(c);
-    if (m.emissive) m.emissive.setHex(skin.glow).multiplyScalar(.14);
+    if (m.emissive) m.emissive.setHex(skin.glow).multiplyScalar(emis);
   };
   group.traverse(o => { if (o.isMesh) mapMat(o.material); });
-  // a small attachment so the change is unmistakable
-  const box = (w, h, d, col, x, y, z) => {
+
+  const accent = (w, h, d, x, y, z, k) => {
     const b = new THREE.Mesh(new THREE.BoxGeometry(w, h, d),
-      new THREE.MeshLambertMaterial({ color: col, emissive: new THREE.Color(skin.glow).multiplyScalar(.35) }));
+      new THREE.MeshLambertMaterial({ color: skin.glow, emissive: new THREE.Color(skin.glow).multiplyScalar((k || .5) * mix) }));
     b.position.set(x, y, z); group.add(b); return b;
   };
-  if (skin.deco === 'trim') {
-    box(.028, .010, .16, skin.glow, 0, .040, -.09);           // glowing top rail strip
-    box(.020, .020, .020, skin.glow, 0, -.052, .02);          // side marker
-  } else if (skin.deco === 'vent') {
-    for (let i = 0; i < 3; i++) box(.052, .008, .014, skin.glow, 0, .030 + i * .012, -.05 - i * .022);
+
+  const deco = skin.deco || 'none';
+  if (deco === 'stripe') {
+    accent(.030, .010, .15, 0, .040, -.09, .6);          // a single top stripe
+  } else if (deco === 'vent') {
+    for (let i = 0; i < 3; i++) accent(.052, .008, .014, 0, .030 + i * .012, -.05 - i * .022, .6);
+    accent(.020, .020, .020, 0, -.052, .02, .6);
+  } else if (deco === 'plasma') {
+    // glowing side cells + a muzzle ring
+    [-1, 1].forEach(s => { accent(.012, .030, .070, s * .050, -.010, -.10, .8); });
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(.030, .006, 8, 14),
+      new THREE.MeshBasicMaterial({ color: skin.glow, transparent: true, opacity: .85, blending: THREE.AdditiveBlending, depthWrite: false }));
+    ring.rotation.x = Math.PI / 2; ring.position.set(0, .015, -.20); group.add(ring);
+    for (let i = 0; i < 3; i++) accent(.040, .008, .014, 0, .030 + i * .012, -.05 - i * .022, .7);
+  } else if (deco === 'legend') {
+    // gold trim, glowing beads and a bright halo ring — the fanciest kit
+    accent(.030, .012, .17, 0, .042, -.09, 1);
+    accent(.022, .022, .022, 0, -.052, .02, 1);
+    for (let i = 0; i < 3; i++) accent(.048, .009, .016, 0, .030 + i * .013, -.05 - i * .024, .9);
+    const beads = skin.beads || 4;
+    for (let i = 0; i < beads; i++) {
+      const b = new THREE.Mesh(new THREE.SphereGeometry(.011, 8, 6),
+        new THREE.MeshBasicMaterial({ color: skin.glow }));
+      b.position.set(((i % 2) ? 1 : -1) * .052, -.005 + (i >> 1) * .014, -.14 + i * .03);
+      group.add(b);
+    }
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(.034, .008, 8, 16),
+      new THREE.MeshBasicMaterial({ color: skin.glow, transparent: true, opacity: .9, blending: THREE.AdditiveBlending, depthWrite: false }));
+    ring.rotation.x = Math.PI / 2; ring.position.set(0, .015, -.22); group.add(ring);
+  }
+  // epic and legendary get their extra beads even if deco differs
+  if (deco !== 'legend' && skin.beads) {
+    for (let i = 0; i < skin.beads; i++) {
+      const b = new THREE.Mesh(new THREE.SphereGeometry(.010, 8, 6),
+        new THREE.MeshBasicMaterial({ color: skin.glow }));
+      b.position.set(((i % 2) ? 1 : -1) * .050, -.006 + (i >> 1) * .013, -.13 + i * .03);
+      group.add(b);
+    }
   }
   return group;
 }

@@ -521,6 +521,14 @@ html.touch #rangePanel{display:none !important}
   padding:9px 10px;font-family:inherit;font-size:12.5px;outline:none}
 .skinsel:focus{border-color:var(--or)}
 .skin-status{font-size:12px;color:var(--or2);letter-spacing:1px;min-height:18px}
+.skin-rar{display:flex;flex-wrap:wrap;gap:8px 12px;font-size:10.5px;letter-spacing:1px;font-weight:700}
+.skin-rar .rarstat{display:inline-flex;align-items:center;gap:5px}
+.skin-rar .rarstat i{display:inline-block;width:9px;height:9px;border-radius:2px}
+.skincard u.rar{display:block;text-decoration:none;font-size:9px;letter-spacing:1.6px;font-weight:800;
+  margin:1px 0 4px}
+.skincard.rar-epic{box-shadow:inset 0 0 0 1px rgba(178,123,255,.25)}
+.skincard.rar-legendary{box-shadow:inset 0 0 0 1px rgba(255,176,32,.35),0 0 12px rgba(255,176,32,.14)}
+.skincard.rar-legendary:not(.locked){background:linear-gradient(180deg,#241a07,#12100a)}
 .skin-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(132px,1fr));gap:8px;
   max-height:38vh;overflow:auto;padding-right:4px}
 .skincard{background:linear-gradient(180deg,#151a1f,#0f1317);border:1px solid var(--line);

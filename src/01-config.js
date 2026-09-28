@@ -499,33 +499,95 @@ const ACHIEVEMENTS = [
 
 /* ============================================================
    WEAPON SKINS
-   One skin per achievement (earned → unlocked). A skin recolours the weapon
-   and may add a small attachment, so the model visibly changes.
+   One skin per achievement (earned → unlocked). Each skin has a RARITY derived
+   from how hard its achievement is: harder → rarer → more decoration and a
+   stronger glow. Rarities: ОБЫЧНЫЙ → НЕОБЫЧНЫЙ → РЕДКИЙ → ЭПИЧЕСКИЙ → ЛЕГЕНДАРНЫЙ.
    ============================================================ */
+const SKIN_RARITIES = {
+  common:    { id: 'common',    label: 'ОБЫЧНЫЙ',     color: 0x9aa4ae, deco: 'none',   glow: .20, beads: 0 },
+  uncommon:  { id: 'uncommon',  label: 'НЕОБЫЧНЫЙ',   color: 0x57d16a, deco: 'stripe', glow: .32, beads: 0 },
+  rare:      { id: 'rare',      label: 'РЕДКИЙ',      color: 0x4aa3ff, deco: 'vent',   glow: .46, beads: 2 },
+  epic:      { id: 'epic',      label: 'ЭПИЧЕСКИЙ',   color: 0xb27bff, deco: 'plasma', glow: .62, beads: 3 },
+  legendary: { id: 'legendary', label: 'ЛЕГЕНДАРНЫЙ', color: 0xffb020, deco: 'legend', glow: .80, beads: 4 }
+};
+const SKIN_RARITY_ORDER = ['common', 'uncommon', 'rare', 'epic', 'legendary'];
+
+/* palettes are grouped by rarity so a rarer skin always looks fancier */
 const SKIN_PALETTES = [
-  { id: 'gold',     tint: [0x4d545c, 0xc8a24a], glow: 0xffd06a, deco: 'trim' },
-  { id: 'crimson',  tint: [0x4d545c, 0x9e2b2b], glow: 0xff5a4a, deco: null },
-  { id: 'toxic',    tint: [0x4d545c, 0x5d8f2e], glow: 0x9bff57, deco: 'vent' },
-  { id: 'ice',      tint: [0x4d545c, 0x6fb6d6], glow: 0x9fe6ff, deco: null },
-  { id: 'violet',   tint: [0x4d545c, 0x6b4a9e], glow: 0xb27bff, deco: 'trim' },
-  { id: 'carbon',   tint: [0x4d545c, 0x23262b], glow: 0xff9d21, deco: null },
-  { id: 'desert',   tint: [0x4d545c, 0xb09a63], glow: 0xffe08a, deco: 'vent' },
-  { id: 'neon',     tint: [0x4d545c, 0x2b7f8f], glow: 0x4ad6ff, deco: 'trim' }
+  /* common — muted field finishes */
+  { rar: 'common',   tint: [0x4d545c, 0x6c757f], glow: 0x9aa4ae },
+  { rar: 'common',   tint: [0x4d545c, 0x5d6247], glow: 0xa8c25a },
+  { rar: 'common',   tint: [0x4d545c, 0xb09a63], glow: 0xffe08a },
+  /* uncommon — two-tone battle paints */
+  { rar: 'uncommon', tint: [0x4d545c, 0x23262b], glow: 0xff9d21 },
+  { rar: 'uncommon', tint: [0x4d545c, 0x9e2b2b], glow: 0xff5a4a },
+  { rar: 'uncommon', tint: [0x4d545c, 0x6fb6d6], glow: 0x9fe6ff },
+  /* rare — saturated finishes with vents */
+  { rar: 'rare',     tint: [0x4d545c, 0x5d8f2e], glow: 0x9bff57 },
+  { rar: 'rare',     tint: [0x4d545c, 0x2b7f8f], glow: 0x4ad6ff },
+  { rar: 'rare',     tint: [0x4d545c, 0x6b4a9e], glow: 0xb27bff },
+  /* epic — plasma-charged, glowing cells */
+  { rar: 'epic',     tint: [0x4d545c, 0x8a2be2], glow: 0xe06bff },
+  { rar: 'epic',     tint: [0x4d545c, 0x2f6f9e], glow: 0x7ffff0 },
+  { rar: 'epic',     tint: [0x4d545c, 0x8f3a1e], glow: 0xff7a1a },
+  /* legendary — gold / prismatic / void, fully dressed */
+  { rar: 'legendary', tint: [0x4d545c, 0xc8a24a], glow: 0xffd06a },
+  { rar: 'legendary', tint: [0x4d545c, 0xb8b8d8], glow: 0xff6ad6 },
+  { rar: 'legendary', tint: [0x4d545c, 0x2a1b40], glow: 0xc060ff }
 ];
-const SKINS = ACHIEVEMENTS.map((a, i) => {
-  const palette = SKIN_PALETTES[i % SKIN_PALETTES.length];
-  return {
-    id: 'sk_' + a.id,
-    ach: a.id,
-    name: 'СКИН · ' + a.name,
-    style: palette.id,
-    tint: palette.tint,
-    glow: palette.glow,
-    deco: palette.deco || null
+const _PAL_BY_RAR = {};
+SKIN_PALETTES.forEach(p => { (_PAL_BY_RAR[p.rar] = _PAL_BY_RAR[p.rar] || []).push(p); });
+
+/* which rarity an achievement's reward skin has */
+function skinRarityFor(achId) {
+  // new goal tiers by their id prefix
+  if (achId.startsWith('v_')) return 'legendary';
+  if (achId.startsWith('h_')) return 'epic';
+  if (achId.startsWith('m_')) return 'rare';
+  if (achId.startsWith('e_')) return 'uncommon';
+  // the original 11 are hand-graded
+  const base = {
+    firstBlood: 'common', head10: 'uncommon', slayer100: 'uncommon',
+    boss1: 'uncommon', rich: 'rare', wave10: 'rare', survive: 'rare',
+    boss4: 'epic', slayer500: 'epic', wave25: 'epic', wave50: 'legendary'
   };
-});
+  return base[achId] || 'common';
+}
+
+const SKINS = (() => {
+  const used = {};
+  return ACHIEVEMENTS.map(a => {
+    const rar = skinRarityFor(a.id);
+    const pool = _PAL_BY_RAR[rar] || SKIN_PALETTES;
+    const k = (used[rar] = (used[rar] || 0));
+    used[rar]++;
+    const pal = pool[k % pool.length];
+    const rd = SKIN_RARITIES[rar];
+    return {
+      id: 'sk_' + a.id,
+      ach: a.id,
+      name: 'СКИН · ' + a.name,
+      rarity: rar,
+      rarityLabel: rd.label,
+      rarityColor: rd.color,
+      style: pal.tint[1],
+      tint: pal.tint,
+      glow: pal.glow,
+      deco: rd.deco,
+      beads: rd.beads,
+      glowMul: rd.glow
+    };
+  });
+})();
 function skinById(id) { for (let i = 0; i < SKINS.length; i++) if (SKINS[i].id === id) return SKINS[i]; return null; }
 function skinForAchievement(achId) { for (let i = 0; i < SKINS.length; i++) if (SKINS[i].ach === achId) return SKINS[i]; return null; }
+function skinRarityCounts() {
+  const c = {}; SKIN_RARITY_ORDER.forEach(r => c[r] = 0);
+  SKINS.forEach(s => c[s.rarity] = (c[s.rarity] || 0) + 1);
+  return c;
+}
+/* a CSS colour for a rarity (used by the UI cards) */
+function rarityHex(rar) { return '#' + (SKIN_RARITIES[rar] ? SKIN_RARITIES[rar].color : 0x39434c).toString(16).padStart(6, '0'); }
 
 /* ---------------- utils ---------------- */
 const U = {

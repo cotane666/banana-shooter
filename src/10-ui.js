@@ -24,7 +24,7 @@ const UI = {
       'offCountChips', 'offHpChips', 'offFreeChips', 'offModeChips', 'offCustomBox', 'offHordeBox', 'offSpecialBox', 'offCpBox', 'offCpInfo', 'offCpMode', 'offCpList', 'offCountExact', 'offCountFixed', 'btnOffContinue', 'custom', 'lobbyShop', 'lobbyShopItems',
       'modScreen', 'modGrid', 'modActive',
       'extras', 'achGrid', 'recTable', 'btnExtrasBack', 'weaponWheel', 'wwInner',
-      'skins', 'skinCanvas', 'skinGrid', 'skinStatus', 'skinWeaponSel', 'skinTargetChips', 'btnSkinsBack', 'btnSkins',
+      'skins', 'skinCanvas', 'skinGrid', 'skinStatus', 'skinWeaponSel', 'skinTargetChips', 'btnSkinsBack', 'btnSkins', 'skinRarityBar',
       'medkitTag', 'droneTag', 'grenadeTag', 'zResetTag', 'jetTag', 'dashTag', 'shieldTag', 'heatTag', 'missileHud', 'mhTime', 'mhReadout',
       'sdScreen', 'sdGrid', 'sdSearch', 'sdToggle2', 'sdClose', 'sdConfig',
       'esScreen', 'esGrid', 'esSearch', 'esCount', 'esClear', 'esClose', 'esConfig'];
@@ -949,10 +949,11 @@ const UI = {
         const on = !!ach[a.id];
         const sk = skinForAchievement(a.id);
         const swatch = sk ? ('#' + sk.glow.toString(16).padStart(6, '0')) : '#39434c';
+        const rcol = sk ? rarityHex(sk.rarity) : '#39434c';
         return '<div class="achcard' + (on ? ' on' : '') + '"><b><span class="sw" style="display:inline-block;width:10px;height:10px;' +
           'border-radius:2px;margin-right:6px;vertical-align:-1px;border:1px solid rgba(255,255,255,.3);background:' + swatch + '"></span>' +
           (on ? '🏆 ' : '🔒 ') + U.esc(a.name) + '</b><i>' + U.esc(a.desc) + '</i>' +
-          (sk ? '<i style="display:block;margin-top:3px;color:#8a95a1">Награда: ' + U.esc(sk.name.replace('СКИН · ', 'Скин ')) + '</i>' : '') +
+          (sk ? '<i style="display:block;margin-top:3px;color:' + rcol + '">Награда: скин · ' + U.esc(sk.rarityLabel) + '</i>' : '') +
           '</div>';
       }).join('');
     }
@@ -1051,11 +1052,26 @@ const Skins = {
     this.init();
     this.renderTargets();
     this.renderWeaponList();
+    this.renderRarityBar();
     this.renderGrid();
     UI.show('skins');
     this._spin = 0;
     this.resize();
     if (!this._raf) this.loop();
+  },
+  /* a small legend showing how many skins of each rarity exist / are owned */
+  renderRarityBar() {
+    const el = $('skinRarityBar');
+    if (!el) return;
+    const ach = Store.data.ach || {};
+    const counts = skinRarityCounts();
+    el.innerHTML = SKIN_RARITY_ORDER.map(r => {
+      const total = counts[r] || 0;
+      const owned = SKINS.filter(s => s.rarity === r && ach[s.ach]).length;
+      const c = rarityHex(r);
+      return '<span class="rarstat" style="color:' + c + '"><i style="background:' + c + '"></i>' +
+        SKIN_RARITIES[r].label + ' ' + owned + '/' + total + '</span>';
+    }).join('');
   },
   close() { if (this._raf) { cancelAnimationFrame(this._raf); this._raf = 0; } if (typeof TouchUI !== 'undefined' && IS_TOUCH) TouchUI.update(); },
 
@@ -1096,8 +1112,11 @@ const Skins = {
       const unlocked = !!ach[sk.ach];
       const on = skinOn[this.weaponId] === sk.id;
       const swatch = '#' + sk.glow.toString(16).padStart(6, '0');
-      return '<div class="skincard' + (unlocked ? '' : ' locked') + (on ? ' on' : '') + '" data-sk="' + sk.id + '">' +
+      const rcol = rarityHex(sk.rarity);
+      return '<div class="skincard rar-' + sk.rarity + (unlocked ? '' : ' locked') + (on ? ' on' : '') + '" data-sk="' + sk.id + '"' +
+        ' style="border-left-color:' + rcol + '">' +
         '<b><span class="sw" style="background:' + swatch + '"></span>' + U.esc(sk.name.replace('СКИН · ', '')) + '</b>' +
+        '<u class="rar" style="color:' + rcol + '">' + U.esc(sk.rarityLabel) + '</u>' +
         '<i>' + (unlocked ? (on ? 'ВЫБРАН' : 'ОТКРЫТ · нажмите') : '🔒 ' + U.esc(ACHIEVEMENTS.find(a => a.id === sk.ach).desc)) + '</i></div>';
     }).join('');
     Array.from(el.children).forEach(card => card.addEventListener('click', () => {
@@ -1113,7 +1132,7 @@ const Skins = {
       this.skinId = Store.data.skinOn[this.weaponId] || null;
       this.renderGrid(); this.rebuild();
       const el2 = $('skinStatus');
-      if (el2) el2.textContent = Store.data.skinOn[this.weaponId] ? ('Надет: ' + sk.name) : 'Скин снят';
+      if (el2) el2.textContent = Store.data.skinOn[this.weaponId] ? ('Надет: ' + sk.name + ' · ' + sk.rarityLabel) : 'Скин снят';
       if (Game && Game.player) Game.player.buildViewModel();
     }));
   },

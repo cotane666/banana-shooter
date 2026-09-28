@@ -1781,6 +1781,58 @@ function animateMechLegs(mesh, speed01, phase, dt) {
   return phase;
 }
 
+/* Point a mech's two arm weapons (minigun, laser and missile pod) along the
+   aim direction. Shared by the local mech and the remote chassis so the guns
+   visibly track in online play. `elev` is the aim pitch in radians, `t` is a
+   running time (for the idle sway). */
+function aimMechArms(mesh, elev, t) {
+  const ud = mesh && mesh.userData;
+  if (!ud) return;
+  const sway = Math.cos((t || 0) * 2.1) * .010;
+  const bob = Math.sin((t || 0) * 4) * .012;
+  if (ud.mgArm) {
+    const b = ud.mgArm.userData.basePos;
+    ud.mgArm.rotation.order = 'YXZ';
+    ud.mgArm.rotation.y = ud.mgArm.userData.baseYaw || 0;
+    ud.mgArm.rotation.x = elev;
+    ud.mgArm.position.set(b.x + sway * .5, b.y + bob, b.z);
+  }
+  if (ud.lzArm) {
+    const b = ud.lzArm.userData.basePos;
+    ud.lzArm.rotation.order = 'YXZ';
+    ud.lzArm.rotation.y = ud.lzArm.userData.baseYaw || 0;
+    ud.lzArm.rotation.x = elev;
+    ud.lzArm.position.set(b.x - sway * .5, b.y + bob * .8, b.z);
+  }
+  if (ud.pod) {
+    ud.pod.rotation.order = 'YXZ';
+    ud.pod.rotation.y = ud.pod.userData.baseYaw || 0;
+    ud.pod.rotation.x = elev;
+    ud.pod.position.y = 3.34 + bob;
+  }
+}
+
+/* Light up a mech's jetpack thrusters (and add a dash flare). `jet` is the
+   vertical-thrust burst, `dash` the ground burst. Shared so the opponent sees
+   the same flames. */
+function setMechThrusters(mesh, jet, dash, t) {
+  const ud = mesh && mesh.userData;
+  if (!ud) return;
+  const on = jet || dash;
+  if (ud.jetFlames) {
+    ud.jetFlames.forEach((f, i) => {
+      f.visible = !!on;
+      if (on) {
+        const boost = dash ? 1.5 : 1;
+        const k = (.7 + Math.sin((t || 0) * 40 + i) * .3) * boost;
+        f.scale.set(1, k, 1);
+        f.material.opacity = .6 + Math.random() * .35;
+      }
+    });
+  }
+  if (ud.jetLight) ud.jetLight.intensity = on ? (5 + Math.random() * 3) : 0;
+}
+
 /* A homing mech missile (small, with a blue flame) */
 function buildMechMissile() {
   const g = new THREE.Group();

@@ -627,6 +627,9 @@ class RemotePlayer {
     this.mechPlate = null;
     this._mechSpin = 0;
     this.mechRecoil = 0;
+    /* mech ability state mirrored from the peer's packets */
+    this.mechDash = false;
+    this.mechJet = false;
   }
 
   /* Attach (or swap) the weapon model in the right hand for this slot.
@@ -796,6 +799,38 @@ class RemotePlayer {
         // walk cycle: the peer's mech strides as it moves
         const spd01 = U.clamp((this.moveSpeed || 0) / CFG.runSpeed, 0, 1);
         this._mechLegPhase = animateMechLegs(this.mechMesh, spd01, this._mechLegPhase || 0, dt);
+        // the guns track the peer's aim (pitch + a little idle sway)
+        this._mechArmT = (this._mechArmT || 0) + dt;
+        aimMechArms(this.mechMesh, this.pitch || 0, this._mechArmT);
+        // jetpack / dash thrusters, mirrored so the opponent sees them
+        setMechThrusters(this.mechMesh, this.mechJet, this.mechDash, this._mechArmT);
+        // a dash leaves a short blue/orange flare behind the mech
+        const fx = Game && Game.effects;
+        if (this.mechDash && fx) {
+          this._mechDashFx = (this._mechDashFx || 0) - dt;
+          if (this._mechDashFx <= 0) {
+            this._mechDashFx = .03;
+            this._mechDashFx2 = (this._mechDashFx2 || 0) + 1;
+            for (let k = 0; k < 2; k++) {
+              fx.particle(
+                this.pos.x + U.rand(-.7, .7), this.pos.y + U.rand(.2, 1.5), this.pos.z + U.rand(-.7, .7),
+                U.rand(-3, 3), U.rand(.3, 2.2), U.rand(-3, 3), U.rand(.10, .22), 'spark', U.rand(.2, .5));
+            }
+            fx.particle(
+              this.pos.x + U.rand(-.5, .5), this.pos.y + .4, this.pos.z + U.rand(-.5, .5),
+              U.rand(-1, 1), U.rand(.4, 1.6), U.rand(-1, 1), U.rand(.16, .30), 'smoke', U.rand(.3, .6));
+          }
+        }
+        // a jetpack leaves a hot exhaust trail while the peer thrusts
+        if (this.mechJet && fx) {
+          this._mechJetFx = (this._mechJetFx || 0) - dt;
+          if (this._mechJetFx <= 0) {
+            this._mechJetFx = .06;
+            fx.particle(
+              this.pos.x + U.rand(-.5, .5), this.pos.y + .1, this.pos.z + .6 + U.rand(-.2, .2),
+              U.rand(-1, 1), U.rand(-3, -1), U.rand(-1, 1), U.rand(.14, .26), 'smoke', U.rand(.3, .6));
+          }
+        }
       }
     }
 
@@ -1273,6 +1308,7 @@ const Game = {
     Net.on('round', r => this.onRoundMsg(r));
     Net.on('drone', d => this.onRemoteDrone(d));
     Net.on('boom', b => this.onRemoteBoom(b));
+    Net.on('mmissile', m => this.onRemoteMechMissile(m));
     Net.on('splat', s => this.onRemoteSplat(s));
     Net.on('score', s => this.onScoreMsg(s));
   },
@@ -5283,12 +5319,21 @@ const Game = {
           const mesh = buildMechMissile();
           mesh.position.set(from.x + sx * .3, from.y + .5, from.z);
           this.scene.add(mesh);
+          const tgt = targets[i % Math.max(1, targets.length)] || null;
           this.mechMissiles.push({
             mesh: mesh, pos: { x: mesh.position.x, y: mesh.position.y, z: mesh.position.z },
             vel: { x: dir.x * 8, y: 4, z: dir.z * 8 }, life: 8,
-            target: targets[i % Math.max(1, targets.length)] || null, dmg: 420,
-            targetIsRemote: !!(targets[i % Math.max(1, targets.length)] && targets[i % Math.max(1, targets.length)].isRemotePlayer)
+            target: tgt, dmg: 420,
+            targetIsRemote: !!(tgt && tgt.isRemotePlayer)
           });
+          // let the room fly a matching cosmetic missile, so the volley is visible
+          if (this.mode === CS.MODE.ONLINE && Net.connected) {
+            Net.send({
+              t: 'mmissile', from: Net.selfId(),
+              x: +mesh.position.x.toFixed(2), y: +mesh.position.y.toFixed(2), z: +mesh.position.z.toFixed(2),
+              dx: dir.x, dy: dir.y, dz: dir.z
+            });
+          }
         }
         const snd = this.mechMuzzleWorldPos('left');
         Audio3D_SFX.explosionAt(snd.x, snd.y, snd.z);
@@ -5446,19 +5491,37 @@ const Game = {
           const spd01 = U.clamp(hspeed / CFG.runSpeed, 0, 1);
           this._mechLegPhase = animateMechLegs(this.mechBody, spd01, this._mechLegPhase || 0, dt);
         }
-        /* ---- jetpack flames ---- */
-        const on = p.jetActive === true;
-        if (ud.jetFlames) {
-          ud.jetFlames.forEach((f, i) => {
-            f.visible = on;
-            if (on) {
-              const k = .7 + Math.sin(t * 40 + i) * .3;
-              f.scale.set(1, k, 1);
-              f.material.opacity = .6 + Math.random() * .35;
+        /* ---- jetpack / dash thrusters (shared visuals) ---- */
+        setMechThrusters(this.mechBody, p.jetActive === true, p.dashActive === true, t);
+        /* ---- dash: an orange fire trail streaming off the thrusters ---- */
+        if (p.dashActive && this.effects) {
+          this._mechDashTrail = (this._mechDashTrail || 0) - dt;
+          if (this._mechDashTrail <= 0) {
+            this._mechDashTrail = .02;
+            const dx = p.dashDir.x, dz = p.dashDir.z;
+            for (let i = 0; i < 3; i++) {
+              this.effects.particle(
+                p.pos.x - dx * .7 + U.rand(-.5, .5), p.pos.y + .3 + U.rand(0, 1.6), p.pos.z - dz * .7 + U.rand(-.5, .5),
+                -dx * U.rand(3, 9) + U.rand(-2, 2), U.rand(.4, 2.4), -dz * U.rand(3, 9) + U.rand(-2, 2),
+                U.rand(.10, .22), 'spark', U.rand(.2, .5));
             }
-          });
+            this.effects.particle(
+              p.pos.x - dx * .8, p.pos.y + .5, p.pos.z - dz * .8,
+              -dx * 4 + U.rand(-1, 1), U.rand(.5, 2), -dz * 4 + U.rand(-1, 1),
+              U.rand(.16, .30), 'smoke', U.rand(.3, .6));
+          }
         }
-        if (ud.jetLight) ud.jetLight.intensity = on ? (5 + Math.random() * 3) : 0;
+        /* ---- jetpack: a hot exhaust trail while thrusting ---- */
+        if (p.jetActive && this.effects) {
+          this._mechJetTrail = (this._mechJetTrail || 0) - dt;
+          if (this._mechJetTrail <= 0) {
+            this._mechJetTrail = .05;
+            this.effects.particle(
+              p.pos.x + U.rand(-.5, .5), p.pos.y + .1, p.pos.z + .6 + U.rand(-.2, .2),
+              U.rand(-1, 1), U.rand(-3, -1), U.rand(-1, 1),
+              U.rand(.14, .26), 'smoke', U.rand(.3, .6));
+          }
+        }
       },
       /* МЕХАКОСТЮМ: dash — a short, powerful ground burst.
          Direction = current movement input (or straight ahead if standing still).
@@ -6096,6 +6159,7 @@ const Game = {
     for (const pr of this.projectiles) { if (pr.mesh.parent) pr.mesh.parent.remove(pr.mesh); }
     this.projectiles.length = 0;
     this.clearRemoteProjectiles();
+    this.clearRemoteMechMissiles();
     this.clearPortals();
     this.removeTurretDrone();
     this.clearHiveDrones();
@@ -6792,6 +6856,9 @@ const Game = {
       mg: wpn && wpn.mag !== Infinity ? wpn.mag : null,
       sp: +(p.spinT || 0).toFixed(2),           // minigun spin-up, for the barrels
       mc: p.mechSuit ? 1 : 0,                   // in the mech: show the chassis remotely
+      md: p.dashActive ? 1 : 0,                 // mech dash in progress
+      mj: p.jetActive ? 1 : 0,                  // mech jetpack thrusting
+      mp: +(p.pitch || 0).toFixed(3),           // aim pitch, so the arms track remotely
       k: p.kills, d: p.deaths, sc: p.score
     });
   },
@@ -6823,6 +6890,9 @@ const Game = {
     // in the mech: hide the soldier and show the chassis instead
     rp.setMech(s.mc);
     if (rp.mech && rp._mechFired === undefined) rp._mechFired = false;
+    // mech ability flags (dash / jetpack) so the opponent sees the effects
+    rp.mechDash = !!s.md;
+    rp.mechJet = !!s.mj;
   },
 
   onRemoteShot(s) {
@@ -6861,6 +6931,53 @@ const Game = {
       if (p) this.effects.impact(p, n, 'concrete');
     }
     Audio3D_SFX.shot(def.sound || 'rifle', muzzle.x, muzzle.y, muzzle.z);
+  },
+
+  /* МЕХАКОСТЮМ: the peer launched a missile volley. Fly a matching cosmetic
+     missile here, so the rockets are visible to everyone (the owner resolves
+     the damage and broadcasts the `boom`). */
+  onRemoteMechMissile(m) {
+    if (this.mode !== CS.MODE.ONLINE) return;
+    const mesh = buildMechMissile();
+    mesh.position.set(m.x, m.y, m.z);
+    this.scene.add(mesh);
+    const dir = { x: m.dx || 0, y: m.dy || 0, z: m.dz || 0 };
+    this.remoteMechMissiles = this.remoteMechMissiles || [];
+    this.remoteMechMissiles.push({
+      mesh: mesh, life: 8,
+      pos: { x: m.x, y: m.y, z: m.z },
+      vel: { x: dir.x * 8, y: 4, z: dir.z * 8 }
+    });
+    Audio3D_SFX.rocketShot(m.x, m.y, m.z);
+    if (this.remoteMechMissiles.length > 24) {
+      const old = this.remoteMechMissiles.shift();
+      if (old.mesh.parent) old.mesh.parent.remove(old.mesh);
+    }
+  },
+
+  updateRemoteMechMissiles(dt) {
+    if (!this.remoteMechMissiles || !this.remoteMechMissiles.length) return;
+    for (let i = this.remoteMechMissiles.length - 1; i >= 0; i--) {
+      const m = this.remoteMechMissiles[i];
+      m.life -= dt;
+      // gentle arcing flight; visual only
+      m.vel.y -= 4 * dt;
+      m.pos.x += m.vel.x * dt; m.pos.y += m.vel.y * dt; m.pos.z += m.vel.z * dt;
+      m.mesh.position.set(m.pos.x, m.pos.y, m.pos.z);
+      const vl = Math.hypot(m.vel.x, m.vel.y, m.vel.z) || 1;
+      m.mesh.lookAt(m.pos.x + m.vel.x / vl, m.pos.y + m.vel.y / vl, m.pos.z + m.vel.z / vl);
+      if (Math.random() < .7) this.effects.particle(m.pos.x, m.pos.y, m.pos.z, U.rand(-.5, .5), U.rand(-.2, .8), U.rand(-.5, .5), U.rand(.06, .16), 'smoke', U.rand(.3, .7));
+      if (m.life <= 0) {
+        if (m.mesh.parent) m.mesh.parent.remove(m.mesh);
+        this.remoteMechMissiles.splice(i, 1);
+      }
+    }
+  },
+
+  clearRemoteMechMissiles() {
+    if (!this.remoteMechMissiles) return;
+    for (const m of this.remoteMechMissiles) { if (m.mesh.parent) m.mesh.parent.remove(m.mesh); m.mesh.traverse(o => { if (o.geometry) o.geometry.dispose(); }); }
+    this.remoteMechMissiles.length = 0;
   },
 
   /* A purely cosmetic projectile for a shot fired by someone else. It follows
@@ -7436,7 +7553,7 @@ const Game = {
     this.updateProjectiles(dt);
     if (this.mode === CS.MODE.RANGE) this.updateDummyProjectiles(dt);
     if (this.mode === CS.MODE.OFFLINE || this.mode === CS.MODE.RANGE) this.updateEnemyShots(dt);
-    if (this.mode === CS.MODE.ONLINE) this.updateRemoteProjectiles(dt);
+    if (this.mode === CS.MODE.ONLINE) { this.updateRemoteProjectiles(dt); this.updateRemoteMechMissiles(dt); }
 
     // ---- networking ----
     if (this.mode === CS.MODE.ONLINE) {

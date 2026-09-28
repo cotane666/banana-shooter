@@ -1547,37 +1547,31 @@ function buildMechChassis() {
   const matG = new THREE.MeshLambertMaterial({ color: GOLD, emissive: 0x1a1405 });
   const matD = new THREE.MeshLambertMaterial({ color: DK });
   const g = new THREE.Group();
-  const box = (w, h, d, m, x, y, z, rx, ry, rz) => {
+  /* helpers accept an optional `par` so parts can be nested in limb groups
+     (the legs are articulated: a hip pivot and a knee pivot) */
+  const box = (w, h, d, m, x, y, z, rx, ry, rz, par) => {
     const b = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m);
     b.position.set(x, y, z);
     if (rx) b.rotation.x = rx; if (ry) b.rotation.y = ry; if (rz) b.rotation.z = rz;
     b.castShadow = true; b.receiveShadow = true;
-    g.add(b); return b;
+    (par || g).add(b); return b;
   };
-  const cyl = (r1, r2, h, seg, m, x, y, z, rx, ry, rz) => {
+  const cyl = (r1, r2, h, seg, m, x, y, z, rx, ry, rz, par) => {
     const c = new THREE.Mesh(new THREE.CylinderGeometry(r1, r2, h, seg || 10), m);
     c.position.set(x, y, z);
     if (rx) c.rotation.x = rx; if (ry) c.rotation.y = ry; if (rz) c.rotation.z = rz;
     c.castShadow = true; c.receiveShadow = true;
-    g.add(c); return c;
+    (par || g).add(c); return c;
   };
-  const sph = (r, m, x, y, z) => {
+  const sph = (r, m, x, y, z, par) => {
     const s = new THREE.Mesh(new THREE.SphereGeometry(r, 10, 8), m);
-    s.position.set(x, y, z); s.castShadow = true; g.add(s); return s;
+    s.position.set(x, y, z); s.castShadow = true; (par || g).add(s); return s;
   };
-  const torus = (r, t, m, x, y, z, rx, ry, rz) => {
+  const torus = (r, t, m, x, y, z, rx, ry, rz, par) => {
     const o = new THREE.Mesh(new THREE.TorusGeometry(r, t, 8, 18), m);
     o.position.set(x, y, z);
     if (rx) o.rotation.x = rx; if (ry) o.rotation.y = ry; if (rz) o.rotation.z = rz;
-    o.castShadow = true; g.add(o); return o;
-  };
-  /* a hydraulic piston between two points (a rod inside a sleeve) */
-  const piston = (x, y, z, h, rx, ry, rz) => {
-    cyl(.055, .070, h, 8, matD, x, y, z, rx, ry, rz);
-    const rod = new THREE.Mesh(new THREE.CylinderGeometry(.028, .028, h * .75, 6), matG);
-    rod.position.set(x, y + (h * .35) * (Math.cos(rx || 0)), z);
-    rod.rotation.set(rx || 0, ry || 0, rz || 0);
-    rod.castShadow = true; g.add(rod); return rod;
+    o.castShadow = true; (par || g).add(o); return o;
   };
   /* OPEN COCKPIT layout: the eye sits at ~3.3, so every structural piece is kept
      BELOW that line or pushed to the sides — nothing crosses the centre of view. */
@@ -1681,32 +1675,46 @@ function buildMechChassis() {
   pod.userData.baseYaw = CFG.mechArmToe * .6;
   pod.rotation.y = pod.userData.baseYaw;
   g.add(pod);
-  // ------- pelvis + legs -------
+  // ------- pelvis + legs (articulated: hip pivot -> knee pivot -> foot) -------
   box(.88, .40, .62, matB2, 0, 1.90, -.02);
   box(.70, .10, .50, matW, 0, 1.72, -.02);             // white pelvis trim
+  /* The legs hang from a HIP pivot (world y 1.78) and a KNEE pivot (world y
+     1.06). Local offsets are measured down from each pivot, so rotating a pivot
+     swings everything below it — this is what makes a walk cycle possible. */
+  const mechLegs = [];
   [-1, 1].forEach(s => {
-    box(.40, .72, .46, matB, s * .42, 1.44, 0);        // thigh
-    box(.42, .12, .48, matB2, s * .42, 1.76, 0);
-    box(.34, .10, .40, matW, s * .42, 1.52, .16);      // knee plate (white)
-    box(.46, .82, .40, matD, s * .42, .80, .05);       // shin
-    box(.42, .16, .44, matB, s * .42, 1.14, .02);
-    for (let i = 0; i < 3; i++) box(.30, .05, .05, matD, s * .42, .92 + i * .16, .26);  // shin ribs
-    box(.52, .22, .78, matB, s * .42, .14, .10);       // foot
-    box(.54, .10, .84, matB2, s * .42, .26, .10);
-    box(.40, .06, .40, matG, s * .42, .035, .10);      // golden toe strip
-    box(.16, .16, .04, matG, s * .42, 1.24, .28);      // golden badge
-    // ---- leg detail: hip actuator, knee hydraulics, shin plate, ankle joint ----
-    torus(.16, .030, matG, s * .42, 1.78, 0, 0, 0, Math.PI / 2);          // hip ring
-    cyl(.06, .06, .46, 8, matD, s * .42, 1.50, .26, .18, 0, 0);           // knee piston
-    cyl(.032, .032, .34, 6, matG, s * .42, 1.36, .27, .18, 0, 0);         // piston rod
-    box(.34, .36, .04, matB2, s * .42, .98, .28);                        // shin front plate
-    box(.26, .06, .04, matW, s * .42, 1.06, .30);
-    sph(.075, matD, s * .42, .90, .03);                                   // ankle ball joint
-    box(.46, .14, .22, matW, s * .42, .30, -.26);                        // heel block
-    box(.14, .10, .10, matG, s * .42, .30, .48);                         // toe cap
-    for (let i = 0; i < 3; i++) box(.10, .08, .03, matD, s * .42 + (i - 1) * .13, .10, .50);  // toe treads
-    box(.10, .12, .12, matD, s * .42, 1.62, -.26);                       // rear thigh vent
+    const hip = new THREE.Group();
+    hip.position.set(s * .42, 1.78, 0);
+    g.add(hip);
+    // ---- thigh (hip-local) ----
+    box(.40, .72, .46, matB, 0, -.34, 0, 0, 0, 0, hip);        // thigh
+    box(.42, .12, .48, matB2, 0, -.02, 0, 0, 0, 0, hip);       // thigh top plate
+    sph(.075, matD, 0, 0, 0, hip);                             // hip ball joint
+    torus(.16, .030, matG, 0, 0, 0, 0, 0, Math.PI / 2, hip);  // hip ring
+    box(.10, .12, .12, matD, 0, -.16, -.26, 0, 0, 0, hip);    // rear thigh vent
+    box(.34, .10, .40, matW, 0, -.26, .16, 0, 0, 0, hip);      // knee plate (white)
+    box(.16, .16, .04, matG, 0, -.54, .28, 0, 0, 0, hip);      // golden badge
+    cyl(.06, .06, .30, 8, matD, 0, -.30, .26, .18, 0, 0, hip);     // thigh piston
+    cyl(.032, .032, .22, 6, matG, 0, -.40, .27, .18, 0, 0, hip);   // piston rod
+    // ---- shin / foot (knee-local) ----
+    const knee = new THREE.Group();
+    knee.position.set(0, -.72, 0);
+    hip.add(knee);
+    box(.42, .16, .44, matB, 0, .08, .02, 0, 0, 0, knee);     // shin upper
+    box(.46, .82, .40, matD, 0, -.26, .05, 0, 0, 0, knee);    // shin
+    for (let i = 0; i < 3; i++) box(.30, .05, .05, matD, 0, -.14 + i * .16, .26, 0, 0, 0, knee);  // shin ribs
+    box(.34, .36, .04, matB2, 0, -.08, .28, 0, 0, 0, knee);   // shin front plate
+    box(.26, .06, .04, matW, 0, .00, .30, 0, 0, 0, knee);
+    sph(.075, matD, 0, -.16, .03, knee);                      // ankle ball joint
+    box(.52, .22, .78, matB, 0, -.92, .10, 0, 0, 0, knee);    // foot
+    box(.54, .10, .84, matB2, 0, -.80, .10, 0, 0, 0, knee);
+    box(.40, .06, .40, matG, 0, -1.03, .10, 0, 0, 0, knee);   // golden toe strip
+    box(.46, .14, .22, matW, 0, -.76, -.26, 0, 0, 0, knee);   // heel block
+    box(.14, .10, .10, matG, 0, -.76, .48, 0, 0, 0, knee);    // toe cap
+    for (let i = 0; i < 3; i++) box(.10, .08, .03, matD, (i - 1) * .13, -.96, .50, 0, 0, 0, knee);  // toe treads
+    mechLegs.push({ hip, knee, side: s });
   });
+  g.userData.legs = mechLegs;
   // a central hip/waist actuator linking the pelvis to the torso
   cyl(.10, .10, .22, 10, matD, 0, 2.06, 0);
   torus(.14, .03, matG, 0, 2.02, 0, Math.PI / 2, 0, 0);
@@ -1749,6 +1757,28 @@ function buildMechChassis() {
   mgArm.userData.basePos = mgArm.position.clone();
   lzArm.userData.basePos = lzArm.position.clone();
   return g;
+}
+
+/* Animate a mech chassis' legs. Shared by the local first-person mech and the
+   remote player's chassis, so walking looks identical in a duel.
+   `speed01` is horizontal speed normalised to a run (0..1); `phase` is a running
+   gait phase in radians. Returns the new phase. */
+function animateMechLegs(mesh, speed01, phase, dt) {
+  const legs = mesh && mesh.userData && mesh.userData.legs;
+  if (!legs) return phase;
+  const spd = Math.max(0, Math.min(1, speed01));
+  // a heavy machine: slow, wide strides; the phase keeps ticking so it settles
+  phase += dt * (1.4 + spd * 5.6);
+  const amp = .10 + spd * .62;                 // stride amplitude (radians)
+  for (let i = 0; i < legs.length; i++) {
+    const L = legs[i];
+    const dir = i === 0 ? 1 : -1;              // legs are opposite phase
+    const sw = Math.sin(phase) * dir;
+    if (L.hip) L.hip.rotation.x = sw * amp;
+    // the knee bends as the leg swings back, so the foot clears the ground
+    if (L.knee) L.knee.rotation.x = Math.max(0, -sw) * amp * 1.25 + spd * .06;
+  }
+  return phase;
 }
 
 /* A homing mech missile (small, with a blue flame) */

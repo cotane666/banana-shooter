@@ -793,6 +793,9 @@ class RemotePlayer {
           this._mechSpin = (this._mechSpin || 0) + dt * (this.spinT > .1 ? 34 : 0);
           ud.barrels.rotation.z = this._mechSpin;
         }
+        // walk cycle: the peer's mech strides as it moves
+        const spd01 = U.clamp((this.moveSpeed || 0) / CFG.runSpeed, 0, 1);
+        this._mechLegPhase = animateMechLegs(this.mechMesh, spd01, this._mechLegPhase || 0, dt);
       }
     }
 
@@ -5437,6 +5440,11 @@ const Game = {
           ud.pod.rotation.y = yawD;
           ud.pod.rotation.x = elevD + podKick * .12;
           ud.pod.position.y = 3.34 + podKick * .14 + bob;
+        }
+        /* ---- walk: animate the articulated legs ---- */
+        {
+          const spd01 = U.clamp(hspeed / CFG.runSpeed, 0, 1);
+          this._mechLegPhase = animateMechLegs(this.mechBody, spd01, this._mechLegPhase || 0, dt);
         }
         /* ---- jetpack flames ---- */
         const on = p.jetActive === true;

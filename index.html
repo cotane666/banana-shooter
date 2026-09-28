@@ -17089,7 +17089,10 @@ const Game = {
   },
 
   collectCrate(c, i) {
-    // restore part of the FULL stock for every owned weapon
+    // restore ~25% of each owned weapon's capacity to BOTH its reserve and its
+    // magazine. The old code topped the magazine by a flat +8 rounds, which for
+    // a machine gun (magazine 150–2000) was barely a few bullets — now the
+    // top-up scales with the magazine, so a crate really is +25%.
     const frac = CFG.crateAmmoFrac;
     const p = this.player;
     let gave = false;
@@ -17098,14 +17101,15 @@ const Game = {
       if (!w || w.id === 'knife') continue;
       const def = WEAPONS[w.id];
       if (!def || def.mag === Infinity) continue;
-      const addReserve = Math.max(1, Math.round((def.reserve || 0) * frac));
-      const addMag = def.mag <= 12 ? 3 : 8;              // a small top-up in the magazine too
-      const before = w.reserve;
-      w.reserve = Math.min(def.reserve, w.reserve + addReserve);
+      const capReserve = def.reserve || def.mag;         // a reserve-less gun uses its magazine as the cap
+      const addReserve = Math.max(1, Math.round(capReserve * frac));
+      const addMag = Math.max(3, Math.round(def.mag * frac));
+      const beforeR = w.reserve, beforeM = w.mag;
+      w.reserve = Math.min(capReserve, (w.reserve || 0) + addReserve);
       w.mag = Math.min(def.mag, (w.mag || 0) + addMag);
-      if (w.reserve !== before) gave = true;
+      if (w.reserve !== beforeR || w.mag !== beforeM) gave = true;
     }
-    UI.center('ПАТРОНЫ +25%', '+запас ко всем стволам', 1.6);
+    UI.center('ПАТРОНЫ +25%', '+запас и магазин ко всем стволам', 1.6);
     UI.toast('Сундук собран: патроны пополнены', '#57d16a');
     UI.feed('<span class="z">▣ Сундук · патроны +25%</span>');
     Audio3D_SFX.pickup();

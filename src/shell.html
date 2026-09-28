@@ -39,6 +39,7 @@
       <button class="mbtn" id="btnOnline"><b>ОНЛАЙН</b><i>Бой против друзей: 2–4 игрока, выбор карты</i></button>
       <button class="mbtn" id="btnMatch"><b>ПАРАМЕТРЫ МАТЧА</b><i>Карта · число игроков · здоровье</i></button>
       <button class="mbtn" id="btnExtras"><b>ДОСТИЖЕНИЯ И РЕКОРДЫ</b><i>Награды за вехи · таблица лучших забегов</i></button>
+      <button class="mbtn" id="btnSkins"><b>ИНВЕНТАРЬ СКИНОВ</b><i>Скины за достижения · посмотреть оружие в 3D</i></button>
       <button class="mbtn" id="btnAndroid"><b>СКАЧАТЬ НА ANDROID</b><i>Установка на телефон / планшет</i></button>
       <button class="mbtn" id="btnIos"><b>СКАЧАТЬ НА iOS</b><i>Установка на iPhone / iPad</i></button>
       <button class="mbtn" id="btnControls"><b>УПРАВЛЕНИЕ</b><i>Клавиши и настройки</i></button>
@@ -456,6 +457,32 @@
     <h2 class="mt">РЕКОРДЫ ЗАБЕГОВ</h2>
     <table class="sb" id="recTable"></table>
     <div class="btnrow"><button class="mbtn small primary" id="btnExtrasBack">НАЗАД</button></div>
+  </div>
+</div>
+
+<!-- ============ SKIN INVENTORY (3D preview) ============ -->
+<div id="skins" class="screen hidden">
+  <div class="panel wide">
+    <h2>ИНВЕНТАРЬ СКИНОВ</h2>
+    <div class="skin-wrap">
+      <div class="skin-view">
+        <canvas id="skinCanvas"></canvas>
+        <div class="skin-view-hint">Потяните, чтобы повернуть · колесо/щипок — зум</div>
+      </div>
+      <div class="skin-side">
+        <div class="skin-fld">
+          <span>Модель:</span>
+          <div class="chips" id="skinTargetChips"></div>
+        </div>
+        <div class="skin-fld">
+          <span>Оружие:</span>
+          <select id="skinWeaponSel" class="skinsel"></select>
+        </div>
+        <div class="skin-status" id="skinStatus">Выберите скин</div>
+        <div class="skin-grid" id="skinGrid"></div>
+      </div>
+    </div>
+    <div class="btnrow"><button class="mbtn small primary" id="btnSkinsBack">НАЗАД</button></div>
   </div>
 </div>
 

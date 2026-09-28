@@ -24,6 +24,7 @@ const UI = {
       'offCountChips', 'offHpChips', 'offFreeChips', 'offModeChips', 'offCustomBox', 'offHordeBox', 'offSpecialBox', 'offCpBox', 'offCpInfo', 'offCpMode', 'offCpList', 'offCountExact', 'offCountFixed', 'btnOffContinue', 'custom', 'lobbyShop', 'lobbyShopItems',
       'modScreen', 'modGrid', 'modActive',
       'extras', 'achGrid', 'recTable', 'btnExtrasBack', 'weaponWheel', 'wwInner',
+      'skins', 'skinCanvas', 'skinGrid', 'skinStatus', 'skinWeaponSel', 'skinTargetChips', 'btnSkinsBack', 'btnSkins',
       'medkitTag', 'droneTag', 'grenadeTag', 'zResetTag', 'jetTag', 'dashTag', 'shieldTag', 'heatTag', 'missileHud', 'mhTime', 'mhReadout',
       'sdScreen', 'sdGrid', 'sdSearch', 'sdToggle2', 'sdClose', 'sdConfig',
       'esScreen', 'esGrid', 'esSearch', 'esCount', 'esClear', 'esClose', 'esConfig'];
@@ -34,7 +35,7 @@ const UI = {
 
   /* ---------------- screens ---------------- */
   show(name) {
-    ['loading', 'menu', 'controls', 'lobby', 'hud', 'buy', 'scoreboard', 'pause', 'connect', 'android', 'ios', 'credits', 'matchEnd', 'custom', 'clickToPlay', 'sdScreen', 'esScreen', 'modScreen', 'extras'].forEach(s => {
+    ['loading', 'menu', 'controls', 'lobby', 'hud', 'buy', 'scoreboard', 'pause', 'connect', 'android', 'ios', 'credits', 'matchEnd', 'custom', 'clickToPlay', 'sdScreen', 'esScreen', 'modScreen', 'extras', 'skins'].forEach(s => {
       const e = this.el[s];
       if (!e) return;
       const on = s === name;
@@ -43,12 +44,12 @@ const UI = {
     this.current = name;
   },
   hideOverlays() {
-    ['buy', 'scoreboard', 'pause', 'controls', 'lobby', 'menu', 'connect', 'android', 'ios', 'credits', 'matchEnd', 'custom', 'sdScreen', 'esScreen', 'modScreen', 'extras'].forEach(s => {
+    ['buy', 'scoreboard', 'pause', 'controls', 'lobby', 'menu', 'connect', 'android', 'ios', 'credits', 'matchEnd', 'custom', 'sdScreen', 'esScreen', 'modScreen', 'extras', 'skins'].forEach(s => {
       if (this.el[s]) this.el[s].classList.add('hidden');
     });
   },
   overlayOpen() {
-    return ['buy', 'scoreboard', 'pause', 'controls', 'lobby', 'menu', 'connect', 'android', 'ios', 'credits', 'matchEnd', 'custom', 'sdScreen', 'esScreen', 'modScreen', 'extras'].some(s => this.el[s] && !this.el[s].classList.contains('hidden'));
+    return ['buy', 'scoreboard', 'pause', 'controls', 'lobby', 'menu', 'connect', 'android', 'ios', 'credits', 'matchEnd', 'custom', 'sdScreen', 'esScreen', 'modScreen', 'extras', 'skins'].some(s => this.el[s] && !this.el[s].classList.contains('hidden'));
   },
 
   /* ============================================================
@@ -946,7 +947,13 @@ const UI = {
     if (this.el.achGrid) {
       this.el.achGrid.innerHTML = ACHIEVEMENTS.map(a => {
         const on = !!ach[a.id];
-        return '<div class="achcard' + (on ? ' on' : '') + '"><b>' + (on ? '🏆 ' : '🔒 ') + U.esc(a.name) + '</b><i>' + U.esc(a.desc) + '</i></div>';
+        const sk = skinForAchievement(a.id);
+        const swatch = sk ? ('#' + sk.glow.toString(16).padStart(6, '0')) : '#39434c';
+        return '<div class="achcard' + (on ? ' on' : '') + '"><b><span class="sw" style="display:inline-block;width:10px;height:10px;' +
+          'border-radius:2px;margin-right:6px;vertical-align:-1px;border:1px solid rgba(255,255,255,.3);background:' + swatch + '"></span>' +
+          (on ? '🏆 ' : '🔒 ') + U.esc(a.name) + '</b><i>' + U.esc(a.desc) + '</i>' +
+          (sk ? '<i style="display:block;margin-top:3px;color:#8a95a1">Награда: ' + U.esc(sk.name.replace('СКИН · ', 'Скин ')) + '</i>' : '') +
+          '</div>';
       }).join('');
     }
     if (this.el.recTable) {
@@ -980,3 +987,177 @@ function bindClick(id, fn) {
   if (e) e.addEventListener('click', () => { Audio3D_SFX.init(); Audio3D_SFX.resume(); Audio3D_SFX.uiClick(); fn(); });
   return e;
 }
+
+/* ============================================================
+   SKIN INVENTORY — a small self-contained 3D preview.
+   Its own renderer/loop, created lazily the first time the screen opens and
+   driven by requestAnimationFrame only while the screen is visible.
+   ============================================================ */
+const Skins = {
+  renderer: null, scene: null, camera: null, root: null,
+  target: 'weapon',          // 'weapon' | 'player'
+  weaponId: 'ak47',
+  skinId: null,
+  rotX: -0.15, rotY: 0.6, dist: 1.5,
+  dragging: false, _lx: 0, _ly: 0, _raf: 0, _spin: 0,
+
+  /* which weapons can be previewed (owned-by-design list of real guns) */
+  weapons() {
+    const out = [];
+    for (const id in WEAPONS) {
+      const w = WEAPONS[id];
+      if (w.price > 0 && !w.shield && id !== 'knife' && !w.mechWeapon && w.cat !== 'exp' && !w.projectile) out.push(id);
+    }
+    return out.sort((a, b) => WEAPONS[a].price - WEAPONS[b].price);
+  },
+  unlocked() {
+    return Object.keys(Store.data.ach || {}).length > 0;
+  },
+
+  init() {
+    if (this.renderer) return;
+    const canvas = $('skinCanvas');
+    if (!canvas) return;
+    this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, powerPreference: 'low-power' });
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
+    this.renderer.outputColorSpace = THREE.SRGBColorSpace;
+    this.scene = new THREE.Scene();
+    this.camera = new THREE.PerspectiveCamera(42, 1, 0.01, 20);
+    this.scene.add(new THREE.HemisphereLight(0xffffff, 0x556070, 2.1));
+    const d1 = new THREE.DirectionalLight(0xfff4e0, 1.9); d1.position.set(1.4, 2.2, 1.8); this.scene.add(d1);
+    const d2 = new THREE.DirectionalLight(0x9fc2ff, 0.8); d2.position.set(-1.6, .6, -1.2); this.scene.add(d2);
+    this.root = new THREE.Group();
+    this.scene.add(this.root);
+    this._base = new THREE.Group();
+    this.root.add(this._base);
+    this.bindInput(canvas);
+  },
+
+  bindInput(canvas) {
+    const on = (el, ev, fn) => el.addEventListener(ev, fn, { passive: false });
+    on(canvas, 'pointerdown', e => { this.dragging = true; this._lx = e.clientX; this._ly = e.clientY; canvas.setPointerCapture && canvas.setPointerCapture(e.pointerId); });
+    on(canvas, 'pointerup', e => { this.dragging = false; });
+    on(canvas, 'pointercancel', () => { this.dragging = false; });
+    on(canvas, 'pointermove', e => {
+      if (!this.dragging) return;
+      this.rotY += (e.clientX - this._lx) * .01;
+      this.rotX = U.clamp(this.rotX + (e.clientY - this._ly) * .01, -.1, 1.4);
+      this._lx = e.clientX; this._ly = e.clientY;
+    });
+    on(canvas, 'wheel', e => { e.preventDefault(); this.dist = U.clamp(this.dist + Math.sign(e.deltaY) * .12, .7, 3.2); });
+  },
+
+  open() {
+    this.init();
+    this.renderTargets();
+    this.renderWeaponList();
+    this.renderGrid();
+    UI.show('skins');
+    this._spin = 0;
+    this.resize();
+    if (!this._raf) this.loop();
+  },
+  close() { if (this._raf) { cancelAnimationFrame(this._raf); this._raf = 0; } if (typeof TouchUI !== 'undefined' && IS_TOUCH) TouchUI.update(); },
+
+  resize() {
+    const wrap = this.root ? null : null;
+    const canvas = $('skinCanvas');
+    if (!canvas || !this.renderer) return;
+    const r = canvas.parentElement.getBoundingClientRect();
+    const w = Math.max(120, Math.round(r.width)), h = Math.max(120, Math.round(r.height));
+    this.renderer.setSize(w, h, false);
+    this.camera.aspect = w / h; this.camera.updateProjectionMatrix();
+  },
+
+  /* the two preview targets: the gun, or the player holding it */
+  renderTargets() {
+    const el = $('skinTargetChips');
+    if (!el) return;
+    el.innerHTML = '<button data-t="weapon"' + (this.target === 'weapon' ? ' class="on"' : '') + '>ОРУЖИЕ</button>' +
+      '<button data-t="player"' + (this.target === 'player' ? ' class="on"' : '') + '>ПЕРСОНАЖ</button>';
+    Array.from(el.children).forEach(b => b.addEventListener('click', () => { this.target = b.dataset.t; this.renderTargets(); this.rebuild(); }));
+  },
+
+  renderWeaponList() {
+    const sel = $('skinWeaponSel');
+    if (!sel) return;
+    const list = this.weapons();
+    if (list.indexOf(this.weaponId) < 0) this.weaponId = list[0];
+    sel.innerHTML = list.map(id => '<option value="' + id + '"' + (id === this.weaponId ? ' selected' : '') + '>' + U.esc(WEAPONS[id].name) + '</option>').join('');
+    sel.onchange = () => { this.weaponId = sel.value; this.rebuild(); };
+  },
+
+  renderGrid() {
+    const el = $('skinGrid');
+    if (!el) return;
+    const ach = Store.data.ach || {};
+    const skinOn = Store.data.skinOn = Store.data.skinOn || {};
+    el.innerHTML = SKINS.map(sk => {
+      const unlocked = !!ach[sk.ach];
+      const on = skinOn[this.weaponId] === sk.id;
+      const swatch = '#' + sk.glow.toString(16).padStart(6, '0');
+      return '<div class="skincard' + (unlocked ? '' : ' locked') + (on ? ' on' : '') + '" data-sk="' + sk.id + '">' +
+        '<b><span class="sw" style="background:' + swatch + '"></span>' + U.esc(sk.name.replace('СКИН · ', '')) + '</b>' +
+        '<i>' + (unlocked ? (on ? 'ВЫБРАН' : 'ОТКРЫТ · нажмите') : '🔒 ' + U.esc(ACHIEVEMENTS.find(a => a.id === sk.ach).desc)) + '</i></div>';
+    }).join('');
+    Array.from(el.children).forEach(card => card.addEventListener('click', () => {
+      const skid = card.dataset.sk;
+      const sk = skinById(skid);
+      const unlocked = !!(Store.data.ach || {})[sk.ach];
+      if (!unlocked) { UI.toast('Скин закрыт: ' + ACHIEVEMENTS.find(a => a.id === sk.ach).name, '#f5d33c'); Audio3D_SFX.deny(); return; }
+      // clicking the active skin removes it, otherwise equip it
+      if (Store.data.skinOn[this.weaponId] === skid) delete Store.data.skinOn[this.weaponId];
+      else Store.data.skinOn[this.weaponId] = skid;
+      Store.save();
+      Audio3D_SFX.uiClick();
+      this.skinId = Store.data.skinOn[this.weaponId] || null;
+      this.renderGrid(); this.rebuild();
+      const el2 = $('skinStatus');
+      if (el2) el2.textContent = Store.data.skinOn[this.weaponId] ? ('Надет: ' + sk.name) : 'Скин снят';
+      if (Game && Game.player) Game.player.buildViewModel();
+    }));
+  },
+
+  rebuild() {
+    if (!this._base) return;
+    while (this._base.children.length) { const c = this._base.children[0]; this._base.remove(c); disposeGroup(c); }
+    const skinId = Store.data.skinOn[this.weaponId];
+    const skin = skinId ? skinById(skinId) : null;
+    if (this.target === 'player') {
+      // a soldier holding the previewed weapon, so the skin is seen in context
+      const soldier = buildSoldierMesh('ct');
+      const gun = buildWeaponModel(this.weaponId);
+      if (skin) applyWeaponSkin(gun, skin);
+      const armR = soldier.userData.parts && soldier.userData.parts.armR;
+      if (armR) {
+        gun.position.set(.02, -.60, .02);
+        gun.rotation.set(-Math.PI / 2, 0, 0);
+        gun.scale.setScalar(.95);
+        armR.add(gun);
+      }
+      this._base.add(soldier);
+      this._modelH = 2.0; this._centerY = 1.0;
+    } else {
+      const gun = buildWeaponModel(this.weaponId);
+      if (skin) applyWeaponSkin(gun, skin);
+      this._base.add(gun);
+      this._modelH = .6; this._centerY = 0;
+    }
+  },
+
+  loop() {
+    this._raf = requestAnimationFrame(() => this.loop());
+    if (UI.current !== 'skins' || !this.renderer) { this._raf && cancelAnimationFrame(this._raf); this._raf = 0; return; }
+    this.resize();
+    // idle auto-spin plus manual rotation
+    if (!this.dragging) this._spin += .004;
+    this.root.rotation.y = this.rotY + this._spin;
+    this.root.rotation.x = this.rotX;
+    // frame the model: pull the camera back so tall (player) models fit
+    const fit = this.target === 'player' ? 2.6 : 1.35;
+    this.camera.position.set(0, .1, this.dist * fit);
+    this.camera.lookAt(0, this._centerY || 0, 0);
+    this.renderer.clear();
+    this.renderer.render(this.scene, this.camera);
+  }
+};

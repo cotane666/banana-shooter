@@ -1132,6 +1132,8 @@ const Game = {
     bindClick('btnMatch', () => { this._prevScreen = 'menu'; UI.refreshChips(); UI.show('controls'); });
     bindClick('btnExtras', () => { UI.renderExtras(); UI.show('extras'); });
     bindClick('btnExtrasBack', () => UI.show('menu'));
+    bindClick('btnSkins', () => Skins.open());
+    bindClick('btnSkinsBack', () => { Skins.close(); UI.show('menu'); });
     bindClick('btnAndroid', () => UI.show('android'));
     bindClick('btnAndroidBack', () => UI.show('menu'));
     bindClick('btnAndroidCopy', () => {
@@ -1452,13 +1454,30 @@ const Game = {
      ============================================================ */
   statsSnapshot() {
     const p = this.player;
+    const shots = p ? p.bulletsFired : 0;
+    const hits = p ? p.bulletsHit : 0;
     return {
       kills: p ? p.zombieKills : 0,
       headshots: p ? p.headshots : 0,
       money: p ? p.money : 0,
       wave: this.offline ? this.offline.wave : 0,
       bossKills: this._bossKills || 0,
-      playTime: this.offline ? (U.now() - this.offline.startTime) / 1000 : 0
+      playTime: this.offline ? (U.now() - this.offline.startTime) / 1000 : 0,
+      score: p ? p.score : 0,
+      shots: shots,
+      accuracy: shots > 0 ? (hits / shots) * 100 : 0,
+      /* run-level counters kept on the game object */
+      mechKills: this._mechKills || 0,
+      knifeKills: this._knifeKills || 0,
+      bestHeadStreak: this._bestHeadStreak || 0,
+      medkitsUsed: this._medkitsUsed || 0,
+      maxWaveKills: this._maxWaveKills || 0,
+      perfectWaves: this._perfectWaves || 0,
+      noDamageWaves: this._noDamageWaves || 0,
+      /* persistent lifetime totals */
+      killsTotal: Store.data.killsTotal || 0,
+      wins: Store.data.wins || 0,
+      clears: Store.data.clears || 0
     };
   },
   checkAchievements() {
@@ -1795,6 +1814,11 @@ const Game = {
     this._creditsOpen = false;
     this._modPickOpen = false;
     this._bossKills = 0;
+    /* fresh run counters for the new achievement set */
+    this._mechKills = 0; this._knifeKills = 0; this._bestHeadStreak = 0;
+    this._headStreak = 0; this._medkitsUsed = 0; this._maxWaveKills = 0;
+    this._perfectWaves = 0; this._noDamageWaves = 0;
+    this._waveKills = 0; this._waveHurt = false; this._runDeaths = 0;
     // NOTE: the checkpoint is deliberately NOT cleared here. It is dropped only
     // by an explicit "НОВАЯ ИГРА" (or after being consumed), so leaving to the
     // menu and returning can still resume the run.
@@ -3419,6 +3443,7 @@ const Game = {
     if (p.health >= maxHP) { UI.toast('Здоровье полное', '#f5d33c'); Audio3D_SFX.deny(); return false; }
     p.medkits--;
     p.health = Math.min(maxHP, p.health + CFG.medkitHeal);
+    this._medkitsUsed = (this._medkitsUsed || 0) + 1;
     Audio3D_SFX.pickup();
     UI.feed('<span class="z">✚ Аптечка +' + CFG.medkitHeal + ' HP</span>');
     UI.toast('+' + CFG.medkitHeal + ' HP', '#57d16a');
@@ -4334,6 +4359,11 @@ const Game = {
       this.player.score += Math.round((250 + o.wave * 40) * ((this.modState && this.modState.playerDmg) || 1));
       o.betweenWaves = true;
       o.breakT = 7;
+      /* run-level wave streaks for the achievement set:
+         perfectWaves = cleared without dying yet, noDamageWaves = cleared unhurt */
+      if (this._runDeaths === 0) this._perfectWaves = (this._perfectWaves || 0) + 1;
+      if (!this._waveHurt) this._noDamageWaves = (this._noDamageWaves || 0) + 1;
+      this._waveKills = 0; this._waveHurt = false;
       Audio3D_SFX.roundEnd(true);
       /* clearing wave 100 means the campaign is finished */
       if (o.wave >= 100) {
@@ -6610,6 +6640,7 @@ const Game = {
       if (p.armor < 0) p.armor = 0;
     }
     p.health -= actual;
+    if (actual > 0) this._waveHurt = true;
     Audio3D_SFX.hurt();
     UI.dmgFlash();
     if (fromPos) {
@@ -6627,6 +6658,7 @@ const Game = {
     if (!p.alive) return;
     p.alive = false;
     p.deaths++;
+    this._runDeaths = (this._runDeaths || 0) + 1;
     Audio3D_SFX.roundEnd(false);
     // a drone still in the air is lost with its pilot
     if (this.drone) this.detonateDrone(false);
@@ -6660,6 +6692,17 @@ const Game = {
     const p = this.player;
     p.zombieKills++;
     p.kills++;
+    this._waveKills = (this._waveKills || 0) + 1;
+    if (this._waveKills > (this._maxWaveKills || 0)) this._maxWaveKills = this._waveKills;
+    // which weapon did the killing blow? (mech kit / knife feed the new goals)
+    const held = p.weapon && p.weapon.id;
+    if (this.isMechActive()) this._mechKills = (this._mechKills || 0) + 1;
+    else if (held === 'knife') this._knifeKills = (this._knifeKills || 0) + 1;
+    // headshot streak (reset on a non-headshot kill)
+    if (headshot) {
+      this._headStreak = (this._headStreak || 0) + 1;
+      if (this._headStreak > (this._bestHeadStreak || 0)) this._bestHeadStreak = this._headStreak;
+    } else this._headStreak = 0;
     const def = z.def;
     p.money = Math.min(CFG.moneyCap, p.money + def.money);
     p.score += def.score * (headshot ? 1.5 : 1) | 0;

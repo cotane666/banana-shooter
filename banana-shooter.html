@@ -472,20 +472,10 @@ html.touch #autoFireTag{font-size:11px;padding:3px 11px}
   padding:7px 8px;border-radius:3px;transition:.12s}
 #rangePanel #sdToggle:hover{background:#242c33}
 #rangePanel #sdToggle.on{background:linear-gradient(90deg,#3a1212,#1d2329);border-left-color:#e33a2e;color:#ff9b91}
-/* On a phone the readouts are still useful, so the panel moves under the
-   minimap and grows tap targets. The aim drill is PC-only (hidden), and any
-   keyboard shortcut hints in the labels are stripped by updateRangePanel()
-   because a phone has no keyboard. */
-html.touch #rangePanel{right:auto;left:12px;top:104px;width:150px;padding:7px 9px;font-size:9.5px;
-  max-height:calc(100vh - 210px);overflow:auto}
-html.touch #rangePanel .rp-title{font-size:9px;letter-spacing:1.2px;margin-bottom:5px;padding-bottom:4px}
-html.touch #rangePanel .rp-row{margin-bottom:2px}
-html.touch #rangePanel .rp-row b{font-size:12px}
-html.touch #rangePanel .rp-sub{margin-top:7px;padding-top:6px;margin-bottom:4px}
-html.touch #rangePanel #rpToggle{display:none !important}
-html.touch #rangePanel #sdConfig,
-html.touch #rangePanel #sdToggle,
-html.touch #rangePanel #esConfig{font-size:10px;padding:8px 7px}
+/* On a phone the whole range readout panel is hidden: it covered the left part
+   of the screen. The dummy/spawn controls it held are available as contextual
+   buttons in the touch action stack instead. */
+html.touch #rangePanel{display:none !important}
 
 /* ---------- shooting-dummy weapon picker ---------- */
 #rangePanel #sdConfig{pointer-events:auto;width:100%;cursor:pointer;margin-bottom:6px;
@@ -525,6 +515,42 @@ html.touch #rangePanel #esConfig{font-size:10px;padding:8px 7px}
 .achcard b{display:block;font-size:12.5px;letter-spacing:1.2px;color:#dfe6ee;margin-bottom:5px}
 .achcard.on b{color:#ffd24a}
 .achcard i{font-style:normal;font-size:11px;color:var(--dim);line-height:1.35}
+
+/* ---------- skin inventory (3D preview) ---------- */
+.skin-wrap{display:flex;gap:16px;align-items:stretch;flex-wrap:wrap}
+.skin-view{position:relative;flex:1 1 360px;min-width:280px;min-height:340px;
+  background:radial-gradient(circle at 50% 40%,#1a2028,#0b0e11);border:1px solid var(--line);
+  border-radius:6px;overflow:hidden;touch-action:none;cursor:grab}
+.skin-view.dragging{cursor:grabbing}
+.skin-view canvas{display:block;width:100%;height:100%}
+.skin-view-hint{position:absolute;left:0;right:0;bottom:7px;text-align:center;font-size:10px;
+  letter-spacing:1px;color:rgba(255,255,255,.4);pointer-events:none}
+.skin-side{flex:1 1 320px;min-width:260px;display:flex;flex-direction:column;gap:10px}
+.skin-fld{font-size:11px;color:var(--dim);letter-spacing:1.2px}
+.skin-fld>span{display:block;margin-bottom:6px}
+.skin-fld .chips{display:flex;gap:6px;flex-wrap:wrap}
+.skin-fld .chips button{background:#171d22;border:1px solid var(--line);color:var(--dim);padding:7px 13px;
+  font-size:11.5px;letter-spacing:1px;cursor:pointer;border-radius:3px;font-family:inherit;transition:.12s}
+.skin-fld .chips button.on{background:var(--or);color:#12161a;font-weight:800;border-color:var(--or)}
+.skinsel{width:100%;background:#12171c;color:#fff;border:1px solid var(--line);border-radius:3px;
+  padding:9px 10px;font-family:inherit;font-size:12.5px;outline:none}
+.skinsel:focus{border-color:var(--or)}
+.skin-status{font-size:12px;color:var(--or2);letter-spacing:1px;min-height:18px}
+.skin-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(132px,1fr));gap:8px;
+  max-height:38vh;overflow:auto;padding-right:4px}
+.skincard{background:linear-gradient(180deg,#151a1f,#0f1317);border:1px solid var(--line);
+  border-left:4px solid #39434c;border-radius:4px;padding:8px 9px;cursor:pointer;transition:.12s}
+.skincard:hover{border-left-color:var(--or);background:#1b2127}
+.skincard.locked{opacity:.44;cursor:not-allowed}
+.skincard.on{border-left-color:#ffd24a;background:linear-gradient(180deg,#221c10,#151109)}
+.skincard b{display:block;font-size:11px;letter-spacing:.8px;color:#dfe6ee;margin-bottom:4px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.skincard.on b{color:#ffd24a}
+.skincard i{font-style:normal;font-size:9.5px;color:var(--dim);display:block;line-height:1.3}
+.skincard .sw{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px;
+  border:1px solid rgba(255,255,255,.3)}
+html.touch .skin-grid{grid-template-columns:repeat(auto-fill,minmax(112px,1fr));max-height:30vh}
+html.touch .skin-view{min-height:230px}
 #weaponWheel{position:absolute;inset:0;z-index:40;pointer-events:none;display:flex;align-items:center;justify-content:center}
 #weaponWheel .ww-inner{display:flex;gap:14px;pointer-events:auto}
 .wwitem{background:rgba(15,19,23,.92);border:1px solid var(--line);border-top:3px solid #39434c;color:var(--txt);
@@ -802,6 +828,7 @@ html.touch .fld input{padding:10px;font-size:15px}
       <button class="mbtn" id="btnOnline"><b>ОНЛАЙН</b><i>Бой против друзей: 2–4 игрока, выбор карты</i></button>
       <button class="mbtn" id="btnMatch"><b>ПАРАМЕТРЫ МАТЧА</b><i>Карта · число игроков · здоровье</i></button>
       <button class="mbtn" id="btnExtras"><b>ДОСТИЖЕНИЯ И РЕКОРДЫ</b><i>Награды за вехи · таблица лучших забегов</i></button>
+      <button class="mbtn" id="btnSkins"><b>ИНВЕНТАРЬ СКИНОВ</b><i>Скины за достижения · посмотреть оружие в 3D</i></button>
       <button class="mbtn" id="btnAndroid"><b>СКАЧАТЬ НА ANDROID</b><i>Установка на телефон / планшет</i></button>
       <button class="mbtn" id="btnIos"><b>СКАЧАТЬ НА iOS</b><i>Установка на iPhone / iPad</i></button>
       <button class="mbtn" id="btnControls"><b>УПРАВЛЕНИЕ</b><i>Клавиши и настройки</i></button>
@@ -1219,6 +1246,32 @@ html.touch .fld input{padding:10px;font-size:15px}
     <h2 class="mt">РЕКОРДЫ ЗАБЕГОВ</h2>
     <table class="sb" id="recTable"></table>
     <div class="btnrow"><button class="mbtn small primary" id="btnExtrasBack">НАЗАД</button></div>
+  </div>
+</div>
+
+<!-- ============ SKIN INVENTORY (3D preview) ============ -->
+<div id="skins" class="screen hidden">
+  <div class="panel wide">
+    <h2>ИНВЕНТАРЬ СКИНОВ</h2>
+    <div class="skin-wrap">
+      <div class="skin-view">
+        <canvas id="skinCanvas"></canvas>
+        <div class="skin-view-hint">Потяните, чтобы повернуть · колесо/щипок — зум</div>
+      </div>
+      <div class="skin-side">
+        <div class="skin-fld">
+          <span>Модель:</span>
+          <div class="chips" id="skinTargetChips"></div>
+        </div>
+        <div class="skin-fld">
+          <span>Оружие:</span>
+          <select id="skinWeaponSel" class="skinsel"></select>
+        </div>
+        <div class="skin-status" id="skinStatus">Выберите скин</div>
+        <div class="skin-grid" id="skinGrid"></div>
+      </div>
+    </div>
+    <div class="btnrow"><button class="mbtn small primary" id="btnSkinsBack">НАЗАД</button></div>
   </div>
 </div>
 
@@ -1761,8 +1814,96 @@ const ACHIEVEMENTS = [
   { id: 'boss4',      name: 'ГРОЗА БОССОВ', desc: 'Убить 4 боссов',             check: s => s.bossKills >= 4 },
   { id: 'head10',     name: 'СНАЙПЕР',      desc: '10 убийств в голову',        check: s => s.headshots >= 10 },
   { id: 'rich',       name: 'БОГАЧ',        desc: 'Накопить $50 000',           check: s => s.money >= 50000 },
-  { id: 'survive',    name: 'ЖИВУЧИЙ',      desc: 'Пережить 15 минут в забеге', check: s => s.playTime >= 900 }
+  { id: 'survive',    name: 'ЖИВУЧИЙ',      desc: 'Пережить 15 минут в забеге', check: s => s.playTime >= 900 },
+  /* ============================================================
+     EXTRA 50 — from easy warm-ups to brutal long-haul goals.
+     Every one also unlocks a weapon skin (see SKINS below).
+     ============================================================ */
+  /* --- easy --- */
+  { id: 'e_kill10',   name: 'РАЗМИНКА',        desc: 'Убить 10 зомби за забег',        check: s => s.kills >= 10 },
+  { id: 'e_wave3',    name: 'ТРЕТЬЯ ВОЛНА',    desc: 'Дожить до 3 волны',              check: s => s.wave >= 3 },
+  { id: 'e_head1',    name: 'ТОЧНЫЙ ГЛАЗ',     desc: 'Убить в голову',                 check: s => s.headshots >= 1 },
+  { id: 'e_money1k',  name: 'КОПЕЙКА',         desc: 'Накопить $1 000',                check: s => s.money >= 1000 },
+  { id: 'e_score5k',  name: 'ПЕРВЫЕ ОЧКИ',     desc: 'Набрать 5 000 очков',            check: s => s.score >= 5000 },
+  { id: 'e_kill50',   name: 'ПОЛСОТНИ',        desc: '50 зомби за забег',              check: s => s.kills >= 50 },
+  { id: 'e_time60',   name: 'МАРАФОНЕЦ',       desc: 'Пережить 1 минуту',              check: s => s.playTime >= 60 },
+  /* --- medium --- */
+  { id: 'm_wave15',   name: 'ПЯТНАДЦАТАЯ',     desc: 'Дожить до 15 волны',             check: s => s.wave >= 15 },
+  { id: 'm_kill200',  name: 'ДВЕСТИ',          desc: '200 зомби за забег',             check: s => s.kills >= 200 },
+  { id: 'm_head25',   name: 'В ГОЛОВУ',        desc: '25 убийств в голову',            check: s => s.headshots >= 25 },
+  { id: 'm_money10k', name: 'КАПИТАЛ',         desc: 'Накопить $10 000',               check: s => s.money >= 10000 },
+  { id: 'm_score25k', name: 'НАБИРАЕМ',        desc: 'Набрать 25 000 очков',           check: s => s.score >= 25000 },
+  { id: 'm_acc40',    name: 'СТАБИЛЬНОСТЬ',    desc: 'Точность 40%+ (200+ выстрелов)', check: s => s.shots >= 200 && s.accuracy >= 40 },
+  { id: 'm_mech10',   name: 'ПИЛОТ',           desc: '10 убийств из мехакостюма',      check: s => s.mechKills >= 10 },
+  { id: 'm_knife5',   name: 'ТИХАЯ СМЕРТЬ',    desc: '5 убийств ножом',                check: s => s.knifeKills >= 5 },
+  { id: 'm_streak3',  name: 'СЕРИЯ В ГОЛОВУ',  desc: '3 хедшота подряд',               check: s => s.bestHeadStreak >= 3 },
+  { id: 'm_med5',     name: 'ФЕЛЬДШЕР',        desc: 'Использовать 5 аптечек',         check: s => s.medkitsUsed >= 5 },
+  { id: 'm_wavekill25', name: 'ЗАЧИСТКА',      desc: '25 убийств за одну волну',       check: s => s.maxWaveKills >= 25 },
+  { id: 'm_time300',  name: 'ПЯТЬ МИНУТ',      desc: 'Пережить 5 минут в забеге',      check: s => s.playTime >= 300 },
+  { id: 'm_boss3',    name: 'ОХОТНИК',         desc: 'Убить 3 боссов за забег',        check: s => s.bossKills >= 3 },
+  { id: 'm_deaths10', name: 'БЕЗ ПОТЕРЬ',      desc: '10 волн без смерти',             check: s => s.perfectWaves >= 10 },
+  { id: 'm_total1k',  name: 'ТЫСЯЧА',          desc: '1 000 зомби всего',              check: s => s.killsTotal >= 1000 },
+  /* --- hard --- */
+  { id: 'h_wave35',   name: 'ТРИДЦАТЬ ПЯТЬ',   desc: 'Дожить до 35 волны',             check: s => s.wave >= 35 },
+  { id: 'h_kill800',  name: 'ВОСЕМЬСОТ',       desc: '800 зомби за забег',             check: s => s.kills >= 800 },
+  { id: 'h_head75',   name: 'ХИРУРГ',          desc: '75 убийств в голову',            check: s => s.headshots >= 75 },
+  { id: 'h_score75k', name: 'СЕМЬДЕСЯТ ПЯТЬ ТЫСЯЧ', desc: '75 000 очков',              check: s => s.score >= 75000 },
+  { id: 'h_boss8',    name: 'ГРОЗА',           desc: 'Убить 8 боссов за забег',        check: s => s.bossKills >= 8 },
+  { id: 'h_mech50',   name: 'МЕТАЛЛОЛОМ',      desc: '50 убийств из мехакостюма',      check: s => s.mechKills >= 50 },
+  { id: 'h_knife25',  name: 'МАСТЕР НОЖА',     desc: '25 убийств ножом',               check: s => s.knifeKills >= 25 },
+  { id: 'h_streak6',  name: 'ШЕСТЬ В ГОЛОВУ',  desc: '6 хедшотов подряд',              check: s => s.bestHeadStreak >= 6 },
+  { id: 'h_acc55',    name: 'МЕТКИЙ СТРЕЛОК',  desc: 'Точность 55%+ (400+ выстрелов)', check: s => s.shots >= 400 && s.accuracy >= 55 },
+  { id: 'h_wavekill60', name: 'БОЙНЯ',         desc: '60 убийств за одну волну',       check: s => s.maxWaveKills >= 60 },
+  { id: 'h_med30',    name: 'ЛАЗАРЕТ',         desc: 'Использовать 30 аптечек',        check: s => s.medkitsUsed >= 30 },
+  { id: 'h_perfect20', name: 'НЕПОБЕДИМЫЙ',    desc: '20 волн без смерти',             check: s => s.perfectWaves >= 20 },
+  { id: 'h_total5k',  name: 'ПЯТЬ ТЫСЯЧ',      desc: '5 000 зомби всего',              check: s => s.killsTotal >= 5000 },
+  { id: 'h_rich100k', name: 'МИЛЛИОНЕР',       desc: 'Накопить $100 000',              check: s => s.money >= 100000 },
+  { id: 'h_time1200', name: 'СТОЙКИЙ',         desc: 'Пережить 20 минут в забеге',     check: s => s.playTime >= 1200 },
+  { id: 'h_win10',    name: 'ОНЛАЙН-БОЕЦ',     desc: '10 побед в онлайне',             check: s => s.wins >= 10 },
+  /* --- very hard --- */
+  { id: 'v_wave75',   name: 'СЕМЬДЕСЯТ ПЯТЬ',  desc: 'Дожить до 75 волны',             check: s => s.wave >= 75 },
+  { id: 'v_kill1500', name: 'ТЫСЯЧА ПЯТЬСОТ',  desc: '1 500 зомби за забег',           check: s => s.kills >= 1500 },
+  { id: 'v_head200',  name: 'АНГЕЛ СМЕРТИ',    desc: '200 убийств в голову',           check: s => s.headshots >= 200 },
+  { id: 'v_score250k', name: 'ЧЕТВЕРТЬ МИЛЛИОНА', desc: '250 000 очков',               check: s => s.score >= 250000 },
+  { id: 'v_perfect40', name: 'ЖЕЛЕЗНЫЙ',       desc: '40 волн без смерти',             check: s => s.perfectWaves >= 40 },
+  { id: 'v_boss15',   name: 'ПОГЛОТИТЕЛЬ БОССОВ', desc: '15 боссов за забег',          check: s => s.bossKills >= 15 },
+  { id: 'v_streak10', name: 'ДЕСЯТЬ В ГОЛОВУ', desc: '10 хедшотов подряд',             check: s => s.bestHeadStreak >= 10 },
+  { id: 'v_acc70',    name: 'ИДЕАЛЬНЫЙ',       desc: 'Точность 70%+ (600+ выстрелов)', check: s => s.shots >= 600 && s.accuracy >= 70 },
+  { id: 'v_total20k', name: 'ДВАДЦАТЬ ТЫСЯЧ',  desc: '20 000 зомби всего',             check: s => s.killsTotal >= 20000 },
+  { id: 'v_clear5',   name: 'ПЯТЬ ПРОХОДОВ',   desc: 'Пройти игру 5 раз',              check: s => s.clears >= 5 },
+  { id: 'v_win50',    name: 'ЛЕГЕНДА ОНЛАЙНА', desc: '50 побед в онлайне',             check: s => s.wins >= 50 },
+  { id: 'v_time3600', name: 'ЧАС В ПЕКЛЕ',     desc: 'Пережить 60 минут в забеге',     check: s => s.playTime >= 3600 }
 ];
+
+/* ============================================================
+   WEAPON SKINS
+   One skin per achievement (earned → unlocked). A skin recolours the weapon
+   and may add a small attachment, so the model visibly changes.
+   ============================================================ */
+const SKIN_PALETTES = [
+  { id: 'gold',     tint: [0x4d545c, 0xc8a24a], glow: 0xffd06a, deco: 'trim' },
+  { id: 'crimson',  tint: [0x4d545c, 0x9e2b2b], glow: 0xff5a4a, deco: null },
+  { id: 'toxic',    tint: [0x4d545c, 0x5d8f2e], glow: 0x9bff57, deco: 'vent' },
+  { id: 'ice',      tint: [0x4d545c, 0x6fb6d6], glow: 0x9fe6ff, deco: null },
+  { id: 'violet',   tint: [0x4d545c, 0x6b4a9e], glow: 0xb27bff, deco: 'trim' },
+  { id: 'carbon',   tint: [0x4d545c, 0x23262b], glow: 0xff9d21, deco: null },
+  { id: 'desert',   tint: [0x4d545c, 0xb09a63], glow: 0xffe08a, deco: 'vent' },
+  { id: 'neon',     tint: [0x4d545c, 0x2b7f8f], glow: 0x4ad6ff, deco: 'trim' }
+];
+const SKINS = ACHIEVEMENTS.map((a, i) => {
+  const palette = SKIN_PALETTES[i % SKIN_PALETTES.length];
+  return {
+    id: 'sk_' + a.id,
+    ach: a.id,
+    name: 'СКИН · ' + a.name,
+    style: palette.id,
+    tint: palette.tint,
+    glow: palette.glow,
+    deco: palette.deco || null
+  };
+});
+function skinById(id) { for (let i = 0; i < SKINS.length; i++) if (SKINS[i].id === id) return SKINS[i]; return null; }
+function skinForAchievement(achId) { for (let i = 0; i < SKINS.length; i++) if (SKINS[i].ach === achId) return SKINS[i]; return null; }
 
 /* ---------------- utils ---------------- */
 const U = {
@@ -1804,7 +1945,7 @@ const Store = {
           map: 'arena', players: 2, maxHP: 100, aimAssist: 1, horde: 0, clears: 0, freeplay: 0, rounds: 3, playTime: 0,
           offCount: 1, offHp: 1, offFree: 0, offMode: 'normal', offMods: {}, offModsRun: 0, offModPick: 0, checkpoint: null, shopAllow: {}, shopItems: {}, music: 1, sfxVol: 100, musicVol: 70,
           grenade: 'frag', buildable: 'turret', weather: 'day', trapsEnabled: 1, offCountExact: 10, offCountFixed: 0,
-          ach: {}, runs: [],
+          ach: {}, runs: [], skinOn: {},
           /* one saved run per offline mode: { normal|horde|freehorde|custom|bossrush|daily|endless: checkpoint } */
           checkpoints: {} },
   load() {
@@ -4549,10 +4690,47 @@ function DOT(r, color, x, y, z) {
   return m;
 }
 
+/* ============================================================
+   WEAPON SKINS — applied on top of a freshly built weapon model.
+   A skin recolours every "body" material toward its tint and can bolt on a
+   small attachment, so the same gun looks visibly different.
+   ============================================================ */
+function applyWeaponSkin(group, skin) {
+  if (!group || !skin) return group;
+  const base = skin.tint[0], to = skin.tint[1];
+  // a hue-shift: map the darkest metal toward the skin colour, keep accents
+  const mapMat = (m) => {
+    if (!m || !m.color) return;
+    const hex = m.color.getHex();
+    // only recolour the gunmetal family, leave sight dots / glows alone
+    if (hex === 0x8affa0 || hex === 0xffd06a || hex === 0x4ad6ff || hex === 0xb27bff) return;
+    if (m.isMeshBasicMaterial) return;
+    // blend the original toward the skin tint (keeps the model's shading)
+    const c = new THREE.Color(hex);
+    const t = new THREE.Color(to);
+    c.lerp(t, .62);
+    m.color.copy(c);
+    if (m.emissive) m.emissive.setHex(skin.glow).multiplyScalar(.14);
+  };
+  group.traverse(o => { if (o.isMesh) mapMat(o.material); });
+  // a small attachment so the change is unmistakable
+  const box = (w, h, d, col, x, y, z) => {
+    const b = new THREE.Mesh(new THREE.BoxGeometry(w, h, d),
+      new THREE.MeshLambertMaterial({ color: col, emissive: new THREE.Color(skin.glow).multiplyScalar(.35) }));
+    b.position.set(x, y, z); group.add(b); return b;
+  };
+  if (skin.deco === 'trim') {
+    box(.028, .010, .16, skin.glow, 0, .040, -.09);           // glowing top rail strip
+    box(.020, .020, .020, skin.glow, 0, -.052, .02);          // side marker
+  } else if (skin.deco === 'vent') {
+    for (let i = 0; i < 3; i++) box(.052, .008, .014, skin.glow, 0, .030 + i * .012, -.05 - i * .022);
+  }
+  return group;
+}
+
 function buildWeaponModel(id) {
   const g = new THREE.Group();
   const add = (...ms) => { for (const m of ms) g.add(m); return ms[0]; };
-
   switch (id) {
 
     /* ---------------- GLOCK-18: compact polymer pistol ---------------- */
@@ -6595,6 +6773,9 @@ class Player {
     const w = this.weapon;
     const id = !w ? 'knife' : w.id;
     const vm = buildWeaponModel(id);
+    // apply the skin the player chose for this weapon (if any)
+    const skinId = (Store.data.skinOn || {})[id];
+    if (skinId) { const sk = skinById(skinId); if (sk) applyWeaponSkin(vm, sk); }
     vm.traverse(o => { if (o.isMesh) { o.castShadow = false; o.receiveShadow = false; o.renderOrder = 5; } });
     const group = new THREE.Group();
     group.add(vm);
@@ -10073,6 +10254,7 @@ const UI = {
       'offCountChips', 'offHpChips', 'offFreeChips', 'offModeChips', 'offCustomBox', 'offHordeBox', 'offSpecialBox', 'offCpBox', 'offCpInfo', 'offCpMode', 'offCpList', 'offCountExact', 'offCountFixed', 'btnOffContinue', 'custom', 'lobbyShop', 'lobbyShopItems',
       'modScreen', 'modGrid', 'modActive',
       'extras', 'achGrid', 'recTable', 'btnExtrasBack', 'weaponWheel', 'wwInner',
+      'skins', 'skinCanvas', 'skinGrid', 'skinStatus', 'skinWeaponSel', 'skinTargetChips', 'btnSkinsBack', 'btnSkins',
       'medkitTag', 'droneTag', 'grenadeTag', 'zResetTag', 'jetTag', 'dashTag', 'shieldTag', 'heatTag', 'missileHud', 'mhTime', 'mhReadout',
       'sdScreen', 'sdGrid', 'sdSearch', 'sdToggle2', 'sdClose', 'sdConfig',
       'esScreen', 'esGrid', 'esSearch', 'esCount', 'esClear', 'esClose', 'esConfig'];
@@ -10083,7 +10265,7 @@ const UI = {
 
   /* ---------------- screens ---------------- */
   show(name) {
-    ['loading', 'menu', 'controls', 'lobby', 'hud', 'buy', 'scoreboard', 'pause', 'connect', 'android', 'ios', 'credits', 'matchEnd', 'custom', 'clickToPlay', 'sdScreen', 'esScreen', 'modScreen', 'extras'].forEach(s => {
+    ['loading', 'menu', 'controls', 'lobby', 'hud', 'buy', 'scoreboard', 'pause', 'connect', 'android', 'ios', 'credits', 'matchEnd', 'custom', 'clickToPlay', 'sdScreen', 'esScreen', 'modScreen', 'extras', 'skins'].forEach(s => {
       const e = this.el[s];
       if (!e) return;
       const on = s === name;
@@ -10092,12 +10274,12 @@ const UI = {
     this.current = name;
   },
   hideOverlays() {
-    ['buy', 'scoreboard', 'pause', 'controls', 'lobby', 'menu', 'connect', 'android', 'ios', 'credits', 'matchEnd', 'custom', 'sdScreen', 'esScreen', 'modScreen', 'extras'].forEach(s => {
+    ['buy', 'scoreboard', 'pause', 'controls', 'lobby', 'menu', 'connect', 'android', 'ios', 'credits', 'matchEnd', 'custom', 'sdScreen', 'esScreen', 'modScreen', 'extras', 'skins'].forEach(s => {
       if (this.el[s]) this.el[s].classList.add('hidden');
     });
   },
   overlayOpen() {
-    return ['buy', 'scoreboard', 'pause', 'controls', 'lobby', 'menu', 'connect', 'android', 'ios', 'credits', 'matchEnd', 'custom', 'sdScreen', 'esScreen', 'modScreen', 'extras'].some(s => this.el[s] && !this.el[s].classList.contains('hidden'));
+    return ['buy', 'scoreboard', 'pause', 'controls', 'lobby', 'menu', 'connect', 'android', 'ios', 'credits', 'matchEnd', 'custom', 'sdScreen', 'esScreen', 'modScreen', 'extras', 'skins'].some(s => this.el[s] && !this.el[s].classList.contains('hidden'));
   },
 
   /* ============================================================
@@ -10995,7 +11177,13 @@ const UI = {
     if (this.el.achGrid) {
       this.el.achGrid.innerHTML = ACHIEVEMENTS.map(a => {
         const on = !!ach[a.id];
-        return '<div class="achcard' + (on ? ' on' : '') + '"><b>' + (on ? '🏆 ' : '🔒 ') + U.esc(a.name) + '</b><i>' + U.esc(a.desc) + '</i></div>';
+        const sk = skinForAchievement(a.id);
+        const swatch = sk ? ('#' + sk.glow.toString(16).padStart(6, '0')) : '#39434c';
+        return '<div class="achcard' + (on ? ' on' : '') + '"><b><span class="sw" style="display:inline-block;width:10px;height:10px;' +
+          'border-radius:2px;margin-right:6px;vertical-align:-1px;border:1px solid rgba(255,255,255,.3);background:' + swatch + '"></span>' +
+          (on ? '🏆 ' : '🔒 ') + U.esc(a.name) + '</b><i>' + U.esc(a.desc) + '</i>' +
+          (sk ? '<i style="display:block;margin-top:3px;color:#8a95a1">Награда: ' + U.esc(sk.name.replace('СКИН · ', 'Скин ')) + '</i>' : '') +
+          '</div>';
       }).join('');
     }
     if (this.el.recTable) {
@@ -11029,6 +11217,180 @@ function bindClick(id, fn) {
   if (e) e.addEventListener('click', () => { Audio3D_SFX.init(); Audio3D_SFX.resume(); Audio3D_SFX.uiClick(); fn(); });
   return e;
 }
+
+/* ============================================================
+   SKIN INVENTORY — a small self-contained 3D preview.
+   Its own renderer/loop, created lazily the first time the screen opens and
+   driven by requestAnimationFrame only while the screen is visible.
+   ============================================================ */
+const Skins = {
+  renderer: null, scene: null, camera: null, root: null,
+  target: 'weapon',          // 'weapon' | 'player'
+  weaponId: 'ak47',
+  skinId: null,
+  rotX: -0.15, rotY: 0.6, dist: 1.5,
+  dragging: false, _lx: 0, _ly: 0, _raf: 0, _spin: 0,
+
+  /* which weapons can be previewed (owned-by-design list of real guns) */
+  weapons() {
+    const out = [];
+    for (const id in WEAPONS) {
+      const w = WEAPONS[id];
+      if (w.price > 0 && !w.shield && id !== 'knife' && !w.mechWeapon && w.cat !== 'exp' && !w.projectile) out.push(id);
+    }
+    return out.sort((a, b) => WEAPONS[a].price - WEAPONS[b].price);
+  },
+  unlocked() {
+    return Object.keys(Store.data.ach || {}).length > 0;
+  },
+
+  init() {
+    if (this.renderer) return;
+    const canvas = $('skinCanvas');
+    if (!canvas) return;
+    this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, powerPreference: 'low-power' });
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
+    this.renderer.outputColorSpace = THREE.SRGBColorSpace;
+    this.scene = new THREE.Scene();
+    this.camera = new THREE.PerspectiveCamera(42, 1, 0.01, 20);
+    this.scene.add(new THREE.HemisphereLight(0xffffff, 0x556070, 2.1));
+    const d1 = new THREE.DirectionalLight(0xfff4e0, 1.9); d1.position.set(1.4, 2.2, 1.8); this.scene.add(d1);
+    const d2 = new THREE.DirectionalLight(0x9fc2ff, 0.8); d2.position.set(-1.6, .6, -1.2); this.scene.add(d2);
+    this.root = new THREE.Group();
+    this.scene.add(this.root);
+    this._base = new THREE.Group();
+    this.root.add(this._base);
+    this.bindInput(canvas);
+  },
+
+  bindInput(canvas) {
+    const on = (el, ev, fn) => el.addEventListener(ev, fn, { passive: false });
+    on(canvas, 'pointerdown', e => { this.dragging = true; this._lx = e.clientX; this._ly = e.clientY; canvas.setPointerCapture && canvas.setPointerCapture(e.pointerId); });
+    on(canvas, 'pointerup', e => { this.dragging = false; });
+    on(canvas, 'pointercancel', () => { this.dragging = false; });
+    on(canvas, 'pointermove', e => {
+      if (!this.dragging) return;
+      this.rotY += (e.clientX - this._lx) * .01;
+      this.rotX = U.clamp(this.rotX + (e.clientY - this._ly) * .01, -.1, 1.4);
+      this._lx = e.clientX; this._ly = e.clientY;
+    });
+    on(canvas, 'wheel', e => { e.preventDefault(); this.dist = U.clamp(this.dist + Math.sign(e.deltaY) * .12, .7, 3.2); });
+  },
+
+  open() {
+    this.init();
+    this.renderTargets();
+    this.renderWeaponList();
+    this.renderGrid();
+    UI.show('skins');
+    this._spin = 0;
+    this.resize();
+    if (!this._raf) this.loop();
+  },
+  close() { if (this._raf) { cancelAnimationFrame(this._raf); this._raf = 0; } if (typeof TouchUI !== 'undefined' && IS_TOUCH) TouchUI.update(); },
+
+  resize() {
+    const wrap = this.root ? null : null;
+    const canvas = $('skinCanvas');
+    if (!canvas || !this.renderer) return;
+    const r = canvas.parentElement.getBoundingClientRect();
+    const w = Math.max(120, Math.round(r.width)), h = Math.max(120, Math.round(r.height));
+    this.renderer.setSize(w, h, false);
+    this.camera.aspect = w / h; this.camera.updateProjectionMatrix();
+  },
+
+  /* the two preview targets: the gun, or the player holding it */
+  renderTargets() {
+    const el = $('skinTargetChips');
+    if (!el) return;
+    el.innerHTML = '<button data-t="weapon"' + (this.target === 'weapon' ? ' class="on"' : '') + '>ОРУЖИЕ</button>' +
+      '<button data-t="player"' + (this.target === 'player' ? ' class="on"' : '') + '>ПЕРСОНАЖ</button>';
+    Array.from(el.children).forEach(b => b.addEventListener('click', () => { this.target = b.dataset.t; this.renderTargets(); this.rebuild(); }));
+  },
+
+  renderWeaponList() {
+    const sel = $('skinWeaponSel');
+    if (!sel) return;
+    const list = this.weapons();
+    if (list.indexOf(this.weaponId) < 0) this.weaponId = list[0];
+    sel.innerHTML = list.map(id => '<option value="' + id + '"' + (id === this.weaponId ? ' selected' : '') + '>' + U.esc(WEAPONS[id].name) + '</option>').join('');
+    sel.onchange = () => { this.weaponId = sel.value; this.rebuild(); };
+  },
+
+  renderGrid() {
+    const el = $('skinGrid');
+    if (!el) return;
+    const ach = Store.data.ach || {};
+    const skinOn = Store.data.skinOn = Store.data.skinOn || {};
+    el.innerHTML = SKINS.map(sk => {
+      const unlocked = !!ach[sk.ach];
+      const on = skinOn[this.weaponId] === sk.id;
+      const swatch = '#' + sk.glow.toString(16).padStart(6, '0');
+      return '<div class="skincard' + (unlocked ? '' : ' locked') + (on ? ' on' : '') + '" data-sk="' + sk.id + '">' +
+        '<b><span class="sw" style="background:' + swatch + '"></span>' + U.esc(sk.name.replace('СКИН · ', '')) + '</b>' +
+        '<i>' + (unlocked ? (on ? 'ВЫБРАН' : 'ОТКРЫТ · нажмите') : '🔒 ' + U.esc(ACHIEVEMENTS.find(a => a.id === sk.ach).desc)) + '</i></div>';
+    }).join('');
+    Array.from(el.children).forEach(card => card.addEventListener('click', () => {
+      const skid = card.dataset.sk;
+      const sk = skinById(skid);
+      const unlocked = !!(Store.data.ach || {})[sk.ach];
+      if (!unlocked) { UI.toast('Скин закрыт: ' + ACHIEVEMENTS.find(a => a.id === sk.ach).name, '#f5d33c'); Audio3D_SFX.deny(); return; }
+      // clicking the active skin removes it, otherwise equip it
+      if (Store.data.skinOn[this.weaponId] === skid) delete Store.data.skinOn[this.weaponId];
+      else Store.data.skinOn[this.weaponId] = skid;
+      Store.save();
+      Audio3D_SFX.uiClick();
+      this.skinId = Store.data.skinOn[this.weaponId] || null;
+      this.renderGrid(); this.rebuild();
+      const el2 = $('skinStatus');
+      if (el2) el2.textContent = Store.data.skinOn[this.weaponId] ? ('Надет: ' + sk.name) : 'Скин снят';
+      if (Game && Game.player) Game.player.buildViewModel();
+    }));
+  },
+
+  rebuild() {
+    if (!this._base) return;
+    while (this._base.children.length) { const c = this._base.children[0]; this._base.remove(c); disposeGroup(c); }
+    const skinId = Store.data.skinOn[this.weaponId];
+    const skin = skinId ? skinById(skinId) : null;
+    if (this.target === 'player') {
+      // a soldier holding the previewed weapon, so the skin is seen in context
+      const soldier = buildSoldierMesh('ct');
+      const gun = buildWeaponModel(this.weaponId);
+      if (skin) applyWeaponSkin(gun, skin);
+      const armR = soldier.userData.parts && soldier.userData.parts.armR;
+      if (armR) {
+        gun.position.set(.02, -.60, .02);
+        gun.rotation.set(-Math.PI / 2, 0, 0);
+        gun.scale.setScalar(.95);
+        armR.add(gun);
+      }
+      this._base.add(soldier);
+      this._modelH = 2.0; this._centerY = 1.0;
+    } else {
+      const gun = buildWeaponModel(this.weaponId);
+      if (skin) applyWeaponSkin(gun, skin);
+      this._base.add(gun);
+      this._modelH = .6; this._centerY = 0;
+    }
+  },
+
+  loop() {
+    this._raf = requestAnimationFrame(() => this.loop());
+    if (UI.current !== 'skins' || !this.renderer) { this._raf && cancelAnimationFrame(this._raf); this._raf = 0; return; }
+    this.resize();
+    // idle auto-spin plus manual rotation
+    if (!this.dragging) this._spin += .004;
+    this.root.rotation.y = this.rotY + this._spin;
+    this.root.rotation.x = this.rotX;
+    // frame the model: pull the camera back so tall (player) models fit
+    const fit = this.target === 'player' ? 2.6 : 1.35;
+    this.camera.position.set(0, .1, this.dist * fit);
+    this.camera.lookAt(0, this._centerY || 0, 0);
+    this.renderer.clear();
+    this.renderer.render(this.scene, this.camera);
+  }
+};
 
 
 /* ===== 11-net.js ===== */
@@ -12787,6 +13149,8 @@ const Game = {
     bindClick('btnMatch', () => { this._prevScreen = 'menu'; UI.refreshChips(); UI.show('controls'); });
     bindClick('btnExtras', () => { UI.renderExtras(); UI.show('extras'); });
     bindClick('btnExtrasBack', () => UI.show('menu'));
+    bindClick('btnSkins', () => Skins.open());
+    bindClick('btnSkinsBack', () => { Skins.close(); UI.show('menu'); });
     bindClick('btnAndroid', () => UI.show('android'));
     bindClick('btnAndroidBack', () => UI.show('menu'));
     bindClick('btnAndroidCopy', () => {
@@ -13107,13 +13471,30 @@ const Game = {
      ============================================================ */
   statsSnapshot() {
     const p = this.player;
+    const shots = p ? p.bulletsFired : 0;
+    const hits = p ? p.bulletsHit : 0;
     return {
       kills: p ? p.zombieKills : 0,
       headshots: p ? p.headshots : 0,
       money: p ? p.money : 0,
       wave: this.offline ? this.offline.wave : 0,
       bossKills: this._bossKills || 0,
-      playTime: this.offline ? (U.now() - this.offline.startTime) / 1000 : 0
+      playTime: this.offline ? (U.now() - this.offline.startTime) / 1000 : 0,
+      score: p ? p.score : 0,
+      shots: shots,
+      accuracy: shots > 0 ? (hits / shots) * 100 : 0,
+      /* run-level counters kept on the game object */
+      mechKills: this._mechKills || 0,
+      knifeKills: this._knifeKills || 0,
+      bestHeadStreak: this._bestHeadStreak || 0,
+      medkitsUsed: this._medkitsUsed || 0,
+      maxWaveKills: this._maxWaveKills || 0,
+      perfectWaves: this._perfectWaves || 0,
+      noDamageWaves: this._noDamageWaves || 0,
+      /* persistent lifetime totals */
+      killsTotal: Store.data.killsTotal || 0,
+      wins: Store.data.wins || 0,
+      clears: Store.data.clears || 0
     };
   },
   checkAchievements() {
@@ -13450,6 +13831,11 @@ const Game = {
     this._creditsOpen = false;
     this._modPickOpen = false;
     this._bossKills = 0;
+    /* fresh run counters for the new achievement set */
+    this._mechKills = 0; this._knifeKills = 0; this._bestHeadStreak = 0;
+    this._headStreak = 0; this._medkitsUsed = 0; this._maxWaveKills = 0;
+    this._perfectWaves = 0; this._noDamageWaves = 0;
+    this._waveKills = 0; this._waveHurt = false; this._runDeaths = 0;
     // NOTE: the checkpoint is deliberately NOT cleared here. It is dropped only
     // by an explicit "НОВАЯ ИГРА" (or after being consumed), so leaving to the
     // menu and returning can still resume the run.
@@ -15074,6 +15460,7 @@ const Game = {
     if (p.health >= maxHP) { UI.toast('Здоровье полное', '#f5d33c'); Audio3D_SFX.deny(); return false; }
     p.medkits--;
     p.health = Math.min(maxHP, p.health + CFG.medkitHeal);
+    this._medkitsUsed = (this._medkitsUsed || 0) + 1;
     Audio3D_SFX.pickup();
     UI.feed('<span class="z">✚ Аптечка +' + CFG.medkitHeal + ' HP</span>');
     UI.toast('+' + CFG.medkitHeal + ' HP', '#57d16a');
@@ -15989,6 +16376,11 @@ const Game = {
       this.player.score += Math.round((250 + o.wave * 40) * ((this.modState && this.modState.playerDmg) || 1));
       o.betweenWaves = true;
       o.breakT = 7;
+      /* run-level wave streaks for the achievement set:
+         perfectWaves = cleared without dying yet, noDamageWaves = cleared unhurt */
+      if (this._runDeaths === 0) this._perfectWaves = (this._perfectWaves || 0) + 1;
+      if (!this._waveHurt) this._noDamageWaves = (this._noDamageWaves || 0) + 1;
+      this._waveKills = 0; this._waveHurt = false;
       Audio3D_SFX.roundEnd(true);
       /* clearing wave 100 means the campaign is finished */
       if (o.wave >= 100) {
@@ -18265,6 +18657,7 @@ const Game = {
       if (p.armor < 0) p.armor = 0;
     }
     p.health -= actual;
+    if (actual > 0) this._waveHurt = true;
     Audio3D_SFX.hurt();
     UI.dmgFlash();
     if (fromPos) {
@@ -18282,6 +18675,7 @@ const Game = {
     if (!p.alive) return;
     p.alive = false;
     p.deaths++;
+    this._runDeaths = (this._runDeaths || 0) + 1;
     Audio3D_SFX.roundEnd(false);
     // a drone still in the air is lost with its pilot
     if (this.drone) this.detonateDrone(false);
@@ -18315,6 +18709,17 @@ const Game = {
     const p = this.player;
     p.zombieKills++;
     p.kills++;
+    this._waveKills = (this._waveKills || 0) + 1;
+    if (this._waveKills > (this._maxWaveKills || 0)) this._maxWaveKills = this._waveKills;
+    // which weapon did the killing blow? (mech kit / knife feed the new goals)
+    const held = p.weapon && p.weapon.id;
+    if (this.isMechActive()) this._mechKills = (this._mechKills || 0) + 1;
+    else if (held === 'knife') this._knifeKills = (this._knifeKills || 0) + 1;
+    // headshot streak (reset on a non-headshot kill)
+    if (headshot) {
+      this._headStreak = (this._headStreak || 0) + 1;
+      if (this._headStreak > (this._bestHeadStreak || 0)) this._bestHeadStreak = this._headStreak;
+    } else this._headStreak = 0;
     const def = z.def;
     p.money = Math.min(CFG.moneyCap, p.money + def.money);
     p.score += def.score * (headshot ? 1.5 : 1) | 0;

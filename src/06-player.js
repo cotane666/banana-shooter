@@ -95,10 +95,47 @@ function DOT(r, color, x, y, z) {
   return m;
 }
 
+/* ============================================================
+   WEAPON SKINS — applied on top of a freshly built weapon model.
+   A skin recolours every "body" material toward its tint and can bolt on a
+   small attachment, so the same gun looks visibly different.
+   ============================================================ */
+function applyWeaponSkin(group, skin) {
+  if (!group || !skin) return group;
+  const base = skin.tint[0], to = skin.tint[1];
+  // a hue-shift: map the darkest metal toward the skin colour, keep accents
+  const mapMat = (m) => {
+    if (!m || !m.color) return;
+    const hex = m.color.getHex();
+    // only recolour the gunmetal family, leave sight dots / glows alone
+    if (hex === 0x8affa0 || hex === 0xffd06a || hex === 0x4ad6ff || hex === 0xb27bff) return;
+    if (m.isMeshBasicMaterial) return;
+    // blend the original toward the skin tint (keeps the model's shading)
+    const c = new THREE.Color(hex);
+    const t = new THREE.Color(to);
+    c.lerp(t, .62);
+    m.color.copy(c);
+    if (m.emissive) m.emissive.setHex(skin.glow).multiplyScalar(.14);
+  };
+  group.traverse(o => { if (o.isMesh) mapMat(o.material); });
+  // a small attachment so the change is unmistakable
+  const box = (w, h, d, col, x, y, z) => {
+    const b = new THREE.Mesh(new THREE.BoxGeometry(w, h, d),
+      new THREE.MeshLambertMaterial({ color: col, emissive: new THREE.Color(skin.glow).multiplyScalar(.35) }));
+    b.position.set(x, y, z); group.add(b); return b;
+  };
+  if (skin.deco === 'trim') {
+    box(.028, .010, .16, skin.glow, 0, .040, -.09);           // glowing top rail strip
+    box(.020, .020, .020, skin.glow, 0, -.052, .02);          // side marker
+  } else if (skin.deco === 'vent') {
+    for (let i = 0; i < 3; i++) box(.052, .008, .014, skin.glow, 0, .030 + i * .012, -.05 - i * .022);
+  }
+  return group;
+}
+
 function buildWeaponModel(id) {
   const g = new THREE.Group();
   const add = (...ms) => { for (const m of ms) g.add(m); return ms[0]; };
-
   switch (id) {
 
     /* ---------------- GLOCK-18: compact polymer pistol ---------------- */
@@ -2141,6 +2178,9 @@ class Player {
     const w = this.weapon;
     const id = !w ? 'knife' : w.id;
     const vm = buildWeaponModel(id);
+    // apply the skin the player chose for this weapon (if any)
+    const skinId = (Store.data.skinOn || {})[id];
+    if (skinId) { const sk = skinById(skinId); if (sk) applyWeaponSkin(vm, sk); }
     vm.traverse(o => { if (o.isMesh) { o.castShadow = false; o.receiveShadow = false; o.renderOrder = 5; } });
     const group = new THREE.Group();
     group.add(vm);

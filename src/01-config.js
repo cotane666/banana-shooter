@@ -436,8 +436,96 @@ const ACHIEVEMENTS = [
   { id: 'boss4',      name: 'ГРОЗА БОССОВ', desc: 'Убить 4 боссов',             check: s => s.bossKills >= 4 },
   { id: 'head10',     name: 'СНАЙПЕР',      desc: '10 убийств в голову',        check: s => s.headshots >= 10 },
   { id: 'rich',       name: 'БОГАЧ',        desc: 'Накопить $50 000',           check: s => s.money >= 50000 },
-  { id: 'survive',    name: 'ЖИВУЧИЙ',      desc: 'Пережить 15 минут в забеге', check: s => s.playTime >= 900 }
+  { id: 'survive',    name: 'ЖИВУЧИЙ',      desc: 'Пережить 15 минут в забеге', check: s => s.playTime >= 900 },
+  /* ============================================================
+     EXTRA 50 — from easy warm-ups to brutal long-haul goals.
+     Every one also unlocks a weapon skin (see SKINS below).
+     ============================================================ */
+  /* --- easy --- */
+  { id: 'e_kill10',   name: 'РАЗМИНКА',        desc: 'Убить 10 зомби за забег',        check: s => s.kills >= 10 },
+  { id: 'e_wave3',    name: 'ТРЕТЬЯ ВОЛНА',    desc: 'Дожить до 3 волны',              check: s => s.wave >= 3 },
+  { id: 'e_head1',    name: 'ТОЧНЫЙ ГЛАЗ',     desc: 'Убить в голову',                 check: s => s.headshots >= 1 },
+  { id: 'e_money1k',  name: 'КОПЕЙКА',         desc: 'Накопить $1 000',                check: s => s.money >= 1000 },
+  { id: 'e_score5k',  name: 'ПЕРВЫЕ ОЧКИ',     desc: 'Набрать 5 000 очков',            check: s => s.score >= 5000 },
+  { id: 'e_kill50',   name: 'ПОЛСОТНИ',        desc: '50 зомби за забег',              check: s => s.kills >= 50 },
+  { id: 'e_time60',   name: 'МАРАФОНЕЦ',       desc: 'Пережить 1 минуту',              check: s => s.playTime >= 60 },
+  /* --- medium --- */
+  { id: 'm_wave15',   name: 'ПЯТНАДЦАТАЯ',     desc: 'Дожить до 15 волны',             check: s => s.wave >= 15 },
+  { id: 'm_kill200',  name: 'ДВЕСТИ',          desc: '200 зомби за забег',             check: s => s.kills >= 200 },
+  { id: 'm_head25',   name: 'В ГОЛОВУ',        desc: '25 убийств в голову',            check: s => s.headshots >= 25 },
+  { id: 'm_money10k', name: 'КАПИТАЛ',         desc: 'Накопить $10 000',               check: s => s.money >= 10000 },
+  { id: 'm_score25k', name: 'НАБИРАЕМ',        desc: 'Набрать 25 000 очков',           check: s => s.score >= 25000 },
+  { id: 'm_acc40',    name: 'СТАБИЛЬНОСТЬ',    desc: 'Точность 40%+ (200+ выстрелов)', check: s => s.shots >= 200 && s.accuracy >= 40 },
+  { id: 'm_mech10',   name: 'ПИЛОТ',           desc: '10 убийств из мехакостюма',      check: s => s.mechKills >= 10 },
+  { id: 'm_knife5',   name: 'ТИХАЯ СМЕРТЬ',    desc: '5 убийств ножом',                check: s => s.knifeKills >= 5 },
+  { id: 'm_streak3',  name: 'СЕРИЯ В ГОЛОВУ',  desc: '3 хедшота подряд',               check: s => s.bestHeadStreak >= 3 },
+  { id: 'm_med5',     name: 'ФЕЛЬДШЕР',        desc: 'Использовать 5 аптечек',         check: s => s.medkitsUsed >= 5 },
+  { id: 'm_wavekill25', name: 'ЗАЧИСТКА',      desc: '25 убийств за одну волну',       check: s => s.maxWaveKills >= 25 },
+  { id: 'm_time300',  name: 'ПЯТЬ МИНУТ',      desc: 'Пережить 5 минут в забеге',      check: s => s.playTime >= 300 },
+  { id: 'm_boss3',    name: 'ОХОТНИК',         desc: 'Убить 3 боссов за забег',        check: s => s.bossKills >= 3 },
+  { id: 'm_deaths10', name: 'БЕЗ ПОТЕРЬ',      desc: '10 волн без смерти',             check: s => s.perfectWaves >= 10 },
+  { id: 'm_total1k',  name: 'ТЫСЯЧА',          desc: '1 000 зомби всего',              check: s => s.killsTotal >= 1000 },
+  /* --- hard --- */
+  { id: 'h_wave35',   name: 'ТРИДЦАТЬ ПЯТЬ',   desc: 'Дожить до 35 волны',             check: s => s.wave >= 35 },
+  { id: 'h_kill800',  name: 'ВОСЕМЬСОТ',       desc: '800 зомби за забег',             check: s => s.kills >= 800 },
+  { id: 'h_head75',   name: 'ХИРУРГ',          desc: '75 убийств в голову',            check: s => s.headshots >= 75 },
+  { id: 'h_score75k', name: 'СЕМЬДЕСЯТ ПЯТЬ ТЫСЯЧ', desc: '75 000 очков',              check: s => s.score >= 75000 },
+  { id: 'h_boss8',    name: 'ГРОЗА',           desc: 'Убить 8 боссов за забег',        check: s => s.bossKills >= 8 },
+  { id: 'h_mech50',   name: 'МЕТАЛЛОЛОМ',      desc: '50 убийств из мехакостюма',      check: s => s.mechKills >= 50 },
+  { id: 'h_knife25',  name: 'МАСТЕР НОЖА',     desc: '25 убийств ножом',               check: s => s.knifeKills >= 25 },
+  { id: 'h_streak6',  name: 'ШЕСТЬ В ГОЛОВУ',  desc: '6 хедшотов подряд',              check: s => s.bestHeadStreak >= 6 },
+  { id: 'h_acc55',    name: 'МЕТКИЙ СТРЕЛОК',  desc: 'Точность 55%+ (400+ выстрелов)', check: s => s.shots >= 400 && s.accuracy >= 55 },
+  { id: 'h_wavekill60', name: 'БОЙНЯ',         desc: '60 убийств за одну волну',       check: s => s.maxWaveKills >= 60 },
+  { id: 'h_med30',    name: 'ЛАЗАРЕТ',         desc: 'Использовать 30 аптечек',        check: s => s.medkitsUsed >= 30 },
+  { id: 'h_perfect20', name: 'НЕПОБЕДИМЫЙ',    desc: '20 волн без смерти',             check: s => s.perfectWaves >= 20 },
+  { id: 'h_total5k',  name: 'ПЯТЬ ТЫСЯЧ',      desc: '5 000 зомби всего',              check: s => s.killsTotal >= 5000 },
+  { id: 'h_rich100k', name: 'МИЛЛИОНЕР',       desc: 'Накопить $100 000',              check: s => s.money >= 100000 },
+  { id: 'h_time1200', name: 'СТОЙКИЙ',         desc: 'Пережить 20 минут в забеге',     check: s => s.playTime >= 1200 },
+  { id: 'h_win10',    name: 'ОНЛАЙН-БОЕЦ',     desc: '10 побед в онлайне',             check: s => s.wins >= 10 },
+  /* --- very hard --- */
+  { id: 'v_wave75',   name: 'СЕМЬДЕСЯТ ПЯТЬ',  desc: 'Дожить до 75 волны',             check: s => s.wave >= 75 },
+  { id: 'v_kill1500', name: 'ТЫСЯЧА ПЯТЬСОТ',  desc: '1 500 зомби за забег',           check: s => s.kills >= 1500 },
+  { id: 'v_head200',  name: 'АНГЕЛ СМЕРТИ',    desc: '200 убийств в голову',           check: s => s.headshots >= 200 },
+  { id: 'v_score250k', name: 'ЧЕТВЕРТЬ МИЛЛИОНА', desc: '250 000 очков',               check: s => s.score >= 250000 },
+  { id: 'v_perfect40', name: 'ЖЕЛЕЗНЫЙ',       desc: '40 волн без смерти',             check: s => s.perfectWaves >= 40 },
+  { id: 'v_boss15',   name: 'ПОГЛОТИТЕЛЬ БОССОВ', desc: '15 боссов за забег',          check: s => s.bossKills >= 15 },
+  { id: 'v_streak10', name: 'ДЕСЯТЬ В ГОЛОВУ', desc: '10 хедшотов подряд',             check: s => s.bestHeadStreak >= 10 },
+  { id: 'v_acc70',    name: 'ИДЕАЛЬНЫЙ',       desc: 'Точность 70%+ (600+ выстрелов)', check: s => s.shots >= 600 && s.accuracy >= 70 },
+  { id: 'v_total20k', name: 'ДВАДЦАТЬ ТЫСЯЧ',  desc: '20 000 зомби всего',             check: s => s.killsTotal >= 20000 },
+  { id: 'v_clear5',   name: 'ПЯТЬ ПРОХОДОВ',   desc: 'Пройти игру 5 раз',              check: s => s.clears >= 5 },
+  { id: 'v_win50',    name: 'ЛЕГЕНДА ОНЛАЙНА', desc: '50 побед в онлайне',             check: s => s.wins >= 50 },
+  { id: 'v_time3600', name: 'ЧАС В ПЕКЛЕ',     desc: 'Пережить 60 минут в забеге',     check: s => s.playTime >= 3600 }
 ];
+
+/* ============================================================
+   WEAPON SKINS
+   One skin per achievement (earned → unlocked). A skin recolours the weapon
+   and may add a small attachment, so the model visibly changes.
+   ============================================================ */
+const SKIN_PALETTES = [
+  { id: 'gold',     tint: [0x4d545c, 0xc8a24a], glow: 0xffd06a, deco: 'trim' },
+  { id: 'crimson',  tint: [0x4d545c, 0x9e2b2b], glow: 0xff5a4a, deco: null },
+  { id: 'toxic',    tint: [0x4d545c, 0x5d8f2e], glow: 0x9bff57, deco: 'vent' },
+  { id: 'ice',      tint: [0x4d545c, 0x6fb6d6], glow: 0x9fe6ff, deco: null },
+  { id: 'violet',   tint: [0x4d545c, 0x6b4a9e], glow: 0xb27bff, deco: 'trim' },
+  { id: 'carbon',   tint: [0x4d545c, 0x23262b], glow: 0xff9d21, deco: null },
+  { id: 'desert',   tint: [0x4d545c, 0xb09a63], glow: 0xffe08a, deco: 'vent' },
+  { id: 'neon',     tint: [0x4d545c, 0x2b7f8f], glow: 0x4ad6ff, deco: 'trim' }
+];
+const SKINS = ACHIEVEMENTS.map((a, i) => {
+  const palette = SKIN_PALETTES[i % SKIN_PALETTES.length];
+  return {
+    id: 'sk_' + a.id,
+    ach: a.id,
+    name: 'СКИН · ' + a.name,
+    style: palette.id,
+    tint: palette.tint,
+    glow: palette.glow,
+    deco: palette.deco || null
+  };
+});
+function skinById(id) { for (let i = 0; i < SKINS.length; i++) if (SKINS[i].id === id) return SKINS[i]; return null; }
+function skinForAchievement(achId) { for (let i = 0; i < SKINS.length; i++) if (SKINS[i].ach === achId) return SKINS[i]; return null; }
 
 /* ---------------- utils ---------------- */
 const U = {
@@ -479,7 +567,7 @@ const Store = {
           map: 'arena', players: 2, maxHP: 100, aimAssist: 1, horde: 0, clears: 0, freeplay: 0, rounds: 3, playTime: 0,
           offCount: 1, offHp: 1, offFree: 0, offMode: 'normal', offMods: {}, offModsRun: 0, offModPick: 0, checkpoint: null, shopAllow: {}, shopItems: {}, music: 1, sfxVol: 100, musicVol: 70,
           grenade: 'frag', buildable: 'turret', weather: 'day', trapsEnabled: 1, offCountExact: 10, offCountFixed: 0,
-          ach: {}, runs: [],
+          ach: {}, runs: [], skinOn: {},
           /* one saved run per offline mode: { normal|horde|freehorde|custom|bossrush|daily|endless: checkpoint } */
           checkpoints: {} },
   load() {

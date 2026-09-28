@@ -184,6 +184,36 @@ function applyWeaponSkin(group, skin) {
     addPart(.024, .030, .030, skin.accent, 0, -.080, -.03, .7);
     addPart(.016, .016, .08, skin.accent, -.050, .048, -.06, .8);    // side plate L
     addPart(.016, .016, .08, skin.accent, .050, .048, -.06, .8);     // side plate R
+  } else if (deco === 'plasma2') {
+    /* HEAVY (epic): a wide energy core, vented heat shields and a barrel halo —
+       bigger hardware than the standard plasma kit. */
+    addPart(.086, .020, .24, skin.steel, 0, .052, -.08, .5);                 // heavy top rail
+    for (let i = 0; i < 4; i++) addGlowBox(.062, .010, .018, 0, .030 + i * .014, -.05 - i * .026, .95);
+    [-1, 1].forEach(s => {
+      addPart(.014, .036, .12, skin.accent, s * .058, .010, -.08, .7);       // heat shield L/R
+      addGlowBox(.008, .030, .10, s * .066, .010, -.08, .95);                // glowing slot
+    });
+    const core = new THREE.Mesh(new THREE.CylinderGeometry(.030, .030, .020, 12),
+      new THREE.MeshBasicMaterial({ color: skin.glow, transparent: true, opacity: .85, blending: THREE.AdditiveBlending, depthWrite: false }));
+    core.rotation.x = Math.PI / 2; core.position.set(0, .015, -.13); group.add(core);
+    addRing(.036, .007, 0, .015, -.22);
+    addRing(.030, .006, 0, .015, -.15);
+  } else if (deco === 'legend2') {
+    /* HEAVY (legendary): the crown jewel — gold frame, twin plasma cores,
+       a muzzle crown and a full set of glowing cells. */
+    addPart(.096, .026, .30, skin.steel, 0, .054, -.08, .6);                 // gold frame
+    addPart(.020, .020, .30, skin.accent, -.062, .038, -.08, .9);            // side frame L
+    addPart(.020, .020, .30, skin.accent, .062, .038, -.08, .9);             // side frame R
+    for (let i = 0; i < 5; i++) addGlowBox(.070, .010, .018, 0, .030 + i * .015, -.05 - i * .028, 1);
+    for (let i = 0; i < 3; i++) {
+      const core = new THREE.Mesh(new THREE.CylinderGeometry(.028, .028, .022, 12),
+        new THREE.MeshBasicMaterial({ color: skin.glow, transparent: true, opacity: .9, blending: THREE.AdditiveBlending, depthWrite: false }));
+      core.rotation.x = Math.PI / 2; core.position.set(0, .015, -.10 - i * .07); group.add(core);
+    }
+    addRing(.040, .009, 0, .015, -.24);                                      // muzzle crown
+    addRing(.034, .008, 0, .015, -.17);
+    addRing(.026, .006, 0, .015, -.10);
+    [-1, 1].forEach(s => addPart(.014, .038, .13, skin.accent, s * .060, .010, -.08, 1));
   }
   /* ---- glowing beads (rare and up) ---- */
   const beads = skin.beads || 0;

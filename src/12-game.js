@@ -1492,6 +1492,15 @@ const Game = {
       maxWaveKills: this._maxWaveKills || 0,
       perfectWaves: this._perfectWaves || 0,
       noDamageWaves: this._noDamageWaves || 0,
+      /* heavy-weapon kill counters (one per heavy gun) */
+      minigunKills: (this._hvKills && this._hvKills.minigun) || 0,
+      rpgKills: (this._hvKills && this._hvKills.rpg) || 0,
+      laserKills: (this._hvKills && this._hvKills.laser) || 0,
+      cannonKills: (this._hvKills && this._hvKills.laserCannon) || 0,
+      atomicKills: (this._hvKills && this._hvKills.atomicRpg) || 0,
+      yhsKills: (this._hvKills && this._hvKills.yhs) || 0,
+      rocketKills: (this._hvKills && this._hvKills.rocketgun) || 0,
+      shieldKills: this._shieldKills || 0,
       /* persistent lifetime totals */
       killsTotal: Store.data.killsTotal || 0,
       wins: Store.data.wins || 0,
@@ -1837,6 +1846,7 @@ const Game = {
     this._headStreak = 0; this._medkitsUsed = 0; this._maxWaveKills = 0;
     this._perfectWaves = 0; this._noDamageWaves = 0;
     this._waveKills = 0; this._waveHurt = false; this._runDeaths = 0;
+    this._hvKills = {}; this._shieldKills = 0;
     // NOTE: the checkpoint is deliberately NOT cleared here. It is dropped only
     // by an explicit "НОВАЯ ИГРА" (or after being consumed), so leaving to the
     // menu and returning can still resume the run.
@@ -6717,10 +6727,18 @@ const Game = {
     p.kills++;
     this._waveKills = (this._waveKills || 0) + 1;
     if (this._waveKills > (this._maxWaveKills || 0)) this._maxWaveKills = this._waveKills;
-    // which weapon did the killing blow? (mech kit / knife feed the new goals)
+    // which weapon did the killing blow? (mech kit / knife / heavy guns)
     const held = p.weapon && p.weapon.id;
     if (this.isMechActive()) this._mechKills = (this._mechKills || 0) + 1;
     else if (held === 'knife') this._knifeKills = (this._knifeKills || 0) + 1;
+    // heavy-weapon kill goals: count the killing blow per heavy gun
+    const HV = { minigun: 1, rpg: 1, laser: 1, laserCannon: 1, atomicRpg: 1, yhs: 1, rocketgun: 1 };
+    if (held && HV[held]) {
+      this._hvKills = this._hvKills || {};
+      this._hvKills[held] = (this._hvKills[held] || 0) + 1;
+    }
+    // a kill credited while the energy shield is raised counts toward its goal
+    if (p.shieldActive) this._shieldKills = (this._shieldKills || 0) + 1;
     // headshot streak (reset on a non-headshot kill)
     if (headshot) {
       this._headStreak = (this._headStreak || 0) + 1;

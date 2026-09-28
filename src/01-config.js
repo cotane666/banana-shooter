@@ -494,7 +494,19 @@ const ACHIEVEMENTS = [
   { id: 'v_total20k', name: 'ДВАДЦАТЬ ТЫСЯЧ',  desc: '20 000 зомби всего',             check: s => s.killsTotal >= 20000 },
   { id: 'v_clear5',   name: 'ПЯТЬ ПРОХОДОВ',   desc: 'Пройти игру 5 раз',              check: s => s.clears >= 5 },
   { id: 'v_win50',    name: 'ЛЕГЕНДА ОНЛАЙНА', desc: '50 побед в онлайне',             check: s => s.wins >= 50 },
-  { id: 'v_time3600', name: 'ЧАС В ПЕКЛЕ',     desc: 'Пережить 60 минут в забеге',     check: s => s.playTime >= 3600 }
+  { id: 'v_time3600', name: 'ЧАС В ПЕКЛЕ',     desc: 'Пережить 60 минут в забеге',     check: s => s.playTime >= 3600 },
+  /* ============================================================
+     HEAVY ARSENAL — one goal per heavy weapon (they also each unlock a
+     dedicated heavy-weapon skin below).
+     ============================================================ */
+  { id: 'hv_minigun', name: 'СВИНЦОВЫЙ ДОЖДЬ', desc: '300 убийств из минигана',        check: s => s.minigunKills >= 300 },
+  { id: 'hv_rpg',     name: 'ПОДРЫВНИК',       desc: '60 убийств из РПГ',              check: s => s.rpgKills >= 60 },
+  { id: 'hv_laser',   name: 'ЛУЧЕВОЙ',         desc: '60 убийств из лазерной винтовки', check: s => s.laserKills >= 60 },
+  { id: 'hv_cannon',  name: 'ПЕРЕГРЕВ',        desc: '30 убийств из лазерной пушки',   check: s => s.cannonKills >= 30 },
+  { id: 'hv_atomic',  name: 'ЯДЕРНЫЙ ГРИБ',    desc: '10 убийств из атомного РПГ',     check: s => s.atomicKills >= 10 },
+  { id: 'hv_yhs',     name: 'АРСЕНАЛ',         desc: '500 убийств из Y.H.S',           check: s => s.yhsKills >= 500 },
+  { id: 'hv_rocket',  name: 'САМОНАВЕДЕНИЕ',   desc: '40 убийств из ракетницы',        check: s => s.rocketKills >= 40 },
+  { id: 'hv_shield',  name: 'НЕСОКРУШИМЫЙ',    desc: '10 убийств с поднятым щитом',    check: s => s.shieldKills >= 10 }
 ];
 
 /* ============================================================
@@ -536,13 +548,25 @@ const SKIN_PALETTES = [
   /* legendary — gold / prismatic / void, fully dressed */
   { rar: 'legendary', body: 0xc8a24a, steel: 0xf0d894, mag: 0x8f7130, grip: 0x5e4a1e, accent: 0xffd06a, glow: 0xffd06a, shot: 0xffe89a },
   { rar: 'legendary', body: 0xb8b8d8, steel: 0xffffff, mag: 0x8080a8, grip: 0x585878, accent: 0xff6ad6, glow: 0xff6ad6, shot: 0xffb0f0 },
-  { rar: 'legendary', body: 0x3a2458, steel: 0xb090e0, mag: 0x241238, grip: 0x140a24, accent: 0xc060ff, glow: 0xc060ff, shot: 0xe0a0ff }
+  { rar: 'legendary', body: 0x3a2458, steel: 0xb090e0, mag: 0x241238, grip: 0x140a24, accent: 0xc060ff, glow: 0xc060ff, shot: 0xe0a0ff },
+  /* epic — heavy-arsenal exclusive finishes (bigger guns get bolder looks) */
+  { rar: 'epic', heavy: 1, body: 0x0f2a4a, steel: 0x5aa8ff, mag: 0x08203c, grip: 0x061426, accent: 0x4ad6ff, glow: 0x4ad6ff, shot: 0xa0f0ff },
+  { rar: 'epic', heavy: 1, body: 0x4a1020, steel: 0xff5a6a, mag: 0x330a16, grip: 0x22060f, accent: 0xff2a4a, glow: 0xff2a4a, shot: 0xff8090 },
+  { rar: 'epic', heavy: 1, body: 0x14401e, steel: 0x7dff8a, mag: 0x0d2c14, grip: 0x091d0d, accent: 0x39ff5a, glow: 0x39ff5a, shot: 0x9bffb0 },
+  { rar: 'epic', heavy: 1, body: 0x3a3a44, steel: 0xc8c8d8, mag: 0x272730, grip: 0x17171e, accent: 0xd8d8ff, glow: 0xe8e8ff, shot: 0xf0f0ff },
+  /* legendary — heavy-arsenal exclusive, the very best-looking kit */
+  { rar: 'legendary', heavy: 1, body: 0x1a1405, steel: 0xffd06a, mag: 0x0f0b02, grip: 0x080501, accent: 0xffb020, glow: 0xffd06a, shot: 0xffe89a },
+  { rar: 'legendary', heavy: 1, body: 0x2a0a3a, steel: 0xe06bff, mag: 0x1a0526, grip: 0x110318, accent: 0xff6ad6, glow: 0xff6ad6, shot: 0xffb0f0 },
+  { rar: 'legendary', heavy: 1, body: 0x04141a, steel: 0x40ffe0, mag: 0x020c10, grip: 0x010608, accent: 0x00ffd0, glow: 0x40ffe0, shot: 0xa0fff0 },
+  { rar: 'legendary', heavy: 1, body: 0x2a0a0a, steel: 0xff8a2a, mag: 0x1a0606, grip: 0x100404, accent: 0xff6a1a, glow: 0xff8a2a, shot: 0xffc080 }
 ];
 const _PAL_BY_RAR = {};
 SKIN_PALETTES.forEach(p => { (_PAL_BY_RAR[p.rar] = _PAL_BY_RAR[p.rar] || []).push(p); });
 
 /* which rarity an achievement's reward skin has */
 function skinRarityFor(achId) {
+  // heavy-arsenal goals are the fanciest: half epic, half legendary
+  if (achId.startsWith('hv_')) return (achId === 'hv_atomic' || achId === 'hv_yhs' || achId === 'hv_shield' || achId === 'hv_cannon') ? 'legendary' : 'epic';
   // new goal tiers by their id prefix
   if (achId.startsWith('v_')) return 'legendary';
   if (achId.startsWith('h_')) return 'epic';
@@ -559,13 +583,25 @@ function skinRarityFor(achId) {
 
 const SKINS = (() => {
   const used = {};
+  const hvUsed = {};
   return ACHIEVEMENTS.map(a => {
     const rar = skinRarityFor(a.id);
-    const pool = _PAL_BY_RAR[rar] || SKIN_PALETTES;
-    const k = (used[rar] = (used[rar] || 0));
-    used[rar]++;
-    const pal = pool[k % pool.length];
     const rd = SKIN_RARITIES[rar];
+    let pal, deco = rd.deco, beads = rd.beads;
+    if (a.id.startsWith('hv_')) {
+      // each heavy weapon gets its OWN exclusive heavy palette + fancier deco
+      const pool = SKIN_PALETTES.filter(p => p.heavy && p.rar === rar);
+      const k = (hvUsed[rar] = (hvUsed[rar] || 0));
+      hvUsed[rar]++;
+      pal = pool.length ? pool[k % pool.length] : SKIN_PALETTES[k % SKIN_PALETTES.length];
+      deco = rar === 'legendary' ? 'legend2' : 'plasma2';
+      beads = rar === 'legendary' ? 6 : 4;
+    } else {
+      const pool = _PAL_BY_RAR[rar] || SKIN_PALETTES;
+      const k = (used[rar] = (used[rar] || 0));
+      used[rar]++;
+      pal = pool[k % pool.length];
+    }
     return {
       id: 'sk_' + a.id,
       ach: a.id,
@@ -573,12 +609,13 @@ const SKINS = (() => {
       rarity: rar,
       rarityLabel: rd.label,
       rarityColor: rd.color,
+      heavy: !!pal.heavy,
       /* full multi-part scheme */
       body: pal.body, steel: pal.steel, mag: pal.mag, grip: pal.grip,
       accent: pal.accent, glow: pal.glow, shot: pal.shot,
       tint: [pal.body, pal.steel],            // kept for older callers
-      deco: rd.deco,
-      beads: rd.beads,
+      deco: deco,
+      beads: beads,
       glowMul: rd.glow
     };
   });

@@ -21,7 +21,7 @@ const UI = {
       'btnCopy', 'dmgDirs', 'android', 'ios', 'credits', 'crPlayer', 'crStats',
       'matchEnd', 'meTitle', 'meWinner', 'meScore', 'meDetail', 'btnMatchAgain', 'btnMatchMenu',
       'mapChips', 'playerChips', 'hpChips', 'hordeChips', 'lobbyMaps', 'lobbyPlayers', 'lobbyHp', 'lobbyFree', 'lobbyRounds',
-      'todChips', 'weatherChips', 'envAutoChips', 'sEnvSpeed', 'oEnvSpeed',
+      'todChips', 'weatherChips', 'envAutoChips', 'sEnvSpeed', 'oEnvSpeed', 'lobbyTod', 'lobbyWeather',
       'offCountChips', 'offHpChips', 'offFreeChips', 'offModeChips', 'offCustomBox', 'offHordeBox', 'offSpecialBox', 'offCpBox', 'offCpInfo', 'offCpMode', 'offCpList', 'offCountExact', 'offCountFixed', 'btnOffContinue', 'custom', 'lobbyShop', 'lobbyShopItems',
       'modScreen', 'modGrid', 'modActive',
       'extras', 'achGrid', 'recTable', 'btnExtrasBack', 'weaponWheel', 'wwInner',
@@ -269,7 +269,10 @@ const UI = {
     this.refreshChips();
   },
 
-  /* time-of-day / weather / auto-cycle chip groups (environment settings) */
+  /* time-of-day / weather / auto-cycle chip groups (environment settings).
+     The same groups appear in the settings panel AND in the online lobby — the
+     lobby ones let the host pick the time of day / weather FOR BOTH players and
+     broadcast it to the room. */
   buildEnvChips() {
     const S = Store.data;
     const fill = (wrap, items, attr, onPick) => {
@@ -283,15 +286,22 @@ const UI = {
         wrap.appendChild(b);
       });
     };
-    fill(this.el.todChips,
-      TOD_ORDER.map(k => ({ v: k, b: todName(k) })),
-      'tod', v => { S.timeOfDay = v; S.weather = v; S.envOff = 0; Store.save(); Game.applyTimeOfDay(); this.refreshChips(); });
-    fill(this.el.weatherChips,
-      WEATHER_ORDER.map(k => ({ v: k, b: weatherName(k) })),
-      'wx', v => { S.skyWeather = v; S.envOff = 0; Store.save(); Game.applyTimeOfDay(); this.refreshChips(); });
-    fill(this.el.envAutoChips,
-      [{ v: 0, b: 'ВЫКЛ' }, { v: 1, b: 'ВКЛ' }],
-      'auto', v => { S.envAuto = v; Store.save(); this.refreshChips(); });
+    const pickTod = v => { S.timeOfDay = v; S.weather = v; S.envOff = 0; Store.save(); Game.applyTimeOfDay(); this.refreshChips(); this.broadcastEnv(); };
+    const pickWx = v => { S.skyWeather = v; S.envOff = 0; Store.save(); Game.applyTimeOfDay(); this.refreshChips(); this.broadcastEnv(); };
+    const pickAuto = v => { S.envAuto = v; Store.save(); this.refreshChips(); this.broadcastEnv(); };
+    fill(this.el.todChips, TOD_ORDER.map(k => ({ v: k, b: todName(k) })), 'tod', pickTod);
+    fill(this.el.weatherChips, WEATHER_ORDER.map(k => ({ v: k, b: weatherName(k) })), 'wx', pickWx);
+    fill(this.el.envAutoChips, [{ v: 0, b: 'ВЫКЛ' }, { v: 1, b: 'ВКЛ' }], 'auto', pickAuto);
+    /* the lobby copies: the host sets the time of day / weather for both players */
+    fill(this.el.lobbyTod, TOD_ORDER.map(k => ({ v: k, b: todName(k) })), 'tod', pickTod);
+    fill(this.el.lobbyWeather, WEATHER_ORDER.map(k => ({ v: k, b: weatherName(k) })), 'wx', pickWx);
+  },
+  /* host → room: send the chosen time of day / weather so BOTH players see it */
+  broadcastEnv() {
+    if (typeof Net === 'undefined' || Net.role !== CS.NETROLE.HOST || !Net.connected) return;
+    Net.send({ t: 'round', st: 'settings', players: Store.data.players, hp: Store.data.maxHP, map: Store.data.map,
+      free: Store.data.freeplay, rounds: Store.data.rounds,
+      tod: Store.data.timeOfDay || 'day', weather: Store.data.skyWeather || 'clear', envAuto: Store.data.envAuto || 0, envOff: Store.data.envOff || 0 });
   },
   /* re-highlight the environment chips (called after the E/P hotkeys) */
   refreshEnv() { this.refreshChips(); },
@@ -316,9 +326,13 @@ const UI = {
     if (!S.envOff) {
       mark(this.el.todChips, 'tod', S.timeOfDay || S.weather || 'day');
       mark(this.el.weatherChips, 'wx', S.skyWeather || 'clear');
+      mark(this.el.lobbyTod, 'tod', S.timeOfDay || S.weather || 'day');
+      mark(this.el.lobbyWeather, 'wx', S.skyWeather || 'clear');
     } else {
       mark(this.el.todChips, 'tod', '__off__');
       mark(this.el.weatherChips, 'wx', '__off__');
+      mark(this.el.lobbyTod, 'tod', '__off__');
+      mark(this.el.lobbyWeather, 'wx', '__off__');
     }
     mark(this.el.envAutoChips, 'auto', S.envAuto ? 1 : 0);
     const mode = S.offMode || 'normal';
@@ -983,15 +997,23 @@ const UI = {
   /* achievements + best-run table */
   renderExtras() {
     const ach = Store.data.ach || {};
+    const stats = (typeof Game !== 'undefined' && Game.statsSnapshot) ? Game.statsSnapshot() : null;
     if (this.el.achGrid) {
       this.el.achGrid.innerHTML = ACHIEVEMENTS.map(a => {
         const on = !!ach[a.id];
         const sk = skinForAchievement(a.id);
         const swatch = sk ? ('#' + sk.glow.toString(16).padStart(6, '0')) : '#39434c';
         const rcol = sk ? rarityHex(sk.rarity) : '#39434c';
-        return '<div class="achcard' + (on ? ' on' : '') + '"><b><span class="sw" style="display:inline-block;width:10px;height:10px;' +
+        /* every achievement gets its OWN progress bar toward its goal */
+        const pr = achProgress(a, stats);
+        const pct = on ? 100 : Math.round(pr.frac * 100);
+        const barCol = on ? '#ffd24a' : rcol;
+        const readout = on ? 'ВЫПОЛНЕНО' : achProgressText(pr.have, pr.goal);
+        return '<div class="achcard' + (on ? ' on' : '') + '" data-ach="' + a.id + '"><b><span class="sw" style="display:inline-block;width:10px;height:10px;' +
           'border-radius:2px;margin-right:6px;vertical-align:-1px;border:1px solid rgba(255,255,255,.3);background:' + swatch + '"></span>' +
           (on ? '🏆 ' : '🔒 ') + U.esc(a.name) + '</b><i>' + U.esc(a.desc) + '</i>' +
+          '<div class="achprog"><div class="achbar"><span style="width:' + pct + '%;background:' + barCol + '"></span></div>' +
+          '<em style="color:' + barCol + '">' + U.esc(readout) + '</em></div>' +
           (sk ? '<i style="display:block;margin-top:3px;color:' + rcol + '">Награда: скин · ' + U.esc(sk.rarityLabel) + '</i>' : '') +
           '</div>';
       }).join('');
@@ -1002,6 +1024,26 @@ const UI = {
       else this.el.recTable.innerHTML = '<tr><th>#</th><th>СЧЁТ</th><th>ВОЛНА</th><th>УБИТО</th><th>РЕЖИМ</th><th>ДАТА</th></tr>' +
         runs.map((r, i) => '<tr><td class="t">' + (i + 1) + '</td><td class="s">' + r.score + '</td><td>' + r.wave + '</td><td>' + r.kills + '</td><td>' + U.esc(r.mode) + '</td><td class="t">' + r.date + '</td></tr>').join('');
     }
+  },
+
+  /* update JUST the progress bars in place (called while the screen is open, so
+     the numbers grow live during a match without rebuilding the whole grid) */
+  tickAchProgress() {
+    const grid = this.el.achGrid;
+    if (!grid || UI.current !== 'extras') return;
+    const ach = Store.data.ach || {};
+    const stats = (typeof Game !== 'undefined' && Game.statsSnapshot) ? Game.statsSnapshot() : null;
+    Array.from(grid.children).forEach(card => {
+      const a = ACHIEVEMENTS.find(x => x.id === card.dataset.ach);
+      if (!a) return;
+      const on = !!ach[a.id];
+      const pr = achProgress(a, stats);
+      const pct = on ? 100 : Math.round(pr.frac * 100);
+      const bar = card.querySelector('.achbar > span');
+      const em = card.querySelector('.achprog > em');
+      if (bar) bar.style.width = pct + '%';
+      if (em) em.textContent = on ? 'ВЫПОЛНЕНО' : achProgressText(pr.have, pr.goal);
+    });
   },
 
   /* weapon wheel: a radial list of owned weapons; clicking one switches */
@@ -1046,7 +1088,13 @@ const Skins = {
     const out = [];
     for (const id in WEAPONS) {
       const w = WEAPONS[id];
-      if (w.price > 0 && !w.shield && id !== 'knife' && !w.mechWeapon && w.cat !== 'exp' && !w.projectile) out.push(id);
+      if (!(w.price > 0)) continue;
+      if (id === 'knife' || w.mechWeapon || w.cat === 'exp') continue;
+      // EVERY heavy gun can be skinned — including the projectile launchers
+      // (РПГ / атомное РПГ / ракетница) and the energy shield. Only the other
+      // categories skip exotic projectiles/shields (banana, acid, ...).
+      if (w.cat !== 'heavy' && (w.projectile || w.shield)) continue;
+      out.push(id);
     }
     return out.sort((a, b) => WEAPONS[a].price - WEAPONS[b].price);
   },

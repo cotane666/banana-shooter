@@ -1608,6 +1608,7 @@ const Game = {
     UI.toast('Время суток: ' + todName(next), (next === 'night' || next === 'dawn') ? '#4aa3ff' : '#ffd24a');
     Audio3D_SFX.uiClick();
     if (typeof UI !== 'undefined' && UI.refreshEnv) UI.refreshEnv();
+    if (typeof UI !== 'undefined' && UI.broadcastEnv) UI.broadcastEnv();
   },
   /* P cycles the weather. */
   cycleWeather() {
@@ -1618,6 +1619,7 @@ const Game = {
     UI.toast('Погода: ' + weatherName(next), '#4ad6ff');
     Audio3D_SFX.uiClick();
     if (typeof UI !== 'undefined' && UI.refreshEnv) UI.refreshEnv();
+    if (typeof UI !== 'undefined' && UI.broadcastEnv) UI.broadcastEnv();
   },
   envTod() { return Store.data.timeOfDay || Store.data.weather || 'day'; },
   envWeather() { return Store.data.skyWeather || 'clear'; },
@@ -1630,6 +1632,7 @@ const Game = {
     UI.toast(Store.data.envOff ? 'Окружение: ВЫКЛ (ясный день)' : 'Окружение: ВКЛ', Store.data.envOff ? '#e33a2e' : '#57d16a');
     Audio3D_SFX.uiClick();
     if (UI.refreshEnv) UI.refreshEnv();
+    if (UI.broadcastEnv) UI.broadcastEnv();
   },
 
   /* a per-time-of-day palette: sky, fog, sun colour/strength, ambient */
@@ -1773,9 +1776,12 @@ const Game = {
     }
   },
 
-  /* AUTO cycle: slowly advance the time of day (and occasionally the weather). */
+  /* AUTO cycle: slowly advance the time of day (and occasionally the weather).
+     In online play only the HOST advances it, then broadcasts so both players
+     stay on the same time of day and weather. */
   updateEnvCycle(dt) {
     if (!this.envEnabled() || !Store.data.envAuto) return;
+    if (this.mode === CS.MODE.ONLINE && Net.role !== CS.NETROLE.HOST) return;
     this._envT = (this._envT || 0) + dt * (Store.data.envAutoSpeed || 1);
     if (this._envT >= 22) {
       this._envT = 0;
@@ -1785,6 +1791,7 @@ const Game = {
       UI.toast('Время суток: ' + todName(next), (next === 'night' || next === 'dawn') ? '#4aa3ff' : '#ffd24a');
       this.applyTimeOfDay();
       if (UI.refreshEnv) UI.refreshEnv();
+      if (UI.broadcastEnv) UI.broadcastEnv();
     }
   },
 
@@ -6939,7 +6946,8 @@ const Game = {
     }
     this.checkAchievements();
     UI.feed('<b>' + U.esc(p.name) + '</b> <span class="z">✖ ' + def.name + (headshot ? ' (в голову)' : '') + '</span> +$' + def.money);
-    if (headshot) UI.toast('В ГОЛОВУ! +$' + def.money + ' +' + Math.round(def.score * 1.5) + ' очков', '#ff9d21');
+    /* the "В ГОЛОВУ!" pop-up is spammy on a phone — keep it on PC only */
+    if (headshot && !IS_TOUCH) UI.toast('В ГОЛОВУ! +$' + def.money + ' +' + Math.round(def.score * 1.5) + ' очков', '#ff9d21');
     Bus.emit('kill', z, headshot);
   },
 
@@ -7058,7 +7066,7 @@ const Game = {
     if (Net.role === CS.NETROLE.HOST) {
       Net.send({ t: 'roster', roster: Net.peers });
       // and make sure everyone agrees on the economy for this room
-      Net.send({ t: 'round', st: 'settings', players: Store.data.players, hp: this.matchHP, map: MAP.id, free: this.freePlay ? 1 : 0, rounds: this.online ? this.online.rounds : MATCH.clampRounds(Store.data.rounds), shop: this.shopAllow, shopItems: this.shopItemsAllow() });
+      Net.send({ t: 'round', st: 'settings', players: Store.data.players, hp: this.matchHP, map: MAP.id, free: this.freePlay ? 1 : 0, rounds: this.online ? this.online.rounds : MATCH.clampRounds(Store.data.rounds), shop: this.shopAllow, shopItems: this.shopItemsAllow(), tod: Store.data.timeOfDay || 'day', weather: Store.data.skyWeather || 'clear', envAuto: Store.data.envAuto || 0, envOff: Store.data.envOff || 0 });
     }
   },
 
@@ -7505,6 +7513,16 @@ const Game = {
       if (r.shop) this.shopAllow = Object.assign({}, r.shop);
       if (r.shopItems) this.shopItemAllow = Object.assign({}, r.shopItems);
       if (r.winner) this.online.winnerName = r.winner;
+      /* the host picks the time of day / weather for BOTH players: adopt it */
+      if (r.tod !== undefined || r.weather !== undefined || r.envAuto !== undefined || r.envOff !== undefined) {
+        if (r.tod !== undefined) { Store.data.timeOfDay = r.tod; Store.data.weather = r.tod; }
+        if (r.weather !== undefined) Store.data.skyWeather = r.weather;
+        if (r.envAuto !== undefined) Store.data.envAuto = r.envAuto ? 1 : 0;
+        if (r.envOff !== undefined) Store.data.envOff = r.envOff ? 1 : 0;
+        Store.save();
+        this.applyTimeOfDay();
+        if (typeof UI !== 'undefined' && UI.refreshEnv) UI.refreshEnv();
+      }
       UI.renderPeerList();
       return;
     }
@@ -7832,6 +7850,10 @@ const Game = {
     // ---- environment ----
     this.updateEnvCycle(dt);
     this.updateWeather(dt);
+
+    // ---- achievements screen: refresh its progress bars while it is open ----
+    this._achTick = (this._achTick || 0) - dt;
+    if (this._achTick <= 0) { this._achTick = 0.2; if (typeof UI !== 'undefined' && UI.tickAchProgress) UI.tickAchProgress(); }
 
     // ---- flying bananas ----
     this.updateProjectiles(dt);

@@ -528,6 +528,72 @@ const ACHIEVEMENTS = [
 ];
 
 /* ============================================================
+   ACHIEVEMENT PROGRESS
+   Every achievement shows its OWN progress bar. A table maps each goal to the
+   live statistic it counts and the target value; a couple of compound goals
+   (accuracy needs a minimum shot count AND a percentage) are special-cased.
+   ============================================================ */
+const ACH_PROGRESS = {
+  /* original 11 */
+  firstBlood: ['kills', 1], slayer100: ['kills', 100], slayer500: ['kills', 500],
+  wave10: ['wave', 10], wave25: ['wave', 25], wave50: ['wave', 50],
+  boss1: ['bossKills', 1], boss4: ['bossKills', 4], head10: ['headshots', 10],
+  rich: ['money', 50000], survive: ['playTime', 900],
+  /* easy */
+  e_kill10: ['kills', 10], e_wave3: ['wave', 3], e_head1: ['headshots', 1],
+  e_money1k: ['money', 1000], e_score5k: ['score', 5000], e_kill50: ['kills', 50],
+  e_time60: ['playTime', 60],
+  /* medium */
+  m_wave15: ['wave', 15], m_kill200: ['kills', 200], m_head25: ['headshots', 25],
+  m_money10k: ['money', 10000], m_score25k: ['score', 25000],
+  m_mech10: ['mechKills', 10], m_knife5: ['knifeKills', 5], m_streak3: ['bestHeadStreak', 3],
+  m_med5: ['medkitsUsed', 5], m_wavekill25: ['maxWaveKills', 25], m_time300: ['playTime', 300],
+  m_boss3: ['bossKills', 3], m_deaths10: ['perfectWaves', 10], m_total1k: ['killsTotal', 1000],
+  /* hard */
+  h_wave35: ['wave', 35], h_kill800: ['kills', 800], h_head75: ['headshots', 75],
+  h_score75k: ['score', 75000], h_boss8: ['bossKills', 8], h_mech50: ['mechKills', 50],
+  h_knife25: ['knifeKills', 25], h_streak6: ['bestHeadStreak', 6],
+  h_wavekill60: ['maxWaveKills', 60], h_med30: ['medkitsUsed', 30],
+  h_perfect20: ['perfectWaves', 20], h_total5k: ['killsTotal', 5000],
+  h_rich100k: ['money', 100000], h_time1200: ['playTime', 1200], h_win10: ['wins', 10],
+  /* very hard */
+  v_wave75: ['wave', 75], v_kill1500: ['kills', 1500], v_head200: ['headshots', 200],
+  v_score250k: ['score', 250000], v_perfect40: ['perfectWaves', 40], v_boss15: ['bossKills', 15],
+  v_streak10: ['bestHeadStreak', 10], v_total20k: ['killsTotal', 20000],
+  v_clear5: ['clears', 5], v_win50: ['wins', 50], v_time3600: ['playTime', 3600],
+  /* heavy arsenal (both sets) */
+  hv_minigun: ['minigunKills', 300], hv_rpg: ['rpgKills', 60], hv_laser: ['laserKills', 60],
+  hv_cannon: ['cannonKills', 30], hv_atomic: ['atomicKills', 10], hv_yhs: ['yhsKills', 500],
+  hv_rocket: ['rocketKills', 40], hv_shield: ['shieldKills', 10],
+  hv2_minigun: ['minigunKills', 800], hv2_rpg: ['rpgKills', 150], hv2_laser: ['laserKills', 150],
+  hv2_cannon: ['cannonKills', 80], hv2_atomic: ['atomicKills', 30], hv2_yhs: ['yhsKills', 1200],
+  hv2_rocket: ['rocketKills', 100], hv2_shield: ['shieldKills', 40]
+};
+/* compound accuracy goals: a minimum number of shots AND an accuracy % */
+const ACH_ACC = {
+  m_acc40: { shots: 200, acc: 40 }, h_acc55: { shots: 400, acc: 55 }, v_acc70: { shots: 600, acc: 70 }
+};
+/* returns { have, goal, frac } for one achievement against a live stats snapshot */
+function achProgress(a, s) {
+  if (!a || !s) return { have: 0, goal: 1, frac: 0 };
+  const acc = ACH_ACC[a.id];
+  if (acc) {
+    const shots = s.shots || 0, pct = s.accuracy || 0;
+    const have = Math.min(shots / acc.shots, pct / acc.acc);
+    return { have: Math.round(have * acc.shots), goal: acc.shots, frac: U.clamp(have, 0, 1), label: Math.round(pct) + '% / ' + acc.acc + '%' };
+  }
+  const spec = ACH_PROGRESS[a.id];
+  if (!spec) return { have: 0, goal: 1, frac: 0 };
+  const have = Math.max(0, s[spec[0]] || 0), goal = spec[1];
+  return { have: have, goal: goal, frac: U.clamp(have / goal, 0, 1) };
+}
+/* a short "1 234 / 5 000" style label for the progress readout */
+function achProgressText(have, goal) {
+  const f = n => Math.round(n).toLocaleString('ru-RU');
+  return f(have) + ' / ' + f(goal);
+}
+
+/* ============================================================
    WEAPON SKINS
    One skin per achievement (earned → unlocked). Each skin has a RARITY derived
    from how hard its achievement is: harder → rarer → more decoration and a

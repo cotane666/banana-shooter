@@ -515,6 +515,13 @@ html.touch #rangePanel{display:none !important}
 .achcard b{display:block;font-size:12.5px;letter-spacing:1.2px;color:#dfe6ee;margin-bottom:5px}
 .achcard.on b{color:#ffd24a}
 .achcard i{font-style:normal;font-size:11px;color:var(--dim);line-height:1.35}
+/* per-achievement progress bar */
+.achprog{display:flex;align-items:center;gap:8px;margin-top:7px}
+.achbar{position:relative;flex:1 1 auto;height:7px;border-radius:4px;background:#0a0d10;
+  border:1px solid var(--line);overflow:hidden}
+.achbar>span{display:block;height:100%;width:0;background:#39434c;border-radius:4px;transition:width .25s ease}
+.achprog>em{font-style:normal;font-size:10px;letter-spacing:.6px;color:var(--dim);
+  white-space:nowrap;min-width:78px;text-align:right;font-weight:700}
 
 /* ---------- skin inventory (3D preview) ---------- */
 .skin-wrap{display:flex;gap:16px;align-items:stretch;flex-wrap:wrap}
@@ -714,7 +721,10 @@ html.touch .score{font-size:23px}
 html.touch .kills{font-size:9.5px;letter-spacing:1.4px}
 html.touch .kills b{font-size:20px}
 html.touch #minimap{left:12px;top:10px;width:90px;height:90px}
-html.touch #feed{right:12px;top:170px;width:160px;font-size:10.5px}
+html.touch #feed{right:10px;top:158px;width:132px;font-size:9px;opacity:.5}
+html.touch #feed div{background:rgba(0,0,0,.32);border-right-width:1px;padding:2px 6px;margin-bottom:2px;
+  animation:none;border-radius:2px}
+html.touch #feed b{font-weight:700}
 html.touch #crosshair{width:30px;height:30px}
 html.touch #centerMsg{font-size:clamp(17px,5vw,28px);letter-spacing:3px}
 html.touch #centerMsg small{font-size:11px;letter-spacing:2px}
@@ -1014,6 +1024,12 @@ html.touch .fld input{padding:10px;font-size:15px}
       </div>
       <div class="fld">Экономика
         <div class="chips" id="lobbyFree"></div>
+      </div>
+      <div class="fld">Время суток (для обоих)
+        <div class="chips" id="lobbyTod"></div>
+      </div>
+      <div class="fld">Погода (для обоих)
+        <div class="chips" id="lobbyWeather"></div>
       </div>
       <div class="fld">Доступно в магазине
         <div class="chips" id="lobbyShop"></div>
@@ -1928,6 +1944,72 @@ const ACHIEVEMENTS = [
   { id: 'hv2_rocket',  name: 'СТАЯ',           desc: '100 убийств из ракетницы',       check: s => s.rocketKills >= 100 },
   { id: 'hv2_shield',  name: 'ОТРАЖАТЕЛЬ',     desc: '40 убийств с поднятым щитом',    check: s => s.shieldKills >= 40 }
 ];
+
+/* ============================================================
+   ACHIEVEMENT PROGRESS
+   Every achievement shows its OWN progress bar. A table maps each goal to the
+   live statistic it counts and the target value; a couple of compound goals
+   (accuracy needs a minimum shot count AND a percentage) are special-cased.
+   ============================================================ */
+const ACH_PROGRESS = {
+  /* original 11 */
+  firstBlood: ['kills', 1], slayer100: ['kills', 100], slayer500: ['kills', 500],
+  wave10: ['wave', 10], wave25: ['wave', 25], wave50: ['wave', 50],
+  boss1: ['bossKills', 1], boss4: ['bossKills', 4], head10: ['headshots', 10],
+  rich: ['money', 50000], survive: ['playTime', 900],
+  /* easy */
+  e_kill10: ['kills', 10], e_wave3: ['wave', 3], e_head1: ['headshots', 1],
+  e_money1k: ['money', 1000], e_score5k: ['score', 5000], e_kill50: ['kills', 50],
+  e_time60: ['playTime', 60],
+  /* medium */
+  m_wave15: ['wave', 15], m_kill200: ['kills', 200], m_head25: ['headshots', 25],
+  m_money10k: ['money', 10000], m_score25k: ['score', 25000],
+  m_mech10: ['mechKills', 10], m_knife5: ['knifeKills', 5], m_streak3: ['bestHeadStreak', 3],
+  m_med5: ['medkitsUsed', 5], m_wavekill25: ['maxWaveKills', 25], m_time300: ['playTime', 300],
+  m_boss3: ['bossKills', 3], m_deaths10: ['perfectWaves', 10], m_total1k: ['killsTotal', 1000],
+  /* hard */
+  h_wave35: ['wave', 35], h_kill800: ['kills', 800], h_head75: ['headshots', 75],
+  h_score75k: ['score', 75000], h_boss8: ['bossKills', 8], h_mech50: ['mechKills', 50],
+  h_knife25: ['knifeKills', 25], h_streak6: ['bestHeadStreak', 6],
+  h_wavekill60: ['maxWaveKills', 60], h_med30: ['medkitsUsed', 30],
+  h_perfect20: ['perfectWaves', 20], h_total5k: ['killsTotal', 5000],
+  h_rich100k: ['money', 100000], h_time1200: ['playTime', 1200], h_win10: ['wins', 10],
+  /* very hard */
+  v_wave75: ['wave', 75], v_kill1500: ['kills', 1500], v_head200: ['headshots', 200],
+  v_score250k: ['score', 250000], v_perfect40: ['perfectWaves', 40], v_boss15: ['bossKills', 15],
+  v_streak10: ['bestHeadStreak', 10], v_total20k: ['killsTotal', 20000],
+  v_clear5: ['clears', 5], v_win50: ['wins', 50], v_time3600: ['playTime', 3600],
+  /* heavy arsenal (both sets) */
+  hv_minigun: ['minigunKills', 300], hv_rpg: ['rpgKills', 60], hv_laser: ['laserKills', 60],
+  hv_cannon: ['cannonKills', 30], hv_atomic: ['atomicKills', 10], hv_yhs: ['yhsKills', 500],
+  hv_rocket: ['rocketKills', 40], hv_shield: ['shieldKills', 10],
+  hv2_minigun: ['minigunKills', 800], hv2_rpg: ['rpgKills', 150], hv2_laser: ['laserKills', 150],
+  hv2_cannon: ['cannonKills', 80], hv2_atomic: ['atomicKills', 30], hv2_yhs: ['yhsKills', 1200],
+  hv2_rocket: ['rocketKills', 100], hv2_shield: ['shieldKills', 40]
+};
+/* compound accuracy goals: a minimum number of shots AND an accuracy % */
+const ACH_ACC = {
+  m_acc40: { shots: 200, acc: 40 }, h_acc55: { shots: 400, acc: 55 }, v_acc70: { shots: 600, acc: 70 }
+};
+/* returns { have, goal, frac } for one achievement against a live stats snapshot */
+function achProgress(a, s) {
+  if (!a || !s) return { have: 0, goal: 1, frac: 0 };
+  const acc = ACH_ACC[a.id];
+  if (acc) {
+    const shots = s.shots || 0, pct = s.accuracy || 0;
+    const have = Math.min(shots / acc.shots, pct / acc.acc);
+    return { have: Math.round(have * acc.shots), goal: acc.shots, frac: U.clamp(have, 0, 1), label: Math.round(pct) + '% / ' + acc.acc + '%' };
+  }
+  const spec = ACH_PROGRESS[a.id];
+  if (!spec) return { have: 0, goal: 1, frac: 0 };
+  const have = Math.max(0, s[spec[0]] || 0), goal = spec[1];
+  return { have: have, goal: goal, frac: U.clamp(have / goal, 0, 1) };
+}
+/* a short "1 234 / 5 000" style label for the progress readout */
+function achProgressText(have, goal) {
+  const f = n => Math.round(n).toLocaleString('ru-RU');
+  return f(have) + ' / ' + f(goal);
+}
 
 /* ============================================================
    WEAPON SKINS
@@ -10697,7 +10779,7 @@ const UI = {
       'btnCopy', 'dmgDirs', 'android', 'ios', 'credits', 'crPlayer', 'crStats',
       'matchEnd', 'meTitle', 'meWinner', 'meScore', 'meDetail', 'btnMatchAgain', 'btnMatchMenu',
       'mapChips', 'playerChips', 'hpChips', 'hordeChips', 'lobbyMaps', 'lobbyPlayers', 'lobbyHp', 'lobbyFree', 'lobbyRounds',
-      'todChips', 'weatherChips', 'envAutoChips', 'sEnvSpeed', 'oEnvSpeed',
+      'todChips', 'weatherChips', 'envAutoChips', 'sEnvSpeed', 'oEnvSpeed', 'lobbyTod', 'lobbyWeather',
       'offCountChips', 'offHpChips', 'offFreeChips', 'offModeChips', 'offCustomBox', 'offHordeBox', 'offSpecialBox', 'offCpBox', 'offCpInfo', 'offCpMode', 'offCpList', 'offCountExact', 'offCountFixed', 'btnOffContinue', 'custom', 'lobbyShop', 'lobbyShopItems',
       'modScreen', 'modGrid', 'modActive',
       'extras', 'achGrid', 'recTable', 'btnExtrasBack', 'weaponWheel', 'wwInner',
@@ -10945,7 +11027,10 @@ const UI = {
     this.refreshChips();
   },
 
-  /* time-of-day / weather / auto-cycle chip groups (environment settings) */
+  /* time-of-day / weather / auto-cycle chip groups (environment settings).
+     The same groups appear in the settings panel AND in the online lobby — the
+     lobby ones let the host pick the time of day / weather FOR BOTH players and
+     broadcast it to the room. */
   buildEnvChips() {
     const S = Store.data;
     const fill = (wrap, items, attr, onPick) => {
@@ -10959,15 +11044,22 @@ const UI = {
         wrap.appendChild(b);
       });
     };
-    fill(this.el.todChips,
-      TOD_ORDER.map(k => ({ v: k, b: todName(k) })),
-      'tod', v => { S.timeOfDay = v; S.weather = v; S.envOff = 0; Store.save(); Game.applyTimeOfDay(); this.refreshChips(); });
-    fill(this.el.weatherChips,
-      WEATHER_ORDER.map(k => ({ v: k, b: weatherName(k) })),
-      'wx', v => { S.skyWeather = v; S.envOff = 0; Store.save(); Game.applyTimeOfDay(); this.refreshChips(); });
-    fill(this.el.envAutoChips,
-      [{ v: 0, b: 'ВЫКЛ' }, { v: 1, b: 'ВКЛ' }],
-      'auto', v => { S.envAuto = v; Store.save(); this.refreshChips(); });
+    const pickTod = v => { S.timeOfDay = v; S.weather = v; S.envOff = 0; Store.save(); Game.applyTimeOfDay(); this.refreshChips(); this.broadcastEnv(); };
+    const pickWx = v => { S.skyWeather = v; S.envOff = 0; Store.save(); Game.applyTimeOfDay(); this.refreshChips(); this.broadcastEnv(); };
+    const pickAuto = v => { S.envAuto = v; Store.save(); this.refreshChips(); this.broadcastEnv(); };
+    fill(this.el.todChips, TOD_ORDER.map(k => ({ v: k, b: todName(k) })), 'tod', pickTod);
+    fill(this.el.weatherChips, WEATHER_ORDER.map(k => ({ v: k, b: weatherName(k) })), 'wx', pickWx);
+    fill(this.el.envAutoChips, [{ v: 0, b: 'ВЫКЛ' }, { v: 1, b: 'ВКЛ' }], 'auto', pickAuto);
+    /* the lobby copies: the host sets the time of day / weather for both players */
+    fill(this.el.lobbyTod, TOD_ORDER.map(k => ({ v: k, b: todName(k) })), 'tod', pickTod);
+    fill(this.el.lobbyWeather, WEATHER_ORDER.map(k => ({ v: k, b: weatherName(k) })), 'wx', pickWx);
+  },
+  /* host → room: send the chosen time of day / weather so BOTH players see it */
+  broadcastEnv() {
+    if (typeof Net === 'undefined' || Net.role !== CS.NETROLE.HOST || !Net.connected) return;
+    Net.send({ t: 'round', st: 'settings', players: Store.data.players, hp: Store.data.maxHP, map: Store.data.map,
+      free: Store.data.freeplay, rounds: Store.data.rounds,
+      tod: Store.data.timeOfDay || 'day', weather: Store.data.skyWeather || 'clear', envAuto: Store.data.envAuto || 0, envOff: Store.data.envOff || 0 });
   },
   /* re-highlight the environment chips (called after the E/P hotkeys) */
   refreshEnv() { this.refreshChips(); },
@@ -10992,9 +11084,13 @@ const UI = {
     if (!S.envOff) {
       mark(this.el.todChips, 'tod', S.timeOfDay || S.weather || 'day');
       mark(this.el.weatherChips, 'wx', S.skyWeather || 'clear');
+      mark(this.el.lobbyTod, 'tod', S.timeOfDay || S.weather || 'day');
+      mark(this.el.lobbyWeather, 'wx', S.skyWeather || 'clear');
     } else {
       mark(this.el.todChips, 'tod', '__off__');
       mark(this.el.weatherChips, 'wx', '__off__');
+      mark(this.el.lobbyTod, 'tod', '__off__');
+      mark(this.el.lobbyWeather, 'wx', '__off__');
     }
     mark(this.el.envAutoChips, 'auto', S.envAuto ? 1 : 0);
     const mode = S.offMode || 'normal';
@@ -11659,15 +11755,23 @@ const UI = {
   /* achievements + best-run table */
   renderExtras() {
     const ach = Store.data.ach || {};
+    const stats = (typeof Game !== 'undefined' && Game.statsSnapshot) ? Game.statsSnapshot() : null;
     if (this.el.achGrid) {
       this.el.achGrid.innerHTML = ACHIEVEMENTS.map(a => {
         const on = !!ach[a.id];
         const sk = skinForAchievement(a.id);
         const swatch = sk ? ('#' + sk.glow.toString(16).padStart(6, '0')) : '#39434c';
         const rcol = sk ? rarityHex(sk.rarity) : '#39434c';
-        return '<div class="achcard' + (on ? ' on' : '') + '"><b><span class="sw" style="display:inline-block;width:10px;height:10px;' +
+        /* every achievement gets its OWN progress bar toward its goal */
+        const pr = achProgress(a, stats);
+        const pct = on ? 100 : Math.round(pr.frac * 100);
+        const barCol = on ? '#ffd24a' : rcol;
+        const readout = on ? 'ВЫПОЛНЕНО' : achProgressText(pr.have, pr.goal);
+        return '<div class="achcard' + (on ? ' on' : '') + '" data-ach="' + a.id + '"><b><span class="sw" style="display:inline-block;width:10px;height:10px;' +
           'border-radius:2px;margin-right:6px;vertical-align:-1px;border:1px solid rgba(255,255,255,.3);background:' + swatch + '"></span>' +
           (on ? '🏆 ' : '🔒 ') + U.esc(a.name) + '</b><i>' + U.esc(a.desc) + '</i>' +
+          '<div class="achprog"><div class="achbar"><span style="width:' + pct + '%;background:' + barCol + '"></span></div>' +
+          '<em style="color:' + barCol + '">' + U.esc(readout) + '</em></div>' +
           (sk ? '<i style="display:block;margin-top:3px;color:' + rcol + '">Награда: скин · ' + U.esc(sk.rarityLabel) + '</i>' : '') +
           '</div>';
       }).join('');
@@ -11678,6 +11782,26 @@ const UI = {
       else this.el.recTable.innerHTML = '<tr><th>#</th><th>СЧЁТ</th><th>ВОЛНА</th><th>УБИТО</th><th>РЕЖИМ</th><th>ДАТА</th></tr>' +
         runs.map((r, i) => '<tr><td class="t">' + (i + 1) + '</td><td class="s">' + r.score + '</td><td>' + r.wave + '</td><td>' + r.kills + '</td><td>' + U.esc(r.mode) + '</td><td class="t">' + r.date + '</td></tr>').join('');
     }
+  },
+
+  /* update JUST the progress bars in place (called while the screen is open, so
+     the numbers grow live during a match without rebuilding the whole grid) */
+  tickAchProgress() {
+    const grid = this.el.achGrid;
+    if (!grid || UI.current !== 'extras') return;
+    const ach = Store.data.ach || {};
+    const stats = (typeof Game !== 'undefined' && Game.statsSnapshot) ? Game.statsSnapshot() : null;
+    Array.from(grid.children).forEach(card => {
+      const a = ACHIEVEMENTS.find(x => x.id === card.dataset.ach);
+      if (!a) return;
+      const on = !!ach[a.id];
+      const pr = achProgress(a, stats);
+      const pct = on ? 100 : Math.round(pr.frac * 100);
+      const bar = card.querySelector('.achbar > span');
+      const em = card.querySelector('.achprog > em');
+      if (bar) bar.style.width = pct + '%';
+      if (em) em.textContent = on ? 'ВЫПОЛНЕНО' : achProgressText(pr.have, pr.goal);
+    });
   },
 
   /* weapon wheel: a radial list of owned weapons; clicking one switches */
@@ -11722,7 +11846,13 @@ const Skins = {
     const out = [];
     for (const id in WEAPONS) {
       const w = WEAPONS[id];
-      if (w.price > 0 && !w.shield && id !== 'knife' && !w.mechWeapon && w.cat !== 'exp' && !w.projectile) out.push(id);
+      if (!(w.price > 0)) continue;
+      if (id === 'knife' || w.mechWeapon || w.cat === 'exp') continue;
+      // EVERY heavy gun can be skinned — including the projectile launchers
+      // (РПГ / атомное РПГ / ракетница) and the energy shield. Only the other
+      // categories skip exotic projectiles/shields (banana, acid, ...).
+      if (w.cat !== 'heavy' && (w.projectile || w.shield)) continue;
+      out.push(id);
     }
     return out.sort((a, b) => WEAPONS[a].price - WEAPONS[b].price);
   },
@@ -14129,6 +14259,7 @@ const Game = {
     UI.toast('Время суток: ' + todName(next), (next === 'night' || next === 'dawn') ? '#4aa3ff' : '#ffd24a');
     Audio3D_SFX.uiClick();
     if (typeof UI !== 'undefined' && UI.refreshEnv) UI.refreshEnv();
+    if (typeof UI !== 'undefined' && UI.broadcastEnv) UI.broadcastEnv();
   },
   /* P cycles the weather. */
   cycleWeather() {
@@ -14139,6 +14270,7 @@ const Game = {
     UI.toast('Погода: ' + weatherName(next), '#4ad6ff');
     Audio3D_SFX.uiClick();
     if (typeof UI !== 'undefined' && UI.refreshEnv) UI.refreshEnv();
+    if (typeof UI !== 'undefined' && UI.broadcastEnv) UI.broadcastEnv();
   },
   envTod() { return Store.data.timeOfDay || Store.data.weather || 'day'; },
   envWeather() { return Store.data.skyWeather || 'clear'; },
@@ -14151,6 +14283,7 @@ const Game = {
     UI.toast(Store.data.envOff ? 'Окружение: ВЫКЛ (ясный день)' : 'Окружение: ВКЛ', Store.data.envOff ? '#e33a2e' : '#57d16a');
     Audio3D_SFX.uiClick();
     if (UI.refreshEnv) UI.refreshEnv();
+    if (UI.broadcastEnv) UI.broadcastEnv();
   },
 
   /* a per-time-of-day palette: sky, fog, sun colour/strength, ambient */
@@ -14294,9 +14427,12 @@ const Game = {
     }
   },
 
-  /* AUTO cycle: slowly advance the time of day (and occasionally the weather). */
+  /* AUTO cycle: slowly advance the time of day (and occasionally the weather).
+     In online play only the HOST advances it, then broadcasts so both players
+     stay on the same time of day and weather. */
   updateEnvCycle(dt) {
     if (!this.envEnabled() || !Store.data.envAuto) return;
+    if (this.mode === CS.MODE.ONLINE && Net.role !== CS.NETROLE.HOST) return;
     this._envT = (this._envT || 0) + dt * (Store.data.envAutoSpeed || 1);
     if (this._envT >= 22) {
       this._envT = 0;
@@ -14306,6 +14442,7 @@ const Game = {
       UI.toast('Время суток: ' + todName(next), (next === 'night' || next === 'dawn') ? '#4aa3ff' : '#ffd24a');
       this.applyTimeOfDay();
       if (UI.refreshEnv) UI.refreshEnv();
+      if (UI.broadcastEnv) UI.broadcastEnv();
     }
   },
 
@@ -19460,7 +19597,8 @@ const Game = {
     }
     this.checkAchievements();
     UI.feed('<b>' + U.esc(p.name) + '</b> <span class="z">✖ ' + def.name + (headshot ? ' (в голову)' : '') + '</span> +$' + def.money);
-    if (headshot) UI.toast('В ГОЛОВУ! +$' + def.money + ' +' + Math.round(def.score * 1.5) + ' очков', '#ff9d21');
+    /* the "В ГОЛОВУ!" pop-up is spammy on a phone — keep it on PC only */
+    if (headshot && !IS_TOUCH) UI.toast('В ГОЛОВУ! +$' + def.money + ' +' + Math.round(def.score * 1.5) + ' очков', '#ff9d21');
     Bus.emit('kill', z, headshot);
   },
 
@@ -19579,7 +19717,7 @@ const Game = {
     if (Net.role === CS.NETROLE.HOST) {
       Net.send({ t: 'roster', roster: Net.peers });
       // and make sure everyone agrees on the economy for this room
-      Net.send({ t: 'round', st: 'settings', players: Store.data.players, hp: this.matchHP, map: MAP.id, free: this.freePlay ? 1 : 0, rounds: this.online ? this.online.rounds : MATCH.clampRounds(Store.data.rounds), shop: this.shopAllow, shopItems: this.shopItemsAllow() });
+      Net.send({ t: 'round', st: 'settings', players: Store.data.players, hp: this.matchHP, map: MAP.id, free: this.freePlay ? 1 : 0, rounds: this.online ? this.online.rounds : MATCH.clampRounds(Store.data.rounds), shop: this.shopAllow, shopItems: this.shopItemsAllow(), tod: Store.data.timeOfDay || 'day', weather: Store.data.skyWeather || 'clear', envAuto: Store.data.envAuto || 0, envOff: Store.data.envOff || 0 });
     }
   },
 
@@ -20026,6 +20164,16 @@ const Game = {
       if (r.shop) this.shopAllow = Object.assign({}, r.shop);
       if (r.shopItems) this.shopItemAllow = Object.assign({}, r.shopItems);
       if (r.winner) this.online.winnerName = r.winner;
+      /* the host picks the time of day / weather for BOTH players: adopt it */
+      if (r.tod !== undefined || r.weather !== undefined || r.envAuto !== undefined || r.envOff !== undefined) {
+        if (r.tod !== undefined) { Store.data.timeOfDay = r.tod; Store.data.weather = r.tod; }
+        if (r.weather !== undefined) Store.data.skyWeather = r.weather;
+        if (r.envAuto !== undefined) Store.data.envAuto = r.envAuto ? 1 : 0;
+        if (r.envOff !== undefined) Store.data.envOff = r.envOff ? 1 : 0;
+        Store.save();
+        this.applyTimeOfDay();
+        if (typeof UI !== 'undefined' && UI.refreshEnv) UI.refreshEnv();
+      }
       UI.renderPeerList();
       return;
     }
@@ -20353,6 +20501,10 @@ const Game = {
     // ---- environment ----
     this.updateEnvCycle(dt);
     this.updateWeather(dt);
+
+    // ---- achievements screen: refresh its progress bars while it is open ----
+    this._achTick = (this._achTick || 0) - dt;
+    if (this._achTick <= 0) { this._achTick = 0.2; if (typeof UI !== 'undefined' && UI.tickAchProgress) UI.tickAchProgress(); }
 
     // ---- flying bananas ----
     this.updateProjectiles(dt);

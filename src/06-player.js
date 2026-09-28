@@ -137,7 +137,15 @@ function _skinDraw(c, pattern, glow) {
   const S = c.width;
   const x = c.getContext('2d');
   x.clearRect(0, 0, S, S);
+  /* `glow` arrives as a numeric colour in some call paths (and as a '#rrggbb'
+     string in others) — normalise it so canvas never sees a bare number. */
+  const glowCss = (typeof glow === 'number')
+    ? ('#' + (glow >>> 0).toString(16).padStart(6, '0'))
+    : (glow || '#ffffff');
   const dark = 'rgba(0,0,0,.45)';
+  /* an OPAQUE base first: a partly transparent map would let the material show
+     through oddly. White keeps the part's own colour; the pattern darkens it. */
+  x.fillStyle = '#ffffff'; x.fillRect(0, 0, S, S);
   const baseName = _PATTERN_BASE[pattern];
   const dataUri = (typeof skinTextureData === 'function') ? skinTextureData(baseName) : null;
   let usedPhoto = false;
@@ -145,7 +153,8 @@ function _skinDraw(c, pattern, glow) {
     const img = _skinTexImage(baseName, dataUri);
     if (img && img.complete && img.naturalWidth) { x.drawImage(img, 0, 0, S, S); usedPhoto = true; }
   }
-  x.fillStyle = usedPhoto ? 'rgba(255,255,255,.05)' : 'rgba(255,255,255,.10)'; x.fillRect(0, 0, S, S);
+  if (!usedPhoto) { x.fillStyle = 'rgba(255,255,255,1)'; x.fillRect(0, 0, S, S); }
+  x.fillStyle = usedPhoto ? 'rgba(0,0,0,.10)' : 'rgba(0,0,0,.06)'; x.fillRect(0, 0, S, S);
   if (pattern === 'carbon') {
     // woven carbon: two diagonal directions of darker cells
     for (let y = 0; y < S; y += 8) for (let xx = 0; xx < S; xx += 8) {
@@ -172,7 +181,7 @@ function _skinDraw(c, pattern, glow) {
         x.beginPath();
         for (let k = 0; k < 6; k++) { const a = k / 6 * 6.283; x.lineTo(cx + Math.cos(a) * r, cy + Math.sin(a) * r); }
         x.closePath(); x.stroke();
-        if (Math.random() < .12) { x.fillStyle = glow; x.globalAlpha = .5; x.fill(); x.globalAlpha = 1; }
+        if (Math.random() < .12) { x.fillStyle = glowCss; x.globalAlpha = .5; x.fill(); x.globalAlpha = 1; }
       }
     }
   } else if (pattern === 'hazard') {
@@ -187,7 +196,7 @@ function _skinDraw(c, pattern, glow) {
     // fine technical grid + small marks
     x.strokeStyle = 'rgba(255,255,255,.12)'; x.lineWidth = 1;
     for (let i = 0; i <= S; i += 16) { x.beginPath(); x.moveTo(i, 0); x.lineTo(i, S); x.moveTo(0, i); x.lineTo(S, i); x.stroke(); }
-    x.fillStyle = glow; x.globalAlpha = .35;
+    x.fillStyle = glowCss; x.globalAlpha = .35;
     for (let i = 0; i < 8; i++) x.fillRect(8 + (i * 29) % (S - 16), 8 + (i * 53) % (S - 16), 6, 2);
     x.globalAlpha = 1;
   } else if (pattern === 'plasma') {
@@ -199,7 +208,7 @@ function _skinDraw(c, pattern, glow) {
     for (let i = 0; i < 5; i++) {
       const gx = 8 + (i * 31) % (S - 16), gy = 8 + (i * 47) % (S - 16);
       const g = x.createRadialGradient(gx, gy, 0, gx, gy, 9);
-      g.addColorStop(0, glow); g.addColorStop(1, 'rgba(0,0,0,0)');
+      g.addColorStop(0, glowCss); g.addColorStop(1, 'rgba(0,0,0,0)');
       x.fillStyle = g; x.fillRect(gx - 9, gy - 9, 18, 18);
     }
   } else if (pattern === 'scale') {
@@ -217,7 +226,7 @@ function _skinDraw(c, pattern, glow) {
     for (let i = 0; i < 40; i++) {
       const px = Math.random() * S, py = Math.random() * S, s2 = 12 + Math.random() * 18;
       x.beginPath(); x.moveTo(px, py); x.lineTo(px + s2, py + Math.random() * s2); x.lineTo(px + Math.random() * s2, py + s2); x.closePath();
-      x.fillStyle = Math.random() < .25 ? glow : 'rgba(0,0,0,.28)';
+      x.fillStyle = Math.random() < .25 ? glowCss : 'rgba(0,0,0,.28)';
       x.globalAlpha = .55; x.fill(); x.globalAlpha = 1;
       x.strokeStyle = 'rgba(255,255,255,.12)'; x.stroke();
     }

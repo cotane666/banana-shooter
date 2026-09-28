@@ -2089,6 +2089,24 @@ function buildMechChassis() {
   // remember the rest pose of each arm so the animator can offset from it
   mgArm.userData.basePos = mgArm.position.clone();
   lzArm.userData.basePos = lzArm.position.clone();
+  /* ---- the PILOT, actually visible inside the open cockpit ----
+     A seated soldier tucked into the chest, so from outside you can see the
+     player sitting in the cab (the glass dome is nearly transparent). It is
+     hidden in FIRST PERSON so it never blocks the local player's view. */
+  const pilot = buildSoldierMesh('ct');
+  pilot.scale.setScalar(.94);
+  pilot.position.set(0, 1.78, -.06);
+  // tuck the legs forward as if seated, and lower the arms onto the controls
+  const pp = pilot.userData.parts;
+  if (pp) {
+    if (pp.legL) { pp.legL.rotation.x = -1.35; pp.legL.position.z = -.05; }
+    if (pp.legR) { pp.legR.rotation.x = -1.35; pp.legR.position.z = -.05; }
+    if (pp.armL) pp.armL.rotation.x = 1.15;
+    if (pp.armR) pp.armR.rotation.x = 1.15;
+  }
+  pilot.traverse(o => { if (o.isMesh) o.castShadow = false; });
+  g.add(pilot);
+  g.userData.pilot = pilot;
   return g;
 }
 
@@ -2239,8 +2257,9 @@ function applyGalaxySkin(group) {
     if (o.material.isMeshBasicMaterial) return;        // lamps keep their look
     const l = o.material.color.r * .3 + o.material.color.g * .59 + o.material.color.b * .11;
     const c = new THREE.Color(l > .55 ? C.bright : l > .3 ? C.violet : C.deep);
-    c.multiplyScalar(U.clamp(.5 + l * 1.2, .35, 1.3));
+    c.multiplyScalar(U.clamp(.75 + l * 1.2, .6, 1.4));
     o.material.color.copy(c);
+    if (o.material.emissive !== undefined) o.material.emissive.setHex(l > .3 ? 0x341266 : 0x180a30);
     if (tex) {
       const t2 = tex.clone(); t2.needsUpdate = true;
       t2.wrapS = t2.wrapT = THREE.RepeatWrapping; t2.repeat.set(2, 2);
@@ -2321,8 +2340,13 @@ function applyGalaxyCharacter(group) {
     if (o.material.isMeshBasicMaterial) return;
     const l = o.material.color.r * .3 + o.material.color.g * .59 + o.material.color.b * .11;
     const c = new THREE.Color(l > .62 ? C.bright : l > .34 ? C.violet : C.deep);
-    c.multiplyScalar(U.clamp(.45 + l * 1.1, .3, 1.25));
+    c.multiplyScalar(U.clamp(.85 + l * 1.2, .75, 1.5));
     o.material.color.copy(c);
+    /* a violet self-glow so the dark nebula map does not leave the soldier a
+       black silhouette — it should read as a glowing cosmic armour */
+    if (o.material.emissive !== undefined) {
+      o.material.emissive.setHex(l > .34 ? 0x552090 : 0x2c1055);
+    }
     if (tex) {
       const t2 = tex.clone(); t2.needsUpdate = true;
       t2.wrapS = t2.wrapT = THREE.RepeatWrapping; t2.repeat.set(2, 2);

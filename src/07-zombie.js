@@ -835,8 +835,10 @@ class Zombie {
 
     p.legL.rotation.x = Math.sin(ph) * amp;
     p.legR.rotation.x = -Math.sin(ph) * amp;
-    // arms reaching forward (classic zombie)
-    const reach = this.type === 'runner' ? -1.15 : -1.5;
+    // arms reaching forward (classic zombie). A limb hangs DOWN from its pivot,
+    // so a POSITIVE rotation.x swings it forward (-Z, the way the zombie faces);
+    // a negative value would point the arms behind its back.
+    const reach = this.type === 'runner' ? 1.15 : 1.5;
     p.armL.rotation.x = reach + Math.sin(ph + 1) * amp * .8 + stagger * U.rand(0, 1);
     p.armR.rotation.x = reach + Math.sin(ph + 2.2) * amp * .8;
     p.armL.rotation.z = .12; p.armR.rotation.z = -.12;

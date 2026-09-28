@@ -1141,6 +1141,7 @@ const Skins = {
     this.renderWeaponList();
     this.renderRarityBar();
     this.renderGrid();
+    this.rebuild();
     UI.show('skins');
     this._spin = 0;
     this.resize();
@@ -1247,10 +1248,16 @@ const Skins = {
       if (skin) applyWeaponSkin(gun, skin);
       const armR = soldier.userData.parts && soldier.userData.parts.armR;
       if (armR) {
-        gun.position.set(.02, -.60, .02);
-        gun.rotation.set(-Math.PI / 2, 0, 0);
-        gun.scale.setScalar(.95);
+        // show the soldier HOLDING the gun with both hands, using the same pose
+        // as the remote players, instead of a gun glued to one arm
+        const hp = (typeof weaponHoldPose === 'function') ? weaponHoldPose(this.weaponId) : { wpos: { x: .02, y: -.60, z: 0 }, wrot: { x: -Math.PI / 2, y: 0, z: 0 }, scale: .95, reachL: 1.5, reachR: 1.32, yawL: .4, yawR: -.1 };
+        gun.position.set(hp.wpos.x, hp.wpos.y, hp.wpos.z);
+        gun.rotation.set(hp.wrot.x, hp.wrot.y, hp.wrot.z);
+        gun.scale.setScalar(hp.scale);
         armR.add(gun);
+        const pp = soldier.userData.parts;
+        if (pp.armR) { pp.armR.rotation.x = hp.reachR; pp.armR.rotation.y = hp.yawR; }
+        if (pp.armL) { pp.armL.rotation.x = hp.reachL; pp.armL.rotation.y = hp.yawL; pp.armL.rotation.z = .1; }
       }
       this._base.add(soldier);
       this._modelH = 2.0; this._centerY = 1.0;

@@ -135,6 +135,43 @@ function buildSoldierWeapon(id, skinId) {
   return clone;
 }
 
+/* ---- how a remote player should HOLD each weapon ----
+   Returns the arm angles and the weapon offset that make the gun read as held
+   by BOTH hands instead of stuck to the end of one arm. The soldier's arms hang
+   from the shoulder pivot, so a POSITIVE rotation.x raises them forward.
+   `reachL` brings the left hand down onto the handguard; `wpos`/`wrot` seat the
+   gun at the right hand and angle it a little across the chest. */
+function weaponHoldPose(id) {
+  const w = WEAPONS[id] || {};
+  const cat = w.cat || 'rifle';
+  const twoHanded = !(cat === 'pistol' || cat === 'melee');
+  // how far the gun is pushed forward: long guns sit further out
+  const len = (w.range || 60) > 120 ? 1.10 : (cat === 'sniper' || cat === 'lmg') ? 1.06 : 1.0;
+  const pose = {
+    reachR: 1.32,               // right (trigger) arm — always raised forward
+    reachL: twoHanded ? 1.62 : 0.85,   // left arm reaches the handguard
+    yawL: twoHanded ? 0.42 : 0.16,     // left arm swings in across the body
+    yawR: -0.10,
+    wpos: { x: .02, y: -.60, z: -.02 * len },
+    wrot: { x: -Math.PI / 2, y: 0.06, z: -0.05 },
+    scale: .95
+  };
+  if (cat === 'pistol') {
+    // one-handed pistol: gun centred in the right hand, close to the body
+    pose.reachR = 1.28; pose.reachL = 1.15; pose.yawL = 0.30;
+    pose.wpos = { x: .0, y: -.62, z: 0 };
+    pose.wrot = { x: -Math.PI / 2, y: 0.0, z: 0.0 };
+  } else if (cat === 'heavy') {
+    // big launchers/miniguns are braced: left hand well forward and under
+    pose.reachR = 1.30; pose.reachL = 1.70; pose.yawL = 0.5;
+    pose.wpos = { x: .05, y: -.66, z: -.06 };
+  } else if (cat === 'sniper' || cat === 'lmg') {
+    pose.reachR = 1.34; pose.reachL = 1.66; pose.yawL = 0.46;
+    pose.wpos = { x: .03, y: -.62, z: -.08 };
+  }
+  return pose;
+}
+
 function makeNameplate(text) {
   const c = makeCanvas(256); c.height = 64;
   const x = c.getContext('2d');
@@ -466,9 +503,13 @@ class ShooterDummy extends Dummy {
     const armR = this.parts.armR;
     if (this.weaponGroup) { armR.remove(this.weaponGroup); this.weaponGroup = null; }
     const w = buildSoldierWeapon(id);
-    w.position.set(.02, -.60, .02);
-    w.rotation.set(-Math.PI / 2, 0, 0);
-    w.scale.setScalar(.95);
+    // the SAME hold pose the remote players use, so the dummy grips it with
+    // both hands as well
+    const hp = weaponHoldPose(id);
+    this.hold = hp;
+    w.position.set(hp.wpos.x, hp.wpos.y, hp.wpos.z);
+    w.rotation.set(hp.wrot.x, hp.wrot.y, hp.wrot.z);
+    w.scale.setScalar(hp.scale);
     armR.add(w);
     this.weaponGroup = w;
   }
@@ -478,10 +519,11 @@ class ShooterDummy extends Dummy {
     // always face the player so the weapon points at them
     if (target) this.yaw = Math.atan2(-(target.pos.x - this.pos.x), -(target.pos.z - this.pos.z));
     Dummy.prototype.update.call(this, dt, ctx);   // DPS readout + hit reaction, no movement
-    // a fixed two-handed firing pose (the zombie "reach" would aim the gun away)
+    // a fixed two-handed firing pose that matches the weapon's hold
     const p = this.parts;
-    p.armL.rotation.x = 1.15; p.armL.rotation.z = .14;
-    p.armR.rotation.x = 1.30; p.armR.rotation.z = -.14;
+    const hp = this.hold || { reachL: 1.15, reachR: 1.30, yawL: 0.3, yawR: -0.1 };
+    p.armL.rotation.x = hp.reachL; p.armL.rotation.y = hp.yawL; p.armL.rotation.z = .14;
+    p.armR.rotation.x = hp.reachR; p.armR.rotation.y = hp.yawR; p.armR.rotation.z = -.14;
     if (this.flashT > 0) this.flashT -= dt;
     if (this.projCd > 0) this.projCd -= dt;
     if (!this.active || !this.alive || !target || !target.alive) return;
@@ -685,17 +727,36 @@ class RemotePlayer {
        shares materials with the cache — so a skin must be applied to a model
        whose materials are per-instance, never to the shared cache. */
     const w = buildSoldierWeapon(id, skinId);
-    // The arm is raised forward with rotation.x = +1.30, which turns its local
-    // -Z axis to point up. Rotating the weapon by -90° cancels that, so the
-    // barrel ends up roughly horizontal and pointing ahead of the soldier
-    // (measured: muzzle ~1.0 m up and 1.25 m in front, a natural rifle hold).
-    w.position.set(.02, -.60, .02);
-    w.rotation.set(-Math.PI / 2, 0, 0);
-    w.scale.setScalar(.95);
+    // Seat the gun at the right hand, angled slightly across the chest, and make
+    // the LEFT arm reach the handguard, so the peer clearly holds it with both
+    // hands (not a gun glued to the end of one arm). The arm is raised forward
+    // with rotation.x, and this rotation cancels the arm's tilt so the barrel
+    // ends up roughly horizontal, pointing ahead of the soldier.
+    this.hold = weaponHoldPose(id);
+    const hp = this.hold;
+    w.position.set(hp.wpos.x, hp.wpos.y, hp.wpos.z);
+    w.rotation.set(hp.wrot.x, hp.wrot.y, hp.wrot.z);
+    w.scale.setScalar(hp.scale);
     armR.add(w);
     this.weaponGroup = w;
     /* the galaxy gun needs its rings/dust animated each frame */
     this._galaxyGun = !!w.userData.galaxy;
+  }
+
+  /* Pose the soldier so the held weapon reads as gripped by BOTH hands. Called
+     every frame from sync(); legs/torso already animate separately. */
+  poseArms(ph, armAmp) {
+    const p = this.mesh.userData.parts;
+    const hp = this.hold;
+    if (!hp) { p.armR.rotation.x = 1.30; p.armL.rotation.x = 1.05; return; }
+    // the trigger arm holds near the stored reach with only a little drift
+    p.armR.rotation.x = hp.reachR - Math.sin(ph) * armAmp * .25;
+    // the support arm is locked onto the handguard (barely drifts)
+    p.armL.rotation.x = hp.reachL + Math.sin(ph) * armAmp * .12;
+    p.armL.rotation.y = hp.yawL;
+    p.armR.rotation.y = hp.yawR;
+    p.armR.rotation.z = -0.06;
+    p.armL.rotation.z = 0.10;
   }
 
   /* МЕХАКОСТЮМ: swap the soldier for a mech chassis. `on` comes from the peer's
@@ -924,14 +985,11 @@ class RemotePlayer {
     p.legL.rotation.x = Math.sin(ph) * amp * spd;
     p.legR.rotation.x = -Math.sin(ph) * amp * spd;
 
-    // arms: the right hand holds the weapon, so it swings less; the left pumps.
-    // A POSITIVE rotation.x raises the arm forward (toward -Z, the way the
-    // soldier faces); a negative one would swing it behind the back.
+    // arms: BOTH hands grip the weapon — the right holds the trigger, the left
+    // braces the handguard (see poseArms). The left still pumps a little with
+    // the stride for life, the right barely moves.
     const armAmp = (running ? .55 : .35) * spd;
-    p.armR.rotation.x = 1.30 - Math.sin(ph) * armAmp * .45;
-    p.armL.rotation.x = 1.05 + Math.sin(ph) * armAmp;
-    p.armR.rotation.z = -0.06;
-    p.armL.rotation.z = 0.10;
+    this.poseArms(ph, armAmp);
 
     // torso/head: lean into a run, always look where the player is aiming
     p.torso.rotation.x = this.pitch * .35 + spd * .10;
@@ -5746,6 +5804,8 @@ const Game = {
         }
         const p = this.player;
         this.mechBody.visible = true;
+        // the pilot model is for the OUTSIDE view only — hide it in first person
+        if (this.mechBody.userData && this.mechBody.userData.pilot) this.mechBody.userData.pilot.visible = false;
         this.mechBody.position.set(p.pos.x, p.pos.y, p.pos.z);
         this.mechBody.rotation.y = p.yaw;
         // the first-person weapon model is not used in the mech: the chassis arms

@@ -627,9 +627,13 @@ class RemotePlayer {
     this.mechPlate = null;
     this._mechSpin = 0;
     this.mechRecoil = 0;
-    /* mech ability state mirrored from the peer's packets */
+    /* mech ability state mirrored from the peer's packets. A dash lasts only
+       ~0.28s, shorter than the packet gap, so each flag is LATCHED: once a
+       packet says "on", the effect stays visible for a short minimum window. */
     this.mechDash = false;
     this.mechJet = false;
+    this._mechDashT = 0;
+    this._mechJetT = 0;
   }
 
   /* Attach (or swap) the weapon model in the right hand for this slot.
@@ -799,6 +803,11 @@ class RemotePlayer {
         // walk cycle: the peer's mech strides as it moves
         const spd01 = U.clamp((this.moveSpeed || 0) / CFG.runSpeed, 0, 1);
         this._mechLegPhase = animateMechLegs(this.mechMesh, spd01, this._mechLegPhase || 0, dt);
+        // decay the latched ability windows (a dash is a short impulse)
+        if (this._mechDashT > 0) this._mechDashT -= dt;
+        if (this._mechJetT > 0) this._mechJetT -= dt;
+        if (this._mechDashT <= 0) this.mechDash = false;
+        if (this._mechJetT <= 0) this.mechJet = false;
         // the guns track the peer's aim (pitch + a little idle sway)
         this._mechArmT = (this._mechArmT || 0) + dt;
         aimMechArms(this.mechMesh, this.pitch || 0, this._mechArmT);
@@ -5192,8 +5201,22 @@ const Game = {
         // step the player OUT of the cockpit (a bit backward so they are clear)
         const bx = Math.sin(myaw), bz = Math.cos(myaw);      // backward
         p.pos.x = mx + bx * 1.6; p.pos.z = mz + bz * 1.6;
-        p.pos.y = this.world.groundAt(p.pos.x, p.pos.z, my + 3) || my;
-        p.vel.x = p.vel.y = p.vel.z = 0;
+        /* If we bail out high in the air, keep the mech's altitude and FALL:
+           snapping straight to the ground teleported the player down. Only snap
+           to the floor when the exit point is on (or barely above) the ground. */
+        const gy = this.world.groundAt(p.pos.x, p.pos.z, my + 3);
+        const ground = (gy === null || gy === undefined) ? my : gy;
+        if (my - ground > 0.6) {
+          // airborne exit: drop from here, with the mech's horizontal drift kept
+          p.pos.y = my;
+          p.vel.x = (p.vel.x || 0) * .5;
+          p.vel.z = (p.vel.z || 0) * .5;
+          p.vel.y = 0;
+          p.onGround = false;
+        } else {
+          p.pos.y = ground;
+          p.vel.x = p.vel.y = p.vel.z = 0;
+        }
         this.clearMechMissiles();
         if (this.effects) { this.effects.endFlame(); }
         UI.center('МЕХ ОСТАВЛЕН', 'G рядом с мехом — снова сесть', 2.2);
@@ -6890,9 +6913,13 @@ const Game = {
     // in the mech: hide the soldier and show the chassis instead
     rp.setMech(s.mc);
     if (rp.mech && rp._mechFired === undefined) rp._mechFired = false;
-    // mech ability flags (dash / jetpack) so the opponent sees the effects
-    rp.mechDash = !!s.md;
-    rp.mechJet = !!s.mj;
+    // mech ability flags (dash / jetpack) so the opponent sees the effects.
+    // A short impulse (dash) would often fall between two packets, so latch a
+    // minimum visible window whenever the flag arrives as ON.
+    if (s.md) rp._mechDashT = Math.max(rp._mechDashT || 0, 0.6);
+    if (s.mj) rp._mechJetT = Math.max(rp._mechJetT || 0, 0.25);
+    rp.mechDash = (rp._mechDashT || 0) > 0 || !!s.md;
+    rp.mechJet = (rp._mechJetT || 0) > 0 || !!s.mj;
   },
 
   onRemoteShot(s) {

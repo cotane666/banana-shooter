@@ -126,7 +126,9 @@
       <div class="krow"><kbd>R</kbd><span>Перезарядка</span></div>
       <div class="krow"><kbd>H</kbd><span>Аптечка (+50 HP)</span></div>
       <div class="krow"><kbd>J</kbd><span>Сменить тип гранаты</span></div>
-      <div class="krow"><kbd>O</kbd><span>День / ночь</span></div>
+      <div class="krow"><kbd>O</kbd><span>Время суток (день · закат · ночь · рассвет)</span></div>
+      <div class="krow"><kbd>P</kbd><span>Погода (ясно · дождь · гроза · туман · снег · пепел)</span></div>
+      <div class="krow"><kbd>L</kbd><span>Выключить окружение (всегда ясный день)</span></div>
       <div class="krow"><kbd>M</kbd><span>Сохранить игру в любой момент</span></div>
       <div class="krow"><kbd>Y</kbd><span>Сбросить зомби на спавн (раз в 2 мин)</span></div>
       <div class="krow"><kbd>ЛКМ/ПКМ</kbd><span>Мехакостюм: миниган / лазер</span></div>
@@ -172,6 +174,19 @@
     <div class="fld">Режим оффлайн
       <div class="chips" id="hordeChips"></div>
     </div>
+    <h2 class="mt">ОКРУЖЕНИЕ</h2>
+    <div class="fld">Время суток
+      <div class="chips" id="todChips"></div>
+    </div>
+    <div class="fld">Погода
+      <div class="chips" id="weatherChips"></div>
+    </div>
+    <div class="fld">Авто-смена
+      <div class="chips" id="envAutoChips"></div>
+    </div>
+    <label class="slider">Скорость авто-смены <output id="oEnvSpeed">1.0</output>
+      <input type="range" id="sEnvSpeed" min="0.25" max="4" step="0.25" value="1"></label>
+    <div class="hintbox">«ВЫКЛ» полностью отключает время суток и погоду (всегда ясный день).</div>
     <div class="btnrow">
       <button class="mbtn small" id="btnReset">Сбросить прогресс</button>
       <button class="mbtn small primary" id="btnControlsBack">НАЗАД</button>

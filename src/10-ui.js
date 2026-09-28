@@ -21,6 +21,7 @@ const UI = {
       'btnCopy', 'dmgDirs', 'android', 'ios', 'credits', 'crPlayer', 'crStats',
       'matchEnd', 'meTitle', 'meWinner', 'meScore', 'meDetail', 'btnMatchAgain', 'btnMatchMenu',
       'mapChips', 'playerChips', 'hpChips', 'hordeChips', 'lobbyMaps', 'lobbyPlayers', 'lobbyHp', 'lobbyFree', 'lobbyRounds',
+      'todChips', 'weatherChips', 'envAutoChips', 'sEnvSpeed', 'oEnvSpeed',
       'offCountChips', 'offHpChips', 'offFreeChips', 'offModeChips', 'offCustomBox', 'offHordeBox', 'offSpecialBox', 'offCpBox', 'offCpInfo', 'offCpMode', 'offCpList', 'offCountExact', 'offCountFixed', 'btnOffContinue', 'custom', 'lobbyShop', 'lobbyShopItems',
       'modScreen', 'modGrid', 'modActive',
       'extras', 'achGrid', 'recTable', 'btnExtrasBack', 'weaponWheel', 'wwInner',
@@ -264,8 +265,36 @@ const UI = {
     fillFree(this.el.lobbyFree);
     fillRounds(this.el.lobbyRounds);
     fillShop(this.el.lobbyShop);
+    this.buildEnvChips();
     this.refreshChips();
   },
+
+  /* time-of-day / weather / auto-cycle chip groups (environment settings) */
+  buildEnvChips() {
+    const S = Store.data;
+    const fill = (wrap, items, attr, onPick) => {
+      if (!wrap) return;
+      wrap.innerHTML = '';
+      items.forEach(o => {
+        const b = document.createElement('button');
+        b.dataset[attr] = o.v;
+        b.innerHTML = '<b>' + U.esc(o.b) + '</b>' + (o.i ? '<i>' + U.esc(o.i) + '</i>' : '');
+        b.addEventListener('click', () => { onPick(o.v); Audio3D_SFX.uiClick(); });
+        wrap.appendChild(b);
+      });
+    };
+    fill(this.el.todChips,
+      TOD_ORDER.map(k => ({ v: k, b: todName(k) })),
+      'tod', v => { S.timeOfDay = v; S.weather = v; S.envOff = 0; Store.save(); Game.applyTimeOfDay(); this.refreshChips(); });
+    fill(this.el.weatherChips,
+      WEATHER_ORDER.map(k => ({ v: k, b: weatherName(k) })),
+      'wx', v => { S.skyWeather = v; S.envOff = 0; Store.save(); Game.applyTimeOfDay(); this.refreshChips(); });
+    fill(this.el.envAutoChips,
+      [{ v: 0, b: 'ВЫКЛ' }, { v: 1, b: 'ВКЛ' }],
+      'auto', v => { S.envAuto = v; Store.save(); this.refreshChips(); });
+  },
+  /* re-highlight the environment chips (called after the E/P hotkeys) */
+  refreshEnv() { this.refreshChips(); },
 
   refreshChips() {
     const S = Store.data;
@@ -282,6 +311,16 @@ const UI = {
     mark(this.el.offCountChips, 'v', parseFloat(S.offCount) || 1);
     mark(this.el.offHpChips, 'v', parseFloat(S.offHp) || 1);
     mark(this.el.offFreeChips, 'v', Number(S.offFree) || 0);
+    /* environment: when OFF nothing is highlighted, otherwise show the current
+       time of day, the weather, and the auto-cycle state */
+    if (!S.envOff) {
+      mark(this.el.todChips, 'tod', S.timeOfDay || S.weather || 'day');
+      mark(this.el.weatherChips, 'wx', S.skyWeather || 'clear');
+    } else {
+      mark(this.el.todChips, 'tod', '__off__');
+      mark(this.el.weatherChips, 'wx', '__off__');
+    }
+    mark(this.el.envAutoChips, 'auto', S.envAuto ? 1 : 0);
     const mode = S.offMode || 'normal';
     if (this.el.offModeChips) {
       Array.from(this.el.offModeChips.children).forEach(b => b.classList.toggle('on', b.dataset.mode === mode));

@@ -1464,6 +1464,13 @@ const Game = {
       case 'KeyO':
         if (!this.paused) this.cycleTimeOfDay();
         break;
+      /* P — cycle the weather; L — toggle the whole environment off/on */
+      case 'KeyP':
+        if (!this.paused) this.cycleWeather();
+        break;
+      case 'KeyL':
+        if (!this.paused) this.toggleEnvironment();
+        break;
     }
   },
 
@@ -1590,42 +1597,194 @@ const Game = {
   },
 
   /* ============================================================
-     ENVIRONMENT: time of day + placeables
+     ENVIRONMENT: time of day + weather (+ optional auto cycle)
      ============================================================ */
+  /* K cycles DAY → SUNSET → NIGHT → DAWN (kept for the old control). */
   cycleTimeOfDay() {
-    const order = ['day', 'night'];
-    const cur = Store.data.weather || 'day';
-    const next = order[(order.indexOf(cur) + 1) % order.length];
-    Store.data.weather = next; Store.save();
+    const cur = this.envTod();
+    const next = TOD_ORDER[(TOD_ORDER.indexOf(cur) + 1) % TOD_ORDER.length];
+    Store.data.timeOfDay = next; Store.data.weather = next; Store.save();
     this.applyTimeOfDay();
-    UI.toast('Время суток: ' + todName(next), next === 'night' ? '#4aa3ff' : '#ffd24a');
+    UI.toast('Время суток: ' + todName(next), (next === 'night' || next === 'dawn') ? '#4aa3ff' : '#ffd24a');
     Audio3D_SFX.uiClick();
+    if (typeof UI !== 'undefined' && UI.refreshEnv) UI.refreshEnv();
   },
+  /* P cycles the weather. */
+  cycleWeather() {
+    const cur = Store.data.skyWeather || 'clear';
+    const next = WEATHER_ORDER[(WEATHER_ORDER.indexOf(cur) + 1) % WEATHER_ORDER.length];
+    Store.data.skyWeather = next; Store.save();
+    this.applyTimeOfDay();
+    UI.toast('Погода: ' + weatherName(next), '#4ad6ff');
+    Audio3D_SFX.uiClick();
+    if (typeof UI !== 'undefined' && UI.refreshEnv) UI.refreshEnv();
+  },
+  envTod() { return Store.data.timeOfDay || Store.data.weather || 'day'; },
+  envWeather() { return Store.data.skyWeather || 'clear'; },
+  envEnabled() { return !Store.data.envOff; },
+  /* L — switch time-of-day + weather OFF (always clear day) or back ON. */
+  toggleEnvironment() {
+    Store.data.envOff = Store.data.envOff ? 0 : 1;
+    Store.save();
+    this.applyTimeOfDay();
+    UI.toast(Store.data.envOff ? 'Окружение: ВЫКЛ (ясный день)' : 'Окружение: ВКЛ', Store.data.envOff ? '#e33a2e' : '#57d16a');
+    Audio3D_SFX.uiClick();
+    if (UI.refreshEnv) UI.refreshEnv();
+  },
+
+  /* a per-time-of-day palette: sky, fog, sun colour/strength, ambient */
+  _todPreset(k) {
+    switch (k) {
+      case 'sunset': return { sky: 0xc98a52, fog: 0xc08a5a, fogMul: 1.25, sun: 0xffb070, sunMul: .72, amb: 0x000000, ambMul: 0 };
+      case 'night':  return { sky: 0x080c18, fog: 0x0a1020, fogMul: 1.7,  sun: 0x8090c0, sunMul: .25, amb: 0x33406a, ambMul: .45 };
+      case 'dawn':   return { sky: 0x8a86b8, fog: 0x9a94b0, fogMul: 1.35, sun: 0xd0b8e0, sunMul: .55, amb: 0x202840, ambMul: .25 };
+      default:       return { sky: 0xbcc6cf, fog: 0xbcc6cf, fogMul: 1.0,  sun: 0xffffff, sunMul: 1.0,  amb: 0x000000, ambMul: 0 };
+    }
+  },
+  /* how much each weather dims/greys the light and thickens the fog */
+  _weatherPreset(k) {
+    switch (k) {
+      case 'clouds': return { dim: .78, fogMul: 1.2, tint: 0xb8bec6, sun: 0xdcdce4 };
+      case 'rain':   return { dim: .60, fogMul: 1.5, tint: 0x8f98a2, sun: 0xc8d0d8 };
+      case 'storm':  return { dim: .42, fogMul: 1.8, tint: 0x6d747e, sun: 0xaab4c0 };
+      case 'fog':    return { dim: .70, fogMul: 2.6, tint: 0xb0b6bc, sun: 0xd8dade };
+      case 'snow':   return { dim: .80, fogMul: 1.6, tint: 0xcdd6de, sun: 0xe8f0f8 };
+      case 'ash':    return { dim: .55, fogMul: 1.7, tint: 0x6a6258, sun: 0xd09070 };
+      default:       return { dim: 1.0, fogMul: 1.0, tint: 0xffffff, sun: 0xffffff };
+    }
+  },
+
   applyTimeOfDay() {
-    const night = (Store.data.weather || 'day') === 'night';
+    const on = this.envEnabled();
+    const tod = on ? this.envTod() : 'day';
+    const wx = on ? this.envWeather() : 'clear';
+    const tp = this._todPreset(tod), wp = this._weatherPreset(wx);
     const g = MAP.group;
     const sky = g && g.userData && g.userData.sky;
-    if (sky) { sky.material.color.setHex(night ? 0x080c18 : 0xbcc6cf); sky.material.needsUpdate = true; }
+    if (sky) {
+      // blend the time sky colour with the weather tint
+      const sc = new THREE.Color(tp.sky).lerp(new THREE.Color(wp.tint), wx === 'clear' ? 0 : .45);
+      sky.material.color.copy(sc); sky.material.needsUpdate = true;
+    }
     if (this.scene) {
       if (!this._dayFog) {
         this._dayFog = { color: this.scene.fog ? this.scene.fog.color.getHex() : 0xbcc6cf, density: this.scene.fog ? this.scene.fog.density : .0055 };
       }
       if (this.scene.fog) {
-        this.scene.fog.color.setHex(night ? 0x0a1020 : this._dayFog.color);
-        this.scene.fog.density = night ? this._dayFog.density * 1.7 : this._dayFog.density;
+        const fc = new THREE.Color(tp.fog).lerp(new THREE.Color(wp.tint), .35);
+        this.scene.fog.color.copy(fc);
+        this.scene.fog.density = this._dayFog.density * tp.fogMul * wp.fogMul;
       }
       this.scene.traverse(o => {
         if (o.isLight && o.type === 'DirectionalLight' && o.userData && o.userData.dayLight) {
-          o.intensity = night ? o.userData.dayIntensity * .25 : o.userData.dayIntensity;
-          o.color.setHex(night ? 0x8090c0 : 0xffffff);
+          o.intensity = o.userData.dayIntensity * tp.sunMul * wp.dim;
+          o.color.setHex(tp.sun).lerp(new THREE.Color(wp.sun), .5);
         }
       });
-      if (!this._ambient) {
-        this._ambient = new THREE.AmbientLight(0xffffff, 0.25);
-        this.scene.add(this._ambient);
+      if (!this._ambient) { this._ambient = new THREE.AmbientLight(0xffffff, 0.25); this.scene.add(this._ambient); }
+      const ambOn = tp.ambMul > 0 || wx === 'storm' || wx === 'ash';
+      this._ambient.visible = ambOn;
+      this._ambient.color.setHex(tp.amb || wp.tint);
+      this._ambient.intensity = Math.max(tp.ambMul, wx === 'storm' ? .35 : wx === 'ash' ? .30 : 0);
+    }
+    this.applyWeatherFX(wx);
+  },
+
+  /* ============================================================
+     WEATHER PARTICLE FX (rain / snow / ash / dust) — a compact recycled
+     point cloud that follows the camera. Built once, retuned per weather.
+     ============================================================ */
+  applyWeatherFX(kind) {
+    if (!this.scene) return;
+    const want = this.envEnabled() && (kind === 'rain' || kind === 'storm' || kind === 'snow' || kind === 'ash');
+    if (!want) {
+      if (this._wxPoints) this._wxPoints.visible = false;
+      if (this._wxLightning) this._wxLightning = 0;
+      return;
+    }
+    const N = kind === 'snow' ? 900 : 1400;
+    if (!this._wxPoints || this._wxPoints.userData.kind !== kind) {
+      if (this._wxPoints) { this.scene.remove(this._wxPoints); disposeGroupDeep(this._wxPoints); }
+      const geo = new THREE.BufferGeometry();
+      const pos = new Float32Array(N * 3);
+      const R = 26, H = 34;
+      for (let i = 0; i < N; i++) {
+        pos[i * 3] = U.rand(-R, R); pos[i * 3 + 1] = U.rand(0, H); pos[i * 3 + 2] = U.rand(-R, R);
       }
-      this._ambient.visible = night;
-      this._ambient.intensity = .45;
+      geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+      const isSnow = kind === 'snow', isAsh = kind === 'ash';
+      const col = isSnow ? 0xffffff : isAsh ? 0xff8a4a : 0xaecbe6;
+      const mat = new THREE.PointsMaterial({ color: col, size: isSnow ? .16 : isAsh ? .12 : .10, transparent: true, opacity: isSnow ? .9 : .75, depthWrite: false, sizeAttenuation: true, blending: isAsh ? THREE.AdditiveBlending : THREE.NormalBlending });
+      const pts = new THREE.Points(geo, mat);
+      pts.frustumCulled = false;
+      pts.renderOrder = 6;
+      pts.userData.kind = kind;
+      pts.userData.R = R; pts.userData.H = H;
+      this.scene.add(pts);
+      this._wxPoints = pts;
+    }
+    this._wxPoints.visible = true;
+    // rain streaks are longer: tilt by scaling Y
+    const isSnow = kind === 'snow', isAsh = kind === 'ash';
+    this._wxPoints.material.size = isSnow ? .16 : isAsh ? .12 : (kind === 'storm' ? .12 : .10);
+    this._wxSpeed = isSnow ? 4.5 : isAsh ? 2.2 : (kind === 'storm' ? 42 : 30);
+  },
+
+  /* called every frame: drift the weather particles around the camera */
+  updateWeather(dt) {
+    const pts = this._wxPoints;
+    if (!pts || !pts.visible) return;
+    const pos = pts.geometry.attributes.position;
+    const arr = pos.array;
+    const R = pts.userData.R, H = pts.userData.H;
+    const kind = pts.userData.kind;
+    const cam = this.camera ? this.camera.position : this.player.pos;
+    const snow = kind === 'snow', ash = kind === 'ash';
+    const drift = snow ? 2.2 : ash ? 1.4 : 3.0;
+    const fall = (this._wxSpeed || 30) * dt;
+    for (let i = 0; i < arr.length; i += 3) {
+      arr[i + 1] -= fall * (ash ? .5 : 1);
+      arr[i] += (Math.sin((arr[i + 1] + i) * .3) * drift + (ash ? .8 : 0)) * dt;
+      arr[i + 2] += Math.cos((arr[i + 1] + i) * .21) * drift * dt;
+      if (arr[i + 1] < 0) {
+        arr[i] = cam.x + U.rand(-R, R);
+        arr[i + 2] = cam.z + U.rand(-R, R);
+        arr[i + 1] = H;
+      }
+      // wrap X/Z around the camera so the field always surrounds the player
+      if (arr[i] - cam.x > R) arr[i] -= R * 2;
+      else if (arr[i] - cam.x < -R) arr[i] += R * 2;
+      if (arr[i + 2] - cam.z > R) arr[i + 2] -= R * 2;
+      else if (arr[i + 2] - cam.z < -R) arr[i + 2] += R * 2;
+    }
+    pos.needsUpdate = true;
+    // lightning flashes during a storm
+    if (kind === 'storm') {
+      this._wxLightning = Math.max(0, (this._wxLightning || 0) - dt);
+      this._wxBoltT = (this._wxBoltT || 0) - dt;
+      if (this._wxBoltT <= 0) {
+        this._wxBoltT = U.rand(2.5, 8);
+        this._wxLightning = .18;
+        if (this._lightningLight) { this._lightningLight.intensity = 3.2; Audio3D_SFX && Audio3D_SFX.explosionAt && Audio3D_SFX.explosionAt(cam.x + U.rand(-30, 30), 18, cam.z + U.rand(-30, 30)); }
+      }
+      if (!this._lightningLight) { this._lightningLight = new THREE.HemisphereLight(0xcfe0ff, 0x203040, 0); this.scene.add(this._lightningLight); }
+      if (this._lightningLight) this._lightningLight.intensity = Math.max(0, (this._lightningLight.intensity || 0) - dt * 14);
+      if (this._wxLightning > 0 && this._lightningLight) this._lightningLight.intensity = 2.6;
+    }
+  },
+
+  /* AUTO cycle: slowly advance the time of day (and occasionally the weather). */
+  updateEnvCycle(dt) {
+    if (!this.envEnabled() || !Store.data.envAuto) return;
+    this._envT = (this._envT || 0) + dt * (Store.data.envAutoSpeed || 1);
+    if (this._envT >= 22) {
+      this._envT = 0;
+      const cur = this.envTod();
+      const next = TOD_ORDER[(TOD_ORDER.indexOf(cur) + 1) % TOD_ORDER.length];
+      Store.data.timeOfDay = next; Store.data.weather = next; Store.save();
+      UI.toast('Время суток: ' + todName(next), (next === 'night' || next === 'dawn') ? '#4aa3ff' : '#ffd24a');
+      this.applyTimeOfDay();
+      if (UI.refreshEnv) UI.refreshEnv();
     }
   },
 
@@ -7669,6 +7828,10 @@ const Game = {
     }
     this.updateMechBody(dt);
     this.updateMechMissiles(dt);
+
+    // ---- environment ----
+    this.updateEnvCycle(dt);
+    this.updateWeather(dt);
 
     // ---- flying bananas ----
     this.updateProjectiles(dt);

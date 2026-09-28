@@ -102,16 +102,50 @@ function DOT(r, color, x, y, z) {
    per pattern+glow so a whole match reuses a handful of small canvases.
    ============================================================ */
 const _skinTexCache = {};
-function _skinTexture(pattern, glowHex) {
-  if (!pattern || pattern === 'none') return null;
-  const key = pattern + '_' + glowHex;
-  if (_skinTexCache[key]) return _skinTexCache[key];
-  const S = 128;
-  const c = makeCanvas(S);
+/* decoded <img> per real texture, so the data-URI is only parsed once */
+const _skinImgCache = {};
+function _skinTexImage(name, uri) {
+  if (_skinImgCache[name]) return _skinImgCache[name];
+  if (typeof Image === 'undefined') return null;
+  const img = new Image();
+  img.onload = () => {
+    // the photo decoded: rebuild every cached canvas that used it, then poke the
+    // shared texture so materials already bound to it re-upload
+    for (const key in _skinTexCache) {
+      const entry = _skinTexCache[key];
+      if (entry.base !== name) continue;
+      _skinDraw(entry.canvas, entry.pattern, entry.glow);
+      entry.tex.needsUpdate = true;
+    }
+  };
+  img.src = uri;
+  _skinImgCache[name] = img;
+  return img;
+}
+
+/* each pattern may be built on a REAL material photo (from the embedded MIT
+   texture set) with procedural detail drawn on top, so it looks like a material
+   rather than noise. */
+const _PATTERN_BASE = {
+  carbon: 'carbon', grid: 'grind', wood: 'wood', hazard: 'grind', tiger: 'grind',
+  camo: 'grass', hex: 'grind', scale: 'brick', plasma: 'carbon', prism: 'checker',
+  noise: 'noise', brick: 'brick', concrete: 'checker', water: 'water', grass: 'grass'
+};
+
+/* draw one pattern into a canvas: a real photo base + procedural detail */
+function _skinDraw(c, pattern, glow) {
+  const S = c.width;
   const x = c.getContext('2d');
-  const glow = '#' + (glowHex >>> 0).toString(16).padStart(6, '0');
+  x.clearRect(0, 0, S, S);
   const dark = 'rgba(0,0,0,.45)';
-  x.fillStyle = 'rgba(255,255,255,.06)'; x.fillRect(0, 0, S, S);
+  const baseName = _PATTERN_BASE[pattern];
+  const dataUri = (typeof skinTextureData === 'function') ? skinTextureData(baseName) : null;
+  let usedPhoto = false;
+  if (dataUri) {
+    const img = _skinTexImage(baseName, dataUri);
+    if (img && img.complete && img.naturalWidth) { x.drawImage(img, 0, 0, S, S); usedPhoto = true; }
+  }
+  x.fillStyle = usedPhoto ? 'rgba(255,255,255,.05)' : 'rgba(255,255,255,.10)'; x.fillRect(0, 0, S, S);
   if (pattern === 'carbon') {
     // woven carbon: two diagonal directions of darker cells
     for (let y = 0; y < S; y += 8) for (let xx = 0; xx < S; xx += 8) {
@@ -199,35 +233,66 @@ function _skinTexture(pattern, glowHex) {
       x.fillRect(0, 0, 4 + Math.random() * 6, 26 + Math.random() * 30); x.restore();
     }
   }
+}
+
+/* build (and cache) the texture for a pattern; also registers it so a late
+   photo decode can redraw it in place. */
+function _skinTexture(pattern, glowHex) {
+  if (!pattern || pattern === 'none') return null;
+  const key = pattern + '_' + glowHex;
+  if (_skinTexCache[key]) return _skinTexCache[key].tex;
+  const S = 128;
+  const c = makeCanvas(S);
+  _skinDraw(c, pattern, glowHex);
   const t = new THREE.CanvasTexture(c);
   t.wrapS = t.wrapT = THREE.RepeatWrapping;
   t.colorSpace = THREE.SRGBColorSpace;
-  _skinTexCache[key] = t;
+  _skinTexCache[key] = { tex: t, canvas: c, pattern: pattern, glow: glowHex, base: _PATTERN_BASE[pattern] };
   return t;
 }
 
 /* ============================================================
    WEAPON SKINS — applied on top of a freshly built weapon model.
-   The SURFACE is defined by a procedural TEXTURE (pattern), and the skin's
-   colour shows up as GLOW: emissive tint, self-lit lamps, a point light and the
-   shot colour. The base metal keeps its original tones so the gun still reads as
-   a real weapon with a pattern applied — not a flat recolour.
+   A skin gives the gun a procedural TEXTURE and repaints its PARTS in separate
+   colours (receiver, steel, magazine, grip, accents) plus a little extra
+   hardware. No emissive glow: skins are paint jobs, not lights. Rarity controls
+   how much extra hardware is bolted on.
    ============================================================ */
 function applyWeaponSkin(group, skin) {
   if (!group || !skin) return group;
-  const mix = U.clamp(skin.glowMul !== undefined ? skin.glowMul : .5, .18, .85);
-  const emis = mix * .5;
-  const glowC = new THREE.Color(skin.glow);
-  const tex = skin.pattern ? _skinTexture(skin.pattern, skin.glow) : null;
+  const tex = skin.pattern ? _skinTexture(skin.pattern, skin.accent || skin.glow) : null;
 
-  const seen = [];
+  /* Source palette colour → the skin's part colour. Different original parts map
+     to different skin colours, so the gun becomes a real multi-part paint job. */
+  const partOf = (hex) => {
+    if (hex === 0x8b939d || hex === 0x646c76) return skin.steel;   // steel / accent metal
+    if (hex === 0x3a4046) return skin.mag;                         // magazine
+    if (hex === 0x353a40) return skin.grip;                        // polymer grip
+    if (hex === 0x2b2f34) return skin.grip;                        // black polymer
+    if (hex === 0x9c6a36) return skin.mag;                         // wooden furniture
+    if (hex === 0xa8926a) return skin.accent;                      // tan furniture
+    if (hex === 0x5d6247) return skin.body;                        // olive furniture
+    if (hex === 0x0e1114) return null;                             // glass stays clear
+    return skin.body;                                              // receiver body
+  };
+  /* keep the ORIGINAL part's brightness so shading survives, but take the
+     skin's hue — that makes each part a visibly different colour. */
+  const shade = (hex, tint) => {
+    const src = new THREE.Color(hex);
+    const l = src.r * .3 + src.g * .59 + src.b * .11;
+    const c = new THREE.Color(tint);
+    c.multiplyScalar(U.clamp(.55 + l * 1.8, .4, 1.6));
+    return c;
+  };
   group.traverse(o => {
     if (!o.isMesh) return;
     const m = o.material;
     if (!m || !m.color) return;
     const hex = m.color.getHex();
-    if (m.isMeshBasicMaterial) { m.color.copy(glowC); return; }   // lamps → the skin glow
-    /* texture is the whole surface look; the colour only glows */
+    if (m.isMeshBasicMaterial) return;               // lamps keep their own look
+    const target = partOf(hex);
+    if (target === null) return;
+    m.color.copy(shade(hex, target));                // repaint this part
     if (tex) {
       const rep = (hex === 0x0e1114) ? 3 : 2;
       const t2 = tex.clone(); t2.needsUpdate = true;
@@ -235,97 +300,68 @@ function applyWeaponSkin(group, skin) {
       t2.repeat.set(rep, rep);
       m.map = t2;
     }
-    // a faint glow tint keeps the base metal readable while the skin colour sings
-    if (m.emissive) m.emissive.setHex(skin.glow).multiplyScalar(emis);
     m.needsUpdate = true;
-    seen.push(o);
   });
 
-  const addPart = (w, h, d, color, x, y, z, k) => {
+  const addPart = (w, h, d, color, x, y, z) => {
     const b = new THREE.Mesh(new THREE.BoxGeometry(w, h, d),
-      new THREE.MeshLambertMaterial({ color: color, emissive: glowC.clone().multiplyScalar((k || .5) * mix) }));
+      new THREE.MeshLambertMaterial({ color: color }));
     b.position.set(x, y, z); group.add(b); return b;
-  };
-  const addGlowBox = (w, h, d, x, y, z, op) => {
-    const b = new THREE.Mesh(new THREE.BoxGeometry(w, h, d),
-      new THREE.MeshBasicMaterial({ color: skin.glow, transparent: true, opacity: op || .9, blending: THREE.AdditiveBlending, depthWrite: false }));
-    b.position.set(x, y, z); group.add(b); return b;
-  };
-  const addRing = (r, t, x, y, z) => {
-    const ring = new THREE.Mesh(new THREE.TorusGeometry(r, t, 8, 16),
-      new THREE.MeshBasicMaterial({ color: skin.glow, transparent: true, opacity: .9, blending: THREE.AdditiveBlending, depthWrite: false }));
-    ring.rotation.x = Math.PI / 2; ring.position.set(x, y, z); group.add(ring); return ring;
   };
 
   const deco = skin.deco || 'none';
   /* ---- every skin adds a small painted accent plate ---- */
-  addPart(.030, .008, .10, skin.accent, 0, .040, -.09, .4);
+  addPart(.030, .008, .10, skin.accent, 0, .040, -.09);
   if (deco === 'stripe') {
-    addGlowBox(.026, .006, .14, 0, .046, -.09, .8);
+    addPart(.026, .006, .14, skin.accent, 0, .046, -.09);
   } else if (deco === 'vent') {
-    for (let i = 0; i < 3; i++) addGlowBox(.050, .007, .013, 0, .030 + i * .013, -.05 - i * .022, .85);
-    addPart(.020, .020, .020, skin.accent, 0, -.052, .02, .6);
-    addPart(.036, .012, .05, skin.steel, 0, -.075, -.02, .3);        // foregrip block
+    for (let i = 0; i < 3; i++) addPart(.050, .007, .013, skin.accent, 0, .030 + i * .013, -.05 - i * .022);
+    addPart(.020, .020, .020, skin.accent, 0, -.052, .02);
+    addPart(.036, .012, .05, skin.steel, 0, -.075, -.02);            // foregrip block
   } else if (deco === 'plasma') {
-    [-1, 1].forEach(s => { addGlowBox(.012, .028, .062, s * .050, -.010, -.10, .9); });
-    addRing(.030, .006, 0, .015, -.20);
-    for (let i = 0; i < 3; i++) addGlowBox(.040, .008, .013, 0, .030 + i * .013, -.05 - i * .022, .9);
-    addPart(.070, .012, .16, skin.steel, 0, .048, -.07, .4);         // top rail plate
-    addPart(.020, .026, .026, skin.accent, 0, -.078, -.03, .5);
+    [-1, 1].forEach(s => { addPart(.012, .028, .062, skin.accent, s * .050, -.010, -.10); });
+    addPart(.012, .012, .012, skin.steel, 0, .015, -.20);            // muzzle ring block
+    for (let i = 0; i < 3; i++) addPart(.040, .008, .013, skin.accent, 0, .030 + i * .013, -.05 - i * .022);
+    addPart(.070, .012, .16, skin.steel, 0, .048, -.07);             // top rail plate
+    addPart(.020, .026, .026, skin.accent, 0, -.078, -.03);
   } else if (deco === 'legend') {
-    addGlowBox(.028, .010, .16, 0, .048, -.09, 1);
-    addRing(.034, .008, 0, .015, -.22);
-    for (let i = 0; i < 3; i++) addGlowBox(.046, .008, .015, 0, .030 + i * .014, -.05 - i * .024, 1);
-    addPart(.072, .014, .18, skin.steel, 0, .050, -.06, .5);         // full top rail
-    addPart(.024, .030, .030, skin.accent, 0, -.080, -.03, .7);
-    addPart(.016, .016, .08, skin.accent, -.050, .048, -.06, .8);    // side plate L
-    addPart(.016, .016, .08, skin.accent, .050, .048, -.06, .8);     // side plate R
+    addPart(.028, .010, .16, skin.accent, 0, .048, -.09);
+    addPart(.016, .016, .016, skin.steel, 0, .015, -.22);
+    for (let i = 0; i < 3; i++) addPart(.046, .008, .015, skin.accent, 0, .030 + i * .014, -.05 - i * .024);
+    addPart(.072, .014, .18, skin.steel, 0, .050, -.06);             // full top rail
+    addPart(.024, .030, .030, skin.accent, 0, -.080, -.03);
+    addPart(.016, .016, .08, skin.accent, -.050, .048, -.06);        // side plate L
+    addPart(.016, .016, .08, skin.accent, .050, .048, -.06);         // side plate R
   } else if (deco === 'plasma2') {
-    /* HEAVY (epic): a wide energy core, vented heat shields and a barrel halo —
-       bigger hardware than the standard plasma kit. */
-    addPart(.086, .020, .24, skin.steel, 0, .052, -.08, .5);                 // heavy top rail
-    for (let i = 0; i < 4; i++) addGlowBox(.062, .010, .018, 0, .030 + i * .014, -.05 - i * .026, .95);
+    /* HEAVY (epic): wide rail, vented heat shields and a big barrel block. */
+    addPart(.086, .020, .24, skin.steel, 0, .052, -.08);             // heavy top rail
+    for (let i = 0; i < 4; i++) addPart(.062, .010, .018, skin.accent, 0, .030 + i * .014, -.05 - i * .026);
     [-1, 1].forEach(s => {
-      addPart(.014, .036, .12, skin.accent, s * .058, .010, -.08, .7);       // heat shield L/R
-      addGlowBox(.008, .030, .10, s * .066, .010, -.08, .95);                // glowing slot
+      addPart(.014, .036, .12, skin.accent, s * .058, .010, -.08);   // heat shield L/R
+      addPart(.008, .030, .10, skin.steel, s * .066, .010, -.08);    // slot L/R
     });
-    const core = new THREE.Mesh(new THREE.CylinderGeometry(.030, .030, .020, 12),
-      new THREE.MeshBasicMaterial({ color: skin.glow, transparent: true, opacity: .85, blending: THREE.AdditiveBlending, depthWrite: false }));
-    core.rotation.x = Math.PI / 2; core.position.set(0, .015, -.13); group.add(core);
-    addRing(.036, .007, 0, .015, -.22);
-    addRing(.030, .006, 0, .015, -.15);
+    addPart(.036, .036, .020, skin.steel, 0, .015, -.13);            // core block
+    addPart(.044, .044, .020, skin.accent, 0, .015, -.22);           // muzzle block
   } else if (deco === 'legend2') {
-    /* HEAVY (legendary): the crown jewel — gold frame, twin plasma cores,
-       a muzzle crown and a full set of glowing cells. */
-    addPart(.096, .026, .30, skin.steel, 0, .054, -.08, .6);                 // gold frame
-    addPart(.020, .020, .30, skin.accent, -.062, .038, -.08, .9);            // side frame L
-    addPart(.020, .020, .30, skin.accent, .062, .038, -.08, .9);             // side frame R
-    for (let i = 0; i < 5; i++) addGlowBox(.070, .010, .018, 0, .030 + i * .015, -.05 - i * .028, 1);
-    for (let i = 0; i < 3; i++) {
-      const core = new THREE.Mesh(new THREE.CylinderGeometry(.028, .028, .022, 12),
-        new THREE.MeshBasicMaterial({ color: skin.glow, transparent: true, opacity: .9, blending: THREE.AdditiveBlending, depthWrite: false }));
-      core.rotation.x = Math.PI / 2; core.position.set(0, .015, -.10 - i * .07); group.add(core);
-    }
-    addRing(.040, .009, 0, .015, -.24);                                      // muzzle crown
-    addRing(.034, .008, 0, .015, -.17);
-    addRing(.026, .006, 0, .015, -.10);
-    [-1, 1].forEach(s => addPart(.014, .038, .13, skin.accent, s * .060, .010, -.08, 1));
+    /* HEAVY (legendary): gold frame, twin cores, a muzzle crown — the crown jewel. */
+    addPart(.096, .026, .30, skin.steel, 0, .054, -.08);             // gold frame
+    addPart(.020, .020, .30, skin.accent, -.062, .038, -.08);        // side frame L
+    addPart(.020, .020, .30, skin.accent, .062, .038, -.08);         // side frame R
+    for (let i = 0; i < 5; i++) addPart(.070, .010, .018, skin.accent, 0, .030 + i * .015, -.05 - i * .028);
+    for (let i = 0; i < 3; i++) addPart(.032, .032, .022, skin.steel, 0, .015, -.10 - i * .07);
+    addPart(.052, .052, .020, skin.accent, 0, .015, -.24);           // muzzle crown
+    addPart(.040, .040, .018, skin.accent, 0, .015, -.17);
+    [-1, 1].forEach(s => addPart(.014, .038, .13, skin.accent, s * .060, .010, -.08));
   }
-  /* ---- glowing beads (rare and up) ---- */
+  /* ---- extra solid bolts (rare and up) — hardware, not glow ---- */
   const beads = skin.beads || 0;
   for (let i = 0; i < beads; i++) {
     const b = new THREE.Mesh(new THREE.SphereGeometry(.010, 8, 6),
-      new THREE.MeshBasicMaterial({ color: skin.glow }));
+      new THREE.MeshLambertMaterial({ color: skin.accent }));
     b.position.set(((i % 2) ? 1 : -1) * .050, -.005 + (i >> 1) * .014, -.13 + i * .03);
     group.add(b);
   }
-  /* ---- rare+ glow light so the finish is visible in the dark ---- */
-  if (mix >= .45) {
-    const light = new THREE.PointLight(skin.glow, mix * 1.1, 2.2, 2);
-    light.position.set(0, .02, -.14);
-    group.add(light);
-  }
-  group.userData.skin = skin;
+  group.userData.skin = skin;                        // remembered for previews/tests
   return group;
 }
 

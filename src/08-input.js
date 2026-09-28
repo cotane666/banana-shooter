@@ -607,6 +607,18 @@ function initSettings() {
     });
   }
 
+  // environment auto-cycle speed
+  const evs = document.getElementById('sEnvSpeed'), oevs = document.getElementById('oEnvSpeed');
+  if (evs) {
+    evs.value = S.envAutoSpeed || 1;
+    if (oevs) oevs.textContent = Number(S.envAutoSpeed || 1).toFixed(2);
+    evs.addEventListener('input', () => {
+      S.envAutoSpeed = parseFloat(evs.value) || 1;
+      if (oevs) oevs.textContent = S.envAutoSpeed.toFixed(2);
+      Store.save();
+    });
+  }
+
   // touch aim-assist (auto-fire when the crosshair is on an enemy)
   const aim = document.getElementById('sAim'), oa = document.getElementById('oAim');
   const aimNames = ['Выкл', 'Вкл'];

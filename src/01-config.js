@@ -334,8 +334,17 @@ const GEAR = {
   napalmNade:   { name: 'НАПАЛМ',          price: 150,  grenade: 'napalm', desc: 'Оставляет горящую лужу' }
 };
 function grenadeName(kind) { return kind === 'freeze' ? 'КРИО' : kind === 'napalm' ? 'НАПАЛМ' : 'ГРАНАТА'; }
-function todName(k) { return k === 'night' ? 'НОЧЬ' : 'ДЕНЬ'; }
+function todName(k) {
+  return ({ day: 'ДЕНЬ', sunset: 'ЗАКАТ', night: 'НОЧЬ', dawn: 'РАССВЕТ' })[k] || 'ДЕНЬ';
+}
 function buildableName(k) { return k === 'barricade' ? 'БАРРИКАДА' : k === 'mine' ? 'МИНА' : 'ТУРЕЛЬ'; }
+/* the environment is one setting: the time of day and the weather, plus an
+   optional AUTO cycle. `envOff` disables both effects entirely. */
+const TOD_ORDER = ['day', 'sunset', 'night', 'dawn'];
+const WEATHER_ORDER = ['clear', 'clouds', 'rain', 'storm', 'fog', 'snow', 'ash'];
+function weatherName(k) {
+  return ({ clear: 'ЯСНО', clouds: 'ОБЛАЧНО', rain: 'ДОЖДЬ', storm: 'ГРОЗА', fog: 'ТУМАН', snow: 'СНЕГ', ash: 'ПЕПЕЛ' })[k] || 'ЯСНО';
+}
 /* one save slot per offline mode, so each mode keeps its own run */
 function offlineModeKey(modeId, horde, free, custom) {
   if (custom) return 'custom';
@@ -506,7 +515,16 @@ const ACHIEVEMENTS = [
   { id: 'hv_atomic',  name: 'ЯДЕРНЫЙ ГРИБ',    desc: '10 убийств из атомного РПГ',     check: s => s.atomicKills >= 10 },
   { id: 'hv_yhs',     name: 'АРСЕНАЛ',         desc: '500 убийств из Y.H.S',           check: s => s.yhsKills >= 500 },
   { id: 'hv_rocket',  name: 'САМОНАВЕДЕНИЕ',   desc: '40 убийств из ракетницы',        check: s => s.rocketKills >= 40 },
-  { id: 'hv_shield',  name: 'НЕСОКРУШИМЫЙ',    desc: '10 убийств с поднятым щитом',    check: s => s.shieldKills >= 10 }
+  { id: 'hv_shield',  name: 'НЕСОКРУШИМЫЙ',    desc: '10 убийств с поднятым щитом',    check: s => s.shieldKills >= 10 },
+  /* второй набор на каждый тяжёлый ствол — ещё по скину на каждое оружие */
+  { id: 'hv2_minigun', name: 'ШКВАЛ',          desc: '800 убийств из минигана',        check: s => s.minigunKills >= 800 },
+  { id: 'hv2_rpg',     name: 'АРТИЛЛЕРИЯ',     desc: '150 убийств из РПГ',             check: s => s.rpgKills >= 150 },
+  { id: 'hv2_laser',   name: 'СВЕТОВОЙ МЕЧ',   desc: '150 убийств из лазерной винтовки', check: s => s.laserKills >= 150 },
+  { id: 'hv2_cannon',  name: 'ЛУЧ СМЕРТИ',     desc: '80 убийств из лазерной пушки',   check: s => s.cannonKills >= 80 },
+  { id: 'hv2_atomic',  name: 'КОНЕЦ СВЕТА',    desc: '30 убийств из атомного РПГ',     check: s => s.atomicKills >= 30 },
+  { id: 'hv2_yhs',     name: 'СВЕРХАРСЕНАЛ',   desc: '1200 убийств из Y.H.S',          check: s => s.yhsKills >= 1200 },
+  { id: 'hv2_rocket',  name: 'СТАЯ',           desc: '100 убийств из ракетницы',       check: s => s.rocketKills >= 100 },
+  { id: 'hv2_shield',  name: 'ОТРАЖАТЕЛЬ',     desc: '40 убийств с поднятым щитом',    check: s => s.shieldKills >= 40 }
 ];
 
 /* ============================================================
@@ -561,14 +579,26 @@ const SKIN_PALETTES = [
   { rar: 'legendary', heavy: 1, pat: 'prism',  body: 0x2a2010, steel: 0xffe0a0, mag: 0x140f05, grip: 0x0a0803, accent: 0xffb020, glow: 0xffd06a, shot: 0xffe89a },
   { rar: 'legendary', heavy: 1, pat: 'plasma', body: 0x2a0a3a, steel: 0xf0b0ff, mag: 0x180620, grip: 0x0c0312, accent: 0xff6ad6, glow: 0xff6ad6, shot: 0xffb0f0 },
   { rar: 'legendary', heavy: 1, pat: 'hex',    body: 0x06202a, steel: 0x90fff0, mag: 0x021014, grip: 0x010608, accent: 0x00ffd0, glow: 0x40ffe0, shot: 0xa0fff0 },
-  { rar: 'legendary', heavy: 1, pat: 'scale',  body: 0x2a0a0a, steel: 0xffc080, mag: 0x1a0606, grip: 0x100404, accent: 0xff6a1a, glow: 0xff8a2a, shot: 0xffc080 }
+  { rar: 'legendary', heavy: 1, pat: 'scale',  body: 0x2a0a0a, steel: 0xffc080, mag: 0x1a0606, grip: 0x100404, accent: 0xff6a1a, glow: 0xff8a2a, shot: 0xffc080 },
+  /* legendary — second heavy set (hv2_*): a distinct look per gun */
+  { rar: 'legendary', heavy: 1, pat: 'tiger',   body: 0x1a1a22, steel: 0xe8e8f4, mag: 0x0e0e14, grip: 0x06060a, accent: 0xaad4ff, glow: 0xcfe4ff, shot: 0xe8f4ff },
+  { rar: 'legendary', heavy: 1, pat: 'camo',    body: 0x142a16, steel: 0x9fffa8, mag: 0x0a1a0c, grip: 0x050d06, accent: 0x3bff6a, glow: 0x5fffa0, shot: 0xb0ffc8 },
+  { rar: 'legendary', heavy: 1, pat: 'hazard',  body: 0x2a2408, steel: 0xfff090, mag: 0x1a1605, grip: 0x0c0a03, accent: 0xffd400, glow: 0xffe650, shot: 0xfff4a0 },
+  { rar: 'legendary', heavy: 1, pat: 'carbon',  body: 0x0d0d12, steel: 0xd0d8e4, mag: 0x060609, grip: 0x020204, accent: 0xff3a4a, glow: 0xff5a6a, shot: 0xff9aa6 },
+  { rar: 'legendary', heavy: 1, pat: 'prism',   body: 0x241038, steel: 0xd8b0ff, mag: 0x150822, grip: 0x0a0414, accent: 0xb060ff, glow: 0xc890ff, shot: 0xe0c0ff },
+  { rar: 'legendary', heavy: 1, pat: 'grid',    body: 0x08201e, steel: 0x8fffe0, mag: 0x041210, grip: 0x020806, accent: 0x00e0b0, glow: 0x40ffd0, shot: 0x90ffe8 },
+  { rar: 'legendary', heavy: 1, pat: 'wood',    body: 0x2a1a0c, steel: 0xffd0a0, mag: 0x1a0f06, grip: 0x0c0703, accent: 0xd8a060, glow: 0xffc080, shot: 0xffe0b0 },
+  { rar: 'legendary', heavy: 1, pat: 'brick',   body: 0x2a1414, steel: 0xffb0b0, mag: 0x180a0a, grip: 0x0c0505, accent: 0xff5040, glow: 0xff8070, shot: 0xffb0a0 },
+  { rar: 'legendary', heavy: 1, pat: 'noise',   body: 0x101820, steel: 0xa0c0e0, mag: 0x080e14, grip: 0x040608, accent: 0x80b0ff, glow: 0xa0d0ff, shot: 0xc0e0ff },
+  { rar: 'legendary', heavy: 1, pat: 'checker', body: 0x1a1a1a, steel: 0xf0f0f0, mag: 0x0e0e0e, grip: 0x060606, accent: 0xc0c0c0, glow: 0xe0e0ff, shot: 0xffffff }
 ];
 const _PAL_BY_RAR = {};
 SKIN_PALETTES.forEach(p => { (_PAL_BY_RAR[p.rar] = _PAL_BY_RAR[p.rar] || []).push(p); });
 
 /* which rarity an achievement's reward skin has */
 function skinRarityFor(achId) {
-  // heavy-arsenal goals are the fanciest: half epic, half legendary
+  // heavy-arsenal goals are the fanciest; the second set is all legendary
+  if (achId.startsWith('hv2_')) return 'legendary';
   if (achId.startsWith('hv_')) return (achId === 'hv_atomic' || achId === 'hv_yhs' || achId === 'hv_shield' || achId === 'hv_cannon') ? 'legendary' : 'epic';
   // new goal tiers by their id prefix
   if (achId.startsWith('v_')) return 'legendary';
@@ -591,7 +621,7 @@ const SKINS = (() => {
     const rar = skinRarityFor(a.id);
     const rd = SKIN_RARITIES[rar];
     let pal, deco = rd.deco, beads = rd.beads;
-    if (a.id.startsWith('hv_')) {
+    if (a.id.startsWith('hv_') || a.id.startsWith('hv2_')) {
       // each heavy weapon gets its OWN exclusive heavy palette + fancier deco
       const pool = SKIN_PALETTES.filter(p => p.heavy && p.rar === rar);
       const k = (hvUsed[rar] = (hvUsed[rar] || 0));
@@ -674,6 +704,7 @@ const Store = {
           map: 'arena', players: 2, maxHP: 100, aimAssist: 1, horde: 0, clears: 0, freeplay: 0, rounds: 3, playTime: 0,
           offCount: 1, offHp: 1, offFree: 0, offMode: 'normal', offMods: {}, offModsRun: 0, offModPick: 0, checkpoint: null, shopAllow: {}, shopItems: {}, music: 1, sfxVol: 100, musicVol: 70,
           grenade: 'frag', buildable: 'turret', weather: 'day', trapsEnabled: 1, offCountExact: 10, offCountFixed: 0,
+          timeOfDay: 'day', skyWeather: 'clear', envAuto: 0, envOff: 0, envAutoSpeed: 1,
           ach: {}, runs: [], skinOn: {},
           /* one saved run per offline mode: { normal|horde|freehorde|custom|bossrush|daily|endless: checkpoint } */
           checkpoints: {} },

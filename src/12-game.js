@@ -5132,7 +5132,20 @@ const Game = {
         p.dashActive = false; p.dashT = 0; p.dashCd = 0; p.dashTook = null;
         // put the normal pistol back in hand instead of the mech weapons
         p.inv[2] = null; p.inv[1] = null;
-        p.slot = 3;
+        // hand back whatever was carried before entering the mech (shotgun etc.)
+        const sv = this._savedLoadout;
+        if (sv) {
+          p.inv[1] = sv.inv1 ? Object.assign({}, sv.inv1) : null;
+          p.inv[2] = sv.inv2 ? Object.assign({}, sv.inv2) : null;
+          p.lastPrimary = sv.lastPrimary || 2;
+          // prefer the weapon the player had in hand, else their primary
+          let back = sv.slot;
+          if (back === 3 || !p.inv[back]) back = (sv.inv2 ? 2 : (sv.inv1 ? 1 : 3));
+          p.slot = back;
+          this._savedLoadout = null;
+        } else {
+          p.slot = 3;
+        }
         p.deployT = .5;
         p.buildViewModel(); this.attachViewModel();
         // park the chassis: stop following the player, keep it in the world
@@ -5192,6 +5205,17 @@ const Game = {
           p.vel.x = p.vel.y = p.vel.z = 0;
           this.mechBody = m.mesh; this.parkedMech = null;
         }
+        /* Remember the weapons that were in hand, so they can be handed back on
+           exit. Without this the mech weapons overwrite slot 2 and leaving the
+           mech wipes everything (a bought shotgun simply vanished). */
+        this._savedLoadout = {
+          inv1: p.inv[1] ? Object.assign({}, p.inv[1]) : null,
+          inv2: p.inv[2] ? Object.assign({}, p.inv[2]) : null,
+          slot: p.slot,
+          lastPrimary: p.lastPrimary
+        };
+        // the mech kit must not inherit the ammo of the gun it replaces
+        p.inv[1] = null; p.inv[2] = null;
         p.give('mechMinigun');
         p.give('mechLaser');
         p.mechSuit = true;

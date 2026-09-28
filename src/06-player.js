@@ -1554,6 +1554,31 @@ function buildMechChassis() {
     b.castShadow = true; b.receiveShadow = true;
     g.add(b); return b;
   };
+  const cyl = (r1, r2, h, seg, m, x, y, z, rx, ry, rz) => {
+    const c = new THREE.Mesh(new THREE.CylinderGeometry(r1, r2, h, seg || 10), m);
+    c.position.set(x, y, z);
+    if (rx) c.rotation.x = rx; if (ry) c.rotation.y = ry; if (rz) c.rotation.z = rz;
+    c.castShadow = true; c.receiveShadow = true;
+    g.add(c); return c;
+  };
+  const sph = (r, m, x, y, z) => {
+    const s = new THREE.Mesh(new THREE.SphereGeometry(r, 10, 8), m);
+    s.position.set(x, y, z); s.castShadow = true; g.add(s); return s;
+  };
+  const torus = (r, t, m, x, y, z, rx, ry, rz) => {
+    const o = new THREE.Mesh(new THREE.TorusGeometry(r, t, 8, 18), m);
+    o.position.set(x, y, z);
+    if (rx) o.rotation.x = rx; if (ry) o.rotation.y = ry; if (rz) o.rotation.z = rz;
+    o.castShadow = true; g.add(o); return o;
+  };
+  /* a hydraulic piston between two points (a rod inside a sleeve) */
+  const piston = (x, y, z, h, rx, ry, rz) => {
+    cyl(.055, .070, h, 8, matD, x, y, z, rx, ry, rz);
+    const rod = new THREE.Mesh(new THREE.CylinderGeometry(.028, .028, h * .75, 6), matG);
+    rod.position.set(x, y + (h * .35) * (Math.cos(rx || 0)), z);
+    rod.rotation.set(rx || 0, ry || 0, rz || 0);
+    rod.castShadow = true; g.add(rod); return rod;
+  };
   /* OPEN COCKPIT layout: the eye sits at ~3.3, so every structural piece is kept
      BELOW that line or pushed to the sides — nothing crosses the centre of view. */
   // ------- torso: a low chest the pilot's legs sit in (top well under the eyes) -------
@@ -1573,6 +1598,14 @@ function buildMechChassis() {
   // warning chevrons on the chest (blue-white)
   box(.20, .05, .04, matW, -.30, 2.36, -.51);
   box(.20, .05, .04, matW, .30, 2.36, -.51);
+  // ---- extra chest detail: grille, gauges, cabling and corner bolts ----
+  for (let r = 0; r < 3; r++) for (let c = 0; c < 6; c++) box(.055, .022, .03, matD, -.20 + c * .08, 2.66 - r * .05, -.505);
+  box(.30, .10, .05, matB2, .0, 2.20, -.50);           // lower module
+  cyl(.035, .035, .05, 10, matG, -.10, 2.20, -.53, Math.PI / 2, 0, 0);
+  cyl(.035, .035, .05, 10, matG, .10, 2.20, -.53, Math.PI / 2, 0, 0);
+  for (let i = 0; i < 3; i++) cyl(.018, .018, .30, 6, matW, -.42, 2.30 + i * .10, -.40, 0, 0, .35);
+  [-.5, .5].forEach(x => box(.06, .30, .06, matD, x, 2.34, -.30, 0, 0, 0));   // chest corner rails
+  box(.06, .06, .06, matG, -.5, 2.50, -.33); box(.06, .06, .06, matG, .5, 2.50, -.33);
   // ------- side shoulder blocks (out at ±1, tops kept low so they frame the view) -------
   [-1, 1].forEach(s => {
     box(.50, .40, .60, matB, s * 1.02, 2.92, -.02);    // pauldron (top ≈ 3.12, at the very side)
@@ -1580,7 +1613,18 @@ function buildMechChassis() {
     box(.44, .06, .56, matW, s * 1.02, 3.00, .06);     // white trim band
     for (let i = 0; i < 3; i++) box(.055, .055, .055, matG, s * 1.24, 3.02 - i * .12, .20);
     for (let i = 0; i < 2; i++) box(.10, .09, .05, matD, s * .86, 2.86 - i * .14, -.30); // small vents
+    // layered pauldron armour: an outer plate on standoffs, plus edge rivets
+    box(.40, .30, .05, matB2, s * 1.05, 2.94, -.34);
+    box(.40, .10, .05, matW, s * 1.05, 3.08, -.34);
+    for (let i = 0; i < 4; i++) box(.030, .030, .030, matG, s * 1.14, 3.02 - i * .09, -.36);
+    // shoulder actuator ring + hydraulic strut
+    torus(.17, .028, matG, s * 1.02, 2.74, -.02, 0, 0, Math.PI / 2);
+    cyl(.05, .05, .34, 8, matD, s * .92, 2.70, .16, .35, 0, s * .18);
   });
+  // ------- neck / shoulder yoke (structural cross-member below the dome) -------
+  cyl(.14, .16, .34, 12, matD, 0, 2.86, -.02);
+  torus(.20, .035, matG, 0, 2.70, -.02, Math.PI / 2, 0, 0);
+  for (let i = 0; i < 6; i++) { const a = i / 6 * Math.PI * 2; box(.03, .05, .03, matW, Math.cos(a) * .22, 2.86, Math.sin(a) * .22 - .02); }
   // ------- GLASS COCKPIT DOME — a clear canopy ball around the pilot -------
   const dome = new THREE.Group();
   const DOME_R = CFG.mechDomeRadius, DOME_Y = 3.62, DOME_Z = .06;
@@ -1639,6 +1683,7 @@ function buildMechChassis() {
   g.add(pod);
   // ------- pelvis + legs -------
   box(.88, .40, .62, matB2, 0, 1.90, -.02);
+  box(.70, .10, .50, matW, 0, 1.72, -.02);             // white pelvis trim
   [-1, 1].forEach(s => {
     box(.40, .72, .46, matB, s * .42, 1.44, 0);        // thigh
     box(.42, .12, .48, matB2, s * .42, 1.76, 0);
@@ -1650,7 +1695,21 @@ function buildMechChassis() {
     box(.54, .10, .84, matB2, s * .42, .26, .10);
     box(.40, .06, .40, matG, s * .42, .035, .10);      // golden toe strip
     box(.16, .16, .04, matG, s * .42, 1.24, .28);      // golden badge
+    // ---- leg detail: hip actuator, knee hydraulics, shin plate, ankle joint ----
+    torus(.16, .030, matG, s * .42, 1.78, 0, 0, 0, Math.PI / 2);          // hip ring
+    cyl(.06, .06, .46, 8, matD, s * .42, 1.50, .26, .18, 0, 0);           // knee piston
+    cyl(.032, .032, .34, 6, matG, s * .42, 1.36, .27, .18, 0, 0);         // piston rod
+    box(.34, .36, .04, matB2, s * .42, .98, .28);                        // shin front plate
+    box(.26, .06, .04, matW, s * .42, 1.06, .30);
+    sph(.075, matD, s * .42, .90, .03);                                   // ankle ball joint
+    box(.46, .14, .22, matW, s * .42, .30, -.26);                        // heel block
+    box(.14, .10, .10, matG, s * .42, .30, .48);                         // toe cap
+    for (let i = 0; i < 3; i++) box(.10, .08, .03, matD, s * .42 + (i - 1) * .13, .10, .50);  // toe treads
+    box(.10, .12, .12, matD, s * .42, 1.62, -.26);                       // rear thigh vent
   });
+  // a central hip/waist actuator linking the pelvis to the torso
+  cyl(.10, .10, .22, 10, matD, 0, 2.06, 0);
+  torus(.14, .03, matG, 0, 2.02, 0, Math.PI / 2, 0, 0);
   // exhaust stacks on the BACK (+z is behind the pilot, since forward is -z)
   [-.55, .55].forEach(x => { const e = new THREE.Mesh(new THREE.CylinderGeometry(.09, .11, .5, 10), matD); e.position.set(x, 2.9, .5); g.add(e); });
   /* ---- jetpack: two big nozzles between the shoulders, with thrusters ---- */

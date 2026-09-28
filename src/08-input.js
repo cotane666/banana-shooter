@@ -575,13 +575,22 @@ function initSettings() {
   };
   link('sSens', 'sSens2');
   link('sVol', 'sVol2');
-  const oS2 = document.getElementById('oSens2'), oV2 = document.getElementById('oVol2');
+  link('sTsens', 'sTsens2');
+  // on a phone there is no mouse, so the quick-settings row shows touch sensitivity
+  if (IS_TOUCH) {
+    const rowSens = document.getElementById('rowSens');
+    const rowTs = document.getElementById('rowTsens');
+    if (rowSens) rowSens.classList.add('hidden');
+    if (rowTs) rowTs.classList.remove('hidden');
+  }
+  const oS2 = document.getElementById('oSens2'), oV2 = document.getElementById('oVol2'), oT2 = document.getElementById('oTsens2');
   const syncOut = () => {
     if (oS2) oS2.textContent = Store.data.sens.toFixed(2);
     if (oV2) oV2.textContent = String(Math.round(Store.data.vol));
+    if (oT2) oT2.textContent = Number(Store.data.touchSens || 1.5).toFixed(2);
   };
   syncOut();
-  ['sSens', 'sSens2', 'sVol', 'sVol2'].forEach(id => {
+  ['sSens', 'sSens2', 'sVol', 'sVol2', 'sTsens', 'sTsens2'].forEach(id => {
     const e = document.getElementById(id); if (e) e.addEventListener('input', syncOut);
   });
 

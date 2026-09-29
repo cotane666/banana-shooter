@@ -181,6 +181,19 @@ const MATCH = window.MATCH = {
 const WEAPONS = {
   knife: { name: 'НОЖ', cat: 'melee', slot: 3, price: 0, dmg: 55, rpm: 120, mag: Infinity, reserve: 0,
            auto: false, spread: 0, moveSpread: 0, recoil: 2, falloff: 1, range: 2.4, headMul: 2.0, sound: 'knife' },
+  /* ---- ОРУЖИЕ БЛИЖНЕГО БОЯ (отдельная категория, слот 3) ---- */
+  machete: { name: 'МАЧЕТЕ', cat: 'melee', slot: 3, price: 400, dmg: 75, rpm: 96, mag: Infinity, reserve: 0,
+           auto: false, spread: 0, moveSpread: 0, recoil: 2.4, falloff: 1, range: 2.7, headMul: 1.8, sound: 'knife', melee: 'machete' },
+  katana:  { name: 'КАТАНА', cat: 'melee', slot: 3, price: 900, dmg: 62, rpm: 220, mag: Infinity, reserve: 0,
+           auto: true, spread: 0, moveSpread: 0, recoil: 2, falloff: 1, range: 3.0, headMul: 2.2, sound: 'knife', melee: 'katana' },
+  axe:     { name: 'ТОПОР', cat: 'melee', slot: 3, price: 700, dmg: 120, rpm: 62, mag: Infinity, reserve: 0,
+           auto: false, spread: 0, moveSpread: 0, recoil: 3, falloff: 1, range: 2.6, headMul: 2.4, sound: 'knife', melee: 'axe' },
+  chainsaw:{ name: 'БЕНЗОПИЛА', cat: 'melee', slot: 3, price: 2200, dmg: 30, rpm: 900, mag: Infinity, reserve: 0,
+           auto: true, spread: 0, moveSpread: 0, recoil: .6, falloff: 1, range: 2.5, headMul: 1.6, sound: 'knife', melee: 'chainsaw' },
+  hammer:  { name: 'МОЛОТ', cat: 'melee', slot: 3, price: 1500, dmg: 160, rpm: 48, mag: Infinity, reserve: 0,
+           auto: false, spread: 0, moveSpread: 0, recoil: 3.4, falloff: 1, range: 2.9, headMul: 2.6, sound: 'knife', melee: 'hammer', knockback: 9 },
+  fists:   { name: 'КУЛАКИ', cat: 'melee', slot: 3, price: 0, dmg: 40, rpm: 150, mag: Infinity, reserve: 0,
+           auto: true, spread: 0, moveSpread: 0, recoil: 1.5, falloff: 1, range: 2.2, headMul: 1.5, sound: 'knife', melee: 'fists' },
 
   glock: { name: 'GLOCK-18', cat: 'pistol', slot: 1, price: 200, dmg: 28, rpm: 420, mag: 20, reserve: 100,
            auto: false, spread: .020, moveSpread: .030, recoil: .85, falloff: .62, range: 60, headMul: 2.0, sound: 'pistol' },
@@ -375,6 +388,7 @@ const BUY_CATS = [
   { id: 'shotgun', label: 'ДРОБОВИКИ' },
   { id: 'lmg',     label: 'ПУЛЕМЁТЫ' },
   { id: 'heavy',   label: 'ТЯЖЁЛОЕ' },
+  { id: 'melee',   label: 'БЛИЖНИЙ БОЙ' },
   { id: 'exp',     label: 'ЭКСПЕРИМЕНТАЛЬНОЕ' },
   { id: 'banana',  label: 'БАНАНЫ' },
   { id: 'gear',    label: 'СНАРЯЖЕНИЕ' }

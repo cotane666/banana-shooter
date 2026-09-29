@@ -6885,8 +6885,12 @@ const Game = {
       const wallHit = this.world.raycast(origin, dir, def.range, ['ground']);
       if (hit && (!wallHit || hit.t < wallHit.t)) {
         p.bulletsHit++;
-        hit.zombie.takeDamage(def.dmg * (def.headMul || 1) / (def.headMul || 1), hit.part, dir);
-        this.hitEffect(hit.point, dir, hit.part, true);
+        hit.zombie.takeDamage(def.dmg, hit.part, dir);
+        // тяжёлое оружие ближнего боя отбрасывает зомби
+        if (def.knockback && hit.zombie && hit.zombie.alive) {
+          hit.zombie.vel.x += dir.x * def.knockback; hit.zombie.vel.z += dir.z * def.knockback;
+        }
+        this.hitEffect(hit.point, dir, hit.part, hit.part === 'head');
         Audio3D_SFX.hit(hit.point.x, hit.point.y, hit.point.z, hit.part === 'head');
       } else if (wallHit && this.effects) {
         this.effects.impact(wallHit.point, wallHit.normal, 'concrete');

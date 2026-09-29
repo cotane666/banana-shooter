@@ -88,6 +88,14 @@ const CFG = {
   /* ---- offline map rotation: a fresh arena every N waves ---- */
   mapRotateEvery: 10,
 
+  /* ---- performance: zombie level-of-detail / culling ----
+     Zombies nearer than zombieNearDist are fully simulated every frame; farther
+     ones every zombieFarInterval seconds; beyond zombieCullDist they are hidden
+     and skipped entirely (bosses and targets are always active). */
+  zombieNearDist: 42,
+  zombieFarInterval: 0.12,
+  zombieCullDist: 85,
+
   /* ---- ammo crate (offline): a supply chest that tops up reserves ---- */
   crateInterval: 10,    // seconds between spawns
   crateAmmoFrac: 0.25,  // fraction of the FULL stock restored per crate
@@ -536,7 +544,9 @@ const ACHIEVEMENTS = [
      нужно выполнить ВСЕ остальные достижения (кроме него самого). Награда —
      «ГАЛАКТИКА»: очень красивый скин на оружие и на персонажа.
      ============================================================ */
-  { id: 'platinum_all', name: 'ВЛАДЫКА ГАЛАКТИКИ', desc: 'Выполнить все остальные достижения', check: s => s.otherAchievementsDone === true }
+  { id: 'platinum_all', name: 'ВЛАДЫКА ГАЛАКТИКИ', desc: 'Выполнить все остальные достижения', check: s => s.otherAchievementsDone === true },
+  /* ХАРДКОР — одна жизнь. Награда: кровавый скин «ПЛОТЬ». */
+  { id: 'hardcore_wave', name: 'ОДНА ЖИЗНЬ', desc: 'Дожить до 25 волны в ХАРДКОРЕ', check: s => s.hardcoreWave >= 25 }
 ];
 
 /* ============================================================
@@ -575,6 +585,7 @@ const ACH_PROGRESS = {
   v_score250k: ['perfectWaves', 100], v_perfect40: ['perfectWaves', 40], v_boss15: ['bossKills', 15],
   v_streak10: ['bestHeadStreak', 10], v_total20k: ['killsTotal', 20000],
   v_clear5: ['clears', 5], v_win50: ['top3', 1], v_time3600: ['playTime', 3600],
+  hardcore_wave: ['hardcoreWave', 25],
   /* интересные: скорострельные и на выносливость */
   x_rampage: ['fastKills', 100], x_speedrun: ['fastClear', 1], x_marathon: ['runTime', 2700],
   /* heavy arsenal (both sets) */
@@ -711,7 +722,31 @@ const SKIN_PALETTES = [
   /* ПЛАТИНА — единственный экземпляр, для финального достижения «ВЛАДЫКА
      ГАЛАКТИКИ». Полноценная модель строится в applyGalaxySkin; эти цвета —
      запасные для карточек/трассеров. */
-  { rar: 'platinum', pat: 'galaxy', body: 0x0a0416, steel: 0xb83cff, mag: 0x150822, grip: 0x0a0414, accent: 0xd896ff, glow: 0xd896ff, shot: 0xe8c8ff }
+  { rar: 'platinum', pat: 'galaxy', body: 0x0a0416, steel: 0xb83cff, mag: 0x150822, grip: 0x0a0414, accent: 0xd896ff, glow: 0xd896ff, shot: 0xe8c8ff },
+  /* ТЕМАТИЧЕСКИЕ — каждый скин с собственной темой, чтобы не повторяться */
+  { rar: 'legendary', pat: 'flesh', body: 0x3a050b, steel: 0xc41428, mag: 0x1c0206, grip: 0x0e0104, accent: 0xff2a3a, glow: 0xff3a4a, shot: 0xff2a3a },
+  { rar: 'rare', pat: 'pixel', body: 0x1c2c4a, steel: 0x59c2e0, mag: 0x0e1626, grip: 0x070b13, accent: 0xffd24a, glow: 0x59c2e0, shot: 0x9fe6ff },
+  { rar: 'uncommon', pat: 'toy', body: 0xe23b56, steel: 0xffd24a, mag: 0x8a1e30, grip: 0x4a0f1a, accent: 0x4ad6ff, glow: 0xffd24a, shot: 0xffe28a },
+  { rar: 'epic', pat: 'glass', body: 0x0c2230, steel: 0x9fe0ff, mag: 0x06141c, grip: 0x030a0e, accent: 0x59d6ff, glow: 0x9fe6ff, shot: 0xd0f4ff },
+  { rar: 'epic', pat: 'ice', body: 0x0a2a3a, steel: 0xcfeaff, mag: 0x061820, grip: 0x030c10, accent: 0x7fd8ff, glow: 0xaee6ff, shot: 0xd8f4ff },
+  { rar: 'legendary', pat: 'fire', body: 0x1a0400, steel: 0xff9a2a, mag: 0x0e0200, grip: 0x070100, accent: 0xffd24a, glow: 0xff7a1a, shot: 0xffb060 },
+  { rar: 'legendary', pat: 'alien', body: 0x0a1a08, steel: 0x8aff6a, mag: 0x051004, grip: 0x020802, accent: 0xb6ff4a, glow: 0x7fff5a, shot: 0xc8ff8a },
+  { rar: 'rare', pat: 'brick', body: 0x3a1a12, steel: 0xd0a890, mag: 0x24100a, grip: 0x120806, accent: 0xff6a3a, glow: 0xff8a5a, shot: 0xffb090 },
+  { rar: 'rare', pat: 'noise', body: 0x1a1e24, steel: 0xb8c4d0, mag: 0x10141a, grip: 0x080a0e, accent: 0x9ab0c8, glow: 0xc0d0e0, shot: 0xd8e4f0 },
+  { rar: 'uncommon', pat: 'checker', body: 0x2a2a2a, steel: 0xf0f0f0, mag: 0x161616, grip: 0x0a0a0a, accent: 0xff5a4a, glow: 0xffffff, shot: 0xffffff },
+  { rar: 'common', pat: 'concrete', body: 0x6a6a64, steel: 0xb8b8b0, mag: 0x44443f, grip: 0x24241f, accent: 0x9a9a90, glow: 0xb8b8b0, shot: 0xd8d8d0 },
+  { rar: 'common', pat: 'grass', body: 0x2f4a1e, steel: 0x9ab880, mag: 0x1c2e12, grip: 0x0e1609, accent: 0x8ad24a, glow: 0x9ad85a, shot: 0xc8f090 },
+  { rar: 'common', pat: 'water', body: 0x14405a, steel: 0xa8d8e8, mag: 0x0a2432, grip: 0x051218, accent: 0x4ac8e0, glow: 0x8ad8f0, shot: 0xc0ecff },
+  { rar: 'rare', pat: 'camo', body: 0x36402a, steel: 0xa0a898, mag: 0x1e2416, grip: 0x0f120b, accent: 0x8f9a70, glow: 0xa8b090, shot: 0xd0d8b8 },
+  { rar: 'epic', pat: 'tiger', body: 0x3a2a10, steel: 0xffc060, mag: 0x201608, grip: 0x100b04, accent: 0xff8a1a, glow: 0xffb040, shot: 0xffd080 },
+  { rar: 'uncommon', pat: 'wood', body: 0x6a4a24, steel: 0xd8b070, mag: 0x422c14, grip: 0x20160a, accent: 0xffd08a, glow: 0xd8b070, shot: 0xffe0b0 },
+  { rar: 'rare', pat: 'hazard', body: 0x2a2408, steel: 0xfff090, mag: 0x1a1605, grip: 0x0c0a03, accent: 0xffd400, glow: 0xffe650, shot: 0xfff4a0 },
+  { rar: 'epic', pat: 'hex', body: 0x2a0a2a, steel: 0xff9ae8, mag: 0x180618, grip: 0x0c030c, accent: 0xff5ad6, glow: 0xff8ae0, shot: 0xffb0f0 },
+  { rar: 'epic', pat: 'scale', body: 0x0a2a24, steel: 0x9affd8, mag: 0x061814, grip: 0x030c0a, accent: 0x4affc0, glow: 0x7fffd8, shot: 0xc0fff0 },
+  { rar: 'legendary', pat: 'prism', body: 0x2a1050, steel: 0xd8b0ff, mag: 0x180828, grip: 0x0a0414, accent: 0xb060ff, glow: 0xc890ff, shot: 0xe0c0ff },
+  { rar: 'legendary', pat: 'plasma', body: 0x3a0a5a, steel: 0xffc0ff, mag: 0x200630, grip: 0x100318, accent: 0xff6ad6, glow: 0xff8ae0, shot: 0xffc0f0 },
+  { rar: 'common', pat: 'grid', body: 0x3a4048, steel: 0xb0b8c0, mag: 0x22262c, grip: 0x111316, accent: 0x90a0b0, glow: 0xb0b8c0, shot: 0xd8e0e8 },
+  { rar: 'common', pat: 'carbon', body: 0x1a1e24, steel: 0x98a0a8, mag: 0x101216, grip: 0x08090c, accent: 0x8890a0, glow: 0xa0a8b8, shot: 0xc8d0d8 }
 ];
 const _PAL_BY_RAR = {};
 SKIN_PALETTES.forEach(p => { (_PAL_BY_RAR[p.rar] = _PAL_BY_RAR[p.rar] || []).push(p); });
@@ -725,6 +760,7 @@ function skinRarityFor(achId) {
   // new goal tiers by their id prefix
   if (achId === 'x_rampage' || achId === 'x_speedrun') return 'legendary';
   if (achId === 'x_marathon') return 'epic';
+  if (achId === 'hardcore_wave') return 'legendary';
   if (achId.startsWith('v_')) return 'legendary';
   if (achId.startsWith('m_')) return 'rare';
   if (achId.startsWith('e_')) return 'uncommon';
@@ -737,9 +773,46 @@ function skinRarityFor(achId) {
   return base[achId] || 'common';
 }
 
+/* --- hue helpers so every skin can get a unique colour set --- */
+function _hexToHsl(hex) {
+  const r = ((hex >> 16) & 255) / 255, g = ((hex >> 8) & 255) / 255, b = (hex & 255) / 255;
+  const mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn;
+  let h = 0, s = 0, l = (mx + mn) / 2;
+  if (d) { s = l > .5 ? d / (2 - mx - mn) : d / (mx + mn); if (mx === r) h = (g - b) / d + (g < b ? 6 : 0); else if (mx === g) h = (b - r) / d + 2; else h = (r - g) / d + 4; h /= 6; }
+  return [h, s, l];
+}
+function _hslToHex(h, s, l) {
+  h = ((h % 1) + 1) % 1;
+  const f = n => { const k = (n + h * 12) % 12; const a = s * Math.min(l, 1 - l); return Math.round(255 * (l - a * Math.max(-1, Math.min(k - 3, 9 - k, 1)))); };
+  return (f(0) << 16) | (f(8) << 8) | f(4);
+}
+function _rotHue(hex, deg) {
+  const [h, s, l] = _hexToHsl(hex >>> 0);
+  return _hslToHex(h + deg / 360, s, l);
+}
+
 const SKINS = (() => {
-  const used = {};
-  const hvUsed = {};
+  /* Каждый скин получает СВОЮ расцветку: палитра берётся по редкости, а если
+     её уже кто-то занял — оттенок сдвигается, чтобы цвета гарантированно не
+     повторялись. Плюс у каждого скина свой тематический паттерн. */
+  const palUse = {};
+  const pickPal = (rar) => {
+    let pool = SKIN_PALETTES.filter(p => p.rar === rar);
+    if (!pool.length) pool = SKIN_PALETTES;
+    // least-used palette of this rarity so the rotation count stays low
+    return pool.reduce((a, b) => ((palUse[SKIN_PALETTES.indexOf(a)] || 0) <= (palUse[SKIN_PALETTES.indexOf(b)] || 0) ? a : b));
+  };
+  const shift = (pal) => {
+    const k = SKIN_PALETTES.indexOf(pal);
+    const n = (palUse[k] = (palUse[k] || 0) + 1) - 1;   // 0 for the first use
+    if (n === 0) return pal;
+    const d = n * 29;                                    // 29° per reuse → clearly different
+    return Object.assign({}, pal, {
+      body: _rotHue(pal.body, d), steel: _rotHue(pal.steel, d), mag: _rotHue(pal.mag, d),
+      grip: _rotHue(pal.grip, d), accent: _rotHue(pal.accent, d), glow: _rotHue(pal.glow, d),
+      shot: _rotHue(pal.shot, d)
+    });
+  };
   return ACHIEVEMENTS.map(a => {
     const rar = skinRarityFor(a.id);
     const rd = SKIN_RARITIES[rar];
@@ -748,19 +821,15 @@ const SKINS = (() => {
       /* «ГАЛАКТИКА» — единственная в своём роде, не зависит от палитр */
       pal = SKIN_PALETTES.filter(p => p.rar === 'platinum')[0];
       deco = 'galaxy'; beads = 8;
+    } else if (a.id === 'hardcore_wave') {
+      pal = SKIN_PALETTES.filter(p => p.pat === 'flesh')[0]; deco = 'flesh'; beads = 6;
     } else if (a.id.startsWith('hv_') || a.id.startsWith('hv2_')) {
-      // each heavy weapon gets its OWN exclusive heavy palette + fancier deco
       const pool = SKIN_PALETTES.filter(p => p.heavy && p.rar === rar);
-      const k = (hvUsed[rar] = (hvUsed[rar] || 0));
-      hvUsed[rar]++;
-      pal = pool.length ? pool[k % pool.length] : SKIN_PALETTES[k % SKIN_PALETTES.length];
+      pal = shift(pool.length ? pool[0] : pickPal(rar));
       deco = rar === 'legendary' ? 'legend2' : 'plasma2';
       beads = rar === 'legendary' ? 6 : 4;
     } else {
-      const pool = _PAL_BY_RAR[rar] || SKIN_PALETTES;
-      const k = (used[rar] = (used[rar] || 0));
-      used[rar]++;
-      pal = pool[k % pool.length];
+      pal = shift(pickPal(rar));
     }
     return {
       id: 'sk_' + a.id,

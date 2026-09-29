@@ -403,6 +403,9 @@ html.touch #bossBar .boss-name{font-size:11px;letter-spacing:2px}
 .bcard .wst i{font-style:normal;color:#c3ccd4;font-weight:600}
 .bcard .pr{position:absolute;right:13px;bottom:11px;font-size:16px;font-weight:800;color:var(--green)}
 .bcard.own .pr{color:var(--green);font-size:11px;letter-spacing:1.5px}
+.bcard.inbag{border-top-color:#4ad6ff}
+.bcard.inbag:hover{border-top-color:#9fe6ff;background:#0f1e26}
+.bcard.inbag .pr{color:#4ad6ff;font-size:11px;letter-spacing:1.5px}
 .buy-foot{display:flex;justify-content:space-between;align-items:center;margin-top:15px;font-size:11.5px;
   color:#5d6873;letter-spacing:1px;flex-wrap:wrap;gap:10px}
 #buyOwned{color:var(--or2)}
@@ -1026,6 +1029,9 @@ html.touch .fld input{padding:10px;font-size:15px}
       <div class="fld">Боёв (раундов)
         <div class="chips" id="lobbyRounds"></div>
       </div>
+      <div class="fld">Режим (для обоих)
+        <div class="chips" id="lobbyMode"></div>
+      </div>
       <div class="fld">Экономика
         <div class="chips" id="lobbyFree"></div>
       </div>
@@ -1510,6 +1516,14 @@ const CFG = {
   /* ---- offline map rotation: a fresh arena every N waves ---- */
   mapRotateEvery: 10,
 
+  /* ---- performance: zombie level-of-detail / culling ----
+     Zombies nearer than zombieNearDist are fully simulated every frame; farther
+     ones every zombieFarInterval seconds; beyond zombieCullDist they are hidden
+     and skipped entirely (bosses and targets are always active). */
+  zombieNearDist: 42,
+  zombieFarInterval: 0.12,
+  zombieCullDist: 85,
+
   /* ---- ammo crate (offline): a supply chest that tops up reserves ---- */
   crateInterval: 10,    // seconds between spawns
   crateAmmoFrac: 0.25,  // fraction of the FULL stock restored per crate
@@ -1958,7 +1972,9 @@ const ACHIEVEMENTS = [
      нужно выполнить ВСЕ остальные достижения (кроме него самого). Награда —
      «ГАЛАКТИКА»: очень красивый скин на оружие и на персонажа.
      ============================================================ */
-  { id: 'platinum_all', name: 'ВЛАДЫКА ГАЛАКТИКИ', desc: 'Выполнить все остальные достижения', check: s => s.otherAchievementsDone === true }
+  { id: 'platinum_all', name: 'ВЛАДЫКА ГАЛАКТИКИ', desc: 'Выполнить все остальные достижения', check: s => s.otherAchievementsDone === true },
+  /* ХАРДКОР — одна жизнь. Награда: кровавый скин «ПЛОТЬ». */
+  { id: 'hardcore_wave', name: 'ОДНА ЖИЗНЬ', desc: 'Дожить до 25 волны в ХАРДКОРЕ', check: s => s.hardcoreWave >= 25 }
 ];
 
 /* ============================================================
@@ -1997,6 +2013,7 @@ const ACH_PROGRESS = {
   v_score250k: ['perfectWaves', 100], v_perfect40: ['perfectWaves', 40], v_boss15: ['bossKills', 15],
   v_streak10: ['bestHeadStreak', 10], v_total20k: ['killsTotal', 20000],
   v_clear5: ['clears', 5], v_win50: ['top3', 1], v_time3600: ['playTime', 3600],
+  hardcore_wave: ['hardcoreWave', 25],
   /* интересные: скорострельные и на выносливость */
   x_rampage: ['fastKills', 100], x_speedrun: ['fastClear', 1], x_marathon: ['runTime', 2700],
   /* heavy arsenal (both sets) */
@@ -2133,7 +2150,31 @@ const SKIN_PALETTES = [
   /* ПЛАТИНА — единственный экземпляр, для финального достижения «ВЛАДЫКА
      ГАЛАКТИКИ». Полноценная модель строится в applyGalaxySkin; эти цвета —
      запасные для карточек/трассеров. */
-  { rar: 'platinum', pat: 'galaxy', body: 0x0a0416, steel: 0xb83cff, mag: 0x150822, grip: 0x0a0414, accent: 0xd896ff, glow: 0xd896ff, shot: 0xe8c8ff }
+  { rar: 'platinum', pat: 'galaxy', body: 0x0a0416, steel: 0xb83cff, mag: 0x150822, grip: 0x0a0414, accent: 0xd896ff, glow: 0xd896ff, shot: 0xe8c8ff },
+  /* ТЕМАТИЧЕСКИЕ — каждый скин с собственной темой, чтобы не повторяться */
+  { rar: 'legendary', pat: 'flesh', body: 0x3a050b, steel: 0xc41428, mag: 0x1c0206, grip: 0x0e0104, accent: 0xff2a3a, glow: 0xff3a4a, shot: 0xff2a3a },
+  { rar: 'rare', pat: 'pixel', body: 0x1c2c4a, steel: 0x59c2e0, mag: 0x0e1626, grip: 0x070b13, accent: 0xffd24a, glow: 0x59c2e0, shot: 0x9fe6ff },
+  { rar: 'uncommon', pat: 'toy', body: 0xe23b56, steel: 0xffd24a, mag: 0x8a1e30, grip: 0x4a0f1a, accent: 0x4ad6ff, glow: 0xffd24a, shot: 0xffe28a },
+  { rar: 'epic', pat: 'glass', body: 0x0c2230, steel: 0x9fe0ff, mag: 0x06141c, grip: 0x030a0e, accent: 0x59d6ff, glow: 0x9fe6ff, shot: 0xd0f4ff },
+  { rar: 'epic', pat: 'ice', body: 0x0a2a3a, steel: 0xcfeaff, mag: 0x061820, grip: 0x030c10, accent: 0x7fd8ff, glow: 0xaee6ff, shot: 0xd8f4ff },
+  { rar: 'legendary', pat: 'fire', body: 0x1a0400, steel: 0xff9a2a, mag: 0x0e0200, grip: 0x070100, accent: 0xffd24a, glow: 0xff7a1a, shot: 0xffb060 },
+  { rar: 'legendary', pat: 'alien', body: 0x0a1a08, steel: 0x8aff6a, mag: 0x051004, grip: 0x020802, accent: 0xb6ff4a, glow: 0x7fff5a, shot: 0xc8ff8a },
+  { rar: 'rare', pat: 'brick', body: 0x3a1a12, steel: 0xd0a890, mag: 0x24100a, grip: 0x120806, accent: 0xff6a3a, glow: 0xff8a5a, shot: 0xffb090 },
+  { rar: 'rare', pat: 'noise', body: 0x1a1e24, steel: 0xb8c4d0, mag: 0x10141a, grip: 0x080a0e, accent: 0x9ab0c8, glow: 0xc0d0e0, shot: 0xd8e4f0 },
+  { rar: 'uncommon', pat: 'checker', body: 0x2a2a2a, steel: 0xf0f0f0, mag: 0x161616, grip: 0x0a0a0a, accent: 0xff5a4a, glow: 0xffffff, shot: 0xffffff },
+  { rar: 'common', pat: 'concrete', body: 0x6a6a64, steel: 0xb8b8b0, mag: 0x44443f, grip: 0x24241f, accent: 0x9a9a90, glow: 0xb8b8b0, shot: 0xd8d8d0 },
+  { rar: 'common', pat: 'grass', body: 0x2f4a1e, steel: 0x9ab880, mag: 0x1c2e12, grip: 0x0e1609, accent: 0x8ad24a, glow: 0x9ad85a, shot: 0xc8f090 },
+  { rar: 'common', pat: 'water', body: 0x14405a, steel: 0xa8d8e8, mag: 0x0a2432, grip: 0x051218, accent: 0x4ac8e0, glow: 0x8ad8f0, shot: 0xc0ecff },
+  { rar: 'rare', pat: 'camo', body: 0x36402a, steel: 0xa0a898, mag: 0x1e2416, grip: 0x0f120b, accent: 0x8f9a70, glow: 0xa8b090, shot: 0xd0d8b8 },
+  { rar: 'epic', pat: 'tiger', body: 0x3a2a10, steel: 0xffc060, mag: 0x201608, grip: 0x100b04, accent: 0xff8a1a, glow: 0xffb040, shot: 0xffd080 },
+  { rar: 'uncommon', pat: 'wood', body: 0x6a4a24, steel: 0xd8b070, mag: 0x422c14, grip: 0x20160a, accent: 0xffd08a, glow: 0xd8b070, shot: 0xffe0b0 },
+  { rar: 'rare', pat: 'hazard', body: 0x2a2408, steel: 0xfff090, mag: 0x1a1605, grip: 0x0c0a03, accent: 0xffd400, glow: 0xffe650, shot: 0xfff4a0 },
+  { rar: 'epic', pat: 'hex', body: 0x2a0a2a, steel: 0xff9ae8, mag: 0x180618, grip: 0x0c030c, accent: 0xff5ad6, glow: 0xff8ae0, shot: 0xffb0f0 },
+  { rar: 'epic', pat: 'scale', body: 0x0a2a24, steel: 0x9affd8, mag: 0x061814, grip: 0x030c0a, accent: 0x4affc0, glow: 0x7fffd8, shot: 0xc0fff0 },
+  { rar: 'legendary', pat: 'prism', body: 0x2a1050, steel: 0xd8b0ff, mag: 0x180828, grip: 0x0a0414, accent: 0xb060ff, glow: 0xc890ff, shot: 0xe0c0ff },
+  { rar: 'legendary', pat: 'plasma', body: 0x3a0a5a, steel: 0xffc0ff, mag: 0x200630, grip: 0x100318, accent: 0xff6ad6, glow: 0xff8ae0, shot: 0xffc0f0 },
+  { rar: 'common', pat: 'grid', body: 0x3a4048, steel: 0xb0b8c0, mag: 0x22262c, grip: 0x111316, accent: 0x90a0b0, glow: 0xb0b8c0, shot: 0xd8e0e8 },
+  { rar: 'common', pat: 'carbon', body: 0x1a1e24, steel: 0x98a0a8, mag: 0x101216, grip: 0x08090c, accent: 0x8890a0, glow: 0xa0a8b8, shot: 0xc8d0d8 }
 ];
 const _PAL_BY_RAR = {};
 SKIN_PALETTES.forEach(p => { (_PAL_BY_RAR[p.rar] = _PAL_BY_RAR[p.rar] || []).push(p); });
@@ -2147,6 +2188,7 @@ function skinRarityFor(achId) {
   // new goal tiers by their id prefix
   if (achId === 'x_rampage' || achId === 'x_speedrun') return 'legendary';
   if (achId === 'x_marathon') return 'epic';
+  if (achId === 'hardcore_wave') return 'legendary';
   if (achId.startsWith('v_')) return 'legendary';
   if (achId.startsWith('m_')) return 'rare';
   if (achId.startsWith('e_')) return 'uncommon';
@@ -2159,9 +2201,46 @@ function skinRarityFor(achId) {
   return base[achId] || 'common';
 }
 
+/* --- hue helpers so every skin can get a unique colour set --- */
+function _hexToHsl(hex) {
+  const r = ((hex >> 16) & 255) / 255, g = ((hex >> 8) & 255) / 255, b = (hex & 255) / 255;
+  const mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn;
+  let h = 0, s = 0, l = (mx + mn) / 2;
+  if (d) { s = l > .5 ? d / (2 - mx - mn) : d / (mx + mn); if (mx === r) h = (g - b) / d + (g < b ? 6 : 0); else if (mx === g) h = (b - r) / d + 2; else h = (r - g) / d + 4; h /= 6; }
+  return [h, s, l];
+}
+function _hslToHex(h, s, l) {
+  h = ((h % 1) + 1) % 1;
+  const f = n => { const k = (n + h * 12) % 12; const a = s * Math.min(l, 1 - l); return Math.round(255 * (l - a * Math.max(-1, Math.min(k - 3, 9 - k, 1)))); };
+  return (f(0) << 16) | (f(8) << 8) | f(4);
+}
+function _rotHue(hex, deg) {
+  const [h, s, l] = _hexToHsl(hex >>> 0);
+  return _hslToHex(h + deg / 360, s, l);
+}
+
 const SKINS = (() => {
-  const used = {};
-  const hvUsed = {};
+  /* Каждый скин получает СВОЮ расцветку: палитра берётся по редкости, а если
+     её уже кто-то занял — оттенок сдвигается, чтобы цвета гарантированно не
+     повторялись. Плюс у каждого скина свой тематический паттерн. */
+  const palUse = {};
+  const pickPal = (rar) => {
+    let pool = SKIN_PALETTES.filter(p => p.rar === rar);
+    if (!pool.length) pool = SKIN_PALETTES;
+    // least-used palette of this rarity so the rotation count stays low
+    return pool.reduce((a, b) => ((palUse[SKIN_PALETTES.indexOf(a)] || 0) <= (palUse[SKIN_PALETTES.indexOf(b)] || 0) ? a : b));
+  };
+  const shift = (pal) => {
+    const k = SKIN_PALETTES.indexOf(pal);
+    const n = (palUse[k] = (palUse[k] || 0) + 1) - 1;   // 0 for the first use
+    if (n === 0) return pal;
+    const d = n * 29;                                    // 29° per reuse → clearly different
+    return Object.assign({}, pal, {
+      body: _rotHue(pal.body, d), steel: _rotHue(pal.steel, d), mag: _rotHue(pal.mag, d),
+      grip: _rotHue(pal.grip, d), accent: _rotHue(pal.accent, d), glow: _rotHue(pal.glow, d),
+      shot: _rotHue(pal.shot, d)
+    });
+  };
   return ACHIEVEMENTS.map(a => {
     const rar = skinRarityFor(a.id);
     const rd = SKIN_RARITIES[rar];
@@ -2170,19 +2249,15 @@ const SKINS = (() => {
       /* «ГАЛАКТИКА» — единственная в своём роде, не зависит от палитр */
       pal = SKIN_PALETTES.filter(p => p.rar === 'platinum')[0];
       deco = 'galaxy'; beads = 8;
+    } else if (a.id === 'hardcore_wave') {
+      pal = SKIN_PALETTES.filter(p => p.pat === 'flesh')[0]; deco = 'flesh'; beads = 6;
     } else if (a.id.startsWith('hv_') || a.id.startsWith('hv2_')) {
-      // each heavy weapon gets its OWN exclusive heavy palette + fancier deco
       const pool = SKIN_PALETTES.filter(p => p.heavy && p.rar === rar);
-      const k = (hvUsed[rar] = (hvUsed[rar] || 0));
-      hvUsed[rar]++;
-      pal = pool.length ? pool[k % pool.length] : SKIN_PALETTES[k % SKIN_PALETTES.length];
+      pal = shift(pool.length ? pool[0] : pickPal(rar));
       deco = rar === 'legendary' ? 'legend2' : 'plasma2';
       beads = rar === 'legendary' ? 6 : 4;
     } else {
-      const pool = _PAL_BY_RAR[rar] || SKIN_PALETTES;
-      const k = (used[rar] = (used[rar] || 0));
-      used[rar]++;
-      pal = pool[k % pool.length];
+      pal = shift(pickPal(rar));
     }
     return {
       id: 'sk_' + a.id,
@@ -2701,7 +2776,23 @@ function noiseFill(ctx, size, base, amp, step) {
 }
 
 const TEXTURES = {};
-function buildTextures() {
+/* a soft vertical streak used for raindrops, so rain reads as grey dashes
+   instead of round dots (PointsMaterial maps it onto each point sprite) */
+let _rainStreakTex = null;
+function rainStreakTexture() {
+  if (_rainStreakTex) return _rainStreakTex;
+  const c = makeCanvas(32); c.height = 64;
+  const x = c.getContext('2d');
+  x.clearRect(0, 0, 32, 64);
+  const g = x.createLinearGradient(0, 0, 0, 64);
+  g.addColorStop(0, 'rgba(210,216,224,0)');
+  g.addColorStop(.5, 'rgba(210,216,224,.95)');
+  g.addColorStop(1, 'rgba(210,216,224,0)');
+  x.fillStyle = g;
+  x.fillRect(12, 0, 8, 64);
+  _rainStreakTex = new THREE.CanvasTexture(c);
+  return _rainStreakTex;
+}function buildTextures() {
   const S = 256;
   const rng = makeRng(1337);
 
@@ -5049,7 +5140,9 @@ function _skinTexImage(name, uri) {
 const _PATTERN_BASE = {
   carbon: 'carbon', grid: 'grind', wood: 'wood', hazard: 'grind', tiger: 'grind',
   camo: 'grass', hex: 'grind', scale: 'brick', plasma: 'carbon', prism: 'checker',
-  noise: 'noise', brick: 'brick', concrete: 'checker', water: 'water', grass: 'grass'
+  noise: 'noise', brick: 'brick', concrete: 'checker', water: 'water', grass: 'grass',
+  /* тематические паттерны рисуются процедурно, без фото-основы */
+  flesh: null, pixel: null, toy: null, glass: null, ice: null, fire: null, alien: null
 };
 
 /* draw one pattern into a canvas: a real photo base + procedural detail */
@@ -5192,6 +5285,120 @@ function _skinDraw(c, pattern, glow) {
       x.beginPath(); x.moveTo(sx - 5, sy); x.lineTo(sx + 5, sy); x.moveTo(sx, sy - 5); x.lineTo(sx, sy + 5); x.stroke();
     }
     x.globalAlpha = 1;
+  } else if (pattern === 'flesh') {
+    /* ПЛОТЬ — кровавый скин: тёмно-багровая мышечная ткань с прожилками,
+       сухожилиями и мокрыми бликами (по референсу). */
+    const base = x.createLinearGradient(0, 0, S, S);
+    base.addColorStop(0, '#2a0206'); base.addColorStop(.5, '#4a060d'); base.addColorStop(1, '#1c0104');
+    x.fillStyle = base; x.fillRect(0, 0, S, S);
+    // muscle fibres: many wavy red strands
+    for (let i = 0; i < 90; i++) {
+      const y0 = Math.random() * S;
+      x.strokeStyle = 'rgba(' + (90 + Math.random() * 120 | 0) + ',' + (4 + Math.random() * 18 | 0) + ',' + (8 + Math.random() * 16 | 0) + ',' + (.25 + Math.random() * .5).toFixed(2) + ')';
+      x.lineWidth = .6 + Math.random() * 1.8;
+      x.beginPath();
+      let yy = y0; x.moveTo(0, yy);
+      for (let xx = 0; xx <= S; xx += 8) { yy += (Math.random() - .5) * 7; x.lineTo(xx, yy); }
+      x.stroke();
+    }
+    // dark veins
+    for (let i = 0; i < 18; i++) {
+      x.strokeStyle = 'rgba(10,0,2,.6)'; x.lineWidth = 1 + Math.random() * 2;
+      x.beginPath();
+      let vx = Math.random() * S, vy = Math.random() * S; x.moveTo(vx, vy);
+      for (let s2 = 0; s2 < 5; s2++) { vx += (Math.random() - .5) * 30; vy += (Math.random() - .5) * 30; x.lineTo(vx, vy); }
+      x.stroke();
+    }
+    // wet specular highlights
+    for (let i = 0; i < 40; i++) {
+      x.fillStyle = 'rgba(255,180,180,' + (.05 + Math.random() * .12).toFixed(2) + ')';
+      x.beginPath(); x.ellipse(Math.random() * S, Math.random() * S, 2 + Math.random() * 6, 1 + Math.random() * 3, Math.random() * 3, 0, 6.29); x.fill();
+    }
+    // a couple of small eyes hidden in the flesh
+    for (let i = 0; i < 3; i++) {
+      const ex = 14 + Math.random() * (S - 28), ey = 14 + Math.random() * (S - 28);
+      x.fillStyle = '#e8e0d0'; x.beginPath(); x.ellipse(ex, ey, 5, 3.4, 0, 0, 6.29); x.fill();
+      x.fillStyle = i % 2 ? '#2a8a3a' : '#3a6a9a'; x.beginPath(); x.arc(ex, ey, 2, 0, 6.29); x.fill();
+      x.fillStyle = '#0a0206'; x.beginPath(); x.arc(ex, ey, .8, 0, 6.29); x.fill();
+    }
+  } else if (pattern === 'pixel') {
+    /* ПИКСЕЛЬНЫЙ — 8-битная палитра, крупные пиксели без сглаживания */
+    const pal = ['#1c2c4a', '#2e6f9e', '#59c2e0', '#e8f4ff', '#c04a2a', '#ffd24a'];
+    for (let yy = 0; yy < S; yy += 8) for (let xx = 0; xx < S; xx += 8) {
+      x.fillStyle = pal[(xx * 7 + yy * 13) % pal.length];
+      x.fillRect(xx, yy, 8, 8);
+    }
+    for (let i = 0; i < 60; i++) {
+      x.fillStyle = Math.random() < .5 ? '#0a1220' : '#ffffff';
+      x.fillRect((Math.random() * S | 0) & ~7, (Math.random() * S | 0) & ~7, 8, 8);
+    }
+  } else if (pattern === 'toy') {
+    /* ИГРУШЕЧНЫЙ — яркий глянцевый пластик, круглые детали и звёздочки */
+    x.fillStyle = '#e23b56'; x.fillRect(0, 0, S, S);
+    for (let i = 0; i < 40; i++) {
+      x.fillStyle = ['#ffd24a', '#4ad6ff', '#57d16a', '#ffffff'][i % 4];
+      x.globalAlpha = .8; x.beginPath(); x.arc(Math.random() * S, Math.random() * S, 3 + Math.random() * 8, 0, 6.29); x.fill();
+    }
+    x.globalAlpha = 1;
+    for (let i = 0; i < 14; i++) {
+      const sx = Math.random() * S, sy = Math.random() * S, r2 = 4 + Math.random() * 4;
+      x.fillStyle = '#fff6c0'; x.beginPath();
+      for (let p2 = 0; p2 < 5; p2++) { const a2 = -Math.PI / 2 + p2 * 2.513; x.lineTo(sx + Math.cos(a2) * r2, sy + Math.sin(a2) * r2); const a3 = a2 + 1.256; x.lineTo(sx + Math.cos(a3) * r2 * .45, sy + Math.sin(a3) * r2 * .45); }
+      x.closePath(); x.fill();
+    }
+    x.fillStyle = 'rgba(255,255,255,.35)'; x.fillRect(0, 0, S, 6);
+  } else if (pattern === 'glass') {
+    /* СТЕКЛЯННЫЙ — прозрачно-голубые панели, белые блики и тонкие грани */
+    x.fillStyle = '#0c2230'; x.fillRect(0, 0, S, S);
+    for (let i = 0; i < 10; i++) {
+      const gx = Math.random() * S, gy = Math.random() * S, w2 = 14 + Math.random() * 30, h2 = 10 + Math.random() * 26;
+      x.fillStyle = 'rgba(150,225,255,' + (.10 + Math.random() * .22).toFixed(2) + ')';
+      x.beginPath(); x.moveTo(gx, gy); x.lineTo(gx + w2, gy + 4); x.lineTo(gx + w2 - 6, gy + h2); x.lineTo(gx - 4, gy + h2 - 5); x.closePath(); x.fill();
+      x.strokeStyle = 'rgba(220,245,255,.7)'; x.lineWidth = 1; x.stroke();
+    }
+    x.strokeStyle = 'rgba(255,255,255,.55)'; x.lineWidth = 2;
+    for (let i = 0; i < 4; i++) { const gx = Math.random() * S, gy = Math.random() * S; x.beginPath(); x.moveTo(gx, gy); x.lineTo(gx + 20, gy - 14); x.stroke(); }
+  } else if (pattern === 'ice') {
+    /* ЛЕДЯНОЙ — голубой лёд с трещинами, инеем и замерзшими гранями */
+    const g3 = x.createLinearGradient(0, 0, S, S);
+    g3.addColorStop(0, '#0a2a3a'); g3.addColorStop(.5, '#1a6a8a'); g3.addColorStop(1, '#0a2030');
+    x.fillStyle = g3; x.fillRect(0, 0, S, S);
+    for (let i = 0; i < 40; i++) {
+      x.strokeStyle = 'rgba(210,245,255,' + (.2 + Math.random() * .5).toFixed(2) + ')';
+      x.lineWidth = .6 + Math.random() * 1.4;
+      const gx = Math.random() * S, gy = Math.random() * S;
+      x.beginPath(); x.moveTo(gx, gy); x.lineTo(gx + (Math.random() - .5) * 40, gy + (Math.random() - .5) * 40); x.stroke();
+    }
+    for (let i = 0; i < 26; i++) { x.fillStyle = 'rgba(255,255,255,' + (.1 + Math.random() * .35).toFixed(2) + ')'; x.beginPath(); x.arc(Math.random() * S, Math.random() * S, 1 + Math.random() * 3, 0, 6.29); x.fill(); }
+  } else if (pattern === 'fire') {
+    /* ОГНЕННЫЙ — раскалённые угли, оранжево-жёлтое пламя и чёрная сажа */
+    const g4 = x.createLinearGradient(0, S, 0, 0);
+    g4.addColorStop(0, '#1a0400'); g4.addColorStop(.5, '#7a1800'); g4.addColorStop(1, '#ff9a2a');
+    x.fillStyle = g4; x.fillRect(0, 0, S, S);
+    for (let i = 0; i < 70; i++) {
+      const fy = Math.random() * S, fx = Math.random() * S, r2 = 3 + Math.random() * 12;
+      const gg = x.createRadialGradient(fx, fy, 0, fx, fy, r2);
+      gg.addColorStop(0, 'rgba(255,' + (180 + Math.random() * 60 | 0) + ',60,.85)');
+      gg.addColorStop(1, 'rgba(255,60,0,0)');
+      x.fillStyle = gg; x.beginPath(); x.arc(fx, fy, r2, 0, 6.29); x.fill();
+    }
+    for (let i = 0; i < 30; i++) { x.fillStyle = 'rgba(10,4,0,.5)'; x.fillRect(Math.random() * S, Math.random() * S, 2 + Math.random() * 6, 2 + Math.random() * 4); }
+  } else if (pattern === 'alien') {
+    /* ИНОПЛАНЕТНЫЙ — зелёная биомасса, светящиеся пузыри и щупальца */
+    x.fillStyle = '#0a1a08'; x.fillRect(0, 0, S, S);
+    for (let i = 0; i < 50; i++) {
+      x.fillStyle = 'rgba(' + (40 + Math.random() * 90 | 0) + ',' + (140 + Math.random() * 100 | 0) + ',' + (30 + Math.random() * 60 | 0) + ',' + (.3 + Math.random() * .5).toFixed(2) + ')';
+      x.beginPath(); x.arc(Math.random() * S, Math.random() * S, 2 + Math.random() * 9, 0, 6.29); x.fill();
+    }
+    for (let i = 0; i < 14; i++) {
+      x.strokeStyle = 'rgba(120,255,120,.5)'; x.lineWidth = 1 + Math.random() * 2;
+      const tx = Math.random() * S, ty = Math.random() * S;
+      x.beginPath(); x.moveTo(tx, ty);
+      let cx2 = tx, cy2 = ty;
+      for (let s2 = 0; s2 < 4; s2++) { cx2 += (Math.random() - .5) * 26; cy2 += (Math.random() - .5) * 26; x.lineTo(cx2, cy2); }
+      x.stroke();
+    }
+    for (let i = 0; i < 8; i++) { x.fillStyle = '#d8ff8a'; x.beginPath(); x.arc(Math.random() * S, Math.random() * S, 1.5 + Math.random() * 3, 0, 6.29); x.fill(); }
   }
 }
 
@@ -5225,6 +5432,79 @@ function animateGalaxySkin(group, dt) {
 }
 
 /* ============================================================
+   FLESH SKIN (ХАРДКОР) — «кровавый» скин из живой плоти: корпус из мышечной
+   ткани, торчащие зубы/шипы, когти и вросшие глаза. Полностью другая модель.
+   ============================================================ */
+const FLESH_COLORS = { meat: 0x6e0a12, meat2: 0x4a050b, dark: 0x2a0206, blood: 0xc41428, bone: 0xe8e0cc, eye: 0xf0ead8, iris: 0x2a8a3a, claw: 0x1a1012 };
+function applyFleshSkin(group) {
+  if (!group) return group;
+  const C = FLESH_COLORS;
+  const tex = _skinTexture('flesh', C.blood);
+  group.traverse(o => {
+    if (!o.isMesh || !o.material || !o.material.color) return;
+    if (o.material.isMeshBasicMaterial) return;
+    const l = o.material.color.r * .3 + o.material.color.g * .59 + o.material.color.b * .11;
+    const c = new THREE.Color(l > .5 ? C.blood : l > .25 ? C.meat : C.meat2);
+    c.multiplyScalar(U.clamp(.7 + l * .9, .5, 1.3));
+    o.material.color.copy(c);
+    if (o.material.emissive !== undefined) o.material.emissive.setHex(l > .4 ? 0x2a0006 : 0x140003);
+    if (tex) {
+      const t2 = tex.clone(); t2.needsUpdate = true;
+      t2.wrapS = t2.wrapT = THREE.RepeatWrapping; t2.repeat.set(2, 2);
+      o.material.map = t2;
+    }
+    o.material.needsUpdate = true;
+  });
+
+  const fx = new THREE.Group();
+  fx.name = 'fleshFX';
+  const matBone = new THREE.MeshLambertMaterial({ color: C.bone, emissive: 0x1a1410 });
+  const matMeat = new THREE.MeshLambertMaterial({ color: C.meat, emissive: 0x1e0206 });
+  const matClaw = new THREE.MeshLambertMaterial({ color: C.claw, emissive: 0x0a0406 });
+  /* bulbous lumps of muscle along the body */
+  for (let i = 0; i < 8; i++) {
+    const b = new THREE.Mesh(new THREE.SphereGeometry(.022 + Math.random() * .022, 8, 6), matMeat);
+    b.position.set((Math.random() - .5) * .12, .02 + (Math.random() - .5) * .12, -.18 + Math.random() * .28);
+    fx.add(b);
+  }
+  /* rows of jagged teeth along the top of the receiver */
+  for (let i = 0; i < 6; i++) {
+    const t2 = new THREE.Mesh(new THREE.ConeGeometry(.012, .05 + Math.random() * .03, 4), matBone);
+    t2.position.set(-.012 + (i % 2) * .024, .052, -.02 - i * .045);
+    t2.rotation.z = (i % 2 ? 1 : -1) * .18;
+    fx.add(t2);
+  }
+  /* a big curved claw near the muzzle and two lower spikes */
+  const claw = new THREE.Mesh(new THREE.ConeGeometry(.018, .11, 5), matClaw);
+  claw.position.set(.03, .02, -.30); claw.rotation.x = -1.1; fx.add(claw);
+  [-1, 1].forEach(s => {
+    const sp = new THREE.Mesh(new THREE.ConeGeometry(.014, .08, 4), matBone);
+    sp.position.set(s * .05, -.05, -.16); sp.rotation.x = Math.PI; sp.rotation.z = s * .3; fx.add(sp);
+  });
+  /* embedded eyes that stare forward */
+  const eyeMat = new THREE.MeshLambertMaterial({ color: C.eye, emissive: 0x222018 });
+  const irisMat = new THREE.MeshBasicMaterial({ color: C.iris });
+  [[-.045, .06, -.14], [.05, .05, -.20], [0, .075, -.05]].forEach(p => {
+    const e = new THREE.Mesh(new THREE.SphereGeometry(.020, 10, 8), eyeMat);
+    e.position.set(p[0], p[1], p[2]); fx.add(e);
+    const ir = new THREE.Mesh(new THREE.SphereGeometry(.010, 8, 6), irisMat);
+    ir.position.set(p[0], p[1], p[2] - .013); fx.add(ir);
+  });
+  /* dark veins/tendons draped over the gun */
+  const veinMat = new THREE.MeshLambertMaterial({ color: C.dark });
+  for (let i = 0; i < 5; i++) {
+    const v = new THREE.Mesh(new THREE.CylinderGeometry(.005, .003, .22 + Math.random() * .16, 5), veinMat);
+    v.position.set((Math.random() - .5) * .10, (Math.random() - .5) * .06, -.10 + Math.random() * .22);
+    v.rotation.set(Math.PI / 2 + U.rand(-.2, .2), 0, U.rand(0, 6.28));
+    fx.add(v);
+  }
+  group.add(fx);
+  group.userData.flesh = true;
+  group.userData.skin = { id: 'sk_hardcore_wave', name: 'ПЛОТЬ', rarity: 'legendary', rarityLabel: 'ЛЕГЕНДАРНЫЙ', glow: C.blood, pattern: 'flesh', shot: 0xff2a3a, accent: C.blood, deco: 'flesh' };
+  return group;
+}
+
+/* ============================================================
    WEAPON SKINS — applied on top of a freshly built weapon model.
    A skin gives the gun a procedural TEXTURE and repaints its PARTS in separate
    colours (receiver, steel, magazine, grip, accents) plus a little extra
@@ -5235,6 +5515,8 @@ function applyWeaponSkin(group, skin) {
   if (!group || !skin) return group;
   /* ПЛАТИНОВЫЙ скин «ГАЛАКТИКА» — особый: полностью другая модель оружия */
   if (skin.rarity === 'platinum' || skin.id === 'sk_platinum') return applyGalaxySkin(group);
+  /* КРОВАВЫЙ скин «ПЛОТЬ» (награда за ХАРДКОР) — своя модель из мяса и костей */
+  if (skin.id === 'sk_hardcore_wave' || skin.deco === 'flesh') return applyFleshSkin(group);
   const tex = skin.pattern ? _skinTexture(skin.pattern, skin.accent || skin.glow) : null;
 
   /* Source palette colour → the skin's part colour. Different original parts map
@@ -7497,6 +7779,9 @@ class Player {
 
     // ---- inventory ----
     this.inv = { 1: null, 2: null, 3: { id: 'knife', mag: Infinity, reserve: 0 } };
+    /* СУМКА: оружие, которое было куплено, но вытеснено другим. Оно остаётся у
+       игрока и может быть снова взято в руки во время закупки. */
+    this.bag = [];
     this.slot = 3;
     this.lastPrimary = 2;
 
@@ -7559,12 +7844,43 @@ class Player {
     const slot = def.slot;
     if (slot === 3) { this.inv[3] = { id: 'knife', mag: Infinity, reserve: 0 }; return true; }
     const had = this.inv[slot];
+    /* если слот занят ДРУГИМ оружием — вытесненное уходит в сумку (а не
+       пропадает), чтобы его можно было вернуть во время закупки */
+    if (had && had.id !== id) this.toBag(had);
     this.inv[slot] = { id, mag: def.mag, reserve: def.reserve };
     if (had && had.id === id) { this.inv[slot].mag = had.mag; this.inv[slot].reserve = had.reserve; }
     if (slot === 2) this.lastPrimary = 2;
     return true;
   }
-  has(id) { return [1, 2, 3].some(s => this.inv[s] && this.inv[s].id === id); }
+  has(id) { return [1, 2, 3].some(s => this.inv[s] && this.inv[s].id === id) || this.bagHas(id); }
+  /* ---- СУМКА ---- */
+  toBag(w) {
+    if (!w || !w.id || w.id === 'knife') return;
+    const def = WEAPONS[w.id];
+    if (!def) return;
+    const found = this.bag.find(b => b.id === w.id);
+    if (found) { found.mag = w.mag; found.reserve = w.reserve; return; }
+    this.bag.push({ id: w.id, mag: w.mag, reserve: w.reserve, slot: def.slot });
+  }
+  bagHas(id) { return this.bag.some(b => b.id === id); }
+  /* взять оружие из сумки в руки: текущее в слоте уедет обратно в сумку */
+  bagTake(id) {
+    const i = this.bag.findIndex(b => b.id === id);
+    if (i < 0) return false;
+    const def = WEAPONS[id];
+    if (!def) return false;
+    const slot = def.slot;
+    const cur = this.inv[slot];
+    if (cur && cur.id !== id) this.toBag(cur);
+    const b = this.bag[i];
+    this.inv[slot] = { id: b.id, mag: b.mag, reserve: b.reserve };
+    this.bag.splice(i, 1);
+    this.slot = slot;
+    this.deployT = Math.max(this.deployT, .35);
+    if (this.vmGroup) this.buildViewModel();
+    return true;
+  }
+  clearBag() { this.bag.length = 0; }
   takeWeapon(slot) {
     if (!this.inv[slot]) return false;
     if (this.slot === slot) return true;
@@ -9193,10 +9509,28 @@ class Horde {
     this.flow.update(dt, player.pos.x, player.pos.z);
     this.bucketize();
     const ctx = { player, world: this.world, flow: this.flow, neighbors: null, horde: this };
+    /* ---- LOD / CULLING ----
+       Only the zombies the player can actually perceive are simulated and
+       animated every frame: near ones in full, far ones at a reduced rate
+       (their motion is imperceptible), and ones beyond the cull distance are
+       hidden entirely — the renderer then skips them. This keeps big hordes
+       (ОРДА ×10) cheap without changing what the player sees. */
+    const p = player.pos;
+    const nearD2 = CFG.zombieNearDist * CFG.zombieNearDist;
+    const cullD2 = CFG.zombieCullDist * CFG.zombieCullDist;
+    this._lodAcc = (this._lodAcc || 0) + dt;
+    const farTick = this._lodAcc >= CFG.zombieFarInterval;
+    if (farTick) this._lodAcc = 0;
     for (let i = 0; i < this.list.length; i++) {
       const z = this.list[i];
+      const dx = z.pos.x - p.x, dz = z.pos.z - p.z;
+      const d2 = dx * dx + dz * dz;
+      const visible = d2 <= cullD2 || z.isTarget || (z.isBoss || z.isMiniBoss);
+      if (z.group) z.group.visible = visible;
+      if (!visible) continue;                 // hidden: skip simulation entirely
+      if (d2 > nearD2 && !farTick) continue;  // distant: update only every few frames
       ctx.neighbors = this.nearby(z);
-      z.update(dt, ctx);
+      z.update(dt * (d2 > nearD2 ? CFG.zombieFarInterval : 1), ctx);
     }
     // reap
     for (let i = this.list.length - 1; i >= 0; i--) {
@@ -11111,7 +11445,7 @@ const UI = {
       'btnCopy', 'dmgDirs', 'android', 'ios', 'credits', 'crPlayer', 'crStats',
       'matchEnd', 'meTitle', 'meWinner', 'meScore', 'meDetail', 'btnMatchAgain', 'btnMatchMenu',
       'mapChips', 'playerChips', 'hpChips', 'hordeChips', 'lobbyMaps', 'lobbyPlayers', 'lobbyHp', 'lobbyFree', 'lobbyRounds',
-      'todChips', 'weatherChips', 'envAutoChips', 'sEnvSpeed', 'oEnvSpeed', 'lobbyTod', 'lobbyWeather',
+      'todChips', 'weatherChips', 'envAutoChips', 'sEnvSpeed', 'oEnvSpeed', 'lobbyTod', 'lobbyWeather', 'lobbyMode',
       'offCountChips', 'offHpChips', 'offFreeChips', 'offModeChips', 'offCustomBox', 'offHordeBox', 'offSpecialBox', 'offCpBox', 'offCpInfo', 'offCpMode', 'offCpList', 'offCountExact', 'offCountFixed', 'btnOffContinue', 'custom', 'lobbyShop', 'lobbyShopItems',
       'modScreen', 'modGrid', 'modActive',
       'extras', 'achGrid', 'recTable', 'btnExtrasBack', 'weaponWheel', 'wwInner',
@@ -11297,6 +11631,7 @@ const UI = {
         { id: 'bossrush', b: 'БОСС-РАШ', i: 'только боссы подряд' },
         { id: 'daily', b: 'ИСПЫТАНИЕ ДНЯ', i: 'общий сид и модификаторы' },
         { id: 'endless', b: 'БЕСКОНЕЧНЫЙ', i: 'модификатор каждые 10 волн' },
+        { id: 'hardcore', b: 'ХАРДКОР', i: 'одна жизнь · без сохранений' },
         { id: 'custom', b: 'СВОЙ', i: 'свои множители' }
       ];
       this.el.offModeChips.innerHTML = '';
@@ -11382,6 +11717,16 @@ const UI = {
     fill(this.el.todChips, TOD_ORDER.map(k => ({ v: k, b: todName(k) })), 'tod', pickTod);
     fill(this.el.weatherChips, WEATHER_ORDER.map(k => ({ v: k, b: weatherName(k) })), 'wx', pickWx);
     fill(this.el.envAutoChips, [{ v: 0, b: 'ВЫКЛ' }, { v: 1, b: 'ВКЛ' }], 'auto', pickAuto);
+    /* режим онлайн-матча: PvP-дуэль или кооп по волнам / орде / босс-рашу */
+    const pickMode = v => {
+      Store.data.onlineMode = v; Store.save(); this.refreshChips(); this.broadcastEnv();
+    };
+    fill(this.el.lobbyMode, [
+      { v: 'pvp', b: 'PvP', i: 'дуэль' },
+      { v: 'normal', b: 'ОБЫЧНЫЙ', i: 'волны вместе' },
+      { v: 'horde', b: 'ОРДА ×10', i: 'кооп-орда' },
+      { v: 'bossrush', b: 'БОСС-РАШ', i: 'боссы подряд' }
+    ], 'omode', pickMode);
     /* the lobby copies: the host sets the time of day / weather for both players */
     fill(this.el.lobbyTod, TOD_ORDER.map(k => ({ v: k, b: todName(k) })), 'tod', pickTod);
     fill(this.el.lobbyWeather, WEATHER_ORDER.map(k => ({ v: k, b: weatherName(k) })), 'wx', pickWx);
@@ -11391,7 +11736,8 @@ const UI = {
     if (typeof Net === 'undefined' || Net.role !== CS.NETROLE.HOST || !Net.connected) return;
     Net.send({ t: 'round', st: 'settings', players: Store.data.players, hp: Store.data.maxHP, map: Store.data.map,
       free: Store.data.freeplay, rounds: Store.data.rounds,
-      tod: Store.data.timeOfDay || 'day', weather: Store.data.skyWeather || 'clear', envAuto: Store.data.envAuto || 0, envOff: Store.data.envOff || 0 });
+      tod: Store.data.timeOfDay || 'day', weather: Store.data.skyWeather || 'clear', envAuto: Store.data.envAuto || 0, envOff: Store.data.envOff || 0,
+      pve: Store.data.onlineMode || 'pvp' });
   },
   /* re-highlight the environment chips (called after the E/P hotkeys) */
   refreshEnv() { this.refreshChips(); },
@@ -11425,6 +11771,7 @@ const UI = {
       mark(this.el.lobbyWeather, 'wx', '__off__');
     }
     mark(this.el.envAutoChips, 'auto', S.envAuto ? 1 : 0);
+    mark(this.el.lobbyMode, 'omode', S.onlineMode || 'pvp');
     const mode = S.offMode || 'normal';
     if (this.el.offModeChips) {
       Array.from(this.el.offModeChips.children).forEach(b => b.classList.toggle('on', b.dataset.mode === mode));
@@ -11811,7 +12158,8 @@ const UI = {
         if (!shopAllows(w.cat)) return;
         if (!itemAllowed(id)) return;
         const owned = player.has(id);
-        const equipped = owned && player.slot === w.slot && player.inv[w.slot] && player.inv[w.slot].id === id;
+        const inBag = player.bagHas && player.bagHas(id) && !(player.inv[w.slot] && player.inv[w.slot].id === id);
+        const equipped = owned && !inBag && player.slot === w.slot && player.inv[w.slot] && player.inv[w.slot].id === id;
         const rpm = Math.round(w.rpm);
         const stats = [['УРОН', w.dmg], ['ТЕМП', rpm]];
         if (w.mag !== Infinity) stats.push(['МАГ', w.mag]);
@@ -11819,10 +12167,11 @@ const UI = {
         if (w.pierce) stats.push(['ПРОБИВ', 'НАСКВОЗЬ']);
         if (w.beam) stats.push(['ЛУЧ', w.beamMax + 'с']);
         if (w.splash) stats.push(['РАДИУС', w.splash + 'м']);
-        mkCard(id, w.name, w.cat.toUpperCase(), w.price, stats, owned, !free && player.money < w.price,
+        mkCard(id, w.name, w.cat.toUpperCase(), w.price, stats, owned || inBag, !free && player.money < w.price,
           () => Bus.emit('buy', id),
           () => Bus.emit('equip', id));
         if (equipped) { const c = wrap.lastChild; if (c) { c.classList.add('equipped'); const pr = c.querySelector('.pr'); if (pr) pr.textContent = 'В РУКАХ'; } }
+        else if (inBag) { const c = wrap.lastChild; if (c) { c.classList.add('inbag'); const pr = c.querySelector('.pr'); if (pr) pr.textContent = 'В СУМКЕ'; } }
       });
     }
     this.el.buyOwned.textContent = this.ownedList(player);
@@ -11833,6 +12182,7 @@ const UI = {
     if (p.inv[2]) a.push(WEAPONS[p.inv[2].id].name);
     if (p.inv[1]) a.push(WEAPONS[p.inv[1].id].name);
     let s = 'В руках: ' + (a.length ? a.join(' + ') : 'нож');
+    if (p.bag && p.bag.length) s += ' · 🎒 сумка: ' + p.bag.map(b => WEAPONS[b.id].name).join(', ');
     if (p.armor > 0) s += ' · броня ' + Math.round(p.armor) + (p.helmet ? '+шлем' : '');
     if (p.medkits > 0) s += ' · аптечек: ' + p.medkits;
     if (p.drone) s += ' · дрон';
@@ -12943,6 +13293,7 @@ const Net = {
       case 'state': case 'shot': case 'hit': case 'died': case 'respawn':
       case 'score': case 'chat': case 'drone': case 'boom': case 'splat':
       case 'mmissile':
+      case 'coopWave':
         if (this.role === CS.NETROLE.HOST) this.relay(m, rec);
         this.emit(m.t, m);
         break;
@@ -14421,6 +14772,7 @@ const Game = {
     Net.on('drone', d => this.onRemoteDrone(d));
     Net.on('boom', b => this.onRemoteBoom(b));
     Net.on('mmissile', m => this.onRemoteMechMissile(m));
+    Net.on('coopWave', m => { if (this.mode === CS.MODE.ONLINE && this.isCoop && Net.role !== CS.NETROLE.HOST) this.coopStartWave(m.w); });
     Net.on('splat', s => this.onRemoteSplat(s));
     Net.on('score', s => this.onScoreMsg(s));
   },
@@ -14607,6 +14959,7 @@ const Game = {
       wavesNoReload: this._wavesNoReload || 0,
       wavesNoShots: this._wavesNoShots || 0,
       top3: Store.data.top3 || 0,
+      hardcoreWave: this._hardcoreWave || 0,
       /* финальное платиновое достижение: сколько остальных уже выполнено */
       otherDone: (typeof achOtherDone === 'function') ? achOtherDone(Store.data.ach) : 0,
       otherTotal: ACHIEVEMENTS.length - 1,
@@ -14770,39 +15123,96 @@ const Game = {
   },
 
   applyTimeOfDay() {
+    /* compute the DESIRED environment; the actual scene values are eased toward
+       it every frame in updateEnv(), so weather / time changes are smooth
+       instead of snapping. */
+    const t = this._envCompute();
+    this._envTarget = t;
+    if (!this._envCur) {
+      this._envCur = {
+        sky: t.sky.clone(), fog: t.fog.clone(), sunCol: t.sunCol.clone(),
+        ambCol: t.ambCol.clone(), fogDen: t.fogDen, sun: t.sun, ambI: t.ambI
+      };
+    }
+    this.applyWeatherFX(t.wx);
+    this._envApply();
+  },
+
+  /* desired environment values for the current time-of-day + weather */
+  _envCompute() {
     const on = this.envEnabled();
     const tod = on ? this.envTod() : 'day';
     const wx = on ? this.envWeather() : 'clear';
     const tp = this._todPreset(tod), wp = this._weatherPreset(wx);
-    const g = MAP.group;
-    const sky = g && g.userData && g.userData.sky;
-    if (sky) {
-      // blend the time sky colour with the weather tint
-      const sc = new THREE.Color(tp.sky).lerp(new THREE.Color(wp.tint), wx === 'clear' ? 0 : .45);
-      sky.material.color.copy(sc); sky.material.needsUpdate = true;
-    }
-    if (this.scene) {
-      if (!this._dayFog) {
-        this._dayFog = { color: this.scene.fog ? this.scene.fog.color.getHex() : 0xbcc6cf, density: this.scene.fog ? this.scene.fog.density : .0055 };
-      }
-      if (this.scene.fog) {
-        const fc = new THREE.Color(tp.fog).lerp(new THREE.Color(wp.tint), .35);
-        this.scene.fog.color.copy(fc);
-        this.scene.fog.density = this._dayFog.density * tp.fogMul * wp.fogMul;
-      }
-      this.scene.traverse(o => {
+    // capture the map's baseline sun intensity + fog density on first use
+    if (this._daySunIntensity === undefined) {
+      this._daySunIntensity = 1;
+      if (this.scene) this.scene.traverse(o => {
         if (o.isLight && o.type === 'DirectionalLight' && o.userData && o.userData.dayLight) {
-          o.intensity = o.userData.dayIntensity * tp.sunMul * wp.dim;
-          o.color.setHex(tp.sun).lerp(new THREE.Color(wp.sun), .5);
+          this._dayLight = o;
+          this._daySunIntensity = o.userData.dayIntensity || o.intensity || 1;
         }
       });
-      if (!this._ambient) { this._ambient = new THREE.AmbientLight(0xffffff, 0.25); this.scene.add(this._ambient); }
-      const ambOn = tp.ambMul > 0 || wx === 'storm' || wx === 'ash';
-      this._ambient.visible = ambOn;
-      this._ambient.color.setHex(tp.amb || wp.tint);
-      this._ambient.intensity = Math.max(tp.ambMul, wx === 'storm' ? .35 : wx === 'ash' ? .30 : 0);
     }
-    this.applyWeatherFX(wx);
+    if (this._dayFogDensity === undefined) {
+      this._dayFogDensity = (this.scene && this.scene.fog) ? this.scene.fog.density : .0055;
+    }
+    const sky = new THREE.Color(tp.sky).lerp(new THREE.Color(wp.tint), wx === 'clear' ? 0 : .45);
+    const fog = new THREE.Color(tp.fog).lerp(new THREE.Color(wp.tint), .35);
+    const sunCol = new THREE.Color(tp.sun).lerp(new THREE.Color(wp.sun), .5);
+    const sun = this._daySunIntensity * tp.sunMul * wp.dim;
+    const ambCol = new THREE.Color(tp.amb || wp.tint);
+    const ambI = Math.max(tp.ambMul, wx === 'storm' ? .35 : wx === 'ash' ? .30 : 0);
+    const fogDen = this._dayFogDensity * tp.fogMul * wp.fogMul;
+    return { sky, fog, fogDen, sun, sunCol, ambCol, ambI, wx, ambOn: tp.ambMul > 0 || wx === 'storm' || wx === 'ash' };
+  },
+
+  /* write the CURRENT eased values onto the scene */
+  _envApply() {
+    const c = this._envCur;
+    if (!c) return;
+    const g = MAP.group;
+    const sky = g && g.userData && g.userData.sky;
+    if (sky && sky.material) { sky.material.color.copy(c.sky); sky.material.needsUpdate = true; }
+    if (this.scene && this.scene.fog) {
+      this.scene.fog.color.copy(c.fog);
+      this.scene.fog.density = c.fogDen;
+    }
+    if (this._dayLight) {
+      this._dayLight.intensity = c.sun;
+      this._dayLight.color.copy(c.sunCol);
+    }
+    if (!this._ambient) { this._ambient = new THREE.AmbientLight(0xffffff, 0.25); this.scene.add(this._ambient); }
+    const t = this._envTarget;
+    this._ambient.visible = !!(t && t.ambOn) || c.ambI > 0.004;
+    this._ambient.color.copy(c.ambCol);
+    this._ambient.intensity = c.ambI;
+  },
+
+  /* called every frame: ease sky / fog / sun / ambient toward the target, and
+     fade the weather particles in and out instead of popping */
+  updateEnv(dt) {
+    if (this._envCur && this._envTarget) {
+      const k = 1 - Math.exp(-dt / 2.4);           // ~2.4 s time constant
+      const c = this._envCur, t = this._envTarget;
+      c.sky.lerp(t.sky, k);
+      c.fog.lerp(t.fog, k);
+      c.sunCol.lerp(t.sunCol, k);
+      c.ambCol.lerp(t.ambCol, k);
+      c.fogDen = U.lerp(c.fogDen, t.fogDen, k);
+      c.sun = U.lerp(c.sun, t.sun, k);
+      c.ambI = U.lerp(c.ambI, t.ambI, k);
+    }
+    this._envApply();
+    // weather particles: fade opacity toward the wanted value, hide at 0
+    const pts = this._wxPoints;
+    if (pts && pts.material) {
+      const want = this._wxWantVisible ? (pts.userData.baseOpacity || .75) : 0;
+      const k = 1 - Math.exp(-dt / 1.1);
+      pts.material.opacity = U.lerp(pts.material.opacity || 0, want, k);
+      if (pts.material.opacity < 0.01) pts.visible = false;
+      else if (!pts.visible) pts.visible = true;
+    }
   },
 
   /* ============================================================
@@ -14812,9 +15222,10 @@ const Game = {
   applyWeatherFX(kind) {
     if (!this.scene) return;
     const want = this.envEnabled() && (kind === 'rain' || kind === 'storm' || kind === 'snow' || kind === 'ash');
+    this._wxWantVisible = want;
     if (!want) {
-      if (this._wxPoints) this._wxPoints.visible = false;
-      if (this._wxLightning) this._wxLightning = 0;
+      // keep the cloud so it can fade out; just stop wanting it visible
+      this._wxLightning = 0;
       return;
     }
     const N = kind === 'snow' ? 900 : 1400;
@@ -14827,22 +15238,31 @@ const Game = {
         pos[i * 3] = U.rand(-R, R); pos[i * 3 + 1] = U.rand(0, H); pos[i * 3 + 2] = U.rand(-R, R);
       }
       geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-      const isSnow = kind === 'snow', isAsh = kind === 'ash';
-      const col = isSnow ? 0xffffff : isAsh ? 0xff8a4a : 0xaecbe6;
-      const mat = new THREE.PointsMaterial({ color: col, size: isSnow ? .16 : isAsh ? .12 : .10, transparent: true, opacity: isSnow ? .9 : .75, depthWrite: false, sizeAttenuation: true, blending: isAsh ? THREE.AdditiveBlending : THREE.NormalBlending });
+      const isSnow = kind === 'snow', isAsh = kind === 'ash', isRain = kind === 'rain' || kind === 'storm';
+      /* дождь: серые вытянутые капли-штрихи (текстура вертикальной полосы),
+         снег — белые точки, пепел — оранжевые искры */
+      const col = isSnow ? 0xffffff : isAsh ? 0xff8a4a : (kind === 'storm' ? 0x9aa2ac : 0xaab2bc);
+      const mat = new THREE.PointsMaterial({
+        color: col, size: isSnow ? .16 : isAsh ? .12 : (kind === 'storm' ? .5 : .42),
+        map: isRain ? rainStreakTexture() : null,
+        transparent: true, opacity: isSnow ? .9 : isAsh ? .75 : .8,
+        depthWrite: false, sizeAttenuation: true,
+        blending: isAsh ? THREE.AdditiveBlending : THREE.NormalBlending
+      });
       const pts = new THREE.Points(geo, mat);
       pts.frustumCulled = false;
       pts.renderOrder = 6;
       pts.userData.kind = kind;
       pts.userData.R = R; pts.userData.H = H;
+      pts.userData.baseOpacity = isSnow ? .9 : isAsh ? .75 : .8;
+      pts.visible = false;
+      pts.material.opacity = 0;
       this.scene.add(pts);
       this._wxPoints = pts;
     }
     this._wxPoints.visible = true;
-    // rain streaks are longer: tilt by scaling Y
-    const isSnow = kind === 'snow', isAsh = kind === 'ash';
-    this._wxPoints.material.size = isSnow ? .16 : isAsh ? .12 : (kind === 'storm' ? .12 : .10);
-    this._wxSpeed = isSnow ? 4.5 : isAsh ? 2.2 : (kind === 'storm' ? 42 : 30);
+    this._wxPoints.material.size = kind === 'snow' ? .16 : kind === 'ash' ? .12 : (kind === 'storm' ? .5 : .42);
+    this._wxSpeed = kind === 'snow' ? 4.5 : kind === 'ash' ? 2.2 : (kind === 'storm' ? 42 : 30);
   },
 
   /* called every frame: drift the weather particles around the camera */
@@ -15154,6 +15574,7 @@ const Game = {
     this.isBossRush = this.specialMode === 'bossrush';
     this.isEndless = this.specialMode === 'endless';
     this.isDaily = this.specialMode === 'daily';
+    this.isHardcore = this.specialMode === 'hardcore';
     this.modState = makeModState();
     this.modList = [];
     this._modPending = false;
@@ -15226,6 +15647,10 @@ const Game = {
     } else if (this.isEndless) {
       this.beginBuyPhase(30, 'БЕСКОНЕЧНЫЙ — ВОЛНА 1');
       UI.toast('БЕСКОНЕЧНЫЙ: модификатор каждые 10 волн', '#c24bff');
+    } else if (this.isHardcore) {
+      this.beginBuyPhase(30, 'ХАРДКОР — ВОЛНА 1');
+      UI.center('ХАРДКОР', 'ОДНА ЖИЗНЬ · смерть = конец забега', 3.0);
+      UI.toast('ХАРДКОР: у вас одна жизнь. Без сохранений и чекпоинтов.', '#c4302a');
     } else {
       this.beginBuyPhase(30, this.hordeMode ? (this.freePlay ? 'БЕСПЛАТНАЯ ОРДА — ВОЛНА 1' : 'ОРДА — ВОЛНА 1') : 'ВОЛНА 1');
       if (this.freePlay && this.hordeMode) UI.toast('БЕСПЛАТНАЯ ОРДА: всё оружие бесплатно', '#57d16a');
@@ -16132,13 +16557,32 @@ const Game = {
     if (sdConf) sdConf.textContent = 'ОРУЖИЕ' + (IS_TOUCH ? '' : ' (C)');
   },
 
-  startOnlineHost() { this.startOnline(CS.NETROLE.HOST); },
+  startOnlineHost() { this.startOnline(CS.NETROLE.HOST, { pve: Store.data.onlineMode || 'pvp' }); },
   startOnlineClient() { this.startOnline(CS.NETROLE.CLIENT); },
+
+  /* Применить режим комнаты, объявленный хостом. Если он не совпадает с уже
+     идущим матчем — мягко перезапускаем онлайн в нужном режиме (в фазе закупки
+     это безопасно). Так и хост, и клиент оказываются в кооп-волнах. */
+  applyOnlinePve(pve) {
+    pve = pve || 'pvp';
+    if (this.onlinePvE === pve && this.isCoop === (pve !== 'pvp')) return;
+    this.onlinePvE = pve;
+    this.isCoop = pve !== 'pvp';
+    if (this.mode !== CS.MODE.ONLINE) return;
+    if (this.roundState === 'buy' || this.roundState === 'idle') {
+      this.startOnline(Net.role, { pve: pve, map: MAP.id, hp: this.matchHP, rounds: this.online ? this.online.rounds : undefined,
+        free: this.freePlay, shop: this.shopAllow, shopItems: this.shopItemAllow });
+    }
+  },
 
   startOnline(role, opts) {
     opts = opts || {};
     this.stopToMenu(true);
     this.mode = CS.MODE.ONLINE;
+    /* режим комнаты: PvP-дуэль или кооп по волнам (обычный / орда / босс-раш).
+       Хост выбирает в лобби, клиентам приезжает в settings. */
+    this.onlinePvE = opts.pve || (role === CS.NETROLE.HOST ? (Store.data.onlineMode || 'pvp') : (opts.pve || 'pvp'));
+    this.isCoop = this.onlinePvE && this.onlinePvE !== 'pvp';
     this.online = {
       role, roundWins: { me: 0, them: 0 }, opponentLeft: false,
       scoreMe: 0, scoreThem: 0, skipVoteMe: 0, votes: {},
@@ -16175,6 +16619,40 @@ const Game = {
 
     // build a RemotePlayer for every other member of the roster
     this.syncRemoteRoster();
+
+    if (this.isCoop) {
+      /* КООП-волны: в онлайне поднимаем локальную орду на обоих игроков и ведём
+         волны; счёт — общий (сумма убийств), это прохождение, а не дуэль. */
+      this.horde = new Horde(this.scene, this.world, this);
+      this.offline = {
+        wave: 0, toSpawn: 0, spawnedThisWave: 0, totalThisWave: 0,
+        betweenWaves: false, breakT: 0, alive: 0, kills: 0, startTime: U.now(),
+        campaignWon: false, bossPending: 0, bossType: null
+      };
+      this.specialMode = this.onlinePvE;
+      this.isBossRush = this.onlinePvE === 'bossrush';
+      this.isHardcore = false; this.isDaily = false; this.isEndless = false;
+      this.hordeMode = this.onlinePvE === 'horde';
+      this.modState = makeModState();
+      this.effects = new Effects(this.scene, Store.data.quality);
+      this.effects.clear();
+      this.spawnPlayerLocal(this.rosterSpawnIndex());
+      console.log('[coop] start', (Net.role === CS.NETROLE.HOST ? 'HOST' : 'CLIENT'), this.onlinePvE);
+      this.roundState = 'live';
+      this.coopStartWave(1);
+      this.enterGame();
+      this._peerWarned = false; this._peerLost = false;
+      this._silentT = 0; this._lastSeenPacket = 0;
+      this._leaving = false;
+      Net.startHeartbeat();
+      Net.keepalive = () => {
+        if (this.mode !== CS.MODE.ONLINE || !Net.connected) return;
+        this.broadcastState();
+      };
+      UI.center('КООП: ' + (this.onlinePvE === 'horde' ? 'ОРДА ×10' : this.onlinePvE === 'bossrush' ? 'БОСС-РАШ' : 'ОБЫЧНЫЙ'), 'Волны для обоих игроков', 2.6);
+      UI.toast('Кооп-режим: выживайте вместе', '#57d16a');
+      return;
+    }
 
     this.horde = null;
     this.effects = new Effects(this.scene, Store.data.quality);
@@ -16588,6 +17066,17 @@ const Game = {
   equipWeapon(id) {
     const w = WEAPONS[id];
     if (!w || !this.player) return;
+    /* из сумки — вернуть в руки; из инвентаря — переключить слот */
+    if (this.player.bagHas(id) && !this.player.has(id)) {
+      this.player.bagTake(id);
+      this.player.flashT = 0;
+      this.attachViewModel();
+      Audio3D_SFX.reloadStep(0);
+      UI.toast('Из сумки: ' + w.name, '#57d16a');
+      UI.renderBuy(this.player, this.buyTimer);
+      if (this.mode === CS.MODE.ONLINE) this.broadcastScore();
+      return;
+    }
     if (!this.player.has(id)) return;
     if (this.player.slot === w.slot && this.player.inv[w.slot] && this.player.inv[w.slot].id === id) {
       Audio3D_SFX.uiClick();
@@ -17074,8 +17563,13 @@ const Game = {
       // Offline survival has no round clock — the wave ends when the horde is dead.
       // Online duels are timed, exactly like a real CS round.
       if (this.mode === CS.MODE.ONLINE) {
-        this.roundT -= dt;
-        if (this.roundT <= 0) this.endRound(null, 'ВРЕМЯ');
+        if (this.isCoop) {
+          // кооп-волны: нет PvP-таймера, раунд длится до конца волн
+          this.roundT = 0;
+        } else {
+          this.roundT -= dt;
+          if (this.roundT <= 0) this.endRound(null, 'ВРЕМЯ');
+        }
       } else if (this.mode === CS.MODE.RANGE) {
         this.updateRange(dt);
       } else if (this.offline) {
@@ -17596,6 +18090,96 @@ const Game = {
     this.crates.length = 0;
   },
 
+  /* ============================================================
+     COOP WAVES (online PvE)
+     Both players run an identical local horde: the HOST owns the wave counter
+     and broadcasts it, so the waves stay in step. Zombies are simulated on each
+     side (as in single-player); the wave number is what is synchronised.
+     ============================================================ */
+  coopStartWave(wave) {
+    const o = this.offline;
+    if (!o) return;
+    o.wave = wave;
+    o.bosses = 0; o.bossPending = 0; o.miniBossPending = 0;
+    if (this.mode === CS.MODE.OFFLINE) this.rotateMapIfNeeded(wave);
+    let count = Math.round(CFG.zombieStartCount + (wave - 1) * 2.4);
+    const countMul = this.hordeMode ? CFG.hordeCountMul : 1;
+    count = Math.round(count * countMul * (this.modState ? this.modState.count : 1));
+    const bossType = this.isBossRush ? this.bossRushList()[(wave - 1) % this.bossRushList().length] : this.bossForWave(wave);
+    if (this.isBossRush) {
+      o.bossType = bossType; o.bossPending = 1; count = 0;
+      UI.center(ZOMBIES[bossType].name, 'БОСС-РАШ · ЭТАП ' + wave, 2.4);
+    } else if (bossType) {
+      o.bossType = bossType;
+      o.bossPending = this.hordeMode ? 3 : 1;
+      count = Math.round(count * .4);
+      UI.center(ZOMBIES[bossType].name, 'БОСС · ВОЛНА ' + wave, 2.4);
+    } else {
+      o.bossType = null;
+      UI.center('ВОЛНА ' + wave, count + ' зомби', 1.6);
+    }
+    o.totalThisWave = count; o.spawnedThisWave = 0; o.toSpawn = count;
+    o.betweenWaves = false; o.waveStart = U.now();
+    this._reloadsAtWaveStart = (this.player && this.player.reloads) || 0;
+    this._shotsAtWaveStart = (this.player && (this.player.bulletsFired | 0)) || 0;
+    Bus.emit('waveStart', wave);
+  },
+
+  updateCoop(dt) {
+    const o = this.offline;
+    if (!o || o.campaignWon) return;
+    if (o.betweenWaves) {
+      o.breakT -= dt;
+      if (o.breakT <= 0) {
+        o.betweenWaves = false;
+        /* только хост задаёт номер волны; клиент ждёт его через coopWave msg */
+        if (Net.role === CS.NETROLE.HOST) {
+          this.coopStartWave(o.wave + 1);
+          Net.send({ t: 'coopWave', w: o.wave });
+        }
+      }
+      return;
+    }
+    // spawn queue (same tuning as single-player)
+    if (o.toSpawn > 0) {
+      o.spawnAcc = (o.spawnAcc || 0) + dt;
+      const big = this.hordeMode;
+      const waveSpd = big ? CFG.hordeSpawnInterval : CFG.zombieSpawnInterval;
+      const interval = Math.max(.10, (waveSpd - o.wave * (big ? .006 : .045)));
+      const maxAlive = big ? CFG.hordeMaxAlive : CFG.zombieMaxAlive;
+      let guard = 0, burst = big ? 8 : 6;
+      while (o.spawnAcc >= interval && o.toSpawn > 0 && guard++ < burst) {
+        o.spawnAcc -= interval;
+        if (this.horde.activeCount >= maxAlive) break;
+        const t = this.pickZombieType(o.wave);
+        const scale = 1 + (o.wave - 1) * .085;
+        const z = this.horde.spawnRandom(t, this.player.pos.x, this.player.pos.z, 26);
+        const hpMul = (this.hordeMode) ? CFG.hordeHpMul : 1;
+        z.maxHealth *= scale * hpMul; z.health = z.maxHealth;
+        z.dmg *= 1 + (o.wave - 1) * .05;
+        o.toSpawn--; o.spawnedThisWave++;
+      }
+    } else if (o.bossPending > 0) {
+      o.bossAcc = (o.bossAcc || 0) + dt;
+      if (o.bossAcc >= (this.hordeMode ? .5 : .9)) {
+        o.bossAcc = 0;
+        const b = this.spawnBoss(o.bossType);
+        if (this.isBossRush && b) b.maxHealth *= (1 + (o.wave - 1) * .35);
+        o.bossPending--;
+      }
+    } else if (this.horde.aliveCount === 0 && o.spawnedThisWave >= o.totalThisWave && !this.isBossRush) {
+      // wave cleared
+      const bonus = 400 + o.wave * 120;
+      this.player.money += bonus;
+      this.player.score += Math.round(250 + o.wave * 40);
+      o.betweenWaves = true; o.breakT = 7;
+      this.player.health = Math.min(this.matchHP || 100, this.player.health + 22);
+      Audio3D_SFX.roundEnd(true);
+      UI.center('ВОЛНА ' + o.wave + ' ЗАЧИЩЕНА', 'Бонус $' + bonus + ' · Передышка 7с', 3.0);
+      Bus.emit('waveCleared', o.wave);
+    }
+  },
+
   updateOffline(dt) {
     const o = this.offline;
     if (!o) return;
@@ -17710,8 +18294,7 @@ const Game = {
 
   /* The final boss is down: award a completion point (shown in the main menu)
      and stop the run. */
-  onCampaignComplete() {
-    if (this._campaignDone) return;
+  onCampaignComplete() {    if (this._campaignDone) return;
     this._campaignDone = true;
     Store.data.clears = (Store.data.clears || 0) + 1;
     Store.save();
@@ -20006,6 +20589,12 @@ const Game = {
       this.checkAchievements();
       UI.center('ВЫ ПОГИБЛИ', 'Счёт: ' + p.score + ' · Волна ' + o.wave, 4.0);
       UI.toast('Волна ' + o.wave + ' · Счёт ' + p.score + ' · Нажмите Tab для статистики', '#e33a2e');
+      if (this.isHardcore) {
+        this._hardcoreKills = p.zombieKills;
+        this._hardcoreWave = o.wave;
+        UI.center('ХАРДКОР ПРОЙДЕН', 'Волна ' + o.wave + ' · убито ' + p.zombieKills, 600);
+        UI.toast('ХАРДКОР: одна жизнь — забег окончен', '#c4302a');
+      }
       this.roundState = 'end';
       this.roundT = 5.0;
       this.offlineDead = true;
@@ -20209,7 +20798,7 @@ const Game = {
     if (Net.role === CS.NETROLE.HOST) {
       Net.send({ t: 'roster', roster: Net.peers });
       // and make sure everyone agrees on the economy for this room
-      Net.send({ t: 'round', st: 'settings', players: Store.data.players, hp: this.matchHP, map: MAP.id, free: this.freePlay ? 1 : 0, rounds: this.online ? this.online.rounds : MATCH.clampRounds(Store.data.rounds), shop: this.shopAllow, shopItems: this.shopItemsAllow(), tod: Store.data.timeOfDay || 'day', weather: Store.data.skyWeather || 'clear', envAuto: Store.data.envAuto || 0, envOff: Store.data.envOff || 0 });
+      Net.send({ t: 'round', st: 'settings', players: Store.data.players, hp: this.matchHP, map: MAP.id, free: this.freePlay ? 1 : 0, rounds: this.online ? this.online.rounds : MATCH.clampRounds(Store.data.rounds), shop: this.shopAllow, shopItems: this.shopItemsAllow(), tod: Store.data.timeOfDay || 'day', weather: Store.data.skyWeather || 'clear', envAuto: Store.data.envAuto || 0, envOff: Store.data.envOff || 0, pve: this.onlinePvE || Store.data.onlineMode || 'pvp' });
     }
   },
 
@@ -20658,6 +21247,8 @@ const Game = {
       if (r.shop) this.shopAllow = Object.assign({}, r.shop);
       if (r.shopItems) this.shopItemAllow = Object.assign({}, r.shopItems);
       if (r.winner) this.online.winnerName = r.winner;
+      /* режим комнаты (PvP / кооп-волны) — задаёт хост */
+      if (r.pve !== undefined) this.applyOnlinePve(r.pve);
       /* the host picks the time of day / weather for BOTH players: adopt it */
       if (r.tod !== undefined || r.weather !== undefined || r.envAuto !== undefined || r.envOff !== undefined) {
         if (r.tod !== undefined) { Store.data.timeOfDay = r.tod; Store.data.weather = r.tod; }
@@ -20973,11 +21564,12 @@ const Game = {
     // ---- round flow ----
     this.updateBuyPhase(dt);
     if (this.mode === CS.MODE.OFFLINE && !this._modPickOpen) { this.updateOffline(dt); this.updateCrates(dt); }
+    if (this.mode === CS.MODE.ONLINE && this.isCoop) { this.updateCoop(dt); this.updateCrates(dt); }
     this.updateGrenades(dt);
 
     // ---- AI ----
     if (this.horde) this.horde.update(dt, p);
-    if (this.mode === CS.MODE.OFFLINE || this.mode === CS.MODE.RANGE) { this.updateBosses(dt); this.updateBossCharges(dt); }
+    if (this.mode === CS.MODE.OFFLINE || this.mode === CS.MODE.RANGE || (this.mode === CS.MODE.ONLINE && this.isCoop)) { this.updateBosses(dt); this.updateBossCharges(dt); }
 
     // ---- effects ----
     if (this.effects) this.effects.update(dt);
@@ -20994,6 +21586,7 @@ const Game = {
 
     // ---- environment ----
     this.updateEnvCycle(dt);
+    this.updateEnv(dt);
     this.updateWeather(dt);
 
     // ---- galaxy skins: spin the rings/dust on the viewmodel and every peer ----

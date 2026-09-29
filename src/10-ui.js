@@ -21,7 +21,7 @@ const UI = {
       'btnCopy', 'dmgDirs', 'android', 'ios', 'credits', 'crPlayer', 'crStats',
       'matchEnd', 'meTitle', 'meWinner', 'meScore', 'meDetail', 'btnMatchAgain', 'btnMatchMenu',
       'mapChips', 'playerChips', 'hpChips', 'hordeChips', 'lobbyMaps', 'lobbyPlayers', 'lobbyHp', 'lobbyFree', 'lobbyRounds',
-      'todChips', 'weatherChips', 'envAutoChips', 'sEnvSpeed', 'oEnvSpeed', 'lobbyTod', 'lobbyWeather',
+      'todChips', 'weatherChips', 'envAutoChips', 'sEnvSpeed', 'oEnvSpeed', 'lobbyTod', 'lobbyWeather', 'lobbyMode',
       'offCountChips', 'offHpChips', 'offFreeChips', 'offModeChips', 'offCustomBox', 'offHordeBox', 'offSpecialBox', 'offCpBox', 'offCpInfo', 'offCpMode', 'offCpList', 'offCountExact', 'offCountFixed', 'btnOffContinue', 'custom', 'lobbyShop', 'lobbyShopItems',
       'modScreen', 'modGrid', 'modActive',
       'extras', 'achGrid', 'recTable', 'btnExtrasBack', 'weaponWheel', 'wwInner',
@@ -207,6 +207,7 @@ const UI = {
         { id: 'bossrush', b: 'БОСС-РАШ', i: 'только боссы подряд' },
         { id: 'daily', b: 'ИСПЫТАНИЕ ДНЯ', i: 'общий сид и модификаторы' },
         { id: 'endless', b: 'БЕСКОНЕЧНЫЙ', i: 'модификатор каждые 10 волн' },
+        { id: 'hardcore', b: 'ХАРДКОР', i: 'одна жизнь · без сохранений' },
         { id: 'custom', b: 'СВОЙ', i: 'свои множители' }
       ];
       this.el.offModeChips.innerHTML = '';
@@ -292,6 +293,16 @@ const UI = {
     fill(this.el.todChips, TOD_ORDER.map(k => ({ v: k, b: todName(k) })), 'tod', pickTod);
     fill(this.el.weatherChips, WEATHER_ORDER.map(k => ({ v: k, b: weatherName(k) })), 'wx', pickWx);
     fill(this.el.envAutoChips, [{ v: 0, b: 'ВЫКЛ' }, { v: 1, b: 'ВКЛ' }], 'auto', pickAuto);
+    /* режим онлайн-матча: PvP-дуэль или кооп по волнам / орде / босс-рашу */
+    const pickMode = v => {
+      Store.data.onlineMode = v; Store.save(); this.refreshChips(); this.broadcastEnv();
+    };
+    fill(this.el.lobbyMode, [
+      { v: 'pvp', b: 'PvP', i: 'дуэль' },
+      { v: 'normal', b: 'ОБЫЧНЫЙ', i: 'волны вместе' },
+      { v: 'horde', b: 'ОРДА ×10', i: 'кооп-орда' },
+      { v: 'bossrush', b: 'БОСС-РАШ', i: 'боссы подряд' }
+    ], 'omode', pickMode);
     /* the lobby copies: the host sets the time of day / weather for both players */
     fill(this.el.lobbyTod, TOD_ORDER.map(k => ({ v: k, b: todName(k) })), 'tod', pickTod);
     fill(this.el.lobbyWeather, WEATHER_ORDER.map(k => ({ v: k, b: weatherName(k) })), 'wx', pickWx);
@@ -301,7 +312,8 @@ const UI = {
     if (typeof Net === 'undefined' || Net.role !== CS.NETROLE.HOST || !Net.connected) return;
     Net.send({ t: 'round', st: 'settings', players: Store.data.players, hp: Store.data.maxHP, map: Store.data.map,
       free: Store.data.freeplay, rounds: Store.data.rounds,
-      tod: Store.data.timeOfDay || 'day', weather: Store.data.skyWeather || 'clear', envAuto: Store.data.envAuto || 0, envOff: Store.data.envOff || 0 });
+      tod: Store.data.timeOfDay || 'day', weather: Store.data.skyWeather || 'clear', envAuto: Store.data.envAuto || 0, envOff: Store.data.envOff || 0,
+      pve: Store.data.onlineMode || 'pvp' });
   },
   /* re-highlight the environment chips (called after the E/P hotkeys) */
   refreshEnv() { this.refreshChips(); },
@@ -335,6 +347,7 @@ const UI = {
       mark(this.el.lobbyWeather, 'wx', '__off__');
     }
     mark(this.el.envAutoChips, 'auto', S.envAuto ? 1 : 0);
+    mark(this.el.lobbyMode, 'omode', S.onlineMode || 'pvp');
     const mode = S.offMode || 'normal';
     if (this.el.offModeChips) {
       Array.from(this.el.offModeChips.children).forEach(b => b.classList.toggle('on', b.dataset.mode === mode));
@@ -721,7 +734,8 @@ const UI = {
         if (!shopAllows(w.cat)) return;
         if (!itemAllowed(id)) return;
         const owned = player.has(id);
-        const equipped = owned && player.slot === w.slot && player.inv[w.slot] && player.inv[w.slot].id === id;
+        const inBag = player.bagHas && player.bagHas(id) && !(player.inv[w.slot] && player.inv[w.slot].id === id);
+        const equipped = owned && !inBag && player.slot === w.slot && player.inv[w.slot] && player.inv[w.slot].id === id;
         const rpm = Math.round(w.rpm);
         const stats = [['УРОН', w.dmg], ['ТЕМП', rpm]];
         if (w.mag !== Infinity) stats.push(['МАГ', w.mag]);
@@ -729,10 +743,11 @@ const UI = {
         if (w.pierce) stats.push(['ПРОБИВ', 'НАСКВОЗЬ']);
         if (w.beam) stats.push(['ЛУЧ', w.beamMax + 'с']);
         if (w.splash) stats.push(['РАДИУС', w.splash + 'м']);
-        mkCard(id, w.name, w.cat.toUpperCase(), w.price, stats, owned, !free && player.money < w.price,
+        mkCard(id, w.name, w.cat.toUpperCase(), w.price, stats, owned || inBag, !free && player.money < w.price,
           () => Bus.emit('buy', id),
           () => Bus.emit('equip', id));
         if (equipped) { const c = wrap.lastChild; if (c) { c.classList.add('equipped'); const pr = c.querySelector('.pr'); if (pr) pr.textContent = 'В РУКАХ'; } }
+        else if (inBag) { const c = wrap.lastChild; if (c) { c.classList.add('inbag'); const pr = c.querySelector('.pr'); if (pr) pr.textContent = 'В СУМКЕ'; } }
       });
     }
     this.el.buyOwned.textContent = this.ownedList(player);
@@ -743,6 +758,7 @@ const UI = {
     if (p.inv[2]) a.push(WEAPONS[p.inv[2].id].name);
     if (p.inv[1]) a.push(WEAPONS[p.inv[1].id].name);
     let s = 'В руках: ' + (a.length ? a.join(' + ') : 'нож');
+    if (p.bag && p.bag.length) s += ' · 🎒 сумка: ' + p.bag.map(b => WEAPONS[b.id].name).join(', ');
     if (p.armor > 0) s += ' · броня ' + Math.round(p.armor) + (p.helmet ? '+шлем' : '');
     if (p.medkits > 0) s += ' · аптечек: ' + p.medkits;
     if (p.drone) s += ' · дрон';

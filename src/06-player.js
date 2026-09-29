@@ -129,7 +129,9 @@ function _skinTexImage(name, uri) {
 const _PATTERN_BASE = {
   carbon: 'carbon', grid: 'grind', wood: 'wood', hazard: 'grind', tiger: 'grind',
   camo: 'grass', hex: 'grind', scale: 'brick', plasma: 'carbon', prism: 'checker',
-  noise: 'noise', brick: 'brick', concrete: 'checker', water: 'water', grass: 'grass'
+  noise: 'noise', brick: 'brick', concrete: 'checker', water: 'water', grass: 'grass',
+  /* тематические паттерны рисуются процедурно, без фото-основы */
+  flesh: null, pixel: null, toy: null, glass: null, ice: null, fire: null, alien: null
 };
 
 /* draw one pattern into a canvas: a real photo base + procedural detail */
@@ -272,6 +274,120 @@ function _skinDraw(c, pattern, glow) {
       x.beginPath(); x.moveTo(sx - 5, sy); x.lineTo(sx + 5, sy); x.moveTo(sx, sy - 5); x.lineTo(sx, sy + 5); x.stroke();
     }
     x.globalAlpha = 1;
+  } else if (pattern === 'flesh') {
+    /* ПЛОТЬ — кровавый скин: тёмно-багровая мышечная ткань с прожилками,
+       сухожилиями и мокрыми бликами (по референсу). */
+    const base = x.createLinearGradient(0, 0, S, S);
+    base.addColorStop(0, '#2a0206'); base.addColorStop(.5, '#4a060d'); base.addColorStop(1, '#1c0104');
+    x.fillStyle = base; x.fillRect(0, 0, S, S);
+    // muscle fibres: many wavy red strands
+    for (let i = 0; i < 90; i++) {
+      const y0 = Math.random() * S;
+      x.strokeStyle = 'rgba(' + (90 + Math.random() * 120 | 0) + ',' + (4 + Math.random() * 18 | 0) + ',' + (8 + Math.random() * 16 | 0) + ',' + (.25 + Math.random() * .5).toFixed(2) + ')';
+      x.lineWidth = .6 + Math.random() * 1.8;
+      x.beginPath();
+      let yy = y0; x.moveTo(0, yy);
+      for (let xx = 0; xx <= S; xx += 8) { yy += (Math.random() - .5) * 7; x.lineTo(xx, yy); }
+      x.stroke();
+    }
+    // dark veins
+    for (let i = 0; i < 18; i++) {
+      x.strokeStyle = 'rgba(10,0,2,.6)'; x.lineWidth = 1 + Math.random() * 2;
+      x.beginPath();
+      let vx = Math.random() * S, vy = Math.random() * S; x.moveTo(vx, vy);
+      for (let s2 = 0; s2 < 5; s2++) { vx += (Math.random() - .5) * 30; vy += (Math.random() - .5) * 30; x.lineTo(vx, vy); }
+      x.stroke();
+    }
+    // wet specular highlights
+    for (let i = 0; i < 40; i++) {
+      x.fillStyle = 'rgba(255,180,180,' + (.05 + Math.random() * .12).toFixed(2) + ')';
+      x.beginPath(); x.ellipse(Math.random() * S, Math.random() * S, 2 + Math.random() * 6, 1 + Math.random() * 3, Math.random() * 3, 0, 6.29); x.fill();
+    }
+    // a couple of small eyes hidden in the flesh
+    for (let i = 0; i < 3; i++) {
+      const ex = 14 + Math.random() * (S - 28), ey = 14 + Math.random() * (S - 28);
+      x.fillStyle = '#e8e0d0'; x.beginPath(); x.ellipse(ex, ey, 5, 3.4, 0, 0, 6.29); x.fill();
+      x.fillStyle = i % 2 ? '#2a8a3a' : '#3a6a9a'; x.beginPath(); x.arc(ex, ey, 2, 0, 6.29); x.fill();
+      x.fillStyle = '#0a0206'; x.beginPath(); x.arc(ex, ey, .8, 0, 6.29); x.fill();
+    }
+  } else if (pattern === 'pixel') {
+    /* ПИКСЕЛЬНЫЙ — 8-битная палитра, крупные пиксели без сглаживания */
+    const pal = ['#1c2c4a', '#2e6f9e', '#59c2e0', '#e8f4ff', '#c04a2a', '#ffd24a'];
+    for (let yy = 0; yy < S; yy += 8) for (let xx = 0; xx < S; xx += 8) {
+      x.fillStyle = pal[(xx * 7 + yy * 13) % pal.length];
+      x.fillRect(xx, yy, 8, 8);
+    }
+    for (let i = 0; i < 60; i++) {
+      x.fillStyle = Math.random() < .5 ? '#0a1220' : '#ffffff';
+      x.fillRect((Math.random() * S | 0) & ~7, (Math.random() * S | 0) & ~7, 8, 8);
+    }
+  } else if (pattern === 'toy') {
+    /* ИГРУШЕЧНЫЙ — яркий глянцевый пластик, круглые детали и звёздочки */
+    x.fillStyle = '#e23b56'; x.fillRect(0, 0, S, S);
+    for (let i = 0; i < 40; i++) {
+      x.fillStyle = ['#ffd24a', '#4ad6ff', '#57d16a', '#ffffff'][i % 4];
+      x.globalAlpha = .8; x.beginPath(); x.arc(Math.random() * S, Math.random() * S, 3 + Math.random() * 8, 0, 6.29); x.fill();
+    }
+    x.globalAlpha = 1;
+    for (let i = 0; i < 14; i++) {
+      const sx = Math.random() * S, sy = Math.random() * S, r2 = 4 + Math.random() * 4;
+      x.fillStyle = '#fff6c0'; x.beginPath();
+      for (let p2 = 0; p2 < 5; p2++) { const a2 = -Math.PI / 2 + p2 * 2.513; x.lineTo(sx + Math.cos(a2) * r2, sy + Math.sin(a2) * r2); const a3 = a2 + 1.256; x.lineTo(sx + Math.cos(a3) * r2 * .45, sy + Math.sin(a3) * r2 * .45); }
+      x.closePath(); x.fill();
+    }
+    x.fillStyle = 'rgba(255,255,255,.35)'; x.fillRect(0, 0, S, 6);
+  } else if (pattern === 'glass') {
+    /* СТЕКЛЯННЫЙ — прозрачно-голубые панели, белые блики и тонкие грани */
+    x.fillStyle = '#0c2230'; x.fillRect(0, 0, S, S);
+    for (let i = 0; i < 10; i++) {
+      const gx = Math.random() * S, gy = Math.random() * S, w2 = 14 + Math.random() * 30, h2 = 10 + Math.random() * 26;
+      x.fillStyle = 'rgba(150,225,255,' + (.10 + Math.random() * .22).toFixed(2) + ')';
+      x.beginPath(); x.moveTo(gx, gy); x.lineTo(gx + w2, gy + 4); x.lineTo(gx + w2 - 6, gy + h2); x.lineTo(gx - 4, gy + h2 - 5); x.closePath(); x.fill();
+      x.strokeStyle = 'rgba(220,245,255,.7)'; x.lineWidth = 1; x.stroke();
+    }
+    x.strokeStyle = 'rgba(255,255,255,.55)'; x.lineWidth = 2;
+    for (let i = 0; i < 4; i++) { const gx = Math.random() * S, gy = Math.random() * S; x.beginPath(); x.moveTo(gx, gy); x.lineTo(gx + 20, gy - 14); x.stroke(); }
+  } else if (pattern === 'ice') {
+    /* ЛЕДЯНОЙ — голубой лёд с трещинами, инеем и замерзшими гранями */
+    const g3 = x.createLinearGradient(0, 0, S, S);
+    g3.addColorStop(0, '#0a2a3a'); g3.addColorStop(.5, '#1a6a8a'); g3.addColorStop(1, '#0a2030');
+    x.fillStyle = g3; x.fillRect(0, 0, S, S);
+    for (let i = 0; i < 40; i++) {
+      x.strokeStyle = 'rgba(210,245,255,' + (.2 + Math.random() * .5).toFixed(2) + ')';
+      x.lineWidth = .6 + Math.random() * 1.4;
+      const gx = Math.random() * S, gy = Math.random() * S;
+      x.beginPath(); x.moveTo(gx, gy); x.lineTo(gx + (Math.random() - .5) * 40, gy + (Math.random() - .5) * 40); x.stroke();
+    }
+    for (let i = 0; i < 26; i++) { x.fillStyle = 'rgba(255,255,255,' + (.1 + Math.random() * .35).toFixed(2) + ')'; x.beginPath(); x.arc(Math.random() * S, Math.random() * S, 1 + Math.random() * 3, 0, 6.29); x.fill(); }
+  } else if (pattern === 'fire') {
+    /* ОГНЕННЫЙ — раскалённые угли, оранжево-жёлтое пламя и чёрная сажа */
+    const g4 = x.createLinearGradient(0, S, 0, 0);
+    g4.addColorStop(0, '#1a0400'); g4.addColorStop(.5, '#7a1800'); g4.addColorStop(1, '#ff9a2a');
+    x.fillStyle = g4; x.fillRect(0, 0, S, S);
+    for (let i = 0; i < 70; i++) {
+      const fy = Math.random() * S, fx = Math.random() * S, r2 = 3 + Math.random() * 12;
+      const gg = x.createRadialGradient(fx, fy, 0, fx, fy, r2);
+      gg.addColorStop(0, 'rgba(255,' + (180 + Math.random() * 60 | 0) + ',60,.85)');
+      gg.addColorStop(1, 'rgba(255,60,0,0)');
+      x.fillStyle = gg; x.beginPath(); x.arc(fx, fy, r2, 0, 6.29); x.fill();
+    }
+    for (let i = 0; i < 30; i++) { x.fillStyle = 'rgba(10,4,0,.5)'; x.fillRect(Math.random() * S, Math.random() * S, 2 + Math.random() * 6, 2 + Math.random() * 4); }
+  } else if (pattern === 'alien') {
+    /* ИНОПЛАНЕТНЫЙ — зелёная биомасса, светящиеся пузыри и щупальца */
+    x.fillStyle = '#0a1a08'; x.fillRect(0, 0, S, S);
+    for (let i = 0; i < 50; i++) {
+      x.fillStyle = 'rgba(' + (40 + Math.random() * 90 | 0) + ',' + (140 + Math.random() * 100 | 0) + ',' + (30 + Math.random() * 60 | 0) + ',' + (.3 + Math.random() * .5).toFixed(2) + ')';
+      x.beginPath(); x.arc(Math.random() * S, Math.random() * S, 2 + Math.random() * 9, 0, 6.29); x.fill();
+    }
+    for (let i = 0; i < 14; i++) {
+      x.strokeStyle = 'rgba(120,255,120,.5)'; x.lineWidth = 1 + Math.random() * 2;
+      const tx = Math.random() * S, ty = Math.random() * S;
+      x.beginPath(); x.moveTo(tx, ty);
+      let cx2 = tx, cy2 = ty;
+      for (let s2 = 0; s2 < 4; s2++) { cx2 += (Math.random() - .5) * 26; cy2 += (Math.random() - .5) * 26; x.lineTo(cx2, cy2); }
+      x.stroke();
+    }
+    for (let i = 0; i < 8; i++) { x.fillStyle = '#d8ff8a'; x.beginPath(); x.arc(Math.random() * S, Math.random() * S, 1.5 + Math.random() * 3, 0, 6.29); x.fill(); }
   }
 }
 
@@ -305,6 +421,79 @@ function animateGalaxySkin(group, dt) {
 }
 
 /* ============================================================
+   FLESH SKIN (ХАРДКОР) — «кровавый» скин из живой плоти: корпус из мышечной
+   ткани, торчащие зубы/шипы, когти и вросшие глаза. Полностью другая модель.
+   ============================================================ */
+const FLESH_COLORS = { meat: 0x6e0a12, meat2: 0x4a050b, dark: 0x2a0206, blood: 0xc41428, bone: 0xe8e0cc, eye: 0xf0ead8, iris: 0x2a8a3a, claw: 0x1a1012 };
+function applyFleshSkin(group) {
+  if (!group) return group;
+  const C = FLESH_COLORS;
+  const tex = _skinTexture('flesh', C.blood);
+  group.traverse(o => {
+    if (!o.isMesh || !o.material || !o.material.color) return;
+    if (o.material.isMeshBasicMaterial) return;
+    const l = o.material.color.r * .3 + o.material.color.g * .59 + o.material.color.b * .11;
+    const c = new THREE.Color(l > .5 ? C.blood : l > .25 ? C.meat : C.meat2);
+    c.multiplyScalar(U.clamp(.7 + l * .9, .5, 1.3));
+    o.material.color.copy(c);
+    if (o.material.emissive !== undefined) o.material.emissive.setHex(l > .4 ? 0x2a0006 : 0x140003);
+    if (tex) {
+      const t2 = tex.clone(); t2.needsUpdate = true;
+      t2.wrapS = t2.wrapT = THREE.RepeatWrapping; t2.repeat.set(2, 2);
+      o.material.map = t2;
+    }
+    o.material.needsUpdate = true;
+  });
+
+  const fx = new THREE.Group();
+  fx.name = 'fleshFX';
+  const matBone = new THREE.MeshLambertMaterial({ color: C.bone, emissive: 0x1a1410 });
+  const matMeat = new THREE.MeshLambertMaterial({ color: C.meat, emissive: 0x1e0206 });
+  const matClaw = new THREE.MeshLambertMaterial({ color: C.claw, emissive: 0x0a0406 });
+  /* bulbous lumps of muscle along the body */
+  for (let i = 0; i < 8; i++) {
+    const b = new THREE.Mesh(new THREE.SphereGeometry(.022 + Math.random() * .022, 8, 6), matMeat);
+    b.position.set((Math.random() - .5) * .12, .02 + (Math.random() - .5) * .12, -.18 + Math.random() * .28);
+    fx.add(b);
+  }
+  /* rows of jagged teeth along the top of the receiver */
+  for (let i = 0; i < 6; i++) {
+    const t2 = new THREE.Mesh(new THREE.ConeGeometry(.012, .05 + Math.random() * .03, 4), matBone);
+    t2.position.set(-.012 + (i % 2) * .024, .052, -.02 - i * .045);
+    t2.rotation.z = (i % 2 ? 1 : -1) * .18;
+    fx.add(t2);
+  }
+  /* a big curved claw near the muzzle and two lower spikes */
+  const claw = new THREE.Mesh(new THREE.ConeGeometry(.018, .11, 5), matClaw);
+  claw.position.set(.03, .02, -.30); claw.rotation.x = -1.1; fx.add(claw);
+  [-1, 1].forEach(s => {
+    const sp = new THREE.Mesh(new THREE.ConeGeometry(.014, .08, 4), matBone);
+    sp.position.set(s * .05, -.05, -.16); sp.rotation.x = Math.PI; sp.rotation.z = s * .3; fx.add(sp);
+  });
+  /* embedded eyes that stare forward */
+  const eyeMat = new THREE.MeshLambertMaterial({ color: C.eye, emissive: 0x222018 });
+  const irisMat = new THREE.MeshBasicMaterial({ color: C.iris });
+  [[-.045, .06, -.14], [.05, .05, -.20], [0, .075, -.05]].forEach(p => {
+    const e = new THREE.Mesh(new THREE.SphereGeometry(.020, 10, 8), eyeMat);
+    e.position.set(p[0], p[1], p[2]); fx.add(e);
+    const ir = new THREE.Mesh(new THREE.SphereGeometry(.010, 8, 6), irisMat);
+    ir.position.set(p[0], p[1], p[2] - .013); fx.add(ir);
+  });
+  /* dark veins/tendons draped over the gun */
+  const veinMat = new THREE.MeshLambertMaterial({ color: C.dark });
+  for (let i = 0; i < 5; i++) {
+    const v = new THREE.Mesh(new THREE.CylinderGeometry(.005, .003, .22 + Math.random() * .16, 5), veinMat);
+    v.position.set((Math.random() - .5) * .10, (Math.random() - .5) * .06, -.10 + Math.random() * .22);
+    v.rotation.set(Math.PI / 2 + U.rand(-.2, .2), 0, U.rand(0, 6.28));
+    fx.add(v);
+  }
+  group.add(fx);
+  group.userData.flesh = true;
+  group.userData.skin = { id: 'sk_hardcore_wave', name: 'ПЛОТЬ', rarity: 'legendary', rarityLabel: 'ЛЕГЕНДАРНЫЙ', glow: C.blood, pattern: 'flesh', shot: 0xff2a3a, accent: C.blood, deco: 'flesh' };
+  return group;
+}
+
+/* ============================================================
    WEAPON SKINS — applied on top of a freshly built weapon model.
    A skin gives the gun a procedural TEXTURE and repaints its PARTS in separate
    colours (receiver, steel, magazine, grip, accents) plus a little extra
@@ -315,6 +504,8 @@ function applyWeaponSkin(group, skin) {
   if (!group || !skin) return group;
   /* ПЛАТИНОВЫЙ скин «ГАЛАКТИКА» — особый: полностью другая модель оружия */
   if (skin.rarity === 'platinum' || skin.id === 'sk_platinum') return applyGalaxySkin(group);
+  /* КРОВАВЫЙ скин «ПЛОТЬ» (награда за ХАРДКОР) — своя модель из мяса и костей */
+  if (skin.id === 'sk_hardcore_wave' || skin.deco === 'flesh') return applyFleshSkin(group);
   const tex = skin.pattern ? _skinTexture(skin.pattern, skin.accent || skin.glow) : null;
 
   /* Source palette colour → the skin's part colour. Different original parts map
@@ -2577,6 +2768,9 @@ class Player {
 
     // ---- inventory ----
     this.inv = { 1: null, 2: null, 3: { id: 'knife', mag: Infinity, reserve: 0 } };
+    /* СУМКА: оружие, которое было куплено, но вытеснено другим. Оно остаётся у
+       игрока и может быть снова взято в руки во время закупки. */
+    this.bag = [];
     this.slot = 3;
     this.lastPrimary = 2;
 
@@ -2639,12 +2833,43 @@ class Player {
     const slot = def.slot;
     if (slot === 3) { this.inv[3] = { id: 'knife', mag: Infinity, reserve: 0 }; return true; }
     const had = this.inv[slot];
+    /* если слот занят ДРУГИМ оружием — вытесненное уходит в сумку (а не
+       пропадает), чтобы его можно было вернуть во время закупки */
+    if (had && had.id !== id) this.toBag(had);
     this.inv[slot] = { id, mag: def.mag, reserve: def.reserve };
     if (had && had.id === id) { this.inv[slot].mag = had.mag; this.inv[slot].reserve = had.reserve; }
     if (slot === 2) this.lastPrimary = 2;
     return true;
   }
-  has(id) { return [1, 2, 3].some(s => this.inv[s] && this.inv[s].id === id); }
+  has(id) { return [1, 2, 3].some(s => this.inv[s] && this.inv[s].id === id) || this.bagHas(id); }
+  /* ---- СУМКА ---- */
+  toBag(w) {
+    if (!w || !w.id || w.id === 'knife') return;
+    const def = WEAPONS[w.id];
+    if (!def) return;
+    const found = this.bag.find(b => b.id === w.id);
+    if (found) { found.mag = w.mag; found.reserve = w.reserve; return; }
+    this.bag.push({ id: w.id, mag: w.mag, reserve: w.reserve, slot: def.slot });
+  }
+  bagHas(id) { return this.bag.some(b => b.id === id); }
+  /* взять оружие из сумки в руки: текущее в слоте уедет обратно в сумку */
+  bagTake(id) {
+    const i = this.bag.findIndex(b => b.id === id);
+    if (i < 0) return false;
+    const def = WEAPONS[id];
+    if (!def) return false;
+    const slot = def.slot;
+    const cur = this.inv[slot];
+    if (cur && cur.id !== id) this.toBag(cur);
+    const b = this.bag[i];
+    this.inv[slot] = { id: b.id, mag: b.mag, reserve: b.reserve };
+    this.bag.splice(i, 1);
+    this.slot = slot;
+    this.deployT = Math.max(this.deployT, .35);
+    if (this.vmGroup) this.buildViewModel();
+    return true;
+  }
+  clearBag() { this.bag.length = 0; }
   takeWeapon(slot) {
     if (!this.inv[slot]) return false;
     if (this.slot === slot) return true;

@@ -27,7 +27,23 @@ function noiseFill(ctx, size, base, amp, step) {
 }
 
 const TEXTURES = {};
-function buildTextures() {
+/* a soft vertical streak used for raindrops, so rain reads as grey dashes
+   instead of round dots (PointsMaterial maps it onto each point sprite) */
+let _rainStreakTex = null;
+function rainStreakTexture() {
+  if (_rainStreakTex) return _rainStreakTex;
+  const c = makeCanvas(32); c.height = 64;
+  const x = c.getContext('2d');
+  x.clearRect(0, 0, 32, 64);
+  const g = x.createLinearGradient(0, 0, 0, 64);
+  g.addColorStop(0, 'rgba(210,216,224,0)');
+  g.addColorStop(.5, 'rgba(210,216,224,.95)');
+  g.addColorStop(1, 'rgba(210,216,224,0)');
+  x.fillStyle = g;
+  x.fillRect(12, 0, 8, 64);
+  _rainStreakTex = new THREE.CanvasTexture(c);
+  return _rainStreakTex;
+}function buildTextures() {
   const S = 256;
   const rng = makeRng(1337);
 

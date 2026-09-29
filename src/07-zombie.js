@@ -1097,10 +1097,28 @@ class Horde {
     this.flow.update(dt, player.pos.x, player.pos.z);
     this.bucketize();
     const ctx = { player, world: this.world, flow: this.flow, neighbors: null, horde: this };
+    /* ---- LOD / CULLING ----
+       Only the zombies the player can actually perceive are simulated and
+       animated every frame: near ones in full, far ones at a reduced rate
+       (their motion is imperceptible), and ones beyond the cull distance are
+       hidden entirely — the renderer then skips them. This keeps big hordes
+       (ОРДА ×10) cheap without changing what the player sees. */
+    const p = player.pos;
+    const nearD2 = CFG.zombieNearDist * CFG.zombieNearDist;
+    const cullD2 = CFG.zombieCullDist * CFG.zombieCullDist;
+    this._lodAcc = (this._lodAcc || 0) + dt;
+    const farTick = this._lodAcc >= CFG.zombieFarInterval;
+    if (farTick) this._lodAcc = 0;
     for (let i = 0; i < this.list.length; i++) {
       const z = this.list[i];
+      const dx = z.pos.x - p.x, dz = z.pos.z - p.z;
+      const d2 = dx * dx + dz * dz;
+      const visible = d2 <= cullD2 || z.isTarget || (z.isBoss || z.isMiniBoss);
+      if (z.group) z.group.visible = visible;
+      if (!visible) continue;                 // hidden: skip simulation entirely
+      if (d2 > nearD2 && !farTick) continue;  // distant: update only every few frames
       ctx.neighbors = this.nearby(z);
-      z.update(dt, ctx);
+      z.update(dt * (d2 > nearD2 ? CFG.zombieFarInterval : 1), ctx);
     }
     // reap
     for (let i = this.list.length - 1; i >= 0; i--) {

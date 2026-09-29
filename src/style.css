@@ -388,6 +388,9 @@ html.touch #bossBar .boss-name{font-size:11px;letter-spacing:2px}
 .bcard .wst i{font-style:normal;color:#c3ccd4;font-weight:600}
 .bcard .pr{position:absolute;right:13px;bottom:11px;font-size:16px;font-weight:800;color:var(--green)}
 .bcard.own .pr{color:var(--green);font-size:11px;letter-spacing:1.5px}
+.bcard.inbag{border-top-color:#4ad6ff}
+.bcard.inbag:hover{border-top-color:#9fe6ff;background:#0f1e26}
+.bcard.inbag .pr{color:#4ad6ff;font-size:11px;letter-spacing:1.5px}
 .buy-foot{display:flex;justify-content:space-between;align-items:center;margin-top:15px;font-size:11.5px;
   color:#5d6873;letter-spacing:1px;flex-wrap:wrap;gap:10px}
 #buyOwned{color:var(--or2)}

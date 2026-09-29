@@ -1415,6 +1415,7 @@ const Game = {
     Net.on('drone', d => this.onRemoteDrone(d));
     Net.on('boom', b => this.onRemoteBoom(b));
     Net.on('mmissile', m => this.onRemoteMechMissile(m));
+    Net.on('coopWave', m => { if (this.mode === CS.MODE.ONLINE && this.isCoop && Net.role !== CS.NETROLE.HOST) this.coopStartWave(m.w); });
     Net.on('splat', s => this.onRemoteSplat(s));
     Net.on('score', s => this.onScoreMsg(s));
   },
@@ -1601,6 +1602,7 @@ const Game = {
       wavesNoReload: this._wavesNoReload || 0,
       wavesNoShots: this._wavesNoShots || 0,
       top3: Store.data.top3 || 0,
+      hardcoreWave: this._hardcoreWave || 0,
       /* финальное платиновое достижение: сколько остальных уже выполнено */
       otherDone: (typeof achOtherDone === 'function') ? achOtherDone(Store.data.ach) : 0,
       otherTotal: ACHIEVEMENTS.length - 1,
@@ -1764,39 +1766,96 @@ const Game = {
   },
 
   applyTimeOfDay() {
+    /* compute the DESIRED environment; the actual scene values are eased toward
+       it every frame in updateEnv(), so weather / time changes are smooth
+       instead of snapping. */
+    const t = this._envCompute();
+    this._envTarget = t;
+    if (!this._envCur) {
+      this._envCur = {
+        sky: t.sky.clone(), fog: t.fog.clone(), sunCol: t.sunCol.clone(),
+        ambCol: t.ambCol.clone(), fogDen: t.fogDen, sun: t.sun, ambI: t.ambI
+      };
+    }
+    this.applyWeatherFX(t.wx);
+    this._envApply();
+  },
+
+  /* desired environment values for the current time-of-day + weather */
+  _envCompute() {
     const on = this.envEnabled();
     const tod = on ? this.envTod() : 'day';
     const wx = on ? this.envWeather() : 'clear';
     const tp = this._todPreset(tod), wp = this._weatherPreset(wx);
-    const g = MAP.group;
-    const sky = g && g.userData && g.userData.sky;
-    if (sky) {
-      // blend the time sky colour with the weather tint
-      const sc = new THREE.Color(tp.sky).lerp(new THREE.Color(wp.tint), wx === 'clear' ? 0 : .45);
-      sky.material.color.copy(sc); sky.material.needsUpdate = true;
-    }
-    if (this.scene) {
-      if (!this._dayFog) {
-        this._dayFog = { color: this.scene.fog ? this.scene.fog.color.getHex() : 0xbcc6cf, density: this.scene.fog ? this.scene.fog.density : .0055 };
-      }
-      if (this.scene.fog) {
-        const fc = new THREE.Color(tp.fog).lerp(new THREE.Color(wp.tint), .35);
-        this.scene.fog.color.copy(fc);
-        this.scene.fog.density = this._dayFog.density * tp.fogMul * wp.fogMul;
-      }
-      this.scene.traverse(o => {
+    // capture the map's baseline sun intensity + fog density on first use
+    if (this._daySunIntensity === undefined) {
+      this._daySunIntensity = 1;
+      if (this.scene) this.scene.traverse(o => {
         if (o.isLight && o.type === 'DirectionalLight' && o.userData && o.userData.dayLight) {
-          o.intensity = o.userData.dayIntensity * tp.sunMul * wp.dim;
-          o.color.setHex(tp.sun).lerp(new THREE.Color(wp.sun), .5);
+          this._dayLight = o;
+          this._daySunIntensity = o.userData.dayIntensity || o.intensity || 1;
         }
       });
-      if (!this._ambient) { this._ambient = new THREE.AmbientLight(0xffffff, 0.25); this.scene.add(this._ambient); }
-      const ambOn = tp.ambMul > 0 || wx === 'storm' || wx === 'ash';
-      this._ambient.visible = ambOn;
-      this._ambient.color.setHex(tp.amb || wp.tint);
-      this._ambient.intensity = Math.max(tp.ambMul, wx === 'storm' ? .35 : wx === 'ash' ? .30 : 0);
     }
-    this.applyWeatherFX(wx);
+    if (this._dayFogDensity === undefined) {
+      this._dayFogDensity = (this.scene && this.scene.fog) ? this.scene.fog.density : .0055;
+    }
+    const sky = new THREE.Color(tp.sky).lerp(new THREE.Color(wp.tint), wx === 'clear' ? 0 : .45);
+    const fog = new THREE.Color(tp.fog).lerp(new THREE.Color(wp.tint), .35);
+    const sunCol = new THREE.Color(tp.sun).lerp(new THREE.Color(wp.sun), .5);
+    const sun = this._daySunIntensity * tp.sunMul * wp.dim;
+    const ambCol = new THREE.Color(tp.amb || wp.tint);
+    const ambI = Math.max(tp.ambMul, wx === 'storm' ? .35 : wx === 'ash' ? .30 : 0);
+    const fogDen = this._dayFogDensity * tp.fogMul * wp.fogMul;
+    return { sky, fog, fogDen, sun, sunCol, ambCol, ambI, wx, ambOn: tp.ambMul > 0 || wx === 'storm' || wx === 'ash' };
+  },
+
+  /* write the CURRENT eased values onto the scene */
+  _envApply() {
+    const c = this._envCur;
+    if (!c) return;
+    const g = MAP.group;
+    const sky = g && g.userData && g.userData.sky;
+    if (sky && sky.material) { sky.material.color.copy(c.sky); sky.material.needsUpdate = true; }
+    if (this.scene && this.scene.fog) {
+      this.scene.fog.color.copy(c.fog);
+      this.scene.fog.density = c.fogDen;
+    }
+    if (this._dayLight) {
+      this._dayLight.intensity = c.sun;
+      this._dayLight.color.copy(c.sunCol);
+    }
+    if (!this._ambient) { this._ambient = new THREE.AmbientLight(0xffffff, 0.25); this.scene.add(this._ambient); }
+    const t = this._envTarget;
+    this._ambient.visible = !!(t && t.ambOn) || c.ambI > 0.004;
+    this._ambient.color.copy(c.ambCol);
+    this._ambient.intensity = c.ambI;
+  },
+
+  /* called every frame: ease sky / fog / sun / ambient toward the target, and
+     fade the weather particles in and out instead of popping */
+  updateEnv(dt) {
+    if (this._envCur && this._envTarget) {
+      const k = 1 - Math.exp(-dt / 2.4);           // ~2.4 s time constant
+      const c = this._envCur, t = this._envTarget;
+      c.sky.lerp(t.sky, k);
+      c.fog.lerp(t.fog, k);
+      c.sunCol.lerp(t.sunCol, k);
+      c.ambCol.lerp(t.ambCol, k);
+      c.fogDen = U.lerp(c.fogDen, t.fogDen, k);
+      c.sun = U.lerp(c.sun, t.sun, k);
+      c.ambI = U.lerp(c.ambI, t.ambI, k);
+    }
+    this._envApply();
+    // weather particles: fade opacity toward the wanted value, hide at 0
+    const pts = this._wxPoints;
+    if (pts && pts.material) {
+      const want = this._wxWantVisible ? (pts.userData.baseOpacity || .75) : 0;
+      const k = 1 - Math.exp(-dt / 1.1);
+      pts.material.opacity = U.lerp(pts.material.opacity || 0, want, k);
+      if (pts.material.opacity < 0.01) pts.visible = false;
+      else if (!pts.visible) pts.visible = true;
+    }
   },
 
   /* ============================================================
@@ -1806,9 +1865,10 @@ const Game = {
   applyWeatherFX(kind) {
     if (!this.scene) return;
     const want = this.envEnabled() && (kind === 'rain' || kind === 'storm' || kind === 'snow' || kind === 'ash');
+    this._wxWantVisible = want;
     if (!want) {
-      if (this._wxPoints) this._wxPoints.visible = false;
-      if (this._wxLightning) this._wxLightning = 0;
+      // keep the cloud so it can fade out; just stop wanting it visible
+      this._wxLightning = 0;
       return;
     }
     const N = kind === 'snow' ? 900 : 1400;
@@ -1821,22 +1881,31 @@ const Game = {
         pos[i * 3] = U.rand(-R, R); pos[i * 3 + 1] = U.rand(0, H); pos[i * 3 + 2] = U.rand(-R, R);
       }
       geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-      const isSnow = kind === 'snow', isAsh = kind === 'ash';
-      const col = isSnow ? 0xffffff : isAsh ? 0xff8a4a : 0xaecbe6;
-      const mat = new THREE.PointsMaterial({ color: col, size: isSnow ? .16 : isAsh ? .12 : .10, transparent: true, opacity: isSnow ? .9 : .75, depthWrite: false, sizeAttenuation: true, blending: isAsh ? THREE.AdditiveBlending : THREE.NormalBlending });
+      const isSnow = kind === 'snow', isAsh = kind === 'ash', isRain = kind === 'rain' || kind === 'storm';
+      /* дождь: серые вытянутые капли-штрихи (текстура вертикальной полосы),
+         снег — белые точки, пепел — оранжевые искры */
+      const col = isSnow ? 0xffffff : isAsh ? 0xff8a4a : (kind === 'storm' ? 0x9aa2ac : 0xaab2bc);
+      const mat = new THREE.PointsMaterial({
+        color: col, size: isSnow ? .16 : isAsh ? .12 : (kind === 'storm' ? .5 : .42),
+        map: isRain ? rainStreakTexture() : null,
+        transparent: true, opacity: isSnow ? .9 : isAsh ? .75 : .8,
+        depthWrite: false, sizeAttenuation: true,
+        blending: isAsh ? THREE.AdditiveBlending : THREE.NormalBlending
+      });
       const pts = new THREE.Points(geo, mat);
       pts.frustumCulled = false;
       pts.renderOrder = 6;
       pts.userData.kind = kind;
       pts.userData.R = R; pts.userData.H = H;
+      pts.userData.baseOpacity = isSnow ? .9 : isAsh ? .75 : .8;
+      pts.visible = false;
+      pts.material.opacity = 0;
       this.scene.add(pts);
       this._wxPoints = pts;
     }
     this._wxPoints.visible = true;
-    // rain streaks are longer: tilt by scaling Y
-    const isSnow = kind === 'snow', isAsh = kind === 'ash';
-    this._wxPoints.material.size = isSnow ? .16 : isAsh ? .12 : (kind === 'storm' ? .12 : .10);
-    this._wxSpeed = isSnow ? 4.5 : isAsh ? 2.2 : (kind === 'storm' ? 42 : 30);
+    this._wxPoints.material.size = kind === 'snow' ? .16 : kind === 'ash' ? .12 : (kind === 'storm' ? .5 : .42);
+    this._wxSpeed = kind === 'snow' ? 4.5 : kind === 'ash' ? 2.2 : (kind === 'storm' ? 42 : 30);
   },
 
   /* called every frame: drift the weather particles around the camera */
@@ -2148,6 +2217,7 @@ const Game = {
     this.isBossRush = this.specialMode === 'bossrush';
     this.isEndless = this.specialMode === 'endless';
     this.isDaily = this.specialMode === 'daily';
+    this.isHardcore = this.specialMode === 'hardcore';
     this.modState = makeModState();
     this.modList = [];
     this._modPending = false;
@@ -2220,6 +2290,10 @@ const Game = {
     } else if (this.isEndless) {
       this.beginBuyPhase(30, 'БЕСКОНЕЧНЫЙ — ВОЛНА 1');
       UI.toast('БЕСКОНЕЧНЫЙ: модификатор каждые 10 волн', '#c24bff');
+    } else if (this.isHardcore) {
+      this.beginBuyPhase(30, 'ХАРДКОР — ВОЛНА 1');
+      UI.center('ХАРДКОР', 'ОДНА ЖИЗНЬ · смерть = конец забега', 3.0);
+      UI.toast('ХАРДКОР: у вас одна жизнь. Без сохранений и чекпоинтов.', '#c4302a');
     } else {
       this.beginBuyPhase(30, this.hordeMode ? (this.freePlay ? 'БЕСПЛАТНАЯ ОРДА — ВОЛНА 1' : 'ОРДА — ВОЛНА 1') : 'ВОЛНА 1');
       if (this.freePlay && this.hordeMode) UI.toast('БЕСПЛАТНАЯ ОРДА: всё оружие бесплатно', '#57d16a');
@@ -3126,13 +3200,32 @@ const Game = {
     if (sdConf) sdConf.textContent = 'ОРУЖИЕ' + (IS_TOUCH ? '' : ' (C)');
   },
 
-  startOnlineHost() { this.startOnline(CS.NETROLE.HOST); },
+  startOnlineHost() { this.startOnline(CS.NETROLE.HOST, { pve: Store.data.onlineMode || 'pvp' }); },
   startOnlineClient() { this.startOnline(CS.NETROLE.CLIENT); },
+
+  /* Применить режим комнаты, объявленный хостом. Если он не совпадает с уже
+     идущим матчем — мягко перезапускаем онлайн в нужном режиме (в фазе закупки
+     это безопасно). Так и хост, и клиент оказываются в кооп-волнах. */
+  applyOnlinePve(pve) {
+    pve = pve || 'pvp';
+    if (this.onlinePvE === pve && this.isCoop === (pve !== 'pvp')) return;
+    this.onlinePvE = pve;
+    this.isCoop = pve !== 'pvp';
+    if (this.mode !== CS.MODE.ONLINE) return;
+    if (this.roundState === 'buy' || this.roundState === 'idle') {
+      this.startOnline(Net.role, { pve: pve, map: MAP.id, hp: this.matchHP, rounds: this.online ? this.online.rounds : undefined,
+        free: this.freePlay, shop: this.shopAllow, shopItems: this.shopItemAllow });
+    }
+  },
 
   startOnline(role, opts) {
     opts = opts || {};
     this.stopToMenu(true);
     this.mode = CS.MODE.ONLINE;
+    /* режим комнаты: PvP-дуэль или кооп по волнам (обычный / орда / босс-раш).
+       Хост выбирает в лобби, клиентам приезжает в settings. */
+    this.onlinePvE = opts.pve || (role === CS.NETROLE.HOST ? (Store.data.onlineMode || 'pvp') : (opts.pve || 'pvp'));
+    this.isCoop = this.onlinePvE && this.onlinePvE !== 'pvp';
     this.online = {
       role, roundWins: { me: 0, them: 0 }, opponentLeft: false,
       scoreMe: 0, scoreThem: 0, skipVoteMe: 0, votes: {},
@@ -3169,6 +3262,40 @@ const Game = {
 
     // build a RemotePlayer for every other member of the roster
     this.syncRemoteRoster();
+
+    if (this.isCoop) {
+      /* КООП-волны: в онлайне поднимаем локальную орду на обоих игроков и ведём
+         волны; счёт — общий (сумма убийств), это прохождение, а не дуэль. */
+      this.horde = new Horde(this.scene, this.world, this);
+      this.offline = {
+        wave: 0, toSpawn: 0, spawnedThisWave: 0, totalThisWave: 0,
+        betweenWaves: false, breakT: 0, alive: 0, kills: 0, startTime: U.now(),
+        campaignWon: false, bossPending: 0, bossType: null
+      };
+      this.specialMode = this.onlinePvE;
+      this.isBossRush = this.onlinePvE === 'bossrush';
+      this.isHardcore = false; this.isDaily = false; this.isEndless = false;
+      this.hordeMode = this.onlinePvE === 'horde';
+      this.modState = makeModState();
+      this.effects = new Effects(this.scene, Store.data.quality);
+      this.effects.clear();
+      this.spawnPlayerLocal(this.rosterSpawnIndex());
+      console.log('[coop] start', (Net.role === CS.NETROLE.HOST ? 'HOST' : 'CLIENT'), this.onlinePvE);
+      this.roundState = 'live';
+      this.coopStartWave(1);
+      this.enterGame();
+      this._peerWarned = false; this._peerLost = false;
+      this._silentT = 0; this._lastSeenPacket = 0;
+      this._leaving = false;
+      Net.startHeartbeat();
+      Net.keepalive = () => {
+        if (this.mode !== CS.MODE.ONLINE || !Net.connected) return;
+        this.broadcastState();
+      };
+      UI.center('КООП: ' + (this.onlinePvE === 'horde' ? 'ОРДА ×10' : this.onlinePvE === 'bossrush' ? 'БОСС-РАШ' : 'ОБЫЧНЫЙ'), 'Волны для обоих игроков', 2.6);
+      UI.toast('Кооп-режим: выживайте вместе', '#57d16a');
+      return;
+    }
 
     this.horde = null;
     this.effects = new Effects(this.scene, Store.data.quality);
@@ -3582,6 +3709,17 @@ const Game = {
   equipWeapon(id) {
     const w = WEAPONS[id];
     if (!w || !this.player) return;
+    /* из сумки — вернуть в руки; из инвентаря — переключить слот */
+    if (this.player.bagHas(id) && !this.player.has(id)) {
+      this.player.bagTake(id);
+      this.player.flashT = 0;
+      this.attachViewModel();
+      Audio3D_SFX.reloadStep(0);
+      UI.toast('Из сумки: ' + w.name, '#57d16a');
+      UI.renderBuy(this.player, this.buyTimer);
+      if (this.mode === CS.MODE.ONLINE) this.broadcastScore();
+      return;
+    }
     if (!this.player.has(id)) return;
     if (this.player.slot === w.slot && this.player.inv[w.slot] && this.player.inv[w.slot].id === id) {
       Audio3D_SFX.uiClick();
@@ -4068,8 +4206,13 @@ const Game = {
       // Offline survival has no round clock — the wave ends when the horde is dead.
       // Online duels are timed, exactly like a real CS round.
       if (this.mode === CS.MODE.ONLINE) {
-        this.roundT -= dt;
-        if (this.roundT <= 0) this.endRound(null, 'ВРЕМЯ');
+        if (this.isCoop) {
+          // кооп-волны: нет PvP-таймера, раунд длится до конца волн
+          this.roundT = 0;
+        } else {
+          this.roundT -= dt;
+          if (this.roundT <= 0) this.endRound(null, 'ВРЕМЯ');
+        }
       } else if (this.mode === CS.MODE.RANGE) {
         this.updateRange(dt);
       } else if (this.offline) {
@@ -4590,6 +4733,96 @@ const Game = {
     this.crates.length = 0;
   },
 
+  /* ============================================================
+     COOP WAVES (online PvE)
+     Both players run an identical local horde: the HOST owns the wave counter
+     and broadcasts it, so the waves stay in step. Zombies are simulated on each
+     side (as in single-player); the wave number is what is synchronised.
+     ============================================================ */
+  coopStartWave(wave) {
+    const o = this.offline;
+    if (!o) return;
+    o.wave = wave;
+    o.bosses = 0; o.bossPending = 0; o.miniBossPending = 0;
+    if (this.mode === CS.MODE.OFFLINE) this.rotateMapIfNeeded(wave);
+    let count = Math.round(CFG.zombieStartCount + (wave - 1) * 2.4);
+    const countMul = this.hordeMode ? CFG.hordeCountMul : 1;
+    count = Math.round(count * countMul * (this.modState ? this.modState.count : 1));
+    const bossType = this.isBossRush ? this.bossRushList()[(wave - 1) % this.bossRushList().length] : this.bossForWave(wave);
+    if (this.isBossRush) {
+      o.bossType = bossType; o.bossPending = 1; count = 0;
+      UI.center(ZOMBIES[bossType].name, 'БОСС-РАШ · ЭТАП ' + wave, 2.4);
+    } else if (bossType) {
+      o.bossType = bossType;
+      o.bossPending = this.hordeMode ? 3 : 1;
+      count = Math.round(count * .4);
+      UI.center(ZOMBIES[bossType].name, 'БОСС · ВОЛНА ' + wave, 2.4);
+    } else {
+      o.bossType = null;
+      UI.center('ВОЛНА ' + wave, count + ' зомби', 1.6);
+    }
+    o.totalThisWave = count; o.spawnedThisWave = 0; o.toSpawn = count;
+    o.betweenWaves = false; o.waveStart = U.now();
+    this._reloadsAtWaveStart = (this.player && this.player.reloads) || 0;
+    this._shotsAtWaveStart = (this.player && (this.player.bulletsFired | 0)) || 0;
+    Bus.emit('waveStart', wave);
+  },
+
+  updateCoop(dt) {
+    const o = this.offline;
+    if (!o || o.campaignWon) return;
+    if (o.betweenWaves) {
+      o.breakT -= dt;
+      if (o.breakT <= 0) {
+        o.betweenWaves = false;
+        /* только хост задаёт номер волны; клиент ждёт его через coopWave msg */
+        if (Net.role === CS.NETROLE.HOST) {
+          this.coopStartWave(o.wave + 1);
+          Net.send({ t: 'coopWave', w: o.wave });
+        }
+      }
+      return;
+    }
+    // spawn queue (same tuning as single-player)
+    if (o.toSpawn > 0) {
+      o.spawnAcc = (o.spawnAcc || 0) + dt;
+      const big = this.hordeMode;
+      const waveSpd = big ? CFG.hordeSpawnInterval : CFG.zombieSpawnInterval;
+      const interval = Math.max(.10, (waveSpd - o.wave * (big ? .006 : .045)));
+      const maxAlive = big ? CFG.hordeMaxAlive : CFG.zombieMaxAlive;
+      let guard = 0, burst = big ? 8 : 6;
+      while (o.spawnAcc >= interval && o.toSpawn > 0 && guard++ < burst) {
+        o.spawnAcc -= interval;
+        if (this.horde.activeCount >= maxAlive) break;
+        const t = this.pickZombieType(o.wave);
+        const scale = 1 + (o.wave - 1) * .085;
+        const z = this.horde.spawnRandom(t, this.player.pos.x, this.player.pos.z, 26);
+        const hpMul = (this.hordeMode) ? CFG.hordeHpMul : 1;
+        z.maxHealth *= scale * hpMul; z.health = z.maxHealth;
+        z.dmg *= 1 + (o.wave - 1) * .05;
+        o.toSpawn--; o.spawnedThisWave++;
+      }
+    } else if (o.bossPending > 0) {
+      o.bossAcc = (o.bossAcc || 0) + dt;
+      if (o.bossAcc >= (this.hordeMode ? .5 : .9)) {
+        o.bossAcc = 0;
+        const b = this.spawnBoss(o.bossType);
+        if (this.isBossRush && b) b.maxHealth *= (1 + (o.wave - 1) * .35);
+        o.bossPending--;
+      }
+    } else if (this.horde.aliveCount === 0 && o.spawnedThisWave >= o.totalThisWave && !this.isBossRush) {
+      // wave cleared
+      const bonus = 400 + o.wave * 120;
+      this.player.money += bonus;
+      this.player.score += Math.round(250 + o.wave * 40);
+      o.betweenWaves = true; o.breakT = 7;
+      this.player.health = Math.min(this.matchHP || 100, this.player.health + 22);
+      Audio3D_SFX.roundEnd(true);
+      UI.center('ВОЛНА ' + o.wave + ' ЗАЧИЩЕНА', 'Бонус $' + bonus + ' · Передышка 7с', 3.0);
+      Bus.emit('waveCleared', o.wave);
+    }
+  },
+
   updateOffline(dt) {
     const o = this.offline;
     if (!o) return;
@@ -4704,8 +4937,7 @@ const Game = {
 
   /* The final boss is down: award a completion point (shown in the main menu)
      and stop the run. */
-  onCampaignComplete() {
-    if (this._campaignDone) return;
+  onCampaignComplete() {    if (this._campaignDone) return;
     this._campaignDone = true;
     Store.data.clears = (Store.data.clears || 0) + 1;
     Store.save();
@@ -7000,6 +7232,12 @@ const Game = {
       this.checkAchievements();
       UI.center('ВЫ ПОГИБЛИ', 'Счёт: ' + p.score + ' · Волна ' + o.wave, 4.0);
       UI.toast('Волна ' + o.wave + ' · Счёт ' + p.score + ' · Нажмите Tab для статистики', '#e33a2e');
+      if (this.isHardcore) {
+        this._hardcoreKills = p.zombieKills;
+        this._hardcoreWave = o.wave;
+        UI.center('ХАРДКОР ПРОЙДЕН', 'Волна ' + o.wave + ' · убито ' + p.zombieKills, 600);
+        UI.toast('ХАРДКОР: одна жизнь — забег окончен', '#c4302a');
+      }
       this.roundState = 'end';
       this.roundT = 5.0;
       this.offlineDead = true;
@@ -7203,7 +7441,7 @@ const Game = {
     if (Net.role === CS.NETROLE.HOST) {
       Net.send({ t: 'roster', roster: Net.peers });
       // and make sure everyone agrees on the economy for this room
-      Net.send({ t: 'round', st: 'settings', players: Store.data.players, hp: this.matchHP, map: MAP.id, free: this.freePlay ? 1 : 0, rounds: this.online ? this.online.rounds : MATCH.clampRounds(Store.data.rounds), shop: this.shopAllow, shopItems: this.shopItemsAllow(), tod: Store.data.timeOfDay || 'day', weather: Store.data.skyWeather || 'clear', envAuto: Store.data.envAuto || 0, envOff: Store.data.envOff || 0 });
+      Net.send({ t: 'round', st: 'settings', players: Store.data.players, hp: this.matchHP, map: MAP.id, free: this.freePlay ? 1 : 0, rounds: this.online ? this.online.rounds : MATCH.clampRounds(Store.data.rounds), shop: this.shopAllow, shopItems: this.shopItemsAllow(), tod: Store.data.timeOfDay || 'day', weather: Store.data.skyWeather || 'clear', envAuto: Store.data.envAuto || 0, envOff: Store.data.envOff || 0, pve: this.onlinePvE || Store.data.onlineMode || 'pvp' });
     }
   },
 
@@ -7652,6 +7890,8 @@ const Game = {
       if (r.shop) this.shopAllow = Object.assign({}, r.shop);
       if (r.shopItems) this.shopItemAllow = Object.assign({}, r.shopItems);
       if (r.winner) this.online.winnerName = r.winner;
+      /* режим комнаты (PvP / кооп-волны) — задаёт хост */
+      if (r.pve !== undefined) this.applyOnlinePve(r.pve);
       /* the host picks the time of day / weather for BOTH players: adopt it */
       if (r.tod !== undefined || r.weather !== undefined || r.envAuto !== undefined || r.envOff !== undefined) {
         if (r.tod !== undefined) { Store.data.timeOfDay = r.tod; Store.data.weather = r.tod; }
@@ -7967,11 +8207,12 @@ const Game = {
     // ---- round flow ----
     this.updateBuyPhase(dt);
     if (this.mode === CS.MODE.OFFLINE && !this._modPickOpen) { this.updateOffline(dt); this.updateCrates(dt); }
+    if (this.mode === CS.MODE.ONLINE && this.isCoop) { this.updateCoop(dt); this.updateCrates(dt); }
     this.updateGrenades(dt);
 
     // ---- AI ----
     if (this.horde) this.horde.update(dt, p);
-    if (this.mode === CS.MODE.OFFLINE || this.mode === CS.MODE.RANGE) { this.updateBosses(dt); this.updateBossCharges(dt); }
+    if (this.mode === CS.MODE.OFFLINE || this.mode === CS.MODE.RANGE || (this.mode === CS.MODE.ONLINE && this.isCoop)) { this.updateBosses(dt); this.updateBossCharges(dt); }
 
     // ---- effects ----
     if (this.effects) this.effects.update(dt);
@@ -7988,6 +8229,7 @@ const Game = {
 
     // ---- environment ----
     this.updateEnvCycle(dt);
+    this.updateEnv(dt);
     this.updateWeather(dt);
 
     // ---- galaxy skins: spin the rings/dust on the viewmodel and every peer ----

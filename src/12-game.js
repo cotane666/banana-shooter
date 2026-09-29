@@ -1549,6 +1549,10 @@ const Game = {
       case 'KeyL':
         if (!this.paused) this.toggleEnvironment();
         break;
+      /* U — подорвать свои прилипшие липучки (как в GTA) */
+      case 'KeyU':
+        if (!this.paused) this.detonateStickies();
+        break;
     }
   },
 
@@ -3784,7 +3788,7 @@ const Game = {
       else if (g.drone) { this.player.drone = (this.player.drone || 0) + 1; this.player.droneOwned = true; }
       else if (g.grenade) {
         const cap = 4;
-        this.player.grenades = this.player.grenades || { frag: 0, freeze: 0, napalm: 0 };
+        this.player.grenades = this.player.grenades || { frag: 0, freeze: 0, napalm: 0, sticky: 0 };
         const cur = this.player.grenades[g.grenade] || 0;
         if (cur >= cap) { Audio3D_SFX.deny(); UI.toast('Гранат максимум: ' + cap); if (!free) this.player.money += g.price; return; }
         this.player.grenades[g.grenade] = cur + 1;
@@ -3866,7 +3870,7 @@ const Game = {
   /* Аптечка: instant heal, usable at any time during a live round/battle */
   /* cycle the active grenade kind */
   cycleGrenade() {
-    const order = ['frag', 'freeze', 'napalm'];
+    const order = ['frag', 'freeze', 'napalm', 'sticky'];
     const cur = Store.data.grenade || 'frag';
     const next = order[(order.indexOf(cur) + 1) % order.length];
     Store.data.grenade = next; Store.save();
@@ -3915,10 +3919,26 @@ const Game = {
     this._grenades = this._grenades || [];
     this._grenades.push({
       kind: kind, mesh: mesh, pos: { x: start.x, y: start.y, z: start.z },
+      /* ЛИПУЧКА не взрывается по таймеру: она прилипает и ждёт команды (P). */
       vel: { x: d.x * speed, y: d.y * speed + 2.6, z: d.z * speed },
-      grav: CFG.gravity * .75, fuse: 2.4, bounces: 0
+      grav: CFG.gravity * .75, fuse: kind === 'sticky' ? 9999 : 2.4, bounces: 0,
+      sticky: kind === 'sticky', stuck: false, armed: false, ownerLocal: true
     });
     Audio3D_SFX.uiClick();
+    return true;
+  },
+
+  /* P — подорвать ВСЕ свои прилипшие липучки (как в GTA) */
+  detonateStickies() {
+    if (!this._grenades || !this._grenades.length) { UI.toast('Липучек нет', '#f5d33c'); Audio3D_SFX.deny(); return false; }
+    let n = 0;
+    for (let i = this._grenades.length - 1; i >= 0; i--) {
+      const g = this._grenades[i];
+      if (!g.sticky || !g.ownerLocal || !g.armed) continue;
+      this.detonateGrenade(g); this.removeGrenade(i); n++;
+    }
+    if (!n) { UI.toast('Нет прилипших липучек', '#f5d33c'); Audio3D_SFX.deny(); return false; }
+    UI.toast('Липучки взорваны: ' + n, '#e33a2e');
     return true;
   },
 
@@ -3927,6 +3947,15 @@ const Game = {
     const world = this.world;
     for (let i = this._grenades.length - 1; i >= 0; i--) {
       const g = this._grenades[i];
+      /* прилипшая липучка ждёт команды: мигает и не двигается */
+      if (g.stuck) {
+        if (g.mesh.userData && g.mesh.userData.led) {
+          g.blink = (g.blink || 0) + dt;
+          g.mesh.userData.led.visible = (g.blink % .6) < .3;
+        }
+        if (g.sticky && g.ownerLocal && !g.armed) { g.armed = true; UI.toast('Липучка прилипла — P чтобы взорвать', '#ff9d21'); }
+        continue;
+      }
       g.fuse -= dt;
       g.vel.y -= g.grav * dt;
       const nx = g.pos.x + g.vel.x * dt, ny = g.pos.y + g.vel.y * dt, nz = g.pos.z + g.vel.z * dt;
@@ -3936,6 +3965,16 @@ const Game = {
       if (hit.length) {
         const h = hit[0];
         g.pos.x = h.point.x + h.normal.x * .12; g.pos.y = h.point.y + h.normal.y * .12; g.pos.z = h.point.z + h.normal.z * .12;
+        if (g.sticky) {
+          /* ЛИПУЧКА прилипает к первой же поверхности и остаётся там */
+          g.stuck = true; g.armed = true;
+          if (h.normal.y < -.5) { g.mesh.rotation.x = Math.PI; }
+          else if (Math.abs(h.normal.y) < .5) {
+            g.mesh.lookAt(g.pos.x + h.normal.x, g.pos.y + h.normal.y, g.pos.z + h.normal.z);
+            g.mesh.rotateX(Math.PI / 2);
+          }
+          continue;
+        }
         const vn = g.vel.x * h.normal.x + g.vel.y * h.normal.y + g.vel.z * h.normal.z;
         g.vel.x -= 2 * vn * h.normal.x; g.vel.y -= 2 * vn * h.normal.y; g.vel.z -= 2 * vn * h.normal.z;
         g.vel.x *= .5; g.vel.y *= .5; g.vel.z *= .5;
@@ -3943,6 +3982,11 @@ const Game = {
       } else { g.pos.x = nx; g.pos.y = ny; g.pos.z = nz; }
       g.mesh.position.set(g.pos.x, g.pos.y, g.pos.z);
       g.mesh.rotation.x += dt * 6; g.mesh.rotation.y += dt * 4;
+      if (g.sticky) {
+        const p = this.player;
+        const ds = Math.hypot(p.pos.x - g.pos.x, p.pos.z - g.pos.z);
+        if (ds < 1.2) { /* close enough to reach the wall next tick */ }
+      }
       if (g.fuse <= 0) { this.detonateGrenade(g); this.removeGrenade(i); }
     }
   },
@@ -4011,6 +4055,30 @@ const Game = {
         this.effects.particle(g.pos.x + Math.cos(a) * r, g.pos.y + .2, g.pos.z + Math.sin(a) * r,
           0, U.rand(1.4, 3.4), 0, U.rand(.10, .26), 'spark', U.rand(.5, 1.2));
       }
+    } else if (kind === 'sticky') {
+      // ЛИПУЧКА: мощный направленный взрыв по кнопке
+      const R = 6.6, dmg = 260;
+      this.effects.explosion(g.pos.x, g.pos.y, g.pos.z, R, [0xff5a2a, 0x1a0604]);
+      Audio3D_SFX.explosionAt(g.pos.x, g.pos.y, g.pos.z);
+      if (this.horde) for (const z of this.horde.list) {
+        if (!z.alive || z.dying) continue;
+        const d = Math.hypot(z.pos.x - g.pos.x, (z.pos.y + 1) - g.pos.y, z.pos.z - g.pos.z);
+        if (d > R) continue;
+        const dealt = dmg * (1 - d / R);
+        z.takeDamage(dealt, 'body', { x: 0, y: 0, z: 0 });
+        this.player.damageDealt += dealt;
+      }
+      const p = this.player;
+      const ds = Math.hypot(p.pos.x - g.pos.x, (p.pos.y + 1) - g.pos.y, p.pos.z - g.pos.z);
+      if (ds < R * .85) this.applyDamageToSelf(dmg * (1 - ds / (R * .85)) * .25, g.pos);
+      if (this.mode === CS.MODE.ONLINE) {
+        for (const rp of this.remotePlayers) {
+          if (!rp.alive) continue;
+          const dr = Math.hypot(rp.pos.x - g.pos.x, (rp.pos.y + 1) - g.pos.y, rp.pos.z - g.pos.z);
+          if (dr <= R) this.sendPvpHit(dmg * (1 - dr / R), 'body', false, rp, 'grenade');
+        }
+      }
+      this.effects.decal(g.pos.x, g.pos.y + .02, g.pos.z, 0, 1, 0, 1.6, 'scorch');
     }
   },
 
@@ -6964,7 +7032,7 @@ const Game = {
     if (stopPoint) {
       this.effects.tracer(muzzleWorld, stopPoint, 1, true, _shotCol);
       const surf = (stopNormal && Math.abs(stopNormal.y) > .7) ? 'concrete' : 'concrete';
-      this.effects.impact(stopPoint, stopNormal, surf);
+      this.effects.impact(stopPoint, stopNormal, surf, (p && p.skinTheme) || null);
       Audio3D_SFX.tone(140, .06, 'triangle', .05, stopPoint.x, stopPoint.y, stopPoint.z, 90);
     } else {
       this.effects.tracer(muzzleWorld, end, 1, false, _shotCol);
@@ -6972,6 +7040,9 @@ const Game = {
   },
 
   hitEffect(point, dir, part, headshot) {
+    const theme = (this.player && this.player.skinTheme) || null;
+    if (theme === 'flesh') this.effects.fleshImpact(point, dir);
+    else if (theme === 'galaxy') this.effects.galaxyImpact(point, dir);
     this.effects.bloodBurst(point, dir, headshot ? 14 : part === 'legs' ? 5 : 8);
     UI.hitmark(false);
     this._hitmarkT = U.now();

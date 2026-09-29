@@ -22,6 +22,7 @@ class Effects {
     this.particleGeo = new THREE.BoxGeometry(1, 1, 1);
     this.bloodMat = new THREE.MeshBasicMaterial({ color: 0x8a1210 });
     this.sparkMat = new THREE.MeshBasicMaterial({ color: 0xffcc55, blending: THREE.AdditiveBlending, transparent: true, depthWrite: false });
+    this.vsparkMat = new THREE.MeshBasicMaterial({ color: 0xc060ff, blending: THREE.AdditiveBlending, transparent: true, depthWrite: false });
     this.smokeMat = new THREE.MeshBasicMaterial({ color: 0x9a9a94, transparent: true, opacity: .4, depthWrite: false });
     this.bananaMat = new THREE.MeshLambertMaterial({ color: 0xf2c93b, emissive: 0x3a2c08 });
 
@@ -32,7 +33,11 @@ class Effects {
       blood: new THREE.MeshBasicMaterial({ map: this._bloodTexture(), transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4 }),
       scorch: new THREE.MeshBasicMaterial({ map: this._scorchTexture(), transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -5, blending: THREE.AdditiveBlending }),
       acid: new THREE.MeshBasicMaterial({ map: this._blobTexture('150,210,60'), transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4, blending: THREE.AdditiveBlending }),
-      frost: new THREE.MeshBasicMaterial({ map: this._blobTexture('150,230,255'), transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4, blending: THREE.AdditiveBlending })
+      frost: new THREE.MeshBasicMaterial({ map: this._blobTexture('150,230,255'), transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4, blending: THREE.AdditiveBlending }),
+      /* тематические декали выстрелов скинов */
+      fleshsplat: new THREE.MeshBasicMaterial({ map: this._fleshSplatTexture(), transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4 }),
+      galaxyburst: new THREE.MeshBasicMaterial({ map: this._galaxyBurstTexture(), transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -5, blending: THREE.AdditiveBlending }),
+      blackhole: new THREE.MeshBasicMaterial({ map: this._blackholeTexture(), transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -5 })
     };
     this.tracerPool = [];
     this.particlePool = [];
@@ -61,6 +66,68 @@ class Effects {
     g.addColorStop(.5, 'rgba(110,8,6,.7)');
     g.addColorStop(1, 'rgba(80,4,4,0)');
     x.fillStyle = g; x.beginPath(); x.arc(32, 32, 26, 0, 7); x.fill();
+    const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
+  }
+  /* ПЛОТЬ: рваное кровавое пятно с брызгами — отметина от выстрела */
+  _fleshSplatTexture() {
+    const c = makeCanvas(96); const x = c.getContext('2d');
+    x.clearRect(0, 0, 96, 96);
+    const blob = (cx, cy, r, a) => {
+      const g = x.createRadialGradient(cx, cy, 0, cx, cy, r);
+      g.addColorStop(0, 'rgba(120,4,6,' + a + ')');
+      g.addColorStop(.6, 'rgba(80,2,4,' + (a * .8) + ')');
+      g.addColorStop(1, 'rgba(40,0,2,0)');
+      x.fillStyle = g; x.beginPath(); x.arc(cx, cy, r, 0, 7); x.fill();
+    };
+    blob(48, 48, 30, .95);
+    for (let i = 0; i < 22; i++) {
+      const a2 = Math.random() * 6.28, r = 20 + Math.random() * 34;
+      blob(48 + Math.cos(a2) * r, 48 + Math.sin(a2) * r, 2 + Math.random() * 9, .5 + Math.random() * .4);
+    }
+    // a couple of brighter wet highlights
+    for (let i = 0; i < 6; i++) {
+      x.fillStyle = 'rgba(220,40,50,.35)';
+      x.beginPath(); x.ellipse(48 + (Math.random() - .5) * 40, 48 + (Math.random() - .5) * 40, 2 + Math.random() * 5, 1 + Math.random() * 3, 0, 0, 7); x.fill();
+    }
+    const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
+  }
+  /* ГАЛАКТИКА: неоновая фиолетовая вспышка со звёздными лучами */
+  _galaxyBurstTexture() {
+    const c = makeCanvas(96); const x = c.getContext('2d');
+    x.clearRect(0, 0, 96, 96);
+    const g = x.createRadialGradient(48, 48, 0, 48, 48, 44);
+    g.addColorStop(0, 'rgba(240,220,255,.95)');
+    g.addColorStop(.35, 'rgba(180,80,255,.7)');
+    g.addColorStop(.75, 'rgba(120,30,210,.35)');
+    g.addColorStop(1, 'rgba(60,10,120,0)');
+    x.fillStyle = g; x.beginPath(); x.arc(48, 48, 44, 0, 7); x.fill();
+    // four neon cross beams
+    x.strokeStyle = 'rgba(230,180,255,.7)'; x.lineWidth = 2;
+    for (let i = 0; i < 4; i++) {
+      const a2 = i * Math.PI / 2 + .3;
+      x.beginPath(); x.moveTo(48, 48); x.lineTo(48 + Math.cos(a2) * 46, 48 + Math.sin(a2) * 46); x.stroke();
+    }
+    // star specks
+    for (let i = 0; i < 26; i++) {
+      x.fillStyle = i % 3 ? 'rgba(255,255,255,.9)' : 'rgba(220,160,255,.9)';
+      x.beginPath(); x.arc(Math.random() * 96, Math.random() * 96, Math.random() < .8 ? 1 : 2, 0, 7); x.fill();
+    }
+    const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
+  }
+  /* ГАЛАКТИКА: тёмный диск чёрной дыры с фиолетовым гало */
+  _blackholeTexture() {
+    const c = makeCanvas(96); const x = c.getContext('2d');
+    x.clearRect(0, 0, 96, 96);
+    const halo = x.createRadialGradient(48, 48, 18, 48, 48, 46);
+    halo.addColorStop(0, 'rgba(0,0,0,.98)');
+    halo.addColorStop(.55, 'rgba(60,10,110,.8)');
+    halo.addColorStop(.82, 'rgba(170,80,255,.5)');
+    halo.addColorStop(1, 'rgba(120,40,220,0)');
+    x.fillStyle = halo; x.beginPath(); x.arc(48, 48, 46, 0, 7); x.fill();
+    x.fillStyle = '#000'; x.beginPath(); x.arc(48, 48, 20, 0, 7); x.fill();
+    // accretion ring
+    x.strokeStyle = 'rgba(200,120,255,.85)'; x.lineWidth = 3;
+    x.beginPath(); x.ellipse(48, 48, 30, 12, .5, 0, 7); x.stroke();
     const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
   }
   /* a soft round splat used for acid pools and frost patches.
@@ -578,7 +645,7 @@ class Effects {
     if (this.particles.length > this.maxParticles) return null;
     let m = this.particlePool.pop();
     const mat = type === 'blood' ? this.bloodMat : type === 'smoke' ? this.smokeMat
-      : type === 'banana' ? this.bananaMat : this.sparkMat;
+      : type === 'banana' ? this.bananaMat : type === 'vspark' ? this.vsparkMat : this.sparkMat;
     if (!m) m = new THREE.Mesh(this.particleGeo, mat);
     m.material = mat;
     m.position.set(x, y, z);
@@ -614,7 +681,56 @@ class Effects {
     this.decal(pos.x, .02, pos.z, 0, -1, 0, U.rand(1.1, 2.0), 'blood');
   }
 
-  impact(pos, normal, surface) {
+  /* ============================================================
+     ТЕМАТИЧЕСКИЕ ЭФФЕКТЫ СКИНОВ
+     ПЛОТЬ: кровяное пятно там, где попал выстрел, брызги и багровые искры.
+     ГАЛАКТИКА: неоновая фиолетовая вспышка, звёздная пыль и чёрная дыра.
+     ============================================================ */
+  fleshImpact(pos, normal) {
+    const n = normal || { x: 0, y: 1, z: 0 };
+    // кровавое пятно прямо на месте попадания (на поверхности)
+    this.decal(pos.x, pos.y, pos.z, n.x, n.y, n.z, U.rand(.55, .95), 'flesh');
+    // багровые брызги веером
+    for (let i = 0; i < 9; i++) {
+      this.particle(pos.x, pos.y, pos.z,
+        n.x * U.rand(1, 4) + U.rand(-2.6, 2.6),
+        U.rand(1, 4),
+        n.z * U.rand(1, 4) + U.rand(-2.6, 2.6),
+        U.rand(.06, .18), 'blood', U.rand(.4, .9));
+    }
+    // несколько мясистых кусочков (тёмно-красные «smoke»-частицы)
+    for (let i = 0; i < 3; i++) {
+      this.particle(pos.x, pos.y, pos.z,
+        U.rand(-1.6, 1.6), U.rand(.5, 2.2), U.rand(-1.6, 1.6),
+        U.rand(.10, .22), 'smoke', U.rand(.3, .6));
+    }
+    // кровавая лужица на полу под точкой
+    this.decal(pos.x, .02, pos.z, 0, -1, 0, U.rand(1.0, 1.8), 'blood');
+  }
+
+  galaxyImpact(pos, normal) {
+    const n = normal || { x: 0, y: 1, z: 0 };
+    // неоновая фиолетовая вспышка на месте попадания
+    this.decal(pos.x, pos.y, pos.z, n.x, n.y, n.z, U.rand(.5, .9), 'galaxy');
+    // фиолетовые искры-звёзды
+    for (let i = 0; i < 10; i++) {
+      this.particle(pos.x, pos.y, pos.z,
+        n.x * U.rand(1, 4) + U.rand(-3, 3),
+        U.rand(1, 3.6),
+        n.z * U.rand(1, 4) + U.rand(-3, 3),
+        U.rand(.04, .13), 'vspark', U.rand(.4, .9));
+    }
+    // звёздная пыль
+    for (let i = 0; i < 4; i++) {
+      this.particle(pos.x, pos.y, pos.z,
+        U.rand(-1.4, 1.4), U.rand(.5, 2.4), U.rand(-1.4, 1.4),
+        U.rand(.05, .11), 'vspark', U.rand(.3, .7));
+    }
+  }
+
+  impact(pos, normal, surface, theme) {
+    if (theme === 'flesh') { this.fleshImpact(pos, normal); return; }
+    if (theme === 'galaxy') { this.galaxyImpact(pos, normal); return; }
     const n = normal || { x: 0, y: 1, z: 0 };
     for (let i = 0; i < 5; i++) {
       this.particle(pos.x, pos.y, pos.z,
@@ -638,7 +754,8 @@ class Effects {
       this.scene.remove(old);
       if (old.material) old.material = null;
     }
-    const mat = this.decalMats[kind === 'blood' ? 'blood' : kind === 'metal' ? 'metal'
+    const mat = this.decalMats[kind === 'blood' ? 'blood' : kind === 'flesh' ? 'fleshsplat' : kind === 'galaxy' ? 'galaxyburst'
+      : kind === 'blackhole' ? 'blackhole' : kind === 'metal' ? 'metal'
       : kind === 'scorch' ? 'scorch' : kind === 'acid' ? 'acid' : kind === 'frost' ? 'frost' : 'concrete'];
     const isScorch = kind === 'scorch';
     const m = new THREE.Mesh(this.decalGeo, mat);

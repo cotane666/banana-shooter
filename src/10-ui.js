@@ -691,11 +691,12 @@ const UI = {
           stats = [['ЛЕЧИТ', '+' + CFG.medkitHeal + ' HP'], ['В ЗАПАСЕ', unlimited ? n : (n + '/' + CFG.medkitMax)], ['КЛАВИША', 'H']];
           desc = full ? 'Лимит — купите ЯЩИК АПТЕЧЕК' : 'Применить в бою (или кнопка на телефоне)';
         } else if (g.grenade) {
-          player.grenades = player.grenades || { frag: 0, freeze: 0, napalm: 0 };
+          player.grenades = player.grenades || { frag: 0, freeze: 0, napalm: 0, sticky: 0 };
           const n = player.grenades[g.grenade] || 0;
           owned = false;
           cant = (!free && player.money < g.price) || n >= 4;
           stats = [['В ЗАПАСЕ', n + '/4'], ['КЛАВИША', 'G'], ['СМЕНА', 'J']];
+          if (g.grenade === 'sticky') stats.push(['ВЗРЫВ', 'U']);
           desc = g.desc;
         } else if (g.turretGear) {
           owned = !!player.turretDrone;
@@ -887,6 +888,24 @@ const UI = {
       });
     }
     // ammo crates (offline): a golden marker with a small "!" so it stands out
+    // ЛИПУЧКИ игрока: видны только тому, кто их прилепил (как в GTA)
+    if (game._grenades && game._grenades.length) {
+      game._grenades.forEach(g => {
+        if (!g.sticky || !g.stuck || !g.ownerLocal) return;
+        const px = tx(g.pos.x), pz = tz(g.pos.z);
+        ctx.save();
+        const bl = .5 + .5 * Math.sin(Date.now() / 180);
+        ctx.strokeStyle = 'rgba(255,60,40,' + (.5 + bl * .5) + ')';
+        ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.arc(px, pz, 6 + bl * 3, 0, 7); ctx.stroke();
+        ctx.fillStyle = '#ff3a2a';
+        ctx.beginPath(); ctx.arc(px, pz, 3, 0, 7); ctx.fill();
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 7px Arial'; ctx.textAlign = 'center';
+        ctx.fillText('L', px, pz + 2.6);
+        ctx.restore();
+      });
+    }
     if (game.crates && game.crates.length) {
       const pulse2 = .5 + .5 * Math.sin(Date.now() / 200);
       game.crates.forEach(c => {

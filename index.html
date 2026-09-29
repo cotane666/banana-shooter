@@ -1767,9 +1767,10 @@ const GEAR = {
   mechSuit:     { name: 'МЕХАКОСТЮМ',      price: 30000, mechSuit: true, desc: 'Мех-миниган (6 стволов) + гипер-лазер · 1/2 — переключить' },
   frag:         { name: 'ГРАНАТА',         price: 100,  grenade: 'frag',   desc: 'Осколочная · G — бросок' },
   freezeNade:   { name: 'КРИО-ГРАНАТА',    price: 120,  grenade: 'freeze', desc: 'Замораживает зомби в области' },
-  napalmNade:   { name: 'НАПАЛМ',          price: 150,  grenade: 'napalm', desc: 'Оставляет горящую лужу' }
+  napalmNade:   { name: 'НАПАЛМ',          price: 150,  grenade: 'napalm', desc: 'Оставляет горящую лужу' },
+  stickyBomb:   { name: 'ЛИПУЧКА',         price: 300,  grenade: 'sticky', desc: 'Липнет к поверхности · взрыв по кнопке (U)' }
 };
-function grenadeName(kind) { return kind === 'freeze' ? 'КРИО' : kind === 'napalm' ? 'НАПАЛМ' : 'ГРАНАТА'; }
+function grenadeName(kind) { return kind === 'freeze' ? 'КРИО' : kind === 'napalm' ? 'НАПАЛМ' : kind === 'sticky' ? 'ЛИПУЧКА' : 'ГРАНАТА'; }
 function todName(k) {
   return ({ day: 'ДЕНЬ', sunset: 'ЗАКАТ', night: 'НОЧЬ', dawn: 'РАССВЕТ' })[k] || 'ДЕНЬ';
 }
@@ -7026,7 +7027,7 @@ function buildMine() {
 
 /* A grenade: a small round body with a lever, coloured by kind */
 function buildGrenadeModel(kind) {
-  const col = kind === 'freeze' ? 0x8fe6ff : kind === 'napalm' ? 0xd8641a : 0x4a5a3a;
+  const col = kind === 'freeze' ? 0x8fe6ff : kind === 'napalm' ? 0xd8641a : kind === 'sticky' ? 0xd42a2a : 0x4a5a3a;
   const g = new THREE.Group();
   const body = new THREE.Mesh(new THREE.SphereGeometry(.10, 10, 8),
     new THREE.MeshLambertMaterial({ color: col, emissive: 0x0a0c0a }));
@@ -7042,6 +7043,21 @@ function buildGrenadeModel(kind) {
   const halo = new THREE.Mesh(new THREE.SphereGeometry(.16, 8, 6),
     new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: .18, blending: THREE.AdditiveBlending, depthWrite: false }));
   g.add(halo);
+  if (kind === 'sticky') {
+    /* ЛИПУЧКА: плоская присоска снизу, мигающий красный индикатор и крепление */
+    const pad = new THREE.Mesh(new THREE.CylinderGeometry(.075, .085, .03, 10),
+      new THREE.MeshLambertMaterial({ color: 0x2a2f36, emissive: 0x12060a }));
+    pad.position.y = -.13; g.add(pad);
+    for (let i = 0; i < 4; i++) {
+      const a = (i / 4) * Math.PI * 2;
+      const cl = new THREE.Mesh(new THREE.BoxGeometry(.02, .02, .05), gunMat(0x8b939d));
+      cl.position.set(Math.cos(a) * .07, -.11, Math.sin(a) * .07); g.add(cl);
+    }
+    const led = new THREE.Mesh(new THREE.SphereGeometry(.022, 8, 6),
+      new THREE.MeshBasicMaterial({ color: 0xff2a2a }));
+    led.position.set(0, .10, .11); g.add(led);
+    g.userData.led = led;
+  }
   return g;
 }
 
@@ -7938,6 +7954,8 @@ class Player {
     // remember the shot colour the skin gives this weapon's tracers/flash
     this.skinShot = skin ? skinShotColor(skin) : null;
     this.skinGlow = skin ? skin.glow : null;
+    /* тема скина для эффектов выстрела (flesh / galaxy) */
+    this.skinTheme = skin ? (skin.deco === 'flesh' ? 'flesh' : skin.rarity === 'platinum' ? 'galaxy' : null) : null;
     vm.traverse(o => { if (o.isMesh) { o.castShadow = false; o.receiveShadow = false; o.renderOrder = 5; } });
     const group = new THREE.Group();
     group.add(vm);
@@ -10321,6 +10339,7 @@ class Effects {
     this.particleGeo = new THREE.BoxGeometry(1, 1, 1);
     this.bloodMat = new THREE.MeshBasicMaterial({ color: 0x8a1210 });
     this.sparkMat = new THREE.MeshBasicMaterial({ color: 0xffcc55, blending: THREE.AdditiveBlending, transparent: true, depthWrite: false });
+    this.vsparkMat = new THREE.MeshBasicMaterial({ color: 0xc060ff, blending: THREE.AdditiveBlending, transparent: true, depthWrite: false });
     this.smokeMat = new THREE.MeshBasicMaterial({ color: 0x9a9a94, transparent: true, opacity: .4, depthWrite: false });
     this.bananaMat = new THREE.MeshLambertMaterial({ color: 0xf2c93b, emissive: 0x3a2c08 });
 
@@ -10331,7 +10350,11 @@ class Effects {
       blood: new THREE.MeshBasicMaterial({ map: this._bloodTexture(), transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4 }),
       scorch: new THREE.MeshBasicMaterial({ map: this._scorchTexture(), transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -5, blending: THREE.AdditiveBlending }),
       acid: new THREE.MeshBasicMaterial({ map: this._blobTexture('150,210,60'), transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4, blending: THREE.AdditiveBlending }),
-      frost: new THREE.MeshBasicMaterial({ map: this._blobTexture('150,230,255'), transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4, blending: THREE.AdditiveBlending })
+      frost: new THREE.MeshBasicMaterial({ map: this._blobTexture('150,230,255'), transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4, blending: THREE.AdditiveBlending }),
+      /* тематические декали выстрелов скинов */
+      fleshsplat: new THREE.MeshBasicMaterial({ map: this._fleshSplatTexture(), transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4 }),
+      galaxyburst: new THREE.MeshBasicMaterial({ map: this._galaxyBurstTexture(), transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -5, blending: THREE.AdditiveBlending }),
+      blackhole: new THREE.MeshBasicMaterial({ map: this._blackholeTexture(), transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -5 })
     };
     this.tracerPool = [];
     this.particlePool = [];
@@ -10360,6 +10383,68 @@ class Effects {
     g.addColorStop(.5, 'rgba(110,8,6,.7)');
     g.addColorStop(1, 'rgba(80,4,4,0)');
     x.fillStyle = g; x.beginPath(); x.arc(32, 32, 26, 0, 7); x.fill();
+    const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
+  }
+  /* ПЛОТЬ: рваное кровавое пятно с брызгами — отметина от выстрела */
+  _fleshSplatTexture() {
+    const c = makeCanvas(96); const x = c.getContext('2d');
+    x.clearRect(0, 0, 96, 96);
+    const blob = (cx, cy, r, a) => {
+      const g = x.createRadialGradient(cx, cy, 0, cx, cy, r);
+      g.addColorStop(0, 'rgba(120,4,6,' + a + ')');
+      g.addColorStop(.6, 'rgba(80,2,4,' + (a * .8) + ')');
+      g.addColorStop(1, 'rgba(40,0,2,0)');
+      x.fillStyle = g; x.beginPath(); x.arc(cx, cy, r, 0, 7); x.fill();
+    };
+    blob(48, 48, 30, .95);
+    for (let i = 0; i < 22; i++) {
+      const a2 = Math.random() * 6.28, r = 20 + Math.random() * 34;
+      blob(48 + Math.cos(a2) * r, 48 + Math.sin(a2) * r, 2 + Math.random() * 9, .5 + Math.random() * .4);
+    }
+    // a couple of brighter wet highlights
+    for (let i = 0; i < 6; i++) {
+      x.fillStyle = 'rgba(220,40,50,.35)';
+      x.beginPath(); x.ellipse(48 + (Math.random() - .5) * 40, 48 + (Math.random() - .5) * 40, 2 + Math.random() * 5, 1 + Math.random() * 3, 0, 0, 7); x.fill();
+    }
+    const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
+  }
+  /* ГАЛАКТИКА: неоновая фиолетовая вспышка со звёздными лучами */
+  _galaxyBurstTexture() {
+    const c = makeCanvas(96); const x = c.getContext('2d');
+    x.clearRect(0, 0, 96, 96);
+    const g = x.createRadialGradient(48, 48, 0, 48, 48, 44);
+    g.addColorStop(0, 'rgba(240,220,255,.95)');
+    g.addColorStop(.35, 'rgba(180,80,255,.7)');
+    g.addColorStop(.75, 'rgba(120,30,210,.35)');
+    g.addColorStop(1, 'rgba(60,10,120,0)');
+    x.fillStyle = g; x.beginPath(); x.arc(48, 48, 44, 0, 7); x.fill();
+    // four neon cross beams
+    x.strokeStyle = 'rgba(230,180,255,.7)'; x.lineWidth = 2;
+    for (let i = 0; i < 4; i++) {
+      const a2 = i * Math.PI / 2 + .3;
+      x.beginPath(); x.moveTo(48, 48); x.lineTo(48 + Math.cos(a2) * 46, 48 + Math.sin(a2) * 46); x.stroke();
+    }
+    // star specks
+    for (let i = 0; i < 26; i++) {
+      x.fillStyle = i % 3 ? 'rgba(255,255,255,.9)' : 'rgba(220,160,255,.9)';
+      x.beginPath(); x.arc(Math.random() * 96, Math.random() * 96, Math.random() < .8 ? 1 : 2, 0, 7); x.fill();
+    }
+    const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
+  }
+  /* ГАЛАКТИКА: тёмный диск чёрной дыры с фиолетовым гало */
+  _blackholeTexture() {
+    const c = makeCanvas(96); const x = c.getContext('2d');
+    x.clearRect(0, 0, 96, 96);
+    const halo = x.createRadialGradient(48, 48, 18, 48, 48, 46);
+    halo.addColorStop(0, 'rgba(0,0,0,.98)');
+    halo.addColorStop(.55, 'rgba(60,10,110,.8)');
+    halo.addColorStop(.82, 'rgba(170,80,255,.5)');
+    halo.addColorStop(1, 'rgba(120,40,220,0)');
+    x.fillStyle = halo; x.beginPath(); x.arc(48, 48, 46, 0, 7); x.fill();
+    x.fillStyle = '#000'; x.beginPath(); x.arc(48, 48, 20, 0, 7); x.fill();
+    // accretion ring
+    x.strokeStyle = 'rgba(200,120,255,.85)'; x.lineWidth = 3;
+    x.beginPath(); x.ellipse(48, 48, 30, 12, .5, 0, 7); x.stroke();
     const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
   }
   /* a soft round splat used for acid pools and frost patches.
@@ -10877,7 +10962,7 @@ class Effects {
     if (this.particles.length > this.maxParticles) return null;
     let m = this.particlePool.pop();
     const mat = type === 'blood' ? this.bloodMat : type === 'smoke' ? this.smokeMat
-      : type === 'banana' ? this.bananaMat : this.sparkMat;
+      : type === 'banana' ? this.bananaMat : type === 'vspark' ? this.vsparkMat : this.sparkMat;
     if (!m) m = new THREE.Mesh(this.particleGeo, mat);
     m.material = mat;
     m.position.set(x, y, z);
@@ -10913,7 +10998,56 @@ class Effects {
     this.decal(pos.x, .02, pos.z, 0, -1, 0, U.rand(1.1, 2.0), 'blood');
   }
 
-  impact(pos, normal, surface) {
+  /* ============================================================
+     ТЕМАТИЧЕСКИЕ ЭФФЕКТЫ СКИНОВ
+     ПЛОТЬ: кровяное пятно там, где попал выстрел, брызги и багровые искры.
+     ГАЛАКТИКА: неоновая фиолетовая вспышка, звёздная пыль и чёрная дыра.
+     ============================================================ */
+  fleshImpact(pos, normal) {
+    const n = normal || { x: 0, y: 1, z: 0 };
+    // кровавое пятно прямо на месте попадания (на поверхности)
+    this.decal(pos.x, pos.y, pos.z, n.x, n.y, n.z, U.rand(.55, .95), 'flesh');
+    // багровые брызги веером
+    for (let i = 0; i < 9; i++) {
+      this.particle(pos.x, pos.y, pos.z,
+        n.x * U.rand(1, 4) + U.rand(-2.6, 2.6),
+        U.rand(1, 4),
+        n.z * U.rand(1, 4) + U.rand(-2.6, 2.6),
+        U.rand(.06, .18), 'blood', U.rand(.4, .9));
+    }
+    // несколько мясистых кусочков (тёмно-красные «smoke»-частицы)
+    for (let i = 0; i < 3; i++) {
+      this.particle(pos.x, pos.y, pos.z,
+        U.rand(-1.6, 1.6), U.rand(.5, 2.2), U.rand(-1.6, 1.6),
+        U.rand(.10, .22), 'smoke', U.rand(.3, .6));
+    }
+    // кровавая лужица на полу под точкой
+    this.decal(pos.x, .02, pos.z, 0, -1, 0, U.rand(1.0, 1.8), 'blood');
+  }
+
+  galaxyImpact(pos, normal) {
+    const n = normal || { x: 0, y: 1, z: 0 };
+    // неоновая фиолетовая вспышка на месте попадания
+    this.decal(pos.x, pos.y, pos.z, n.x, n.y, n.z, U.rand(.5, .9), 'galaxy');
+    // фиолетовые искры-звёзды
+    for (let i = 0; i < 10; i++) {
+      this.particle(pos.x, pos.y, pos.z,
+        n.x * U.rand(1, 4) + U.rand(-3, 3),
+        U.rand(1, 3.6),
+        n.z * U.rand(1, 4) + U.rand(-3, 3),
+        U.rand(.04, .13), 'vspark', U.rand(.4, .9));
+    }
+    // звёздная пыль
+    for (let i = 0; i < 4; i++) {
+      this.particle(pos.x, pos.y, pos.z,
+        U.rand(-1.4, 1.4), U.rand(.5, 2.4), U.rand(-1.4, 1.4),
+        U.rand(.05, .11), 'vspark', U.rand(.3, .7));
+    }
+  }
+
+  impact(pos, normal, surface, theme) {
+    if (theme === 'flesh') { this.fleshImpact(pos, normal); return; }
+    if (theme === 'galaxy') { this.galaxyImpact(pos, normal); return; }
     const n = normal || { x: 0, y: 1, z: 0 };
     for (let i = 0; i < 5; i++) {
       this.particle(pos.x, pos.y, pos.z,
@@ -10937,7 +11071,8 @@ class Effects {
       this.scene.remove(old);
       if (old.material) old.material = null;
     }
-    const mat = this.decalMats[kind === 'blood' ? 'blood' : kind === 'metal' ? 'metal'
+    const mat = this.decalMats[kind === 'blood' ? 'blood' : kind === 'flesh' ? 'fleshsplat' : kind === 'galaxy' ? 'galaxyburst'
+      : kind === 'blackhole' ? 'blackhole' : kind === 'metal' ? 'metal'
       : kind === 'scorch' ? 'scorch' : kind === 'acid' ? 'acid' : kind === 'frost' ? 'frost' : 'concrete'];
     const isScorch = kind === 'scorch';
     const m = new THREE.Mesh(this.decalGeo, mat);
@@ -12119,11 +12254,12 @@ const UI = {
           stats = [['ЛЕЧИТ', '+' + CFG.medkitHeal + ' HP'], ['В ЗАПАСЕ', unlimited ? n : (n + '/' + CFG.medkitMax)], ['КЛАВИША', 'H']];
           desc = full ? 'Лимит — купите ЯЩИК АПТЕЧЕК' : 'Применить в бою (или кнопка на телефоне)';
         } else if (g.grenade) {
-          player.grenades = player.grenades || { frag: 0, freeze: 0, napalm: 0 };
+          player.grenades = player.grenades || { frag: 0, freeze: 0, napalm: 0, sticky: 0 };
           const n = player.grenades[g.grenade] || 0;
           owned = false;
           cant = (!free && player.money < g.price) || n >= 4;
           stats = [['В ЗАПАСЕ', n + '/4'], ['КЛАВИША', 'G'], ['СМЕНА', 'J']];
+          if (g.grenade === 'sticky') stats.push(['ВЗРЫВ', 'U']);
           desc = g.desc;
         } else if (g.turretGear) {
           owned = !!player.turretDrone;
@@ -12315,6 +12451,24 @@ const UI = {
       });
     }
     // ammo crates (offline): a golden marker with a small "!" so it stands out
+    // ЛИПУЧКИ игрока: видны только тому, кто их прилепил (как в GTA)
+    if (game._grenades && game._grenades.length) {
+      game._grenades.forEach(g => {
+        if (!g.sticky || !g.stuck || !g.ownerLocal) return;
+        const px = tx(g.pos.x), pz = tz(g.pos.z);
+        ctx.save();
+        const bl = .5 + .5 * Math.sin(Date.now() / 180);
+        ctx.strokeStyle = 'rgba(255,60,40,' + (.5 + bl * .5) + ')';
+        ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.arc(px, pz, 6 + bl * 3, 0, 7); ctx.stroke();
+        ctx.fillStyle = '#ff3a2a';
+        ctx.beginPath(); ctx.arc(px, pz, 3, 0, 7); ctx.fill();
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 7px Arial'; ctx.textAlign = 'center';
+        ctx.fillText('L', px, pz + 2.6);
+        ctx.restore();
+      });
+    }
     if (game.crates && game.crates.length) {
       const pulse2 = .5 + .5 * Math.sin(Date.now() / 200);
       game.crates.forEach(c => {
@@ -14910,6 +15064,10 @@ const Game = {
       case 'KeyL':
         if (!this.paused) this.toggleEnvironment();
         break;
+      /* U — подорвать свои прилипшие липучки (как в GTA) */
+      case 'KeyU':
+        if (!this.paused) this.detonateStickies();
+        break;
     }
   },
 
@@ -17145,7 +17303,7 @@ const Game = {
       else if (g.drone) { this.player.drone = (this.player.drone || 0) + 1; this.player.droneOwned = true; }
       else if (g.grenade) {
         const cap = 4;
-        this.player.grenades = this.player.grenades || { frag: 0, freeze: 0, napalm: 0 };
+        this.player.grenades = this.player.grenades || { frag: 0, freeze: 0, napalm: 0, sticky: 0 };
         const cur = this.player.grenades[g.grenade] || 0;
         if (cur >= cap) { Audio3D_SFX.deny(); UI.toast('Гранат максимум: ' + cap); if (!free) this.player.money += g.price; return; }
         this.player.grenades[g.grenade] = cur + 1;
@@ -17227,7 +17385,7 @@ const Game = {
   /* Аптечка: instant heal, usable at any time during a live round/battle */
   /* cycle the active grenade kind */
   cycleGrenade() {
-    const order = ['frag', 'freeze', 'napalm'];
+    const order = ['frag', 'freeze', 'napalm', 'sticky'];
     const cur = Store.data.grenade || 'frag';
     const next = order[(order.indexOf(cur) + 1) % order.length];
     Store.data.grenade = next; Store.save();
@@ -17276,10 +17434,26 @@ const Game = {
     this._grenades = this._grenades || [];
     this._grenades.push({
       kind: kind, mesh: mesh, pos: { x: start.x, y: start.y, z: start.z },
+      /* ЛИПУЧКА не взрывается по таймеру: она прилипает и ждёт команды (P). */
       vel: { x: d.x * speed, y: d.y * speed + 2.6, z: d.z * speed },
-      grav: CFG.gravity * .75, fuse: 2.4, bounces: 0
+      grav: CFG.gravity * .75, fuse: kind === 'sticky' ? 9999 : 2.4, bounces: 0,
+      sticky: kind === 'sticky', stuck: false, armed: false, ownerLocal: true
     });
     Audio3D_SFX.uiClick();
+    return true;
+  },
+
+  /* P — подорвать ВСЕ свои прилипшие липучки (как в GTA) */
+  detonateStickies() {
+    if (!this._grenades || !this._grenades.length) { UI.toast('Липучек нет', '#f5d33c'); Audio3D_SFX.deny(); return false; }
+    let n = 0;
+    for (let i = this._grenades.length - 1; i >= 0; i--) {
+      const g = this._grenades[i];
+      if (!g.sticky || !g.ownerLocal || !g.armed) continue;
+      this.detonateGrenade(g); this.removeGrenade(i); n++;
+    }
+    if (!n) { UI.toast('Нет прилипших липучек', '#f5d33c'); Audio3D_SFX.deny(); return false; }
+    UI.toast('Липучки взорваны: ' + n, '#e33a2e');
     return true;
   },
 
@@ -17288,6 +17462,15 @@ const Game = {
     const world = this.world;
     for (let i = this._grenades.length - 1; i >= 0; i--) {
       const g = this._grenades[i];
+      /* прилипшая липучка ждёт команды: мигает и не двигается */
+      if (g.stuck) {
+        if (g.mesh.userData && g.mesh.userData.led) {
+          g.blink = (g.blink || 0) + dt;
+          g.mesh.userData.led.visible = (g.blink % .6) < .3;
+        }
+        if (g.sticky && g.ownerLocal && !g.armed) { g.armed = true; UI.toast('Липучка прилипла — P чтобы взорвать', '#ff9d21'); }
+        continue;
+      }
       g.fuse -= dt;
       g.vel.y -= g.grav * dt;
       const nx = g.pos.x + g.vel.x * dt, ny = g.pos.y + g.vel.y * dt, nz = g.pos.z + g.vel.z * dt;
@@ -17297,6 +17480,16 @@ const Game = {
       if (hit.length) {
         const h = hit[0];
         g.pos.x = h.point.x + h.normal.x * .12; g.pos.y = h.point.y + h.normal.y * .12; g.pos.z = h.point.z + h.normal.z * .12;
+        if (g.sticky) {
+          /* ЛИПУЧКА прилипает к первой же поверхности и остаётся там */
+          g.stuck = true; g.armed = true;
+          if (h.normal.y < -.5) { g.mesh.rotation.x = Math.PI; }
+          else if (Math.abs(h.normal.y) < .5) {
+            g.mesh.lookAt(g.pos.x + h.normal.x, g.pos.y + h.normal.y, g.pos.z + h.normal.z);
+            g.mesh.rotateX(Math.PI / 2);
+          }
+          continue;
+        }
         const vn = g.vel.x * h.normal.x + g.vel.y * h.normal.y + g.vel.z * h.normal.z;
         g.vel.x -= 2 * vn * h.normal.x; g.vel.y -= 2 * vn * h.normal.y; g.vel.z -= 2 * vn * h.normal.z;
         g.vel.x *= .5; g.vel.y *= .5; g.vel.z *= .5;
@@ -17304,6 +17497,11 @@ const Game = {
       } else { g.pos.x = nx; g.pos.y = ny; g.pos.z = nz; }
       g.mesh.position.set(g.pos.x, g.pos.y, g.pos.z);
       g.mesh.rotation.x += dt * 6; g.mesh.rotation.y += dt * 4;
+      if (g.sticky) {
+        const p = this.player;
+        const ds = Math.hypot(p.pos.x - g.pos.x, p.pos.z - g.pos.z);
+        if (ds < 1.2) { /* close enough to reach the wall next tick */ }
+      }
       if (g.fuse <= 0) { this.detonateGrenade(g); this.removeGrenade(i); }
     }
   },
@@ -17372,6 +17570,30 @@ const Game = {
         this.effects.particle(g.pos.x + Math.cos(a) * r, g.pos.y + .2, g.pos.z + Math.sin(a) * r,
           0, U.rand(1.4, 3.4), 0, U.rand(.10, .26), 'spark', U.rand(.5, 1.2));
       }
+    } else if (kind === 'sticky') {
+      // ЛИПУЧКА: мощный направленный взрыв по кнопке
+      const R = 6.6, dmg = 260;
+      this.effects.explosion(g.pos.x, g.pos.y, g.pos.z, R, [0xff5a2a, 0x1a0604]);
+      Audio3D_SFX.explosionAt(g.pos.x, g.pos.y, g.pos.z);
+      if (this.horde) for (const z of this.horde.list) {
+        if (!z.alive || z.dying) continue;
+        const d = Math.hypot(z.pos.x - g.pos.x, (z.pos.y + 1) - g.pos.y, z.pos.z - g.pos.z);
+        if (d > R) continue;
+        const dealt = dmg * (1 - d / R);
+        z.takeDamage(dealt, 'body', { x: 0, y: 0, z: 0 });
+        this.player.damageDealt += dealt;
+      }
+      const p = this.player;
+      const ds = Math.hypot(p.pos.x - g.pos.x, (p.pos.y + 1) - g.pos.y, p.pos.z - g.pos.z);
+      if (ds < R * .85) this.applyDamageToSelf(dmg * (1 - ds / (R * .85)) * .25, g.pos);
+      if (this.mode === CS.MODE.ONLINE) {
+        for (const rp of this.remotePlayers) {
+          if (!rp.alive) continue;
+          const dr = Math.hypot(rp.pos.x - g.pos.x, (rp.pos.y + 1) - g.pos.y, rp.pos.z - g.pos.z);
+          if (dr <= R) this.sendPvpHit(dmg * (1 - dr / R), 'body', false, rp, 'grenade');
+        }
+      }
+      this.effects.decal(g.pos.x, g.pos.y + .02, g.pos.z, 0, 1, 0, 1.6, 'scorch');
     }
   },
 
@@ -20325,7 +20547,7 @@ const Game = {
     if (stopPoint) {
       this.effects.tracer(muzzleWorld, stopPoint, 1, true, _shotCol);
       const surf = (stopNormal && Math.abs(stopNormal.y) > .7) ? 'concrete' : 'concrete';
-      this.effects.impact(stopPoint, stopNormal, surf);
+      this.effects.impact(stopPoint, stopNormal, surf, (p && p.skinTheme) || null);
       Audio3D_SFX.tone(140, .06, 'triangle', .05, stopPoint.x, stopPoint.y, stopPoint.z, 90);
     } else {
       this.effects.tracer(muzzleWorld, end, 1, false, _shotCol);
@@ -20333,6 +20555,9 @@ const Game = {
   },
 
   hitEffect(point, dir, part, headshot) {
+    const theme = (this.player && this.player.skinTheme) || null;
+    if (theme === 'flesh') this.effects.fleshImpact(point, dir);
+    else if (theme === 'galaxy') this.effects.galaxyImpact(point, dir);
     this.effects.bloodBurst(point, dir, headshot ? 14 : part === 'legs' ? 5 : 8);
     UI.hitmark(false);
     this._hitmarkT = U.now();

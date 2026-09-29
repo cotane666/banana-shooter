@@ -2015,7 +2015,7 @@ function buildMine() {
 
 /* A grenade: a small round body with a lever, coloured by kind */
 function buildGrenadeModel(kind) {
-  const col = kind === 'freeze' ? 0x8fe6ff : kind === 'napalm' ? 0xd8641a : 0x4a5a3a;
+  const col = kind === 'freeze' ? 0x8fe6ff : kind === 'napalm' ? 0xd8641a : kind === 'sticky' ? 0xd42a2a : 0x4a5a3a;
   const g = new THREE.Group();
   const body = new THREE.Mesh(new THREE.SphereGeometry(.10, 10, 8),
     new THREE.MeshLambertMaterial({ color: col, emissive: 0x0a0c0a }));
@@ -2031,6 +2031,21 @@ function buildGrenadeModel(kind) {
   const halo = new THREE.Mesh(new THREE.SphereGeometry(.16, 8, 6),
     new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: .18, blending: THREE.AdditiveBlending, depthWrite: false }));
   g.add(halo);
+  if (kind === 'sticky') {
+    /* ЛИПУЧКА: плоская присоска снизу, мигающий красный индикатор и крепление */
+    const pad = new THREE.Mesh(new THREE.CylinderGeometry(.075, .085, .03, 10),
+      new THREE.MeshLambertMaterial({ color: 0x2a2f36, emissive: 0x12060a }));
+    pad.position.y = -.13; g.add(pad);
+    for (let i = 0; i < 4; i++) {
+      const a = (i / 4) * Math.PI * 2;
+      const cl = new THREE.Mesh(new THREE.BoxGeometry(.02, .02, .05), gunMat(0x8b939d));
+      cl.position.set(Math.cos(a) * .07, -.11, Math.sin(a) * .07); g.add(cl);
+    }
+    const led = new THREE.Mesh(new THREE.SphereGeometry(.022, 8, 6),
+      new THREE.MeshBasicMaterial({ color: 0xff2a2a }));
+    led.position.set(0, .10, .11); g.add(led);
+    g.userData.led = led;
+  }
   return g;
 }
 
@@ -2927,6 +2942,8 @@ class Player {
     // remember the shot colour the skin gives this weapon's tracers/flash
     this.skinShot = skin ? skinShotColor(skin) : null;
     this.skinGlow = skin ? skin.glow : null;
+    /* тема скина для эффектов выстрела (flesh / galaxy) */
+    this.skinTheme = skin ? (skin.deco === 'flesh' ? 'flesh' : skin.rarity === 'platinum' ? 'galaxy' : null) : null;
     vm.traverse(o => { if (o.isMesh) { o.castShadow = false; o.receiveShadow = false; o.renderOrder = 5; } });
     const group = new THREE.Group();
     group.add(vm);

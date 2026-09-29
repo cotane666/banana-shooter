@@ -339,9 +339,10 @@ const GEAR = {
   mechSuit:     { name: 'МЕХАКОСТЮМ',      price: 30000, mechSuit: true, desc: 'Мех-миниган (6 стволов) + гипер-лазер · 1/2 — переключить' },
   frag:         { name: 'ГРАНАТА',         price: 100,  grenade: 'frag',   desc: 'Осколочная · G — бросок' },
   freezeNade:   { name: 'КРИО-ГРАНАТА',    price: 120,  grenade: 'freeze', desc: 'Замораживает зомби в области' },
-  napalmNade:   { name: 'НАПАЛМ',          price: 150,  grenade: 'napalm', desc: 'Оставляет горящую лужу' }
+  napalmNade:   { name: 'НАПАЛМ',          price: 150,  grenade: 'napalm', desc: 'Оставляет горящую лужу' },
+  stickyBomb:   { name: 'ЛИПУЧКА',         price: 300,  grenade: 'sticky', desc: 'Липнет к поверхности · взрыв по кнопке (U)' }
 };
-function grenadeName(kind) { return kind === 'freeze' ? 'КРИО' : kind === 'napalm' ? 'НАПАЛМ' : 'ГРАНАТА'; }
+function grenadeName(kind) { return kind === 'freeze' ? 'КРИО' : kind === 'napalm' ? 'НАПАЛМ' : kind === 'sticky' ? 'ЛИПУЧКА' : 'ГРАНАТА'; }
 function todName(k) {
   return ({ day: 'ДЕНЬ', sunset: 'ЗАКАТ', night: 'НОЧЬ', dawn: 'РАССВЕТ' })[k] || 'ДЕНЬ';
 }

@@ -418,6 +418,10 @@ function animateGalaxySkin(group, dt) {
     gx.shards[i].rotation.x += dt * (1 + i * .2);
     gx.shards[i].rotation.y += dt * .8;
   }
+  /* чёрная дыра: вращаются оба аккреционных диска, пульсирует гало */
+  if (gx.bhDisc) gx.bhDisc.rotation.z += dt * 2.2;
+  if (gx.bhDisc2) gx.bhDisc2.rotation.z -= dt * 1.5;
+  if (gx.bhHalo) gx.bhHalo.material.opacity = .22 + .14 * Math.sin(gx.t * 3);
 }
 
 /* ============================================================
@@ -2693,12 +2697,48 @@ function applyGalaxySkin(group) {
     blending: THREE.AdditiveBlending, depthWrite: false, sizeAttenuation: true
   }));
   fx.add(dust);
+  /* --- ЧЁРНАЯ ДЫРА: тёмное ядро с фиолетовым аккреционным диском --- */
+  const bh = new THREE.Group();
+  const bhCore = new THREE.Mesh(new THREE.SphereGeometry(.045, 16, 12),
+    new THREE.MeshBasicMaterial({ color: 0x050108 }));
+  bh.add(bhCore);
+  const bhHalo = new THREE.Mesh(new THREE.SphereGeometry(.075, 16, 12),
+    new THREE.MeshBasicMaterial({ color: C.violet, transparent: true, opacity: .3, blending: THREE.AdditiveBlending, depthWrite: false }));
+  bh.add(bhHalo);
+  const bhDisc = new THREE.Mesh(new THREE.TorusGeometry(.085, .010, 6, 28),
+    new THREE.MeshBasicMaterial({ color: C.bright, transparent: true, opacity: .85, blending: THREE.AdditiveBlending, depthWrite: false }));
+  bhDisc.rotation.x = 1.35; bh.add(bhDisc);
+  const bhDisc2 = new THREE.Mesh(new THREE.TorusGeometry(.11, .006, 6, 30),
+    new THREE.MeshBasicMaterial({ color: C.purple, transparent: true, opacity: .6, blending: THREE.AdditiveBlending, depthWrite: false }));
+  bhDisc2.rotation.x = 1.15; bhDisc2.rotation.z = .4; bh.add(bhDisc2);
+  bh.position.set(0, .04, .10);
+  fx.add(bh);
+  /* --- неоновые звёзды-кресты по корпусу --- */
+  const starMat = new THREE.MeshBasicMaterial({ color: C.star, transparent: true, opacity: .9, blending: THREE.AdditiveBlending, depthWrite: false });
+  for (let i = 0; i < 5; i++) {
+    const st = new THREE.Mesh(new THREE.PlaneGeometry(.05, .012), starMat);
+    st.position.set((Math.random() - .5) * .12, .02 + (Math.random() - .5) * .10, -.28 + Math.random() * .30);
+    st.userData.cross = true; fx.add(st);
+    const st2 = new THREE.Mesh(new THREE.PlaneGeometry(.012, .05), starMat);
+    st2.position.copy(st.position); st2.userData.cross = true; fx.add(st2);
+  }
+  /* --- светящиеся неоновые грани вдоль корпуса --- */
+  for (let i = 0; i < 3; i++) {
+    const edge = new THREE.Mesh(new THREE.BoxGeometry(.008, .008, .16 + Math.random() * .14),
+      new THREE.MeshBasicMaterial({ color: i % 2 ? C.bright : C.violet, transparent: true, opacity: .8, blending: THREE.AdditiveBlending, depthWrite: false }));
+    edge.position.set((i - 1) * .055, -.03, -.12);
+    fx.add(edge);
+  }
   /* the rings/dust spin slowly and a soft violet light pulses at the core */
   const light = new THREE.PointLight(C.violet, .8, 2.4, 2);
   light.position.set(0, .04, -.10);
   fx.add(light);
   group.add(fx);
-  group.userData.galaxy = { rings: [ringA, ringB], dust: dust, shards: fx.children.filter(c => c.geometry && c.geometry.type === 'OctahedronGeometry'), t: 0 };
+  group.userData.galaxy = {
+    rings: [ringA, ringB], dust: dust,
+    shards: fx.children.filter(c => c.geometry && c.geometry.type === 'OctahedronGeometry'),
+    blackhole: bh, bhDisc: bhDisc, bhDisc2: bhDisc2, bhHalo: bhHalo, t: 0
+  };
   group.userData.skin = { id: 'sk_platinum', name: 'ГАЛАКТИКА', rarity: 'platinum', rarityLabel: 'ПЛАТИНОВЫЙ', glow: C.violet, pattern: 'galaxy', shot: C.bright, accent: C.violet, deco: 'galaxy' };
   return group;
 }

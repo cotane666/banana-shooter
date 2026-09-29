@@ -222,6 +222,7 @@ const TouchUI = {
   autoFire: false,        // double-tap locked: keep firing like a held LMB
   jumpQueued: false,
   jumpHeld: false,
+  crouchToggle: false,   // ПРИСЕСТЬ — переключатель (не удержание)
   reloadQueued: false,
   switchQueued: 0,
   climbQueued: false,
@@ -315,9 +316,14 @@ const TouchUI = {
       el.addEventListener('touchend', e => { swallow(e); el.classList.remove('down'); off(); }, { passive: false });
       el.addEventListener('touchcancel', e => { swallow(e); el.classList.remove('down'); off(); }, { passive: false });
     };
-    holdBtn(E.crouch, () => { this.crouchHeld = true; }, () => { this.crouchHeld = false; });
-    // ПРЫЖОК is HELD: the mech jetpack thrusts while the thumb is down, and a
-    // tap still queues a normal jump (jumpQueued) for the ground.
+    /* ПРИСЕСТЬ — ПЕРЕКЛЮЧАТЕЛЬ: нажал один раз сел, нажал второй — встал.
+       Раньше кнопку нужно было удерживать, что мешало целиться и стрелять. */
+    E.crouch.addEventListener('touchstart', e => {
+      swallow(e);
+      this.crouchToggle = !this.crouchToggle;
+      E.crouch.classList.toggle('down', this.crouchToggle);
+    }, { passive: false });
+    // ПРЫЖОК зажимаемый: пока держишь — прыгаешь/летишь на джетпаке перка
     holdBtn(E.jump, () => { this.jumpQueued = true; this.jumpHeld = true; }, () => { this.jumpHeld = false; });
     // Dedicated automatic-fire button (a toggle). It replaced the old
     // double-tap gesture, which conflicted with normal aiming taps.
@@ -438,8 +444,8 @@ const TouchUI = {
     return {
       f: this.move.f, r: this.move.r,
       run: this.move.run,
-      crouch: !!this.crouchHeld,
-      wantJump: false
+      crouch: !!this.crouchToggle,
+      wantJump: this.jumpHeld
     };
   },
 
@@ -604,6 +610,21 @@ function initSettings() {
       if (oq) oq.textContent = qNames[S.quality];
       Store.save();
       if (window.Game && Game.renderer) Game.applyQuality();
+    });
+  }
+
+  /* графика / производительность: автопресет под устройство или вручную */
+  const gfx = document.getElementById('sGfx'), ogfx = document.getElementById('oGfx');
+  const gfxNames = ['АВТО', 'НИЗКАЯ', 'СРЕДНЯЯ', 'ВЫСОКАЯ'];
+  if (gfx) {
+    gfx.value = (S.gfx === undefined ? 0 : S.gfx);
+    if (ogfx) ogfx.textContent = gfxNames[parseInt(gfx.value, 10)] || 'АВТО';
+    gfx.addEventListener('input', () => {
+      S.gfx = parseInt(gfx.value, 10);
+      if (ogfx) ogfx.textContent = gfxNames[S.gfx];
+      Store.save();
+      if (window.Game && Game.applyGfxPreset) Game.applyGfxPreset();
+      if (typeof UI !== 'undefined' && UI.toast) UI.toast('Графика: ' + gfxNames[S.gfx], '#57d16a');
     });
   }
 

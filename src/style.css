@@ -132,9 +132,12 @@ html.touch .shopitems .si-grid button{padding:7px 10px;font-size:11px}
 .ios-row strong{color:#fff;font-weight:700}
 .ios-ic{display:inline-block;background:#0c0f12;border:1px solid var(--line);border-radius:3px;
   padding:0 6px;color:var(--or2);font-weight:700}
-.slider{display:block;font-size:12px;color:var(--dim);letter-spacing:1.2px;margin:0 0 16px}
+.slider{display:block;font-size:12px;color:var(--dim);letter-spacing:1.2px;margin:0 0 16px;padding:10px 0}
 .slider output{color:var(--or);font-weight:700;float:right}
 .slider input{width:100%;margin-top:8px;-webkit-appearance:none;height:5px;border-radius:3px;
+  /* вертикальный свайп по ползунку прокручивает меню, а не меняет значение —
+     иначе при пролистывании настроек постоянно сбивались настройки */
+  touch-action:pan-y;
   background:#242c33;outline:none;display:block}
 .slider input::-webkit-slider-thumb{-webkit-appearance:none;width:15px;height:15px;border-radius:50%;
   background:var(--or);cursor:pointer;box-shadow:0 0 8px rgba(255,157,33,.7)}
@@ -144,6 +147,11 @@ html.touch .shopitems .si-grid button{padding:7px 10px;font-size:11px}
 .keys{display:grid;grid-template-columns:1fr 1fr;gap:7px 22px}
 .krow{display:flex;align-items:center;gap:12px;font-size:13px;color:var(--dim);padding:5px 0;
   border-bottom:1px solid #1c2228}
+/* на телефоне ползунки выше и с крупным бегунком, а зона прокрутки панели
+   получает запас, чтобы палец не задевал настройки при пролистывании */
+html.touch .panel{scroll-padding-top:8px}
+html.touch .fld{padding:9px 0}
+html.touch .hintbox{margin:12px 0}
 kbd{background:#0c0f12;border:1px solid var(--line);border-bottom:2px solid #333c44;border-radius:3px;
   padding:3px 8px;font-size:11px;color:var(--or2);font-family:inherit;min-width:74px;text-align:center;
   display:inline-block;letter-spacing:.5px}
@@ -383,6 +391,12 @@ html.touch #bossBar .boss-name{font-size:11px;letter-spacing:2px}
 .bcard .num{position:absolute;right:9px;top:7px;font-size:10px;color:#4d565f;background:#0c0f12;
   border:1px solid var(--line);border-radius:2px;padding:1px 5px}
 .bcard .wn{font-size:16px;font-weight:800;letter-spacing:1.2px;color:#fff}
+.bcard .wico{position:absolute;right:8px;top:22px;width:86px;height:58px;pointer-events:none;
+  filter:drop-shadow(0 2px 4px rgba(0,0,0,.6))}
+.bcard .wico img{width:100%;height:100%;object-fit:contain}
+.bcard:has(.wico){padding-right:104px;min-height:74px}
+html.touch .bcard .wico{width:70px;height:46px;top:20px}
+html.touch .bcard:has(.wico){padding-right:80px;min-height:64px}
 .bcard .wd{font-size:10.5px;color:var(--dim);letter-spacing:1.4px;margin:2px 0 9px}
 .bcard .wst{display:flex;gap:11px;font-size:11px;color:#77838f}
 .bcard .wst i{font-style:normal;color:#c3ccd4;font-weight:600}

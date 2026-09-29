@@ -62,14 +62,21 @@ function buildMaterials() {
   MAT._cache = {};
 }
 
-/* Build a box mesh whose texture repeats according to its world size. */
+/* Build a box mesh whose texture repeats according to its world size.
+   Текстура масштабируется ПО РАЗМЕРУ ГРАНИ: у длинных стен больше плиток по
+   длине и столько же по высоте, поэтому рисунок больше не растягивается. */
 function makeBoxMesh(w, h, d, mat, faceTopMat) {
   const g = new THREE.BoxGeometry(w, h, d);
   let m = mat;
   if (mat.map) {
     const s = mat.userData.scale || 3;
-    // clone material so each box gets its own repeat scale (merged via material cache keyed by size bucket)
-    const key = mat.userData.tex + ':' + s + ':' + Math.max(1, Math.round(w / s)) + ':' + Math.max(1, Math.round(h / s)) + ':' + Math.max(1, Math.round(d / s));
+    /* сколько плиток текстуры нужно по каждой паре осей: перед/зад (w×h),
+       бок (d×h) и верх (w×d) — так рисунок не растягивается на длинных
+       стенах и не «сплющивается» на тонких перекладинах. */
+    const rx = Math.max(1, Math.round(w / s));
+    const ry = Math.max(1, Math.round(h / s));
+    const rz = Math.max(1, Math.round(d / s));
+    const key = mat.userData.tex + ':' + s + ':' + rx + ':' + ry + ':' + rz;
     if (!MAT._cache) MAT._cache = {};
     m = MAT._cache[key];
     if (!m) {
@@ -77,9 +84,30 @@ function makeBoxMesh(w, h, d, mat, faceTopMat) {
       m.map = mat.map.clone();
       m.map.needsUpdate = true;
       m.map.wrapS = m.map.wrapT = THREE.RepeatWrapping;
-      m.map.repeat.set(Math.max(1, Math.round(w / s)) / 1 || 1, Math.max(1, Math.round(h / s)) || 1);
+      m.map.repeat.set(1, 1);          // реальный repeat задаётся через UV граней
       MAT._cache[key] = m;
+      m.userData = m.userData || {};
     }
+    /* BoxGeometry: 6 грани по 4 вершины. Задаём UV каждой грани отдельно,
+       чтобы повторы шли по фактическим размерам сторон. Делается КАЖДЫЙ раз,
+       т.к. геометрия у каждого бокса своя, а материал может быть из кэша. */
+    const uv = g.attributes.uv;
+    const faceRepeat = [
+      [rz, ry],   // +X  (бок)
+      [rz, ry],   // -X  (бок)
+      [rx, rz],   // +Y  (верх)
+      [rx, rz],   // -Y  (низ)
+      [rx, ry],   // +Z  (перед)
+      [rx, ry]    // -Z  (зад)
+    ];
+    for (let f = 0; f < 6; f++) {
+      const ru = faceRepeat[f][0], rv = faceRepeat[f][1];
+      for (let v = 0; v < 4; v++) {
+        const i = (f * 4 + v) * 2;
+        uv.setXY(i, uv.getX(i) * ru, uv.getY(i) * rv);
+      }
+    }
+    uv.needsUpdate = true;
   }
   const mesh = new THREE.Mesh(g, m);
   mesh.castShadow = true;
@@ -92,7 +120,70 @@ function makeBoxMesh(w, h, d, mat, faceTopMat) {
    damageMapAt() наносит урон разрушаемым чанкам в радиусе (взрыв/удар зомби) и
    убирает те, чей HP упал до нуля (меш скрывается, коллизия мягко снимается).
    restoreMap() возвращает ВСЕ чанки (вызывается на новой волне/карте).
+
+   ОПТИМИЗАЦИЯ: все чанки одного цвета/размера рисуются ОДНИМ InstancedMesh —
+   сотни кусков карты дают несколько draw call вместо сотен, что критично для
+   телефона.
    ============================================================ */
+/* ключ инстанс-группы: материал + цвет. Размер задаётся масштабом матрицы,
+   поэтому куски любых размеров делят одну InstancedMesh (единый unit-куб). */
+function _chunkInstanceKey(mat) {
+  const tex = (mat && mat.userData && mat.userData.tex) || 'flat';
+  return tex + '|' + (mat && mat.color ? mat.color.getHexString() : 'ffffff');
+}
+
+/* добавить чанк в общий InstancedMesh (создаётся лениво при первом чанке).
+   Базовый куб единичный; масштаб = реальный размер куска. */
+function _addChunkInstance(parent, world, cx, cy, cz, cw, ch, cd, mat, tag, noCollide, noShadow, invisible) {
+  const aabb = aabbFromBase(cx, cy, cz, cw, ch, cd, tag);
+  aabb.destructible = true;
+  aabb.hp = aabb.maxHp = Math.max(30, cw * ch * cd * 26);
+  aabb._iw = cw; aabb._ih = ch; aabb._id = cd;   // размеры для матрицы инстанса
+  if (!noCollide) world.addBox(aabb);
+  aabb._invisible = !!invisible;
+
+  if (!invisible) {
+    if (!MAP._chunkGroups) MAP._chunkGroups = {};
+    const key = _chunkInstanceKey(mat || MAT.concrete);
+    let grp = MAP._chunkGroups[key];
+    if (!grp) {
+      grp = { mat: mat || MAT.concrete, items: [], mesh: null, noShadow: !!noShadow, parent: parent };
+      MAP._chunkGroups[key] = grp;
+    }
+    aabb._chunkGroup = grp;
+    aabb._chunkIndex = grp.items.length;
+    const zero = new THREE.Matrix4().makeScale(0, 0, 0);
+    grp.items.push({ aabb: aabb, mtx: zero, x: cx, y: cy + ch / 2, z: cz, w: cw, h: ch, d: cd, visible: true });
+  }
+  MAP.destructibles.push(aabb);
+  return aabb;
+}
+
+/* собрать все инстанс-группы в реальные InstancedMesh (один раз после постройки) */
+function _buildChunkInstances() {
+  if (!MAP._chunkGroups) return;
+  const tmp = new THREE.Matrix4();
+  for (const key in MAP._chunkGroups) {
+    const grp = MAP._chunkGroups[key];
+    if (grp.mesh) continue;
+    const geo = new THREE.BoxGeometry(1, 1, 1);
+    const im = new THREE.InstancedMesh(geo, grp.mat, Math.max(1, grp.items.length));
+    im.castShadow = !grp.noShadow;
+    im.receiveShadow = true;
+    im.frustumCulled = false;             // чанки размазаны по арене
+    im.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    for (let i = 0; i < grp.items.length; i++) {
+      const it = grp.items[i];
+      it.mtx.makeScale(it.w, it.h, it.d).setPosition(it.x, it.y, it.z);
+      im.setMatrixAt(i, it.mtx);
+    }
+    im.instanceMatrix.needsUpdate = true;
+    im.userData.group = grp;
+    grp.mesh = im;
+    grp.parent.add(im);
+  }
+}
+
 function damageMapAt(x, y, z, radius, dmg) {
   if (!MAP.destructibles || !MAP.destructibles.length) return 0;
   let destroyed = 0;
@@ -111,30 +202,56 @@ function damageMapAt(x, y, z, radius, dmg) {
     b.hp -= dmg * (0.4 + k * 0.6);
     if (b.hp <= 0) { removeMapChunk(b); destroyed++; }
   }
+  if (destroyed) _flushChunkInstances();
   return destroyed;
 }
 
-/* один чанк: спрятать меш и снять коллизию (мягко — бокс остаётся в списке) */
+/* один чанк: спрятать инстанс (масштаб 0) и снять коллизию */
 function removeMapChunk(b) {
   if (!b || b.removed) return;
   b.removed = true;
-  if (b.mesh) b.mesh.visible = false;
+  if (b._chunkGroup && b._chunkGroup.items[b._chunkIndex]) {
+    const it = b._chunkGroup.items[b._chunkIndex];
+    it.visible = false;
+    it.mtx.copy(ZERO_M4);
+    _chunkDirty = true;
+  } else if (b.mesh) b.mesh.visible = false;
   if (MAP.world) MAP.world.removeBox(b);
+}
+
+/* пометить инстанс-буферы к обновлению */
+const ZERO_M4 = new THREE.Matrix4().makeScale(0, 0, 0);
+let _chunkDirty = false;
+function _flushChunkInstances() {
+  if (!MAP._chunkGroups) return;
+  for (const key in MAP._chunkGroups) {
+    const grp = MAP._chunkGroups[key];
+    if (!grp.mesh) continue;
+    for (let i = 0; i < grp.items.length; i++) grp.mesh.setMatrixAt(i, grp.items[i].mtx);
+    grp.mesh.instanceMatrix.needsUpdate = true;
+  }
+  _chunkDirty = false;
 }
 
 /* восстановить всю карту после волны */
 function restoreMap() {
   if (!MAP.destructibles || !MAP.destructibles.length) return 0;
   let n = 0;
+  const tmp = new THREE.Matrix4();
   for (let i = 0; i < MAP.destructibles.length; i++) {
     const b = MAP.destructibles[i];
     if (!b.removed) continue;
     b.removed = false;
     b.hp = b.maxHp;
-    if (b.mesh) b.mesh.visible = true;
+    if (b._chunkGroup && b._chunkGroup.items[b._chunkIndex]) {
+      const it = b._chunkGroup.items[b._chunkIndex];
+      it.visible = true;
+      it.mtx.makeScale(it.w, it.h, it.d).setPosition(it.x, it.y, it.z);
+    } else if (b.mesh) b.mesh.visible = true;
     if (MAP.world) MAP.world.restoreBox(b);
     n++;
   }
+  if (n) _flushChunkInstances();
   return n;
 }
 
@@ -163,19 +280,8 @@ function solid(parent, world, x, y, z, w, h, d, mat, opts) {
             const cx = x - w / 2 + cw * (ix + .5);
             const cz = z - d / 2 + cd * (iz + .5);
             const cy = y + ch * iy;
-            const aabb = aabbFromBase(cx, cy, cz, cw, ch, cd, tag);
-            aabb.destructible = true;
+            const aabb = _addChunkInstance(parent, world, cx, cy, cz, cw, ch, cd, mat || MAT.concrete, tag, opts.noCollide, opts.noShadow, opts.invisible);
             aabb.building = gid;
-            aabb.hp = aabb.maxHp = Math.max(30, cw * ch * cd * 26);
-            if (!opts.noCollide) world.addBox(aabb);
-            if (!opts.invisible) {
-              const mesh = makeBoxMesh(cw, ch, cd, mat || MAT.concrete);
-              mesh.position.set(cx, cy + ch / 2, cz);
-              if (opts.noShadow) mesh.castShadow = false;
-              parent.add(mesh);
-              aabb.mesh = mesh;
-            }
-            MAP.destructibles.push(aabb);
           }
         }
       }
@@ -1077,8 +1183,13 @@ function buildMap(scene, quality, mapId) {
   MAP.aimRoom = null;
   MAP.destructibles = [];
   MAP._chunkGid = 0;
+  MAP._chunkGroups = {};
 
   MAP.def.build(group, world);
+
+  /* все разрушаемые чанки собираются в InstancedMesh — сотни кусков дают
+     несколько draw call вместо сотен (важно для телефона) */
+  _buildChunkInstances();
 
   buildAimRoom(group, world);
   buildLighting(group, quality);

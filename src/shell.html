@@ -77,6 +77,10 @@
       <div class="fld">Магазин
         <div class="chips" id="offFreeChips"></div>
       </div>
+      <div class="fld">Смена карты
+        <div class="chips" id="offMapFreqChips"></div>
+        <div class="hintbox" style="margin-top:6px">Как часто оффлайн-забег меняет карту. «ВЫКЛ» — играть на выбранной карте.</div>
+      </div>
     </div>
     <div id="offHordeBox" class="hidden">
       <div class="hintbox" style="margin-top:0">
@@ -159,6 +163,9 @@
       <input type="range" id="sMusic" min="0" max="1" step="1" value="1"></label>
     <label class="slider">Качество теней <output id="oQual">Среднее</output>
       <input type="range" id="sQual" min="0" max="2" step="1" value="1"></label>
+    <label class="slider">Графика (производительность) <output id="oGfx">СРЕДНЯЯ</output>
+      <input type="range" id="sGfx" min="0" max="3" step="1" value="1"></label>
+    <div class="hintbox" style="margin-top:-6px">«НИЗКАЯ» заметно ускоряет игру на телефоне: меньше дальность прорисовки, проще тени, без погодных частиц. «АВТО» сам выбирает по устройству.</div>
     <label class="slider">Автоприцел (телефон) <output id="oAim">Вкл</output>
       <input type="range" id="sAim" min="0" max="1" step="1" value="1"></label>
     <h2 class="mt">ПАРАМЕТРЫ МАТЧА</h2>
@@ -465,6 +472,13 @@
       <input type="text" id="esSearch" placeholder="Поиск врага…" autocomplete="off">
       <div class="es-count">Сложность: <b id="esCount">1</b>× HP</div>
       <button class="mbtn small primary" id="esClear">УБРАТЬ ВСЕХ</button>
+    </div>
+    <div class="es-countrow">
+      <label>Сколько спавнить:
+        <input type="number" id="esCountNum" min="1" max="1000" step="1" value="1">
+      </label>
+      <div class="chips" id="esCountChips"></div>
+      <span class="es-hint">Спавн идёт в точку прицела</span>
     </div>
     <div class="sd-grid" id="esGrid"></div>
     <div class="btnrow">

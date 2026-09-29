@@ -1174,6 +1174,7 @@ const Game = {
     this.vmScene.add(vAmb);
 
     window.addEventListener('resize', () => this.onResize());
+    this.applyGfxPreset();
     this.applyQuality();
   },
 
@@ -1187,14 +1188,67 @@ const Game = {
   applyQuality() {
     const q = Store.data.quality;
     this.renderer.shadowMap.enabled = q > 0;
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, q === 2 ? 2 : q === 1 ? 1.4 : 1));
+    const prCap = this._gfxPixelCap || (IS_TOUCH ? (q === 2 ? 1.5 : 1) : (q === 2 ? 2 : q === 1 ? 1.4 : 1));
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, prCap));
     const sun = MAP.group && MAP.group.userData ? MAP.group.userData.sun : null;
     if (sun) {
-      const size = q === 0 ? 1024 : q === 1 ? 2048 : 4096;
+      let size = this._gfxShadow || (q === 0 ? 1024 : q === 1 ? 2048 : 4096);
       if (sun.shadow.mapSize.width !== size) {
         sun.shadow.mapSize.width = size; sun.shadow.mapSize.height = size;
         if (sun.shadow.map) { sun.shadow.map.dispose(); sun.shadow.map = null; }
       }
+    }
+  },
+
+  /* ---- ПРЕСЕТ ГРАФИКИ: 0 авто · 1 низкая · 2 средняя · 3 высокая ----
+     Управляет туманом, дальностью LOD зомби, частицами, тенями и разрешением.
+     Это и есть «настройка графики для телефона». */
+  activeGfxPreset() {
+    let g = Store.data.gfx;
+    if (g === 0 || g === undefined || g === null) return this.autoGfxPreset();
+    return U.clamp(g | 0, 1, 3);
+  },
+
+  /* Авто-выбор графики ПО ЖЕЛЕЗУ: слабый телефон сразу получает «низкую»,
+     мощный — «среднюю/высокую». Настройка хранится на конкретном устройстве,
+     поэтому у каждого игрока свой уровень. */
+  autoGfxPreset() {
+    let score = 0;
+    try {
+      const cores = navigator.hardwareConcurrency || 4;
+      const mem = navigator.deviceMemory || 4;               // ГБ (Chrome)
+      const pr = window.devicePixelRatio || 1;
+      const px = (window.screen && screen.width ? screen.width : window.innerWidth) *
+                 (window.screen && screen.height ? screen.height : window.innerHeight);
+      if (cores >= 8) score += 2; else if (cores >= 6) score += 1; else if (cores <= 4) score -= 1;
+      if (mem >= 8) score += 1; else if (mem <= 2) score -= 2; else if (mem <= 3) score -= 1;
+      if (pr >= 3) score += 1;                                 // плотный экран обычно = мощный
+      if (px > 2200000) score += 1; else if (px < 900000) score -= 1;
+    } catch (e) { }
+    if (!IS_TOUCH) score += 2;                                 // ПК почти всегда тянет больше
+    // -3..-1 → низкая(1) · 0..1 → низкая/средняя · 2..3 → средняя · 4+ → высокая
+    if (score <= 0) return 1;
+    if (score <= 2) return 2;
+    return 3;
+  },
+
+  applyGfxPreset() {
+    const preset = CFG.gfxPresets[this.activeGfxPreset()] || CFG.gfxPresets[1];
+    CFG.zombieCullDist = preset.cull;
+    CFG.zombieNearDist = preset.near;
+    CFG.zombieFarInterval = preset.farInterval;
+    CFG.particleMul = preset.particleMul;
+    CFG.decalMul = preset.decalMul;
+    this._gfxPixelCap = preset.pixelCap;
+    this._gfxShadow = preset.shadow;
+    // туман: не трогаем, если окружение управляет им (авто/погода), иначе задаём
+    if (this.scene && this.scene.fog && !Store.data.envAuto && !Store.data.envOff) {
+      this.scene.fog.density = preset.fog;
+    }
+    if (this.renderer) {
+      // antialias нельзя переключить без пересоздания контекста; при низкой
+      // графике уменьшаем pixelRatio, что и даёт основной выигрыш
+      this.applyQuality();
     }
   },
 
@@ -1279,6 +1333,23 @@ const Game = {
     if (esSearch) esSearch.addEventListener('input', () => this.renderEnemySpawn());
     const esCount = document.getElementById('esCount');
     if (esCount) esCount.parentElement.addEventListener('click', () => this.cycleSpawnHp(1));
+    /* количество спавна врагов (1..1000) */
+    const esNum = document.getElementById('esCountNum');
+    if (esNum) {
+      esNum.addEventListener('input', () => this.setSpawnCount(parseInt(esNum.value, 10)));
+      esNum.addEventListener('change', () => this.setSpawnCount(parseInt(esNum.value, 10)));
+    }
+    const esChips = document.getElementById('esCountChips');
+    if (esChips) {
+      [[1, '×1'], [10, '×10'], [50, '×50'], [100, '×100'], [1000, '×1000']].forEach(([v, label]) => {
+        const b = document.createElement('button');
+        b.className = 'chip';
+        b.dataset.n = String(v);
+        b.textContent = label;
+        b.addEventListener('click', () => { this.setSpawnCount(v); if (esNum) esNum.value = String(v); });
+        esChips.appendChild(b);
+      });
+    }
     bindClick('btnOnline', () => { UI.show('lobby'); this.resetLobby(); Net.warmup(); });
     bindClick('btnControls', () => { this._prevScreen = 'menu'; UI.show('controls'); });
     bindClick('btnControlsBack', () => UI.show(this._prevScreen || 'menu'));
@@ -1289,7 +1360,7 @@ const Game = {
     bindClick('btnLeave', () => this.stopToMenu());
     bindClick('btnReset', () => {
       if (confirm('Сбросить весь прогресс и настройки?')) {
-        Store.data = { sens: 2.2, fov: 80, vol: 60, quality: 1, touchSens: 1.5, name: '', best: 0, bestWave: 0, killsTotal: 0, matches: 0, wins: 0, signalSrv: 0, aimBest: 0, aimAutoFire: 1, map: 'arena', players: 2, maxHP: 100, aimAssist: 1, horde: 0, clears: 0, freeplay: 0, rounds: 3, playTime: 0, offCount: 1, offHp: 1, offFree: 0, offMode: 'normal', offMods: {}, offModsRun: 0, offModPick: 0, checkpoint: null, shopAllow: {}, shopItems: {}, music: 1, sfxVol: 100, musicVol: 70, grenade: 'frag', buildable: 'turret', weather: 'day', trapsEnabled: 1, ach: {}, runs: [], checkpoints: {} };
+        Store.data = { sens: 2.2, fov: 80, vol: 60, quality: 1, gfx: 0, touchSens: 1.5, name: '', best: 0, bestWave: 0, killsTotal: 0, matches: 0, wins: 0, signalSrv: 0, aimBest: 0, aimAutoFire: 1, map: 'arena', players: 2, maxHP: 100, aimAssist: 1, horde: 0, clears: 0, freeplay: 0, rounds: 3, playTime: 0, offCount: 1, offHp: 1, offFree: 0, offMode: 'normal', offMods: {}, offModsRun: 0, offModPick: 0, checkpoint: null, shopAllow: {}, shopItems: {}, music: 1, sfxVol: 100, musicVol: 70, grenade: 'frag', buildable: 'turret', weather: 'day', trapsEnabled: 1, ach: {}, runs: [], checkpoints: {} };
         this.shopAllow = MATCH.defaultShopAllow();
         Store.save();
         UI.refreshChips(); UI.renderMenuStats(); UI.toast('Прогресс сброшен');
@@ -1404,8 +1475,15 @@ const Game = {
     Bus.on('touchRangeSpawn', () => this.toggleEnemySpawn(!this.enemySpawnOpen));
     Bus.on('touchUnstick', () => this.resetZombiePositions());
     Bus.on('zombieHit', (z, part, dmg, dir) => this.onZombieHit(z, part, dmg, dir));
-    Bus.on('zombieGrowl', z => Audio3D_SFX.growl(z.pos.x, z.pos.y + 1.4, z.pos.z, z.type));
+    Bus.on('zombieGrowl', z => {
+      // рычание: смешиваем «классический» гроул и новые голоса зомби
+      Audio3D_SFX.growl(z.pos.x, z.pos.y + 1.4, z.pos.z, z.type);
+      if (Math.random() < .6) Audio3D_SFX.zombieVoice(z.pos.x, z.pos.y + 1.4, z.pos.z, z.type);
+    });
     Bus.on('zombieShoot', (z, from) => this.onZombieShoot(z, from));
+    /* звуки атаки/смерти зомби — рычание и предсмертный хрип */
+    Bus.on('zombieAttack', (z) => { if (z && z.pos) Audio3D_SFX.zombieVoice(z.pos.x, z.pos.y + 1.4, z.pos.z, z.type); });
+    Bus.on('zombieDied', (z) => { if (z && z.pos) Audio3D_SFX.zombieVoice(z.pos.x, z.pos.y + 1.2, z.pos.z, z.type); });
     Bus.on('zombieShatter', z => {
       // АБСОЛЮТНЫЙ НОЛЬ: a frozen body burst into ice shards
       this.effects.frostBurst(z.pos.x, z.pos.y + 1, z.pos.z, 2.6);
@@ -2340,7 +2418,9 @@ const Game = {
      different one, so a long survival run keeps changing scenery. The next map
      is chosen at random but never repeats the current one. */
   rotateMapIfNeeded(nextWave) {
-    const every = CFG.mapRotateEvery || 10;
+    /* частота смены карты настраивается в оффлайне (0 = никогда) */
+    const every = Store.data.offMapFreq !== undefined ? (Store.data.offMapFreq || 0) : (CFG.mapRotateEvery || 10);
+    if (!every) return false;
     if (!nextWave || nextWave < 1) return false;
     if (nextWave % every !== 1) return false;          // waves 1, 11, 21, 31…
     if (nextWave === 1) return false;                  // wave 1 keeps the chosen map
@@ -2639,28 +2719,65 @@ const Game = {
       grid.appendChild(card);
     }
     if (!shown) grid.innerHTML = '<div class="ecard cant">Ничего не найдено</div>';
+    const num = document.getElementById('esCountNum');
+    if (num) num.value = String(this._spawnCount || 1);
+    const chips = document.getElementById('esCountChips');
+    if (chips) Array.from(chips.children).forEach(b => b.classList.toggle('on', +b.dataset.n === (this._spawnCount || 1)));
   },
 
-  /* Drop one enemy in front of the player, a few metres out. */
-  spawnRangeEnemy(id) {
+  /* Drop enemies where the crosshair points. A ray from the eye finds the first
+     wall/floor/cover; the enemy appears right there (or a bit along the ray if
+     we hit the sky). Bosses drop a little further out so they are not in your
+     face. `id` may be one type or, from the picker, spawns `count` of them. */
+  spawnRangeEnemy(id, count) {
     if (this.mode !== CS.MODE.RANGE || !this.horde) return;
     const p = this.player;
     const d = ZOMBIES[id];
     if (!d) return;
-    const fwd = { x: -Math.sin(p.yaw), z: -Math.cos(p.yaw) };
-    const dist = d.boss ? 14 : 11;
-    const x = p.pos.x + fwd.x * dist + U.rand(-2, 2);
-    const z = p.pos.z + fwd.z * dist + U.rand(-2, 2);
-    const y = this.world.groundAt(x, z, 6);
-    const zz = this.horde.spawn(id, x, z, y === null ? 0 : y);
+    const n = Math.max(1, Math.min(1000, count || this._spawnCount || 1));
+    /* точка прицела: луч из глаз по направлению взгляда */
+    const eye = this.eyePos();
+    const dir = this.cameraDir();
+    let px, py, pz, ground;
+    const hits = this.world.raycastAll(eye, dir, 300);
+    if (hits && hits.length) {
+      const h = hits[0];
+      // чуть перед точкой попадания, чтобы враг не утонул в стене
+      px = h.point.x - dir.x * 0.8; pz = h.point.z - dir.z * 0.8;
+      ground = this.world.groundAt(px, pz, h.point.y + 4);
+      py = ground === null ? h.point.y : ground;
+    } else {
+      // луч ушёл в небо: ставим далеко впереди, на земле
+      px = p.pos.x + dir.x * 26; pz = p.pos.z + dir.z * 26;
+      ground = this.world.groundAt(px, pz, 12); py = ground === null ? 0 : ground;
+    }
     const mul = this._spawnHpMul || 1;
-    zz.maxHealth *= mul; zz.health = zz.maxHealth;
-    if (d.boss) zz.isBoss = true;
-    else if (d.miniBoss) zz.isMiniBoss = true;
-    UI.toast('Полигон: ' + d.name + (mul !== 1 ? ' ×' + mul + ' HP' : ''), d.boss ? '#c24bff' : d.miniBoss ? '#4ad6ff' : '#e33a2e');
-    Audio3D_SFX.growl(x, y === null ? 0 : y + 1.2, z, d.boss ? 'brute' : id);
+    let last = null;
+    for (let i = 0; i < n; i++) {
+      const ox = i === 0 ? 0 : U.rand(-3.2, 3.2);
+      const oz = i === 0 ? 0 : U.rand(-3.2, 3.2);
+      const x = U.clamp(px + ox, -MAP.size / 2 + 2, MAP.size / 2 - 2);
+      const z = U.clamp(pz + oz, -MAP.size / 2 + 2, MAP.size / 2 - 2);
+      const g = this.world.groundAt(x, z, 8);
+      const zz = this.horde.spawn(id, x, z, g === null ? py : g);
+      zz.maxHealth *= mul; zz.health = zz.maxHealth;
+      if (d.boss) zz.isBoss = true;
+      else if (d.miniBoss) zz.isMiniBoss = true;
+      last = zz;
+    }
+    UI.toast('Полигон: ' + d.name + (n > 1 ? ' ×' + n : '') + (mul !== 1 ? ' · ×' + mul + ' HP' : ''),
+      d.boss ? '#c24bff' : d.miniBoss ? '#4ad6ff' : '#e33a2e');
+    Audio3D_SFX.growl(px, py + 1.2, pz, d.boss ? 'brute' : id);
     // do not let a stray hit on the horde count as a wave clear
     if (this._panelT <= 0) this.updateRangePanel();
+  },
+
+  /* выбрать количество врагов для спавна (1..1000) */
+  setSpawnCount(v) {
+    this._spawnCount = Math.max(1, Math.min(1000, Math.round(v || 1)));
+    const el = document.getElementById('esCountNum');
+    if (el) el.textContent = String(this._spawnCount);
+    UI.toast('Количество спавна: ' + this._spawnCount, '#ff9d21');
   },
 
   /* cycle the spawn HP multiplier (1× → 2× → 5× → 10× → 1×) */
@@ -2901,7 +3018,7 @@ const Game = {
     const p = this.player;
     if (!p || !p.alive) return;
     for (const z of this.horde.list) {
-      if (!z.isBoss || !z.alive || z.dying) continue;
+      if ((!z.isBoss && !z.isMiniBoss) || !z.alive || z.dying) continue;
       const def = z.def;
       if (!def.abilities || !def.abilities.length) continue;
       z.abilityCd = (z.abilityCd || 0) - dt;
@@ -2954,6 +3071,7 @@ const Game = {
     if (kind === 'shockwave') {
       this.effects.explosion(z.pos.x, z.pos.y + .4, z.pos.z, 8.0, [z.def.aura || 0xffb347, 0x2a1a0a]);
       Audio3D_SFX.explosionAt(z.pos.x, z.pos.y, z.pos.z);
+      if (typeof damageMapAt === 'function') damageMapAt(z.pos.x, z.pos.y + .4, z.pos.z, 8.0, 260);
       const R = 10;
       const ds = Math.hypot(p.pos.x - z.pos.x, p.pos.z - z.pos.z);
       if (ds <= R) {
@@ -2998,6 +3116,44 @@ const Game = {
       }
       Audio3D_SFX.shot('laser', z.pos.x, z.pos.y + 2, z.pos.z);
       this.bossTell(z, 'ЗАЛП', '#4ad6ff');
+      return;
+    }
+    if (kind === 'frost') {
+      // КРИОМАНТ: конус холода — замедляет игрока и замораживает землю
+      const R = 9;
+      const ds = Math.hypot(p.pos.x - z.pos.x, p.pos.z - z.pos.z);
+      this.effects.frostBurst(z.pos.x, z.pos.y + 1, z.pos.z, R);
+      this.effects.decal(z.pos.x, .02, z.pos.z, 0, 1, 0, R * .8, 'frost');
+      if (ds <= R) {
+        const k = 1 - ds / R;
+        if (!this.playerShieldUp()) {
+          this.applyDamageToSelf(Math.max(4, (z.dmg || 40) * .35 * k), { x: z.pos.x, y: z.pos.y, z: z.pos.z });
+          p.freezeT = Math.max(p.freezeT || 0, 1.6 * k);
+          UI.toast('ЗАМОРОЖЕН', '#7fd8ff');
+        } else this.reflectAtDummy({ x: z.pos.x, y: z.pos.y, z: z.pos.z }, (z.dmg || 40) * .5, false);
+      }
+      Audio3D_SFX.shot('laser', z.pos.x, z.pos.y + 1.5, z.pos.z);
+      this.bossTell(z, 'ЛЕДЯНОЙ КОНУС', '#7fd8ff');
+      return;
+    }
+    if (kind === 'devour') {
+      // ПОЖИРАТЕЛЬ ПЛОТИ: высасывает жизнь из ближайших зомби и лечится
+      let drained = 0;
+      for (const o of this.horde.list) {
+        if (o === z || o.dying || !o.alive || o.isBoss || o.isMiniBoss) continue;
+        const d = Math.hypot(o.pos.x - z.pos.x, o.pos.z - z.pos.z);
+        if (d > 8) continue;
+        const bite = Math.min(o.health, o.maxHealth * .5);
+        o.takeDamage(bite, 'body', { x: 0, y: 0, z: 0 });
+        drained += bite;
+        this.effects.particle(o.pos.x, o.pos.y + 1.2 * o.scale, o.pos.z, 0, 1.4, 0, .5, 'spark', .4);
+      }
+      if (drained > 0) {
+        z.health = Math.min(z.maxHealth, z.health + drained * .35);
+        UI.toast('ПОЖИРАТЕЛЬ насытился', '#ff2a3a');
+      }
+      Audio3D_SFX.growl(z.pos.x, z.pos.y, z.pos.z, 'brute');
+      this.bossTell(z, 'ПОЖИРАНИЕ', '#ff2a3a');
       return;
     }
   },
@@ -3871,6 +4027,21 @@ const Game = {
       return;
     }
 
+    /* ---- ПРОКАЧКА ДВИЖЕНИЯ: покупается один раз, действует весь забег ---- */
+    if (g.perk) {
+      const flag = { highJump: 'perkHighJump', dash: 'perkDash', runSpeed: 'perkRunSpeed' }[g.perk];
+      if (this.player[flag]) { Audio3D_SFX.deny(); UI.toast('Уже куплено'); return; }
+      if (!free && this.player.money < g.price) { Audio3D_SFX.deny(); UI.toast('Не хватает денег'); return; }
+      if (!free) { this.player.money -= g.price; this.player.moneySpent = (this.player.moneySpent || 0) + g.price; }
+      this.player[flag] = true;
+      this.player.applyPerks();
+      Audio3D_SFX.buy();
+      UI.toast('Куплено: ' + g.name, '#57d16a');
+      UI.renderBuy(this.player, this.buyTimer);
+      if (this.mode === CS.MODE.ONLINE) this.broadcastScore();
+      return;
+    }
+
     /* Armour: each tier has more AP and soaks more, so it can be bought even
        when a weaker suit was already owned. The energy suit is the best. */
     if (g.heavy) {
@@ -3881,6 +4052,7 @@ const Game = {
       if (g.energy) this.player.energyArmor = true;
       else this.player.heavyArmor = true;
       this.player.armor = g.ap;
+      this.player.armorMax = g.ap;
       this.player.helmet = true;
       Audio3D_SFX.buy();
       UI.toast('Куплено: ' + g.name + ' · AP ' + g.ap, '#57d16a');
@@ -3894,6 +4066,7 @@ const Game = {
     if (!free) { this.player.money -= g.price; this.player.moneySpent = (this.player.moneySpent || 0) + g.price; }
     this.player.armor = g.ap;
     if (g.helmet) this.player.helmet = true;
+    this.player.armorMax = g.ap;
     Audio3D_SFX.buy();
     UI.toast('Куплено: ' + g.name, '#57d16a');
     UI.renderBuy(this.player, this.buyTimer);
@@ -4496,6 +4669,8 @@ const Game = {
     this.player.maxHealth = this.matchHP;
     this.player.health = this.matchHP;
     this.player.armor = 0; this.player.helmet = false;
+    this.player.heavyArmor = false; this.player.energyArmor = false;   // броня не переносится в новый раунд
+    this.player.armorMax = CFG.maxAP || 100;
     this.player.alive = true;
     this.player.money = Math.min(CFG.moneyCap, this.player.money + 1400);
     // a drone still in the air belongs to the previous round
@@ -4568,8 +4743,10 @@ const Game = {
       if (o.miniBossPending) {
         count = Math.round(count * .85);
         o.totalThisWave = count;
-        sub = count + ' противников · МИНИ-БОСС: ' + ZOMBIES.robot.name;
-        UI.toast('МИНИ-БОСС: ' + ZOMBIES.robot.name, '#4ad6ff');
+        const mbType = this.pickMiniBoss(o.wave);
+        o.miniBossType = mbType;
+        sub = count + ' противников · МИНИ-БОСС: ' + ZOMBIES[mbType].name;
+        UI.toast('МИНИ-БОСС: ' + ZOMBIES[mbType].name, '#4ad6ff');
       }
       UI.center(title, sub, 2.0);
       UI.toast((this.hordeMode ? 'Орда ' : 'Волна ') + o.wave + ' — ' + count + ' зомби', '#e33a2e');
@@ -4679,13 +4856,43 @@ const Game = {
     if (wave >= 10) pool.push({ t: 'summoner', w: Math.min(2, (wave - 9) * .26) });
     return pool;
   },
+  /* Мини-боссы в обычной волне: чем дальше, тем чаще и сильнее варианты.
+     Они идут как РЕДКИЕ враги, чтобы не перегружать волну. */
+  miniBossWaveTypes(wave) {
+    const pool = [];
+    if (wave >= 12) pool.push({ t: 'stalker', w: Math.min(1.2, (wave - 11) * .08) });
+    if (wave >= 15) pool.push({ t: 'spider', w: Math.min(1.0, (wave - 14) * .07) });
+    if (wave >= 18) pool.push({ t: 'cryomancer', w: Math.min(.9, (wave - 17) * .06) });
+    if (wave >= 22) pool.push({ t: 'devourer', w: Math.min(.7, (wave - 21) * .05) });
+    if (wave >= 26) pool.push({ t: 'titanMini', w: Math.min(.5, (wave - 25) * .04) });
+    return pool;
+  },
   /* the armoured robot mini-boss is a rare special, from wave 8 onward */
   isMiniBossWave(wave) {
     const every = (this.modState && this.modState.miniEvery) || 3;
     return wave >= 8 && (wave - 8) % every === 0;
   },
+  /* Пул мини-боссов растёт с волной: слабые попадаются раньше, сильные — позже.
+     Робот остаётся в пуле как «бронированный стрелок». */
+  pickMiniBoss(wave) {
+    const pool = [
+      { t: 'robot', w: 8 },
+      { t: 'stalker', w: 7 },
+      { t: 'spider', w: wave >= 11 ? 6 : 0 },
+      { t: 'cryomancer', w: wave >= 14 ? 5 : 0 },
+      { t: 'devourer', w: wave >= 17 ? 4 : 0 },
+      { t: 'titanMini', w: wave >= 20 ? 3 : 0 }
+    ];
+    let total = 0; pool.forEach(p => total += p.w);
+    let r = Math.random() * total;
+    for (const p of pool) { r -= p.w; if (r <= 0) return p.t; }
+    return 'robot';
+  },
   pickZombieType(wave) {
     const pool = this.waveTypesFor(wave);
+    // редкие мини-боссы попадаются прямо в волне (и помечаются как мини-боссы)
+    const mb = this.miniBossWaveTypes ? this.miniBossWaveTypes(wave) : [];
+    for (const p of mb) pool.push(p);
     let total = 0; pool.forEach(p => total += p.w);
     let r = Math.random() * total;
     for (const p of pool) { r -= p.w; if (r <= 0) return p.t; }
@@ -5032,10 +5239,11 @@ const Game = {
       return;
     }
 
-    // the armoured robot mini-boss leads the wave in, right before the horde
+    // the armoured mini-boss leads the wave in, right before the horde
     if (o.miniBossPending > 0 && o.spawnedThisWave === 0) {
       o.miniBossPending = 0;
-      const s = this.horde.spawnRandom('robot', this.player.pos.x, this.player.pos.z, 30);
+      const mbType = o.miniBossType || this.pickMiniBoss(o.wave);
+      const s = this.horde.spawnRandom(mbType, this.player.pos.x, this.player.pos.z, 30);
       const hpMul = (this.offHpMul != null) ? this.offHpMul
         : ((this.hordeMode && !this.freePlay) ? CFG.hordeHpMul : 1);
       s.maxHealth *= hpMul * this.modState.hp; s.health = s.maxHealth;
@@ -5044,7 +5252,7 @@ const Game = {
       s.dmgTakenMul = this.modState.playerDmg;
       s.isMiniBoss = true;
       Audio3D_SFX.growl(s.pos.x, s.pos.y, s.pos.z, 'brute');
-      UI.toast('РОБОТ-ЗОМБИ в бою', '#4ad6ff');
+      UI.toast(ZOMBIES[mbType].name + ' в бою', '#4ad6ff');
     }
 
     // spawn queue
@@ -8274,6 +8482,8 @@ const Game = {
     this.player.maxHealth = this.matchHP;
     this.player.health = this.matchHP;
     this.player.armor = 0; this.player.helmet = false;
+    this.player.heavyArmor = false; this.player.energyArmor = false;
+    this.player.armorMax = CFG.maxAP || 100;
     this.player.alive = true;
     this.player.money = Math.min(CFG.moneyCap, this.player.money + 1400);
     // a drone still in the air belongs to the previous round
@@ -8404,6 +8614,8 @@ const Game = {
       p.in.wantJump = IS_TOUCH ? (TouchUI.jumpHeld || Input.keys['Space']) : !!mv.wantJump;
     } else if (IS_TOUCH) {
       p.in.wantJump = Input.consumeJump() && p.onGround;
+      // зажатая кнопка ПРЫЖОК включает джетпак перка «ВЫСОКИЙ ПРЫЖОК»
+      if (TouchUI.jumpHeld) p.in.wantJump = true;
     } else {
       if (mv.wantJump && p.onGround) p.in.wantJump = true;
       if (!mv.wantJump) p.in.wantJump = false;
@@ -8427,7 +8639,10 @@ const Game = {
       else p.climbQueued = true;
     }
     // mech dash: the dash button / key is edge-triggered
-    if (Input.consumeDash()) this.mechDash();
+    if (Input.consumeDash()) {
+      if (this.isMechActive()) this.mechDash();
+      else if (p.perkDash) p._gearDashWant = true;   // снаряжение «РЫВОК»
+    }
 
     p._wantAim = Input.aimDown() && canLook;
 

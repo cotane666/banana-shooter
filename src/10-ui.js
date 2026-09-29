@@ -22,7 +22,7 @@ const UI = {
       'matchEnd', 'meTitle', 'meWinner', 'meScore', 'meDetail', 'btnMatchAgain', 'btnMatchMenu',
       'mapChips', 'playerChips', 'hpChips', 'hordeChips', 'lobbyMaps', 'lobbyPlayers', 'lobbyHp', 'lobbyFree', 'lobbyRounds',
       'todChips', 'weatherChips', 'envAutoChips', 'sEnvSpeed', 'oEnvSpeed', 'lobbyTod', 'lobbyWeather', 'lobbyMode',
-      'offCountChips', 'offHpChips', 'offFreeChips', 'offModeChips', 'offCustomBox', 'offHordeBox', 'offSpecialBox', 'offCpBox', 'offCpInfo', 'offCpMode', 'offCpList', 'offCountExact', 'offCountFixed', 'btnOffContinue', 'custom', 'lobbyShop', 'lobbyShopItems',
+      'offCountChips', 'offHpChips', 'offFreeChips', 'offMapFreqChips', 'offModeChips', 'offCustomBox', 'offHordeBox', 'offSpecialBox', 'offCpBox', 'offCpInfo', 'offCpMode', 'offCpList', 'offCountExact', 'offCountFixed', 'btnOffContinue', 'custom', 'lobbyShop', 'lobbyShopItems',
       'modScreen', 'modGrid', 'modActive',
       'extras', 'achGrid', 'recTable', 'btnExtrasBack', 'weaponWheel', 'wwInner',
       'skins', 'skinCanvas', 'skinGrid', 'skinStatus', 'skinWeaponSel', 'skinTargetChips', 'btnSkinsBack', 'btnSkins', 'skinRarityBar',
@@ -198,6 +198,18 @@ const UI = {
         this.el.offFreeChips.appendChild(b);
       });
     }
+    /* частота смены карты в оффлайне: каждая N-я волна, либо ВЫКЛ */
+    if (this.el.offMapFreqChips) {
+      this.el.offMapFreqChips.innerHTML = '';
+      [{ v: 0, b: 'ВЫКЛ', i: 'одна карта' }, { v: 5, b: '5', i: 'волн' }, { v: 10, b: '10', i: 'волн' },
+       { v: 20, b: '20', i: 'волн' }, { v: 30, b: '30', i: 'волн' }].forEach(o => {
+        const b = document.createElement('button');
+        b.dataset.v = o.v;
+        b.innerHTML = '<b>' + o.b + '</b><i>' + o.i + '</i>';
+        b.addEventListener('click', () => { Store.data.offMapFreq = o.v; Store.save(); this.refreshChips(); Audio3D_SFX.uiClick(); });
+        this.el.offMapFreqChips.appendChild(b);
+      });
+    }
     /* offline mode picker: ordinary, horde ×10, free horde, custom */
     if (this.el.offModeChips) {
       const modes = [
@@ -347,6 +359,9 @@ const UI = {
       mark(this.el.lobbyWeather, 'wx', '__off__');
     }
     mark(this.el.envAutoChips, 'auto', S.envAuto ? 1 : 0);
+    if (this.el.offMapFreqChips) {
+      Array.from(this.el.offMapFreqChips.children).forEach(b => b.classList.toggle('on', +b.dataset.v === (S.offMapFreq || 0)));
+    }
     mark(this.el.lobbyMode, 'omode', S.onlineMode || 'pvp');
     const mode = S.offMode || 'normal';
     if (this.el.offModeChips) {
@@ -470,7 +485,7 @@ const UI = {
     e.hpFill.style.transform = 'scaleX(' + (hp / maxHP) + ')';
     e.hpVal.textContent = Math.max(0, Math.round(p.health));
     e.hpFill.parentElement.classList.toggle('low', hp <= maxHP * .35);
-    e.apFill.style.transform = 'scaleX(' + (U.clamp(p.armor, 0, 100) / 100) + ')';
+    e.apFill.style.transform = 'scaleX(' + (U.clamp(p.armor, 0, CFG.maxAP) / (CFG.maxAP || 100)) + ')';
     e.apVal.textContent = Math.round(p.armor);
     this.lowHP(hp > 0 && hp <= maxHP * .32);
 
@@ -642,11 +657,17 @@ const UI = {
     const shopAllows = (cat) => !allow || allow[cat] !== 0;
     const itemAllow = (typeof Game !== 'undefined' && Game.shopItemAllow) ? Game.shopItemAllow : null;
     const itemAllowed = (id) => !itemAllow || itemAllow[id] !== 0;
-    const mkCard = (id, name, desc, price, stats, owned, cant, onClick, onOwned) => {
+    const mkCard = (id, name, desc, price, stats, owned, cant, onClick, onOwned, iconId) => {
       n++;
       const d = document.createElement('div');
       d.className = 'bcard' + (cant ? ' cant' : '') + (owned ? ' own' : '');
+      let iconHtml = '';
+      if (iconId) {
+        const url = (typeof shopWeaponIcon === 'function') ? shopWeaponIcon(iconId) : '';
+        if (url) iconHtml = '<div class="wico"><img alt="" src="' + url + '"></div>';
+      }
       d.innerHTML = '<span class="num">' + (n <= 9 ? n : '') + '</span>' +
+        iconHtml +
         '<div class="wn">' + U.esc(name) + '</div>' +
         '<div class="wd">' + U.esc(desc) + '</div>' +
         '<div class="wst">' + stats.map(s => '<span>' + s[0] + ' <i>' + s[1] + '</i></span>').join('') + '</div>' +
@@ -713,6 +734,14 @@ const UI = {
           cant = !free && player.money < g.price;
           stats = [['ЭФФЕКТ', '100%'], ['ВСЕ СТВОЛЫ', 'ДА']];
           desc = g.desc;
+        } else if (g.perk) {
+          const flag = { highJump: 'perkHighJump', dash: 'perkDash', runSpeed: 'perkRunSpeed' }[g.perk];
+          owned = !!player[flag];
+          cant = (!free && player.money < g.price) || owned;
+          stats = g.perk === 'highJump' ? [['ВЫСОТА', '×1.8'], ['ДЖЕТПАК', 'УДЕРЖ.']]
+            : g.perk === 'dash' ? [['РЫВОК', 'X'], ['ПЕРЕЗАРЯД', '3с']]
+              : [['БЕГ', '+55%'], ['ВСЕГДА', 'ДА']];
+          desc = g.desc;
         } else if (g.heavy) {
           owned = g.energy ? !!player.energyArmor : (!!player.heavyArmor && !player.energyArmor && player.armor >= g.ap);
           cant = (!free && player.money < g.price) || (g.energy ? !!player.energyArmor : (!!player.energyArmor));
@@ -746,7 +775,7 @@ const UI = {
         if (w.splash) stats.push(['РАДИУС', w.splash + 'м']);
         mkCard(id, w.name, w.cat.toUpperCase(), w.price, stats, owned || inBag, !free && player.money < w.price,
           () => Bus.emit('buy', id),
-          () => Bus.emit('equip', id));
+          () => Bus.emit('equip', id), id);
         if (equipped) { const c = wrap.lastChild; if (c) { c.classList.add('equipped'); const pr = c.querySelector('.pr'); if (pr) pr.textContent = 'В РУКАХ'; } }
         else if (inBag) { const c = wrap.lastChild; if (c) { c.classList.add('inbag'); const pr = c.querySelector('.pr'); if (pr) pr.textContent = 'В СУМКЕ'; } }
       });

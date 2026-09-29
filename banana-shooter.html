@@ -147,9 +147,12 @@ html.touch .shopitems .si-grid button{padding:7px 10px;font-size:11px}
 .ios-row strong{color:#fff;font-weight:700}
 .ios-ic{display:inline-block;background:#0c0f12;border:1px solid var(--line);border-radius:3px;
   padding:0 6px;color:var(--or2);font-weight:700}
-.slider{display:block;font-size:12px;color:var(--dim);letter-spacing:1.2px;margin:0 0 16px}
+.slider{display:block;font-size:12px;color:var(--dim);letter-spacing:1.2px;margin:0 0 16px;padding:10px 0}
 .slider output{color:var(--or);font-weight:700;float:right}
 .slider input{width:100%;margin-top:8px;-webkit-appearance:none;height:5px;border-radius:3px;
+  /* вертикальный свайп по ползунку прокручивает меню, а не меняет значение —
+     иначе при пролистывании настроек постоянно сбивались настройки */
+  touch-action:pan-y;
   background:#242c33;outline:none;display:block}
 .slider input::-webkit-slider-thumb{-webkit-appearance:none;width:15px;height:15px;border-radius:50%;
   background:var(--or);cursor:pointer;box-shadow:0 0 8px rgba(255,157,33,.7)}
@@ -159,6 +162,11 @@ html.touch .shopitems .si-grid button{padding:7px 10px;font-size:11px}
 .keys{display:grid;grid-template-columns:1fr 1fr;gap:7px 22px}
 .krow{display:flex;align-items:center;gap:12px;font-size:13px;color:var(--dim);padding:5px 0;
   border-bottom:1px solid #1c2228}
+/* на телефоне ползунки выше и с крупным бегунком, а зона прокрутки панели
+   получает запас, чтобы палец не задевал настройки при пролистывании */
+html.touch .panel{scroll-padding-top:8px}
+html.touch .fld{padding:9px 0}
+html.touch .hintbox{margin:12px 0}
 kbd{background:#0c0f12;border:1px solid var(--line);border-bottom:2px solid #333c44;border-radius:3px;
   padding:3px 8px;font-size:11px;color:var(--or2);font-family:inherit;min-width:74px;text-align:center;
   display:inline-block;letter-spacing:.5px}
@@ -398,6 +406,12 @@ html.touch #bossBar .boss-name{font-size:11px;letter-spacing:2px}
 .bcard .num{position:absolute;right:9px;top:7px;font-size:10px;color:#4d565f;background:#0c0f12;
   border:1px solid var(--line);border-radius:2px;padding:1px 5px}
 .bcard .wn{font-size:16px;font-weight:800;letter-spacing:1.2px;color:#fff}
+.bcard .wico{position:absolute;right:8px;top:22px;width:86px;height:58px;pointer-events:none;
+  filter:drop-shadow(0 2px 4px rgba(0,0,0,.6))}
+.bcard .wico img{width:100%;height:100%;object-fit:contain}
+.bcard:has(.wico){padding-right:104px;min-height:74px}
+html.touch .bcard .wico{width:70px;height:46px;top:20px}
+html.touch .bcard:has(.wico){padding-right:80px;min-height:64px}
 .bcard .wd{font-size:10.5px;color:var(--dim);letter-spacing:1.4px;margin:2px 0 9px}
 .bcard .wst{display:flex;gap:11px;font-size:11px;color:#77838f}
 .bcard .wst i{font-style:normal;color:#c3ccd4;font-weight:600}
@@ -891,6 +905,10 @@ html.touch .fld input{padding:10px;font-size:15px}
       <div class="fld">Магазин
         <div class="chips" id="offFreeChips"></div>
       </div>
+      <div class="fld">Смена карты
+        <div class="chips" id="offMapFreqChips"></div>
+        <div class="hintbox" style="margin-top:6px">Как часто оффлайн-забег меняет карту. «ВЫКЛ» — играть на выбранной карте.</div>
+      </div>
     </div>
     <div id="offHordeBox" class="hidden">
       <div class="hintbox" style="margin-top:0">
@@ -973,6 +991,9 @@ html.touch .fld input{padding:10px;font-size:15px}
       <input type="range" id="sMusic" min="0" max="1" step="1" value="1"></label>
     <label class="slider">Качество теней <output id="oQual">Среднее</output>
       <input type="range" id="sQual" min="0" max="2" step="1" value="1"></label>
+    <label class="slider">Графика (производительность) <output id="oGfx">СРЕДНЯЯ</output>
+      <input type="range" id="sGfx" min="0" max="3" step="1" value="1"></label>
+    <div class="hintbox" style="margin-top:-6px">«НИЗКАЯ» заметно ускоряет игру на телефоне: меньше дальность прорисовки, проще тени, без погодных частиц. «АВТО» сам выбирает по устройству.</div>
     <label class="slider">Автоприцел (телефон) <output id="oAim">Вкл</output>
       <input type="range" id="sAim" min="0" max="1" step="1" value="1"></label>
     <h2 class="mt">ПАРАМЕТРЫ МАТЧА</h2>
@@ -1280,6 +1301,13 @@ html.touch .fld input{padding:10px;font-size:15px}
       <div class="es-count">Сложность: <b id="esCount">1</b>× HP</div>
       <button class="mbtn small primary" id="esClear">УБРАТЬ ВСЕХ</button>
     </div>
+    <div class="es-countrow">
+      <label>Сколько спавнить:
+        <input type="number" id="esCountNum" min="1" max="1000" step="1" value="1">
+      </label>
+      <div class="chips" id="esCountChips"></div>
+      <span class="es-hint">Спавн идёт в точку прицела</span>
+    </div>
     <div class="sd-grid" id="esGrid"></div>
     <div class="btnrow">
       <button class="mbtn" id="esClose">ЗАКРЫТЬ (X / Esc)</button>
@@ -1473,6 +1501,24 @@ const CFG = {
   mechDashTime: 0.28,       // сколько длится сам бросок (с)
   mechDashCd: 2.2,          // перезарядка рывка (с)
   mechDashDmg: 60,          // урон/отброс зомби, которых задели на рывке
+  /* ---- прокачка движения (снаряжение по $16000) ---- */
+  highJumpThrust: 8.5,      // тяга джетпака высокого прыжка (м/с)
+  highJumpMax: 1.1,         // секунд тяги при удержании прыжка
+  highJumpRecharge: 1.2,    // перезарядка джетпака прыжка (с)
+  gearDashSpeed: 24,        // начальная скорость рывка-перка (м/с)
+  gearDashTime: 0.28,       // длительность рывка (с)
+  gearDashCd: 3.0,          // перезарядка рывка (с)
+  /* ---- ПРЕСЕТЫ ГРАФИКИ: 0 авто · 1 низкая · 2 средняя · 3 высокая ---- */
+  gfxPresets: [
+    /* АВТО (выбирается по устройству при загрузке) */
+    { fog: 0.0075, cull: 70, near: 34, farInterval: 0.16, particleMul: 0.45, decalMul: 0.5, pixelCap: 1.0, shadow: 512, aa: false },
+    /* НИЗКАЯ — для слабых телефонов */
+    { fog: 0.0085, cull: 62, near: 30, farInterval: 0.20, particleMul: 0.35, decalMul: 0.4, pixelCap: 1.0, shadow: 512, aa: false },
+    /* СРЕДНЯЯ */
+    { fog: 0.0055, cull: 85, near: 42, farInterval: 0.12, particleMul: 1.0, decalMul: 1.0, pixelCap: 1.4, shadow: 2048, aa: true },
+    /* ВЫСОКАЯ */
+    { fog: 0.0042, cull: 130, near: 60, farInterval: 0.08, particleMul: 1.4, decalMul: 1.4, pixelCap: 2.0, shadow: 4096, aa: true }
+  ],
   maxHP: 100,
   maxAP: 100,
   stepUp: 0.62,
@@ -1528,6 +1574,9 @@ const CFG = {
   zombieNearDist: 42,
   zombieFarInterval: 0.12,
   zombieCullDist: 85,
+  /* runtime-настройки производительности (меняются пресетом графики) */
+  particleMul: 1,
+  decalMul: 1,
 
   /* ---- ammo crate (offline): a supply chest that tops up reserves ---- */
   crateInterval: 10,    // seconds between spawns
@@ -1770,6 +1819,52 @@ const WEAPONS = {
           splash: 8.5, splashDmg: 900, explosionColor: [0x9a5aff, 0x08040f], noSelfDamage: true }
 };
 
+/* ============================================================
+   МИНИ-ИЗОБРАЖЕНИЯ ОРУЖИЯ ДЛЯ МАГАЗИНА
+   Один offscreen-рендерер рисует каждую модель в PNG (вид «боком»), чтобы в
+   магазине было видно, что покупаешь. Результаты кэшируются по id.
+   ============================================================ */
+let _shopIconRenderer = null;
+const _shopIconCache = {};
+function shopWeaponIcon(id) {
+  if (_shopIconCache[id] !== undefined) return _shopIconCache[id];
+  let url = '';
+  try {
+    if (!_shopIconRenderer) {
+      const cnv = document.createElement('canvas');
+      cnv.width = 160; cnv.height = 110;
+      const r = new THREE.WebGLRenderer({ canvas: cnv, antialias: true, alpha: true, preserveDrawingBuffer: true, powerPreference: 'low-power' });
+      r.setPixelRatio(1);
+      r.setSize(160, 110, false);
+      r.outputColorSpace = THREE.SRGBColorSpace;
+      r._scene = new THREE.Scene();
+      r._scene.add(new THREE.HemisphereLight(0xffffff, 0x44505f, 1.6));
+      const d1 = new THREE.DirectionalLight(0xffffff, 2.3); d1.position.set(1.3, 1.7, 1.1); r._scene.add(d1);
+      const d2 = new THREE.DirectionalLight(0x9fc2ff, 1.0); d2.position.set(-1.5, .7, -.9); r._scene.add(d2);
+      r._cam = new THREE.PerspectiveCamera(32, 160 / 110, 0.01, 60);
+      _shopIconRenderer = r;
+    }
+    const r = _shopIconRenderer;
+    const model = buildWeaponModel(id);
+    r._scene.add(model);
+    const box = new THREE.Box3().setFromObject(model);
+    const size = new THREE.Vector3(), ctr = new THREE.Vector3();
+    box.getSize(size); box.getCenter(ctr);
+    model.position.sub(ctr);
+    // вид «боком»: смотрим чуть сверху-сбоку, ствол уходит вбок — силуэт читается
+    const maxD = Math.max(size.x, size.y, size.z) || 1;
+    r._cam.position.set(maxD * .12, maxD * .75, maxD * 1.55);
+    r._cam.lookAt(0, 0, 0);
+    r._cam.updateProjectionMatrix();
+    r.render(r._scene, r._cam);
+    url = r.domElement.toDataURL('image/png');
+    r._scene.remove(model);
+    if (typeof disposeGroup === 'function') disposeGroup(model);
+  } catch (e) { url = ''; }
+  _shopIconCache[id] = url;
+  return url;
+}
+
 const GEAR = {
   kevlar:       { name: 'БРОНЯ (KEVLAR)', price: 650,  ap: 100, helmet: false },
   kevlarHelmet: { name: 'БРОНЯ + ШЛЕМ',   price: 1000, ap: 100, helmet: true },
@@ -1786,7 +1881,11 @@ const GEAR = {
   frag:         { name: 'ГРАНАТА',         price: 100,  grenade: 'frag',   desc: 'Осколочная · G — бросок' },
   freezeNade:   { name: 'КРИО-ГРАНАТА',    price: 120,  grenade: 'freeze', desc: 'Замораживает зомби в области' },
   napalmNade:   { name: 'НАПАЛМ',          price: 150,  grenade: 'napalm', desc: 'Оставляет горящую лужу' },
-  stickyBomb:   { name: 'ЛИПУЧКА',         price: 300,  grenade: 'sticky', desc: 'Липнет к поверхности · взрыв по кнопке (U)' }
+  stickyBomb:   { name: 'ЛИПУЧКА',         price: 300,  grenade: 'sticky', desc: 'Липнет к поверхности · взрыв по кнопке (U)' },
+  /* ---- ПРОКАЧКА ДВИЖЕНИЯ: покупаются один раз, действуют весь забег ---- */
+  highJump:     { name: 'ВЫСОКИЙ ПРЫЖОК',  price: 16000, perk: 'highJump', desc: 'Прыжок в 1.8× выше · держи ПРЫЖОК для джетпака' },
+  dashGear:     { name: 'РЫВОК',           price: 16000, perk: 'dash',     desc: 'X или кнопка РЫВОК — быстрый рывок вперёд (перезаряд 3с)' },
+  runBoost:     { name: 'ВЫСОКАЯ СКОРОСТЬ БЕГА', price: 16000, perk: 'runSpeed', desc: '+55% к скорости бега навсегда' }
 };
 function grenadeName(kind) { return kind === 'freeze' ? 'КРИО' : kind === 'napalm' ? 'НАПАЛМ' : kind === 'sticky' ? 'ЛИПУЧКА' : 'ГРАНАТА'; }
 function todName(k) {
@@ -1844,6 +1943,28 @@ const ZOMBIES = {
   /* ---- robot zombie: armoured ranged MINI-BOSS, from wave 8 onward ---- */
   robot:  { name: 'РОБОТ-ЗОМБИ',  hp: 1600, speed: 1.75, dmg: 45, score: 2200, money: 950, scale: 1.85, color: 0x8b95a1, atkRange: 2.3,
             miniBoss: true, armor: .35, shoot: 'plasma', shootRange: 26, shootCd: 2.2, shootDmg: 24, shootSpeed: 34, shootGrav: 0 },
+
+  /* ============================================================
+     НОВЫЕ МИНИ-БОССЫ (5) — разные по силе, способностям и моделькам.
+     Сила растёт: сталкер < паук < криомант < пожиратель < титан-мини.
+     ============================================================ */
+  /* 1) СТАЛКЕР — слабый быстрый мини-босс: рывки к игроку */
+  stalker: { name: 'СТАЛКЕР',     hp: 900,  speed: 2.55, dmg: 34, score: 1200, money: 520, scale: 1.55, color: 0x4a5a3a, atkRange: 2.1,
+             miniBoss: true, armor: .10, abilities: ['charge'], abilityCd: 5.5, aura: 0x9bff57 },
+  /* 2) ПАУК-МАТКА — плодовитый: призывает выводок и плюётся */
+  spider:  { name: 'ПАУК-МАТКА',  hp: 1350, speed: 1.90, dmg: 30, score: 1600, money: 640, scale: 1.72, color: 0x5a2a4a, atkRange: 2.1,
+             miniBoss: true, armor: .14, abilities: ['summon', 'barrage'], abilityCd: 6.5, aura: 0xff4a8a,
+             shoot: 'spit', shootRange: 20, shootCd: 2.6, shootDmg: 18, shootSpeed: 22, shootGrav: 7 },
+  /* 3) КРИОМАНТ — морозит игрока и создаёт лёд */
+  cryomancer: { name: 'КРИОМАНТ', hp: 1750, speed: 1.60, dmg: 40, score: 2000, money: 780, scale: 1.80, color: 0x3a6f9e, atkRange: 2.2,
+             miniBoss: true, armor: .18, abilities: ['frost', 'summon'], abilityCd: 6.0, aura: 0x7fd8ff,
+             shoot: 'frost', shootRange: 24, shootCd: 2.0, shootDmg: 20, shootSpeed: 30, shootGrav: 0 },
+  /* 4) ПОЖИРАТЕЛЬ ПЛОТИ — живучий: пожирает и лечится, бьёт мощно */
+  devourer:{ name: 'ПОЖИРАТЕЛЬ ПЛОТИ', hp: 2400, speed: 1.45, dmg: 58, score: 2900, money: 1100, scale: 2.05, color: 0x7a1020, atkRange: 2.5,
+             miniBoss: true, armor: .24, abilities: ['devour', 'shockwave'], abilityCd: 7.0, aura: 0xff2a3a },
+  /* 5) ТИТАН-МИНИ — самый сильный мини-босс: ударная волна + обстрел */
+  titanMini:{ name: 'ТИТАН-МИНИ', hp: 3400, speed: 1.30, dmg: 72, score: 4200, money: 1600, scale: 2.30, color: 0x6b3b2b, atkRange: 2.8,
+             miniBoss: true, armor: .30, abilities: ['shockwave', 'charge', 'barrage'], abilityCd: 6.5, aura: 0xff7a2a },
 
   /* ---- new specials (waves 7+) ---- */
   splitter:{ name: 'ДЕЛЯЩИЙСЯ',   hp: 130, speed: 1.9, dmg: 15, score: 280, money: 110, scale: 1.1, color: 0x7a4a6a, atkRange: 1.6,
@@ -2347,7 +2468,7 @@ function makeRng(seed) {
 /* ---------------- persistent settings & progress ---------------- */
 const Store = {
   key: 'cs3d.save.v1',
-  data: { sens: 2.2, fov: 80, vol: 60, quality: 1, touchSens: 1.5, name: '', best: 0, bestWave: 0, killsTotal: 0, matches: 0, wins: 0, signalSrv: 0, aimBest: 0, aimAutoFire: 1,
+  data: { sens: 2.2, fov: 80, vol: 60, quality: 1, gfx: 0, touchSens: 1.5, name: '', best: 0, bestWave: 0, killsTotal: 0, matches: 0, wins: 0, signalSrv: 0, aimBest: 0, aimAutoFire: 1,
           map: 'arena', players: 2, maxHP: 100, aimAssist: 1, horde: 0, clears: 0, freeplay: 0, rounds: 3, playTime: 0,
           offCount: 1, offHp: 1, offFree: 0, offMode: 'normal', offMods: {}, offModsRun: 0, offModPick: 0, checkpoint: null, shopAllow: {}, shopItems: {}, music: 1, sfxVol: 100, musicVol: 70,
           grenade: 'frag', buildable: 'turret', weather: 'day', trapsEnabled: 1, offCountExact: 10, offCountFixed: 0,
@@ -3073,14 +3194,21 @@ function buildMaterials() {
   MAT._cache = {};
 }
 
-/* Build a box mesh whose texture repeats according to its world size. */
+/* Build a box mesh whose texture repeats according to its world size.
+   Текстура масштабируется ПО РАЗМЕРУ ГРАНИ: у длинных стен больше плиток по
+   длине и столько же по высоте, поэтому рисунок больше не растягивается. */
 function makeBoxMesh(w, h, d, mat, faceTopMat) {
   const g = new THREE.BoxGeometry(w, h, d);
   let m = mat;
   if (mat.map) {
     const s = mat.userData.scale || 3;
-    // clone material so each box gets its own repeat scale (merged via material cache keyed by size bucket)
-    const key = mat.userData.tex + ':' + s + ':' + Math.max(1, Math.round(w / s)) + ':' + Math.max(1, Math.round(h / s)) + ':' + Math.max(1, Math.round(d / s));
+    /* сколько плиток текстуры нужно по каждой паре осей: перед/зад (w×h),
+       бок (d×h) и верх (w×d) — так рисунок не растягивается на длинных
+       стенах и не «сплющивается» на тонких перекладинах. */
+    const rx = Math.max(1, Math.round(w / s));
+    const ry = Math.max(1, Math.round(h / s));
+    const rz = Math.max(1, Math.round(d / s));
+    const key = mat.userData.tex + ':' + s + ':' + rx + ':' + ry + ':' + rz;
     if (!MAT._cache) MAT._cache = {};
     m = MAT._cache[key];
     if (!m) {
@@ -3088,9 +3216,30 @@ function makeBoxMesh(w, h, d, mat, faceTopMat) {
       m.map = mat.map.clone();
       m.map.needsUpdate = true;
       m.map.wrapS = m.map.wrapT = THREE.RepeatWrapping;
-      m.map.repeat.set(Math.max(1, Math.round(w / s)) / 1 || 1, Math.max(1, Math.round(h / s)) || 1);
+      m.map.repeat.set(1, 1);          // реальный repeat задаётся через UV граней
       MAT._cache[key] = m;
+      m.userData = m.userData || {};
     }
+    /* BoxGeometry: 6 грани по 4 вершины. Задаём UV каждой грани отдельно,
+       чтобы повторы шли по фактическим размерам сторон. Делается КАЖДЫЙ раз,
+       т.к. геометрия у каждого бокса своя, а материал может быть из кэша. */
+    const uv = g.attributes.uv;
+    const faceRepeat = [
+      [rz, ry],   // +X  (бок)
+      [rz, ry],   // -X  (бок)
+      [rx, rz],   // +Y  (верх)
+      [rx, rz],   // -Y  (низ)
+      [rx, ry],   // +Z  (перед)
+      [rx, ry]    // -Z  (зад)
+    ];
+    for (let f = 0; f < 6; f++) {
+      const ru = faceRepeat[f][0], rv = faceRepeat[f][1];
+      for (let v = 0; v < 4; v++) {
+        const i = (f * 4 + v) * 2;
+        uv.setXY(i, uv.getX(i) * ru, uv.getY(i) * rv);
+      }
+    }
+    uv.needsUpdate = true;
   }
   const mesh = new THREE.Mesh(g, m);
   mesh.castShadow = true;
@@ -3103,7 +3252,70 @@ function makeBoxMesh(w, h, d, mat, faceTopMat) {
    damageMapAt() наносит урон разрушаемым чанкам в радиусе (взрыв/удар зомби) и
    убирает те, чей HP упал до нуля (меш скрывается, коллизия мягко снимается).
    restoreMap() возвращает ВСЕ чанки (вызывается на новой волне/карте).
+
+   ОПТИМИЗАЦИЯ: все чанки одного цвета/размера рисуются ОДНИМ InstancedMesh —
+   сотни кусков карты дают несколько draw call вместо сотен, что критично для
+   телефона.
    ============================================================ */
+/* ключ инстанс-группы: материал + цвет. Размер задаётся масштабом матрицы,
+   поэтому куски любых размеров делят одну InstancedMesh (единый unit-куб). */
+function _chunkInstanceKey(mat) {
+  const tex = (mat && mat.userData && mat.userData.tex) || 'flat';
+  return tex + '|' + (mat && mat.color ? mat.color.getHexString() : 'ffffff');
+}
+
+/* добавить чанк в общий InstancedMesh (создаётся лениво при первом чанке).
+   Базовый куб единичный; масштаб = реальный размер куска. */
+function _addChunkInstance(parent, world, cx, cy, cz, cw, ch, cd, mat, tag, noCollide, noShadow, invisible) {
+  const aabb = aabbFromBase(cx, cy, cz, cw, ch, cd, tag);
+  aabb.destructible = true;
+  aabb.hp = aabb.maxHp = Math.max(30, cw * ch * cd * 26);
+  aabb._iw = cw; aabb._ih = ch; aabb._id = cd;   // размеры для матрицы инстанса
+  if (!noCollide) world.addBox(aabb);
+  aabb._invisible = !!invisible;
+
+  if (!invisible) {
+    if (!MAP._chunkGroups) MAP._chunkGroups = {};
+    const key = _chunkInstanceKey(mat || MAT.concrete);
+    let grp = MAP._chunkGroups[key];
+    if (!grp) {
+      grp = { mat: mat || MAT.concrete, items: [], mesh: null, noShadow: !!noShadow, parent: parent };
+      MAP._chunkGroups[key] = grp;
+    }
+    aabb._chunkGroup = grp;
+    aabb._chunkIndex = grp.items.length;
+    const zero = new THREE.Matrix4().makeScale(0, 0, 0);
+    grp.items.push({ aabb: aabb, mtx: zero, x: cx, y: cy + ch / 2, z: cz, w: cw, h: ch, d: cd, visible: true });
+  }
+  MAP.destructibles.push(aabb);
+  return aabb;
+}
+
+/* собрать все инстанс-группы в реальные InstancedMesh (один раз после постройки) */
+function _buildChunkInstances() {
+  if (!MAP._chunkGroups) return;
+  const tmp = new THREE.Matrix4();
+  for (const key in MAP._chunkGroups) {
+    const grp = MAP._chunkGroups[key];
+    if (grp.mesh) continue;
+    const geo = new THREE.BoxGeometry(1, 1, 1);
+    const im = new THREE.InstancedMesh(geo, grp.mat, Math.max(1, grp.items.length));
+    im.castShadow = !grp.noShadow;
+    im.receiveShadow = true;
+    im.frustumCulled = false;             // чанки размазаны по арене
+    im.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    for (let i = 0; i < grp.items.length; i++) {
+      const it = grp.items[i];
+      it.mtx.makeScale(it.w, it.h, it.d).setPosition(it.x, it.y, it.z);
+      im.setMatrixAt(i, it.mtx);
+    }
+    im.instanceMatrix.needsUpdate = true;
+    im.userData.group = grp;
+    grp.mesh = im;
+    grp.parent.add(im);
+  }
+}
+
 function damageMapAt(x, y, z, radius, dmg) {
   if (!MAP.destructibles || !MAP.destructibles.length) return 0;
   let destroyed = 0;
@@ -3122,30 +3334,56 @@ function damageMapAt(x, y, z, radius, dmg) {
     b.hp -= dmg * (0.4 + k * 0.6);
     if (b.hp <= 0) { removeMapChunk(b); destroyed++; }
   }
+  if (destroyed) _flushChunkInstances();
   return destroyed;
 }
 
-/* один чанк: спрятать меш и снять коллизию (мягко — бокс остаётся в списке) */
+/* один чанк: спрятать инстанс (масштаб 0) и снять коллизию */
 function removeMapChunk(b) {
   if (!b || b.removed) return;
   b.removed = true;
-  if (b.mesh) b.mesh.visible = false;
+  if (b._chunkGroup && b._chunkGroup.items[b._chunkIndex]) {
+    const it = b._chunkGroup.items[b._chunkIndex];
+    it.visible = false;
+    it.mtx.copy(ZERO_M4);
+    _chunkDirty = true;
+  } else if (b.mesh) b.mesh.visible = false;
   if (MAP.world) MAP.world.removeBox(b);
+}
+
+/* пометить инстанс-буферы к обновлению */
+const ZERO_M4 = new THREE.Matrix4().makeScale(0, 0, 0);
+let _chunkDirty = false;
+function _flushChunkInstances() {
+  if (!MAP._chunkGroups) return;
+  for (const key in MAP._chunkGroups) {
+    const grp = MAP._chunkGroups[key];
+    if (!grp.mesh) continue;
+    for (let i = 0; i < grp.items.length; i++) grp.mesh.setMatrixAt(i, grp.items[i].mtx);
+    grp.mesh.instanceMatrix.needsUpdate = true;
+  }
+  _chunkDirty = false;
 }
 
 /* восстановить всю карту после волны */
 function restoreMap() {
   if (!MAP.destructibles || !MAP.destructibles.length) return 0;
   let n = 0;
+  const tmp = new THREE.Matrix4();
   for (let i = 0; i < MAP.destructibles.length; i++) {
     const b = MAP.destructibles[i];
     if (!b.removed) continue;
     b.removed = false;
     b.hp = b.maxHp;
-    if (b.mesh) b.mesh.visible = true;
+    if (b._chunkGroup && b._chunkGroup.items[b._chunkIndex]) {
+      const it = b._chunkGroup.items[b._chunkIndex];
+      it.visible = true;
+      it.mtx.makeScale(it.w, it.h, it.d).setPosition(it.x, it.y, it.z);
+    } else if (b.mesh) b.mesh.visible = true;
     if (MAP.world) MAP.world.restoreBox(b);
     n++;
   }
+  if (n) _flushChunkInstances();
   return n;
 }
 
@@ -3174,19 +3412,8 @@ function solid(parent, world, x, y, z, w, h, d, mat, opts) {
             const cx = x - w / 2 + cw * (ix + .5);
             const cz = z - d / 2 + cd * (iz + .5);
             const cy = y + ch * iy;
-            const aabb = aabbFromBase(cx, cy, cz, cw, ch, cd, tag);
-            aabb.destructible = true;
+            const aabb = _addChunkInstance(parent, world, cx, cy, cz, cw, ch, cd, mat || MAT.concrete, tag, opts.noCollide, opts.noShadow, opts.invisible);
             aabb.building = gid;
-            aabb.hp = aabb.maxHp = Math.max(30, cw * ch * cd * 26);
-            if (!opts.noCollide) world.addBox(aabb);
-            if (!opts.invisible) {
-              const mesh = makeBoxMesh(cw, ch, cd, mat || MAT.concrete);
-              mesh.position.set(cx, cy + ch / 2, cz);
-              if (opts.noShadow) mesh.castShadow = false;
-              parent.add(mesh);
-              aabb.mesh = mesh;
-            }
-            MAP.destructibles.push(aabb);
           }
         }
       }
@@ -4088,8 +4315,13 @@ function buildMap(scene, quality, mapId) {
   MAP.aimRoom = null;
   MAP.destructibles = [];
   MAP._chunkGid = 0;
+  MAP._chunkGroups = {};
 
   MAP.def.build(group, world);
+
+  /* все разрушаемые чанки собираются в InstancedMesh — сотни кусков дают
+     несколько draw call вместо сотен (важно для телефона) */
+  _buildChunkInstances();
 
   buildAimRoom(group, world);
   buildLighting(group, quality);
@@ -4996,7 +5228,9 @@ const Audio3D_SFX = {
     const base = kind === 'brute' ? 52 : kind === 'runner' ? 170 : kind === 'tank' ? 44
       : kind === 'flying' ? 240 : kind === 'robot' ? 66 : kind === 'spitter' ? 130
       : kind === 'digger' ? 72 : kind === 'splitter' ? 150 : kind === 'healer' ? 300
-      : kind === 'shielder' ? 60 : kind === 'summoner' ? 46 : 96;
+      : kind === 'shielder' ? 60 : kind === 'summoner' ? 46
+      : kind === 'stalker' ? 120 : kind === 'spider' ? 88 : kind === 'cryomancer' ? 210
+      : kind === 'devourer' ? 38 : kind === 'titanMini' ? 34 : 96;
     const o = this.ctx.createOscillator();
     o.type = 'sawtooth';
     o.frequency.setValueAtTime(base * (.85 + Math.random() * .4), t);
@@ -5008,6 +5242,36 @@ const Audio3D_SFX = {
     g.gain.exponentialRampToValueAtTime(.001, t + .5);
     o.connect(lp); lp.connect(g); g.connect(out);
     o.start(t); o.stop(t + .55);
+  },
+  /* ЗВУКИ ЗОМБИ: рычание, стон, визг — короткие узнаваемые реплики, чтобы
+     орда «звучала» и по звуку было понятно, кто подходит. */
+  zombieVoice(x, y, z, kind) {
+    if (!this.ctx || this.muted) return;
+    const sp = this._spatial(x, y, z, 3, 42);
+    if (sp.gain <= .004) return;
+    const t = this.ctx.currentTime;
+    // визгливый / низкий тембр в зависимости от типа и случайности
+    const deep = kind === 'brute' || kind === 'tank' || kind === 'devourer' || kind === 'titanMini' || kind === 'bossBrute' || kind === 'bossTitan' || kind === 'bossFinal';
+    const high = kind === 'runner' || kind === 'crawler' || kind === 'healer' || kind === 'spitter';
+    const rnd = Math.random();
+    const f0 = deep ? U.rand(50, 78) : high ? U.rand(180, 300) : U.rand(95, 150);
+    const o = this.ctx.createOscillator();
+    o.type = rnd < .5 ? 'sawtooth' : 'square';
+    o.frequency.setValueAtTime(f0, t);
+    // «ныряющее» рычание с дрожью
+    o.frequency.linearRampToValueAtTime(f0 * U.rand(.5, .75), t + .5);
+    const lfo = this.ctx.createOscillator(); lfo.type = 'sine'; lfo.frequency.value = U.rand(9, 20);
+    const lfoG = this.ctx.createGain(); lfoG.gain.value = f0 * .12;
+    lfo.connect(lfoG); lfoG.connect(o.frequency);
+    const lp = this.ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = deep ? 620 : 1300; lp.Q.value = 4;
+    const g = this.ctx.createGain();
+    g.gain.setValueAtTime(.0001, t);
+    g.gain.linearRampToValueAtTime(sp.gain * (deep ? .30 : .20), t + .05);
+    g.gain.exponentialRampToValueAtTime(.001, t + .55);
+    const pan = this.ctx.createStereoPanner ? this.ctx.createStereoPanner() : null;
+    if (pan) { pan.pan.value = sp.pan; g.connect(pan); pan.connect(this.sfx); } else g.connect(this.sfx);
+    o.connect(lp); lp.connect(g);
+    o.start(t); o.stop(t + .6); lfo.start(t); lfo.stop(t + .6);
   },
   step(x, y, z) {
     if (!this.ctx || this.muted) return;
@@ -8126,6 +8390,7 @@ class Player {
     this.helmet = false;
     this.heavyArmor = false;   // reinforced armour soaks a larger share of damage
     this.energyArmor = false;  // best suit: AP 300, soaks the most
+    this.armorMax = CFG.maxAP || 100;   // AP the current suit provides (для полосы HUD)
     this.alive = true;
     this.money = 800;
     this.kills = 0;
@@ -8144,6 +8409,16 @@ class Player {
     this.droneOwned = false;  // has bought the drone: it recharges every online round
     this.turretDrone = 0;     // turret-drone charges (gear, launched with V)
     this.mechOwned = false;   // has bought the mech suit (can re-enter it)
+    /* ---- ПРОКАЧКА ДВИЖЕНИЯ (снаряжение по $16000) ---- */
+    this.perkHighJump = false;   // 1.8× прыжок (+джетпак по удержанию)
+    this.perkDash = false;       // рывок вне меха
+    this.perkRunSpeed = false;   // +55% к бегу
+    this.jumpMul = 1;            // множители, применяются в applyPerks()
+    this.runMul = 1;
+    this.dashGearCd = 0;         // перезарядка рывка-перка
+    this.dashGearT = 0;
+    this.dashGearDir = { x: 0, z: 0 };
+    this.freezeT = 0;            // замедление от КРИОМАНТА
     this.mechSuit = false;    // currently sitting in the mech cockpit
     this.jetActive = false;   // jetpack thrusting
     this.jetT = 0;            // seconds of thrust left this burst
@@ -8280,6 +8555,13 @@ class Player {
     const order = this.inv[2] ? [2, 1, 3] : [1, 3];
     const i = order.indexOf(this.slot);
     return order[(i + 1) % order.length];
+  }
+
+  /* Пересчитать множители от купленной прокачки движения. Дёшево, вызывается
+     при покупке и при загрузке сохранения. */
+  applyPerks() {
+    this.jumpMul = this.perkHighJump ? 1.8 : 1;
+    this.runMul = this.perkRunSpeed ? 1.55 : 1;
   }
 
   resetSpawn(x, y, z, yaw) {
@@ -8470,6 +8752,7 @@ class Player {
 
     let maxSpeed = input.run && !this.crouching ? CFG.runSpeed : CFG.walkSpeed;
     if (this.crouching) maxSpeed = CFG.crouchSpeed;
+    maxSpeed *= this.runMul || 1;
     if (this.isAiming && def.zoom) maxSpeed *= .35;
     maxSpeed *= (1 - U.clamp(this.reloadT > 0 ? .16 : 0, 0, 1));
 
@@ -8493,9 +8776,51 @@ class Player {
 
     // ---- jump ----
     if (input.wantJump && this.onGround) {
-      this.vel.y = CFG.jumpSpeed;
+      this.vel.y = CFG.jumpSpeed * (this.jumpMul || 1);
       this.onGround = false;
     }
+    /* ВЫСОКИЙ ПРЫЖОК: держи ПРЫЖОК — включается джетпак (как у меха, но слабее).
+       Работает и на телефоне (кнопка зажимается), и на ПК (удержание Space). */
+    if (this.perkHighJump && !this.mechSuit) {
+      if (this.hjJetActive) {
+        this.hjJetT -= dt;
+        this.vel.y = Math.max(this.vel.y, CFG.highJumpThrust || 9);
+        if (this.hjJetT <= 0) { this.hjJetActive = false; this.hjJetCd = CFG.highJumpRecharge || 1.2; }
+      } else if (this.hjJetCd > 0) {
+        this.hjJetCd -= dt;
+      } else if (input.wantJump && !this.onGround) {
+        this.hjJetActive = true; this.hjJetT = CFG.highJumpMax || 1.1;
+      }
+    } else { this.hjJetActive = false; this.hjJetCd = 0; this.hjJetT = 0; }
+
+    /* РЫВОК (снаряжение): короткий мощный рывок вперёд, вне меха. */
+    if (this.perkDash && !this.mechSuit) {
+      if (this.dashGearCd > 0) this.dashGearCd -= dt;
+      if (this._gearDashWant && this.dashGearCd <= 0) {
+        this._gearDashWant = false;
+        const f = input.f || 0, r = input.r || 0;
+        let dx = -Math.sin(this.yaw) * f + Math.cos(this.yaw) * r;
+        let dz = -Math.cos(this.yaw) * f - Math.sin(this.yaw) * r;
+        const l = Math.hypot(dx, dz);
+        if (l < .1) { dx = -Math.sin(this.yaw); dz = -Math.cos(this.yaw); }
+        else { dx /= l; dz /= l; }
+        this.dashGearDir = { x: dx, z: dz };
+        this.dashGearT = CFG.gearDashTime || .28;
+        this.dashGearCd = CFG.gearDashCd || 3;
+        Audio3D_SFX.tone(320, .12, 'sawtooth', .1, this.pos.x, this.pos.y, this.pos.z, 120);
+      }
+      if (this.dashGearT > 0) {
+        this.dashGearT -= dt;
+        const k = Math.max(0, this.dashGearT / (CFG.gearDashTime || .28));
+        const s = (CFG.gearDashSpeed || 24) * (.4 + .6 * k);
+        this.vel.x = this.dashGearDir.x * s;
+        this.vel.z = this.dashGearDir.z * s;
+        if (this.vel.y < 0) this.vel.y = 0;
+      }
+    } else { this._gearDashWant = false; this.dashGearT = 0; }
+
+    /* КРИОМАНТ: заморозка замедляет игрока */
+    if (this.freezeT > 0) { this.freezeT -= dt; maxSpeed *= .45; }
 
     /* ---- МЕХАКОСТЮМ: jetpack ----
        Hold Space in the mech: for `mechJetMax` seconds thrust lifts you, then the
@@ -9001,6 +9326,187 @@ function buildZombieMesh(type) {
       new THREE.MeshBasicMaterial({ color: 0x9a3aff, transparent: true, opacity: .8 }));
     ring.position.set(0, 1.05, -.30); g.add(ring);
     parts.summonCore = core; parts.summonRing = ring;
+  } else if (ZOMBIES[type] && ZOMBIES[type].miniBoss && type !== 'robot') {
+    /* ============================================================
+       НОВЫЕ МИНИ-БОССЫ (5) — у каждого своя моделька, «кожа» и силуэт,
+       чтобы издалека читалось, кто именно идёт. Сила растёт по списку.
+       ============================================================ */
+    const glowMat = (c) => new THREE.MeshBasicMaterial({ color: c });
+    const eyePair = (c, ox, oy, oz, r) => {
+      const m = new THREE.MeshBasicMaterial({ color: c });
+      [-1, 1].forEach(s => {
+        const e = new THREE.Mesh(new THREE.SphereGeometry(r || .045, 8, 6), m);
+        e.position.set(ox * s, oy, oz); head.add(e);
+      });
+    };
+    // все мини-боссы заметно крупнее обычного зомби
+    chest.scale.set(1.35, 1.12, 1.3);
+    pelvis.scale.set(1.25, 1.05, 1.2);
+    armL.scale.set(1.45, 1.12, 1.45); armR.scale.set(1.45, 1.12, 1.45);
+    legL.scale.set(1.3, 1.05, 1.3); legR.scale.set(1.3, 1.05, 1.3);
+    skull.scale.set(1.18, 1.08, 1.18);
+
+    if (type === 'stalker') {
+      /* СТАЛКЕР — тощий, закованный в лёгкую броню охотник: капюшон,
+         зелёные глаза-щели и два кривых клинка на предплечьях. */
+      const HIDE = 0x3f4a30, PLATE = 0x59643f, GLOW = 0x9bff57;
+      chest.material = new THREE.MeshLambertMaterial({ color: HIDE });
+      pelvis.material = new THREE.MeshLambertMaterial({ color: 0x2b331f });
+      skull.material = new THREE.MeshLambertMaterial({ color: PLATE });
+      // капюшон
+      const hood = new THREE.Mesh(new THREE.ConeGeometry(.34, .55, 7, 1, true),
+        new THREE.MeshLambertMaterial({ color: HIDE, side: THREE.DoubleSide }));
+      hood.position.set(0, 1.70, .04); hood.rotation.x = -.18; g.add(hood);
+      // наплечники
+      [-1, 1].forEach(s => addBossBox(g, .30, .18, .34, PLATE, s * .48, 1.60, 0));
+      // клинки на предплечьях
+      [-1, 1].forEach(s => {
+        const blade = new THREE.Mesh(new THREE.ConeGeometry(.055, .78, 4), new THREE.MeshLambertMaterial({ color: 0xcfd8b0 }));
+        blade.position.set(s * .40, 1.02, -.46); blade.rotation.x = -1.35;
+        g.add(blade);
+      });
+      eyePair(GLOW, .07, .04, -.155, .04);
+      const lamp = new THREE.PointLight(GLOW, 3, 6, 2); lamp.position.set(0, 1.5, 0); g.add(lamp);
+    } else if (type === 'spider') {
+      /* ПАУК-МАТКА — паучиха: 6 дополнительных лап и светящийся кокон
+         с яйцами на спине, плюющиеся железы. */
+      const CHITIN = 0x4a2140, SAC = 0xff4a8a;
+      chest.material = new THREE.MeshLambertMaterial({ color: CHITIN });
+      pelvis.material = new THREE.MeshLambertMaterial({ color: 0x341428 });
+      skull.material = new THREE.MeshLambertMaterial({ color: 0x5a2a4a });
+      // лапы
+      const legMat = new THREE.MeshLambertMaterial({ color: 0x2c1024 });
+      for (let i = 0; i < 3; i++) {
+        [-1, 1].forEach(s => {
+          const hip = new THREE.Group();
+          hip.position.set(s * .30, 1.10, -.05 + i * .18);
+          const upper = new THREE.Mesh(new THREE.CylinderGeometry(.05, .04, .70, 6), legMat);
+          upper.position.set(s * .30, -.10, 0); upper.rotation.z = s * -.95;
+          const lower = new THREE.Mesh(new THREE.CylinderGeometry(.04, .025, .62, 6), legMat);
+          lower.position.set(s * .62, -.42, 0); lower.rotation.z = s * .55;
+          hip.add(upper); hip.add(lower);
+          g.add(hip);
+        });
+      }
+      // кокон с яйцами
+      const sac = new THREE.Mesh(new THREE.SphereGeometry(.30, 10, 8),
+        new THREE.MeshLambertMaterial({ color: 0x6a2a52, emissive: 0x2a0816 }));
+      sac.position.set(0, 1.12, .24); torso.add(sac); parts.eggSac = sac;
+      for (let i = 0; i < 6; i++) {
+        const a = i / 6 * Math.PI * 2;
+        const egg = new THREE.Mesh(new THREE.SphereGeometry(.06, 6, 5), glowMat(SAC));
+        egg.position.set(Math.cos(a) * .18, 1.12 + Math.sin(a) * .16, .24); torso.add(egg);
+      }
+      // 4 пары глаз
+      const em = new THREE.MeshBasicMaterial({ color: 0xff1a5a });
+      [-.10, -.03, .03, .10].forEach((ox, i) => {
+        const e = new THREE.Mesh(new THREE.SphereGeometry(i % 2 ? .028 : .038, 6, 5), em);
+        e.position.set(ox, .06 - (i > 1 ? .06 : 0), -.16); head.add(e);
+      });
+    } else if (type === 'cryomancer') {
+      /* КРИОМАНТ — ледяной маг: кристаллическая броня, посох с осколком
+         льда и морозная аура. */
+      const ICE = 0x7fd8ff, DEEP = 0x2f5f8f;
+      chest.material = new THREE.MeshLambertMaterial({ color: DEEP });
+      pelvis.material = new THREE.MeshLambertMaterial({ color: 0x24486b });
+      skull.material = new THREE.MeshLambertMaterial({ color: 0x3a6f9e });
+      // ледяные шипы на плечах и спине
+      [-1, 1].forEach(s => {
+        for (let i = 0; i < 3; i++) {
+          const shard = new THREE.Mesh(new THREE.ConeGeometry(.08, .42 + i * .12, 4),
+            new THREE.MeshLambertMaterial({ color: ICE, emissive: 0x0a2a40 }));
+          shard.position.set(s * (.42 + i * .06), 1.66 + i * .05, .02);
+          shard.rotation.z = s * -.5; g.add(shard);
+        }
+      });
+      // нагрудный кристалл
+      const gem = new THREE.Mesh(new THREE.OctahedronGeometry(.20, 0), glowMat(ICE));
+      gem.position.set(0, .18, -.20); torso.add(gem); parts.gem = gem;
+      // посох
+      const staff = new THREE.Group();
+      staff.add(mkBox(.07, 1.9, .07, 0x2a4a6a, 0, 0, 0));
+      const orb = new THREE.Mesh(new THREE.IcosahedronGeometry(.20, 0), glowMat(0xbfefff));
+      orb.position.y = 1.0; staff.add(orb);
+      staff.position.set(-1.0, 1.05, .10); g.add(staff); parts.staff = staff;
+      eyePair(ICE, .075, .04, -.155, .045);
+      const lamp = new THREE.PointLight(ICE, 4, 8, 2); lamp.position.set(0, 1.3, 0); g.add(lamp);
+    } else if (type === 'devourer') {
+      /* ПОЖИРАТЕЛЬ ПЛОТИ — груда мышц с двумя пастями, костяными шипами
+         и кровавым ореолом. */
+      const FLESH = 0x7a1020, MUSCLE = 0xb03040, BONE = 0xe8dcc8;
+      chest.material = new THREE.MeshLambertMaterial({ color: FLESH });
+      pelvis.material = new THREE.MeshLambertMaterial({ color: 0x5a0c18 });
+      skull.material = new THREE.MeshLambertMaterial({ color: MUSCLE });
+      // бугры мышц
+      for (let i = 0; i < 6; i++) {
+        const a = i / 6 * Math.PI * 2;
+        const lump = new THREE.Mesh(new THREE.SphereGeometry(U.rand(.14, .22), 7, 6),
+          new THREE.MeshLambertMaterial({ color: MUSCLE }));
+        lump.position.set(Math.cos(a) * .30, .16 + Math.sin(a) * .26, Math.sin(a) * .16 - .12);
+        torso.add(lump);
+      }
+      // нижняя пасть на животе
+      const maw = new THREE.Group();
+      maw.add(mkBox(.60, .30, .12, 0x1a0508, 0, 0, -.20));
+      for (let i = 0; i < 6; i++) {
+        const t = new THREE.Mesh(new THREE.ConeGeometry(.05, .15, 4), glowMat(BONE));
+        t.position.set(-.25 + i * .10, .13, -.22); t.rotation.x = Math.PI; maw.add(t);
+        const t2 = new THREE.Mesh(new THREE.ConeGeometry(.05, .15, 4), glowMat(BONE));
+        t2.position.set(-.25 + i * .10, -.13, -.22); maw.add(t2);
+      }
+      maw.position.set(0, -.30, 0); torso.add(maw); parts.maw = maw;
+      // костяные шипы на спине
+      for (let i = 0; i < 5; i++) {
+        const sp = new THREE.Mesh(new THREE.ConeGeometry(.07, .38 - i * .03, 4),
+          new THREE.MeshLambertMaterial({ color: BONE }));
+        sp.position.set(0, 1.72 - i * .14, .18); sp.rotation.x = -.5; g.add(sp);
+      }
+      eyePair(0xff3020, .085, .04, -.16, .05);
+      // кровавый ореол
+      const halo = new THREE.Mesh(new THREE.TorusGeometry(.55, .04, 6, 20),
+        new THREE.MeshBasicMaterial({ color: 0xff2a2a, transparent: true, opacity: .5, blending: THREE.AdditiveBlending, depthWrite: false }));
+      halo.rotation.x = Math.PI / 2; halo.position.y = 1.05; g.add(halo); parts.bloodHalo = halo;
+    } else if (type === 'titanMini') {
+      /* ТИТАН-МИНИ — уменьшенный каменный титан: глыбы, магма и кулаки-молоты
+         (отличается от робота и старшего Титана). */
+      const ROCK = 0x5a4a42, ROCK2 = 0x3e332d, MAGMA = 0xff7a2a;
+      chest.material = new THREE.MeshLambertMaterial({ color: ROCK });
+      pelvis.material = new THREE.MeshLambertMaterial({ color: ROCK2 });
+      skull.material = new THREE.MeshLambertMaterial({ color: ROCK });
+      // каменные наплечники
+      [-1, 1].forEach(s => {
+        const b = new THREE.Mesh(new THREE.DodecahedronGeometry(.38, 0), new THREE.MeshLambertMaterial({ color: ROCK2 }));
+        b.position.set(s * .58, 1.62, 0); g.add(b);
+      });
+      // трещины магмы
+      for (let i = 0; i < 4; i++) {
+        const crack = mkBox(.62 - i * .09, .05, .04, MAGMA, U.rand(-.1, .1), 1.5 - i * .17, -.19);
+        crack.rotation.z = U.rand(-.3, .3); g.add(crack);
+      }
+      // кулаки-молоты
+      [-1, 1].forEach(s => {
+        const fist = new THREE.Mesh(new THREE.DodecahedronGeometry(.24, 0), new THREE.MeshLambertMaterial({ color: ROCK2 }));
+        fist.position.set(s * .40, .60, -.10); g.add(fist);
+      });
+      eyePair(MAGMA, .09, .04, -.16, .05);
+      const core = new THREE.Mesh(new THREE.SphereGeometry(.22, 10, 8), glowMat(0xffb060));
+      core.position.set(0, 1.15, -.24); torso.add(core);
+    }
+
+    /* общая аура мини-босса: кольца у ног + цветная подсветка */
+    if (ZOMBIES[type].aura) {
+      const arcC = ZOMBIES[type].aura;
+      const aura = new THREE.Group();
+      const mkRing = (r, tube, op) => {
+        const m = new THREE.Mesh(new THREE.TorusGeometry(r, tube, 6, 26),
+          new THREE.MeshBasicMaterial({ color: arcC, transparent: true, opacity: op, blending: THREE.AdditiveBlending, depthWrite: false }));
+        m.rotation.x = Math.PI / 2; return m;
+      };
+      aura.add(mkRing(.85, .04, .5));
+      const r2 = mkRing(1.15, .026, .32); r2.position.y = .05; aura.add(r2);
+      aura.position.y = .10; g.add(aura);
+      parts.aura = aura; parts.auraRing2 = r2;
+    }
   } else if (ZOMBIES[type] && ZOMBIES[type].boss) {
     /* Every boss gets its own silhouette so it reads instantly from across the
        arena. Shared base is bulked up first, then the type-specific build adds
@@ -9210,6 +9716,8 @@ class Zombie {
     this.alive = true;
     this.dying = false;
     this.deadT = 0;
+    this.isBoss = !!S.boss;
+    this.isMiniBoss = !!S.miniBoss;
     this.pos = { x, y: y === undefined ? 0 : y, z };
     this.vel = { x: 0, y: 0, z: 0 };
     this.yaw = U.rand(-Math.PI, Math.PI);
@@ -9244,6 +9752,9 @@ class Zombie {
     this.healCd = U.rand(.5, 2.5); this.healPulse = 0; this.healFlash = 0;
     this.summonCd = U.rand(2, 5); this.summonPulse = 0;
     this.blockFlash = 0;
+    /* способности мини-боссов */
+    this.abilityCd = this.def.abilities ? U.rand(2, 5) : 0;
+    this.abilityTimer = 0;
 
     this.group = buildZombieMesh(type);
     this.group.scale.setScalar(this.scale);
@@ -10217,6 +10728,7 @@ const TouchUI = {
   autoFire: false,        // double-tap locked: keep firing like a held LMB
   jumpQueued: false,
   jumpHeld: false,
+  crouchToggle: false,   // ПРИСЕСТЬ — переключатель (не удержание)
   reloadQueued: false,
   switchQueued: 0,
   climbQueued: false,
@@ -10310,9 +10822,14 @@ const TouchUI = {
       el.addEventListener('touchend', e => { swallow(e); el.classList.remove('down'); off(); }, { passive: false });
       el.addEventListener('touchcancel', e => { swallow(e); el.classList.remove('down'); off(); }, { passive: false });
     };
-    holdBtn(E.crouch, () => { this.crouchHeld = true; }, () => { this.crouchHeld = false; });
-    // ПРЫЖОК is HELD: the mech jetpack thrusts while the thumb is down, and a
-    // tap still queues a normal jump (jumpQueued) for the ground.
+    /* ПРИСЕСТЬ — ПЕРЕКЛЮЧАТЕЛЬ: нажал один раз сел, нажал второй — встал.
+       Раньше кнопку нужно было удерживать, что мешало целиться и стрелять. */
+    E.crouch.addEventListener('touchstart', e => {
+      swallow(e);
+      this.crouchToggle = !this.crouchToggle;
+      E.crouch.classList.toggle('down', this.crouchToggle);
+    }, { passive: false });
+    // ПРЫЖОК зажимаемый: пока держишь — прыгаешь/летишь на джетпаке перка
     holdBtn(E.jump, () => { this.jumpQueued = true; this.jumpHeld = true; }, () => { this.jumpHeld = false; });
     // Dedicated automatic-fire button (a toggle). It replaced the old
     // double-tap gesture, which conflicted with normal aiming taps.
@@ -10433,8 +10950,8 @@ const TouchUI = {
     return {
       f: this.move.f, r: this.move.r,
       run: this.move.run,
-      crouch: !!this.crouchHeld,
-      wantJump: false
+      crouch: !!this.crouchToggle,
+      wantJump: this.jumpHeld
     };
   },
 
@@ -10602,6 +11119,21 @@ function initSettings() {
     });
   }
 
+  /* графика / производительность: автопресет под устройство или вручную */
+  const gfx = document.getElementById('sGfx'), ogfx = document.getElementById('oGfx');
+  const gfxNames = ['АВТО', 'НИЗКАЯ', 'СРЕДНЯЯ', 'ВЫСОКАЯ'];
+  if (gfx) {
+    gfx.value = (S.gfx === undefined ? 0 : S.gfx);
+    if (ogfx) ogfx.textContent = gfxNames[parseInt(gfx.value, 10)] || 'АВТО';
+    gfx.addEventListener('input', () => {
+      S.gfx = parseInt(gfx.value, 10);
+      if (ogfx) ogfx.textContent = gfxNames[S.gfx];
+      Store.save();
+      if (window.Game && Game.applyGfxPreset) Game.applyGfxPreset();
+      if (typeof UI !== 'undefined' && UI.toast) UI.toast('Графика: ' + gfxNames[S.gfx], '#57d16a');
+    });
+  }
+
   // environment auto-cycle speed
   const evs = document.getElementById('sEnvSpeed'), oevs = document.getElementById('oEnvSpeed');
   if (evs) {
@@ -10717,6 +11249,11 @@ class Effects {
     this.decals = [];
     this.maxDecals = quality === 0 ? 40 : quality === 1 ? 90 : 150;
     this.maxParticles = quality === 0 ? 120 : quality === 1 ? 260 : 420;
+    /* пресет графики домножает лимиты (низкая графика = меньше частиц/декалей) */
+    const pm = (CFG && CFG.particleMul) || 1;
+    const dm = (CFG && CFG.decalMul) || 1;
+    this.maxDecals = Math.max(12, Math.round(this.maxDecals * dm));
+    this.maxParticles = Math.max(40, Math.round(this.maxParticles * pm));
 
     // tracer: thin elongated box reused from a pool
     this.tracerGeo = new THREE.BoxGeometry(.03, .03, 1);
@@ -11972,7 +12509,7 @@ const UI = {
       'matchEnd', 'meTitle', 'meWinner', 'meScore', 'meDetail', 'btnMatchAgain', 'btnMatchMenu',
       'mapChips', 'playerChips', 'hpChips', 'hordeChips', 'lobbyMaps', 'lobbyPlayers', 'lobbyHp', 'lobbyFree', 'lobbyRounds',
       'todChips', 'weatherChips', 'envAutoChips', 'sEnvSpeed', 'oEnvSpeed', 'lobbyTod', 'lobbyWeather', 'lobbyMode',
-      'offCountChips', 'offHpChips', 'offFreeChips', 'offModeChips', 'offCustomBox', 'offHordeBox', 'offSpecialBox', 'offCpBox', 'offCpInfo', 'offCpMode', 'offCpList', 'offCountExact', 'offCountFixed', 'btnOffContinue', 'custom', 'lobbyShop', 'lobbyShopItems',
+      'offCountChips', 'offHpChips', 'offFreeChips', 'offMapFreqChips', 'offModeChips', 'offCustomBox', 'offHordeBox', 'offSpecialBox', 'offCpBox', 'offCpInfo', 'offCpMode', 'offCpList', 'offCountExact', 'offCountFixed', 'btnOffContinue', 'custom', 'lobbyShop', 'lobbyShopItems',
       'modScreen', 'modGrid', 'modActive',
       'extras', 'achGrid', 'recTable', 'btnExtrasBack', 'weaponWheel', 'wwInner',
       'skins', 'skinCanvas', 'skinGrid', 'skinStatus', 'skinWeaponSel', 'skinTargetChips', 'btnSkinsBack', 'btnSkins', 'skinRarityBar',
@@ -12148,6 +12685,18 @@ const UI = {
         this.el.offFreeChips.appendChild(b);
       });
     }
+    /* частота смены карты в оффлайне: каждая N-я волна, либо ВЫКЛ */
+    if (this.el.offMapFreqChips) {
+      this.el.offMapFreqChips.innerHTML = '';
+      [{ v: 0, b: 'ВЫКЛ', i: 'одна карта' }, { v: 5, b: '5', i: 'волн' }, { v: 10, b: '10', i: 'волн' },
+       { v: 20, b: '20', i: 'волн' }, { v: 30, b: '30', i: 'волн' }].forEach(o => {
+        const b = document.createElement('button');
+        b.dataset.v = o.v;
+        b.innerHTML = '<b>' + o.b + '</b><i>' + o.i + '</i>';
+        b.addEventListener('click', () => { Store.data.offMapFreq = o.v; Store.save(); this.refreshChips(); Audio3D_SFX.uiClick(); });
+        this.el.offMapFreqChips.appendChild(b);
+      });
+    }
     /* offline mode picker: ordinary, horde ×10, free horde, custom */
     if (this.el.offModeChips) {
       const modes = [
@@ -12297,6 +12846,9 @@ const UI = {
       mark(this.el.lobbyWeather, 'wx', '__off__');
     }
     mark(this.el.envAutoChips, 'auto', S.envAuto ? 1 : 0);
+    if (this.el.offMapFreqChips) {
+      Array.from(this.el.offMapFreqChips.children).forEach(b => b.classList.toggle('on', +b.dataset.v === (S.offMapFreq || 0)));
+    }
     mark(this.el.lobbyMode, 'omode', S.onlineMode || 'pvp');
     const mode = S.offMode || 'normal';
     if (this.el.offModeChips) {
@@ -12420,7 +12972,7 @@ const UI = {
     e.hpFill.style.transform = 'scaleX(' + (hp / maxHP) + ')';
     e.hpVal.textContent = Math.max(0, Math.round(p.health));
     e.hpFill.parentElement.classList.toggle('low', hp <= maxHP * .35);
-    e.apFill.style.transform = 'scaleX(' + (U.clamp(p.armor, 0, 100) / 100) + ')';
+    e.apFill.style.transform = 'scaleX(' + (U.clamp(p.armor, 0, CFG.maxAP) / (CFG.maxAP || 100)) + ')';
     e.apVal.textContent = Math.round(p.armor);
     this.lowHP(hp > 0 && hp <= maxHP * .32);
 
@@ -12592,11 +13144,17 @@ const UI = {
     const shopAllows = (cat) => !allow || allow[cat] !== 0;
     const itemAllow = (typeof Game !== 'undefined' && Game.shopItemAllow) ? Game.shopItemAllow : null;
     const itemAllowed = (id) => !itemAllow || itemAllow[id] !== 0;
-    const mkCard = (id, name, desc, price, stats, owned, cant, onClick, onOwned) => {
+    const mkCard = (id, name, desc, price, stats, owned, cant, onClick, onOwned, iconId) => {
       n++;
       const d = document.createElement('div');
       d.className = 'bcard' + (cant ? ' cant' : '') + (owned ? ' own' : '');
+      let iconHtml = '';
+      if (iconId) {
+        const url = (typeof shopWeaponIcon === 'function') ? shopWeaponIcon(iconId) : '';
+        if (url) iconHtml = '<div class="wico"><img alt="" src="' + url + '"></div>';
+      }
       d.innerHTML = '<span class="num">' + (n <= 9 ? n : '') + '</span>' +
+        iconHtml +
         '<div class="wn">' + U.esc(name) + '</div>' +
         '<div class="wd">' + U.esc(desc) + '</div>' +
         '<div class="wst">' + stats.map(s => '<span>' + s[0] + ' <i>' + s[1] + '</i></span>').join('') + '</div>' +
@@ -12663,6 +13221,14 @@ const UI = {
           cant = !free && player.money < g.price;
           stats = [['ЭФФЕКТ', '100%'], ['ВСЕ СТВОЛЫ', 'ДА']];
           desc = g.desc;
+        } else if (g.perk) {
+          const flag = { highJump: 'perkHighJump', dash: 'perkDash', runSpeed: 'perkRunSpeed' }[g.perk];
+          owned = !!player[flag];
+          cant = (!free && player.money < g.price) || owned;
+          stats = g.perk === 'highJump' ? [['ВЫСОТА', '×1.8'], ['ДЖЕТПАК', 'УДЕРЖ.']]
+            : g.perk === 'dash' ? [['РЫВОК', 'X'], ['ПЕРЕЗАРЯД', '3с']]
+              : [['БЕГ', '+55%'], ['ВСЕГДА', 'ДА']];
+          desc = g.desc;
         } else if (g.heavy) {
           owned = g.energy ? !!player.energyArmor : (!!player.heavyArmor && !player.energyArmor && player.armor >= g.ap);
           cant = (!free && player.money < g.price) || (g.energy ? !!player.energyArmor : (!!player.energyArmor));
@@ -12696,7 +13262,7 @@ const UI = {
         if (w.splash) stats.push(['РАДИУС', w.splash + 'м']);
         mkCard(id, w.name, w.cat.toUpperCase(), w.price, stats, owned || inBag, !free && player.money < w.price,
           () => Bus.emit('buy', id),
-          () => Bus.emit('equip', id));
+          () => Bus.emit('equip', id), id);
         if (equipped) { const c = wrap.lastChild; if (c) { c.classList.add('equipped'); const pr = c.querySelector('.pr'); if (pr) pr.textContent = 'В РУКАХ'; } }
         else if (inBag) { const c = wrap.lastChild; if (c) { c.classList.add('inbag'); const pr = c.querySelector('.pr'); if (pr) pr.textContent = 'В СУМКЕ'; } }
       });
@@ -15081,6 +15647,7 @@ const Game = {
     this.vmScene.add(vAmb);
 
     window.addEventListener('resize', () => this.onResize());
+    this.applyGfxPreset();
     this.applyQuality();
   },
 
@@ -15094,14 +15661,67 @@ const Game = {
   applyQuality() {
     const q = Store.data.quality;
     this.renderer.shadowMap.enabled = q > 0;
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, q === 2 ? 2 : q === 1 ? 1.4 : 1));
+    const prCap = this._gfxPixelCap || (IS_TOUCH ? (q === 2 ? 1.5 : 1) : (q === 2 ? 2 : q === 1 ? 1.4 : 1));
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, prCap));
     const sun = MAP.group && MAP.group.userData ? MAP.group.userData.sun : null;
     if (sun) {
-      const size = q === 0 ? 1024 : q === 1 ? 2048 : 4096;
+      let size = this._gfxShadow || (q === 0 ? 1024 : q === 1 ? 2048 : 4096);
       if (sun.shadow.mapSize.width !== size) {
         sun.shadow.mapSize.width = size; sun.shadow.mapSize.height = size;
         if (sun.shadow.map) { sun.shadow.map.dispose(); sun.shadow.map = null; }
       }
+    }
+  },
+
+  /* ---- ПРЕСЕТ ГРАФИКИ: 0 авто · 1 низкая · 2 средняя · 3 высокая ----
+     Управляет туманом, дальностью LOD зомби, частицами, тенями и разрешением.
+     Это и есть «настройка графики для телефона». */
+  activeGfxPreset() {
+    let g = Store.data.gfx;
+    if (g === 0 || g === undefined || g === null) return this.autoGfxPreset();
+    return U.clamp(g | 0, 1, 3);
+  },
+
+  /* Авто-выбор графики ПО ЖЕЛЕЗУ: слабый телефон сразу получает «низкую»,
+     мощный — «среднюю/высокую». Настройка хранится на конкретном устройстве,
+     поэтому у каждого игрока свой уровень. */
+  autoGfxPreset() {
+    let score = 0;
+    try {
+      const cores = navigator.hardwareConcurrency || 4;
+      const mem = navigator.deviceMemory || 4;               // ГБ (Chrome)
+      const pr = window.devicePixelRatio || 1;
+      const px = (window.screen && screen.width ? screen.width : window.innerWidth) *
+                 (window.screen && screen.height ? screen.height : window.innerHeight);
+      if (cores >= 8) score += 2; else if (cores >= 6) score += 1; else if (cores <= 4) score -= 1;
+      if (mem >= 8) score += 1; else if (mem <= 2) score -= 2; else if (mem <= 3) score -= 1;
+      if (pr >= 3) score += 1;                                 // плотный экран обычно = мощный
+      if (px > 2200000) score += 1; else if (px < 900000) score -= 1;
+    } catch (e) { }
+    if (!IS_TOUCH) score += 2;                                 // ПК почти всегда тянет больше
+    // -3..-1 → низкая(1) · 0..1 → низкая/средняя · 2..3 → средняя · 4+ → высокая
+    if (score <= 0) return 1;
+    if (score <= 2) return 2;
+    return 3;
+  },
+
+  applyGfxPreset() {
+    const preset = CFG.gfxPresets[this.activeGfxPreset()] || CFG.gfxPresets[1];
+    CFG.zombieCullDist = preset.cull;
+    CFG.zombieNearDist = preset.near;
+    CFG.zombieFarInterval = preset.farInterval;
+    CFG.particleMul = preset.particleMul;
+    CFG.decalMul = preset.decalMul;
+    this._gfxPixelCap = preset.pixelCap;
+    this._gfxShadow = preset.shadow;
+    // туман: не трогаем, если окружение управляет им (авто/погода), иначе задаём
+    if (this.scene && this.scene.fog && !Store.data.envAuto && !Store.data.envOff) {
+      this.scene.fog.density = preset.fog;
+    }
+    if (this.renderer) {
+      // antialias нельзя переключить без пересоздания контекста; при низкой
+      // графике уменьшаем pixelRatio, что и даёт основной выигрыш
+      this.applyQuality();
     }
   },
 
@@ -15186,6 +15806,23 @@ const Game = {
     if (esSearch) esSearch.addEventListener('input', () => this.renderEnemySpawn());
     const esCount = document.getElementById('esCount');
     if (esCount) esCount.parentElement.addEventListener('click', () => this.cycleSpawnHp(1));
+    /* количество спавна врагов (1..1000) */
+    const esNum = document.getElementById('esCountNum');
+    if (esNum) {
+      esNum.addEventListener('input', () => this.setSpawnCount(parseInt(esNum.value, 10)));
+      esNum.addEventListener('change', () => this.setSpawnCount(parseInt(esNum.value, 10)));
+    }
+    const esChips = document.getElementById('esCountChips');
+    if (esChips) {
+      [[1, '×1'], [10, '×10'], [50, '×50'], [100, '×100'], [1000, '×1000']].forEach(([v, label]) => {
+        const b = document.createElement('button');
+        b.className = 'chip';
+        b.dataset.n = String(v);
+        b.textContent = label;
+        b.addEventListener('click', () => { this.setSpawnCount(v); if (esNum) esNum.value = String(v); });
+        esChips.appendChild(b);
+      });
+    }
     bindClick('btnOnline', () => { UI.show('lobby'); this.resetLobby(); Net.warmup(); });
     bindClick('btnControls', () => { this._prevScreen = 'menu'; UI.show('controls'); });
     bindClick('btnControlsBack', () => UI.show(this._prevScreen || 'menu'));
@@ -15196,7 +15833,7 @@ const Game = {
     bindClick('btnLeave', () => this.stopToMenu());
     bindClick('btnReset', () => {
       if (confirm('Сбросить весь прогресс и настройки?')) {
-        Store.data = { sens: 2.2, fov: 80, vol: 60, quality: 1, touchSens: 1.5, name: '', best: 0, bestWave: 0, killsTotal: 0, matches: 0, wins: 0, signalSrv: 0, aimBest: 0, aimAutoFire: 1, map: 'arena', players: 2, maxHP: 100, aimAssist: 1, horde: 0, clears: 0, freeplay: 0, rounds: 3, playTime: 0, offCount: 1, offHp: 1, offFree: 0, offMode: 'normal', offMods: {}, offModsRun: 0, offModPick: 0, checkpoint: null, shopAllow: {}, shopItems: {}, music: 1, sfxVol: 100, musicVol: 70, grenade: 'frag', buildable: 'turret', weather: 'day', trapsEnabled: 1, ach: {}, runs: [], checkpoints: {} };
+        Store.data = { sens: 2.2, fov: 80, vol: 60, quality: 1, gfx: 0, touchSens: 1.5, name: '', best: 0, bestWave: 0, killsTotal: 0, matches: 0, wins: 0, signalSrv: 0, aimBest: 0, aimAutoFire: 1, map: 'arena', players: 2, maxHP: 100, aimAssist: 1, horde: 0, clears: 0, freeplay: 0, rounds: 3, playTime: 0, offCount: 1, offHp: 1, offFree: 0, offMode: 'normal', offMods: {}, offModsRun: 0, offModPick: 0, checkpoint: null, shopAllow: {}, shopItems: {}, music: 1, sfxVol: 100, musicVol: 70, grenade: 'frag', buildable: 'turret', weather: 'day', trapsEnabled: 1, ach: {}, runs: [], checkpoints: {} };
         this.shopAllow = MATCH.defaultShopAllow();
         Store.save();
         UI.refreshChips(); UI.renderMenuStats(); UI.toast('Прогресс сброшен');
@@ -15311,8 +15948,15 @@ const Game = {
     Bus.on('touchRangeSpawn', () => this.toggleEnemySpawn(!this.enemySpawnOpen));
     Bus.on('touchUnstick', () => this.resetZombiePositions());
     Bus.on('zombieHit', (z, part, dmg, dir) => this.onZombieHit(z, part, dmg, dir));
-    Bus.on('zombieGrowl', z => Audio3D_SFX.growl(z.pos.x, z.pos.y + 1.4, z.pos.z, z.type));
+    Bus.on('zombieGrowl', z => {
+      // рычание: смешиваем «классический» гроул и новые голоса зомби
+      Audio3D_SFX.growl(z.pos.x, z.pos.y + 1.4, z.pos.z, z.type);
+      if (Math.random() < .6) Audio3D_SFX.zombieVoice(z.pos.x, z.pos.y + 1.4, z.pos.z, z.type);
+    });
     Bus.on('zombieShoot', (z, from) => this.onZombieShoot(z, from));
+    /* звуки атаки/смерти зомби — рычание и предсмертный хрип */
+    Bus.on('zombieAttack', (z) => { if (z && z.pos) Audio3D_SFX.zombieVoice(z.pos.x, z.pos.y + 1.4, z.pos.z, z.type); });
+    Bus.on('zombieDied', (z) => { if (z && z.pos) Audio3D_SFX.zombieVoice(z.pos.x, z.pos.y + 1.2, z.pos.z, z.type); });
     Bus.on('zombieShatter', z => {
       // АБСОЛЮТНЫЙ НОЛЬ: a frozen body burst into ice shards
       this.effects.frostBurst(z.pos.x, z.pos.y + 1, z.pos.z, 2.6);
@@ -16247,7 +16891,9 @@ const Game = {
      different one, so a long survival run keeps changing scenery. The next map
      is chosen at random but never repeats the current one. */
   rotateMapIfNeeded(nextWave) {
-    const every = CFG.mapRotateEvery || 10;
+    /* частота смены карты настраивается в оффлайне (0 = никогда) */
+    const every = Store.data.offMapFreq !== undefined ? (Store.data.offMapFreq || 0) : (CFG.mapRotateEvery || 10);
+    if (!every) return false;
     if (!nextWave || nextWave < 1) return false;
     if (nextWave % every !== 1) return false;          // waves 1, 11, 21, 31…
     if (nextWave === 1) return false;                  // wave 1 keeps the chosen map
@@ -16546,28 +17192,65 @@ const Game = {
       grid.appendChild(card);
     }
     if (!shown) grid.innerHTML = '<div class="ecard cant">Ничего не найдено</div>';
+    const num = document.getElementById('esCountNum');
+    if (num) num.value = String(this._spawnCount || 1);
+    const chips = document.getElementById('esCountChips');
+    if (chips) Array.from(chips.children).forEach(b => b.classList.toggle('on', +b.dataset.n === (this._spawnCount || 1)));
   },
 
-  /* Drop one enemy in front of the player, a few metres out. */
-  spawnRangeEnemy(id) {
+  /* Drop enemies where the crosshair points. A ray from the eye finds the first
+     wall/floor/cover; the enemy appears right there (or a bit along the ray if
+     we hit the sky). Bosses drop a little further out so they are not in your
+     face. `id` may be one type or, from the picker, spawns `count` of them. */
+  spawnRangeEnemy(id, count) {
     if (this.mode !== CS.MODE.RANGE || !this.horde) return;
     const p = this.player;
     const d = ZOMBIES[id];
     if (!d) return;
-    const fwd = { x: -Math.sin(p.yaw), z: -Math.cos(p.yaw) };
-    const dist = d.boss ? 14 : 11;
-    const x = p.pos.x + fwd.x * dist + U.rand(-2, 2);
-    const z = p.pos.z + fwd.z * dist + U.rand(-2, 2);
-    const y = this.world.groundAt(x, z, 6);
-    const zz = this.horde.spawn(id, x, z, y === null ? 0 : y);
+    const n = Math.max(1, Math.min(1000, count || this._spawnCount || 1));
+    /* точка прицела: луч из глаз по направлению взгляда */
+    const eye = this.eyePos();
+    const dir = this.cameraDir();
+    let px, py, pz, ground;
+    const hits = this.world.raycastAll(eye, dir, 300);
+    if (hits && hits.length) {
+      const h = hits[0];
+      // чуть перед точкой попадания, чтобы враг не утонул в стене
+      px = h.point.x - dir.x * 0.8; pz = h.point.z - dir.z * 0.8;
+      ground = this.world.groundAt(px, pz, h.point.y + 4);
+      py = ground === null ? h.point.y : ground;
+    } else {
+      // луч ушёл в небо: ставим далеко впереди, на земле
+      px = p.pos.x + dir.x * 26; pz = p.pos.z + dir.z * 26;
+      ground = this.world.groundAt(px, pz, 12); py = ground === null ? 0 : ground;
+    }
     const mul = this._spawnHpMul || 1;
-    zz.maxHealth *= mul; zz.health = zz.maxHealth;
-    if (d.boss) zz.isBoss = true;
-    else if (d.miniBoss) zz.isMiniBoss = true;
-    UI.toast('Полигон: ' + d.name + (mul !== 1 ? ' ×' + mul + ' HP' : ''), d.boss ? '#c24bff' : d.miniBoss ? '#4ad6ff' : '#e33a2e');
-    Audio3D_SFX.growl(x, y === null ? 0 : y + 1.2, z, d.boss ? 'brute' : id);
+    let last = null;
+    for (let i = 0; i < n; i++) {
+      const ox = i === 0 ? 0 : U.rand(-3.2, 3.2);
+      const oz = i === 0 ? 0 : U.rand(-3.2, 3.2);
+      const x = U.clamp(px + ox, -MAP.size / 2 + 2, MAP.size / 2 - 2);
+      const z = U.clamp(pz + oz, -MAP.size / 2 + 2, MAP.size / 2 - 2);
+      const g = this.world.groundAt(x, z, 8);
+      const zz = this.horde.spawn(id, x, z, g === null ? py : g);
+      zz.maxHealth *= mul; zz.health = zz.maxHealth;
+      if (d.boss) zz.isBoss = true;
+      else if (d.miniBoss) zz.isMiniBoss = true;
+      last = zz;
+    }
+    UI.toast('Полигон: ' + d.name + (n > 1 ? ' ×' + n : '') + (mul !== 1 ? ' · ×' + mul + ' HP' : ''),
+      d.boss ? '#c24bff' : d.miniBoss ? '#4ad6ff' : '#e33a2e');
+    Audio3D_SFX.growl(px, py + 1.2, pz, d.boss ? 'brute' : id);
     // do not let a stray hit on the horde count as a wave clear
     if (this._panelT <= 0) this.updateRangePanel();
+  },
+
+  /* выбрать количество врагов для спавна (1..1000) */
+  setSpawnCount(v) {
+    this._spawnCount = Math.max(1, Math.min(1000, Math.round(v || 1)));
+    const el = document.getElementById('esCountNum');
+    if (el) el.textContent = String(this._spawnCount);
+    UI.toast('Количество спавна: ' + this._spawnCount, '#ff9d21');
   },
 
   /* cycle the spawn HP multiplier (1× → 2× → 5× → 10× → 1×) */
@@ -16808,7 +17491,7 @@ const Game = {
     const p = this.player;
     if (!p || !p.alive) return;
     for (const z of this.horde.list) {
-      if (!z.isBoss || !z.alive || z.dying) continue;
+      if ((!z.isBoss && !z.isMiniBoss) || !z.alive || z.dying) continue;
       const def = z.def;
       if (!def.abilities || !def.abilities.length) continue;
       z.abilityCd = (z.abilityCd || 0) - dt;
@@ -16861,6 +17544,7 @@ const Game = {
     if (kind === 'shockwave') {
       this.effects.explosion(z.pos.x, z.pos.y + .4, z.pos.z, 8.0, [z.def.aura || 0xffb347, 0x2a1a0a]);
       Audio3D_SFX.explosionAt(z.pos.x, z.pos.y, z.pos.z);
+      if (typeof damageMapAt === 'function') damageMapAt(z.pos.x, z.pos.y + .4, z.pos.z, 8.0, 260);
       const R = 10;
       const ds = Math.hypot(p.pos.x - z.pos.x, p.pos.z - z.pos.z);
       if (ds <= R) {
@@ -16905,6 +17589,44 @@ const Game = {
       }
       Audio3D_SFX.shot('laser', z.pos.x, z.pos.y + 2, z.pos.z);
       this.bossTell(z, 'ЗАЛП', '#4ad6ff');
+      return;
+    }
+    if (kind === 'frost') {
+      // КРИОМАНТ: конус холода — замедляет игрока и замораживает землю
+      const R = 9;
+      const ds = Math.hypot(p.pos.x - z.pos.x, p.pos.z - z.pos.z);
+      this.effects.frostBurst(z.pos.x, z.pos.y + 1, z.pos.z, R);
+      this.effects.decal(z.pos.x, .02, z.pos.z, 0, 1, 0, R * .8, 'frost');
+      if (ds <= R) {
+        const k = 1 - ds / R;
+        if (!this.playerShieldUp()) {
+          this.applyDamageToSelf(Math.max(4, (z.dmg || 40) * .35 * k), { x: z.pos.x, y: z.pos.y, z: z.pos.z });
+          p.freezeT = Math.max(p.freezeT || 0, 1.6 * k);
+          UI.toast('ЗАМОРОЖЕН', '#7fd8ff');
+        } else this.reflectAtDummy({ x: z.pos.x, y: z.pos.y, z: z.pos.z }, (z.dmg || 40) * .5, false);
+      }
+      Audio3D_SFX.shot('laser', z.pos.x, z.pos.y + 1.5, z.pos.z);
+      this.bossTell(z, 'ЛЕДЯНОЙ КОНУС', '#7fd8ff');
+      return;
+    }
+    if (kind === 'devour') {
+      // ПОЖИРАТЕЛЬ ПЛОТИ: высасывает жизнь из ближайших зомби и лечится
+      let drained = 0;
+      for (const o of this.horde.list) {
+        if (o === z || o.dying || !o.alive || o.isBoss || o.isMiniBoss) continue;
+        const d = Math.hypot(o.pos.x - z.pos.x, o.pos.z - z.pos.z);
+        if (d > 8) continue;
+        const bite = Math.min(o.health, o.maxHealth * .5);
+        o.takeDamage(bite, 'body', { x: 0, y: 0, z: 0 });
+        drained += bite;
+        this.effects.particle(o.pos.x, o.pos.y + 1.2 * o.scale, o.pos.z, 0, 1.4, 0, .5, 'spark', .4);
+      }
+      if (drained > 0) {
+        z.health = Math.min(z.maxHealth, z.health + drained * .35);
+        UI.toast('ПОЖИРАТЕЛЬ насытился', '#ff2a3a');
+      }
+      Audio3D_SFX.growl(z.pos.x, z.pos.y, z.pos.z, 'brute');
+      this.bossTell(z, 'ПОЖИРАНИЕ', '#ff2a3a');
       return;
     }
   },
@@ -17778,6 +18500,21 @@ const Game = {
       return;
     }
 
+    /* ---- ПРОКАЧКА ДВИЖЕНИЯ: покупается один раз, действует весь забег ---- */
+    if (g.perk) {
+      const flag = { highJump: 'perkHighJump', dash: 'perkDash', runSpeed: 'perkRunSpeed' }[g.perk];
+      if (this.player[flag]) { Audio3D_SFX.deny(); UI.toast('Уже куплено'); return; }
+      if (!free && this.player.money < g.price) { Audio3D_SFX.deny(); UI.toast('Не хватает денег'); return; }
+      if (!free) { this.player.money -= g.price; this.player.moneySpent = (this.player.moneySpent || 0) + g.price; }
+      this.player[flag] = true;
+      this.player.applyPerks();
+      Audio3D_SFX.buy();
+      UI.toast('Куплено: ' + g.name, '#57d16a');
+      UI.renderBuy(this.player, this.buyTimer);
+      if (this.mode === CS.MODE.ONLINE) this.broadcastScore();
+      return;
+    }
+
     /* Armour: each tier has more AP and soaks more, so it can be bought even
        when a weaker suit was already owned. The energy suit is the best. */
     if (g.heavy) {
@@ -17788,6 +18525,7 @@ const Game = {
       if (g.energy) this.player.energyArmor = true;
       else this.player.heavyArmor = true;
       this.player.armor = g.ap;
+      this.player.armorMax = g.ap;
       this.player.helmet = true;
       Audio3D_SFX.buy();
       UI.toast('Куплено: ' + g.name + ' · AP ' + g.ap, '#57d16a');
@@ -17801,6 +18539,7 @@ const Game = {
     if (!free) { this.player.money -= g.price; this.player.moneySpent = (this.player.moneySpent || 0) + g.price; }
     this.player.armor = g.ap;
     if (g.helmet) this.player.helmet = true;
+    this.player.armorMax = g.ap;
     Audio3D_SFX.buy();
     UI.toast('Куплено: ' + g.name, '#57d16a');
     UI.renderBuy(this.player, this.buyTimer);
@@ -18403,6 +19142,8 @@ const Game = {
     this.player.maxHealth = this.matchHP;
     this.player.health = this.matchHP;
     this.player.armor = 0; this.player.helmet = false;
+    this.player.heavyArmor = false; this.player.energyArmor = false;   // броня не переносится в новый раунд
+    this.player.armorMax = CFG.maxAP || 100;
     this.player.alive = true;
     this.player.money = Math.min(CFG.moneyCap, this.player.money + 1400);
     // a drone still in the air belongs to the previous round
@@ -18475,8 +19216,10 @@ const Game = {
       if (o.miniBossPending) {
         count = Math.round(count * .85);
         o.totalThisWave = count;
-        sub = count + ' противников · МИНИ-БОСС: ' + ZOMBIES.robot.name;
-        UI.toast('МИНИ-БОСС: ' + ZOMBIES.robot.name, '#4ad6ff');
+        const mbType = this.pickMiniBoss(o.wave);
+        o.miniBossType = mbType;
+        sub = count + ' противников · МИНИ-БОСС: ' + ZOMBIES[mbType].name;
+        UI.toast('МИНИ-БОСС: ' + ZOMBIES[mbType].name, '#4ad6ff');
       }
       UI.center(title, sub, 2.0);
       UI.toast((this.hordeMode ? 'Орда ' : 'Волна ') + o.wave + ' — ' + count + ' зомби', '#e33a2e');
@@ -18586,13 +19329,43 @@ const Game = {
     if (wave >= 10) pool.push({ t: 'summoner', w: Math.min(2, (wave - 9) * .26) });
     return pool;
   },
+  /* Мини-боссы в обычной волне: чем дальше, тем чаще и сильнее варианты.
+     Они идут как РЕДКИЕ враги, чтобы не перегружать волну. */
+  miniBossWaveTypes(wave) {
+    const pool = [];
+    if (wave >= 12) pool.push({ t: 'stalker', w: Math.min(1.2, (wave - 11) * .08) });
+    if (wave >= 15) pool.push({ t: 'spider', w: Math.min(1.0, (wave - 14) * .07) });
+    if (wave >= 18) pool.push({ t: 'cryomancer', w: Math.min(.9, (wave - 17) * .06) });
+    if (wave >= 22) pool.push({ t: 'devourer', w: Math.min(.7, (wave - 21) * .05) });
+    if (wave >= 26) pool.push({ t: 'titanMini', w: Math.min(.5, (wave - 25) * .04) });
+    return pool;
+  },
   /* the armoured robot mini-boss is a rare special, from wave 8 onward */
   isMiniBossWave(wave) {
     const every = (this.modState && this.modState.miniEvery) || 3;
     return wave >= 8 && (wave - 8) % every === 0;
   },
+  /* Пул мини-боссов растёт с волной: слабые попадаются раньше, сильные — позже.
+     Робот остаётся в пуле как «бронированный стрелок». */
+  pickMiniBoss(wave) {
+    const pool = [
+      { t: 'robot', w: 8 },
+      { t: 'stalker', w: 7 },
+      { t: 'spider', w: wave >= 11 ? 6 : 0 },
+      { t: 'cryomancer', w: wave >= 14 ? 5 : 0 },
+      { t: 'devourer', w: wave >= 17 ? 4 : 0 },
+      { t: 'titanMini', w: wave >= 20 ? 3 : 0 }
+    ];
+    let total = 0; pool.forEach(p => total += p.w);
+    let r = Math.random() * total;
+    for (const p of pool) { r -= p.w; if (r <= 0) return p.t; }
+    return 'robot';
+  },
   pickZombieType(wave) {
     const pool = this.waveTypesFor(wave);
+    // редкие мини-боссы попадаются прямо в волне (и помечаются как мини-боссы)
+    const mb = this.miniBossWaveTypes ? this.miniBossWaveTypes(wave) : [];
+    for (const p of mb) pool.push(p);
     let total = 0; pool.forEach(p => total += p.w);
     let r = Math.random() * total;
     for (const p of pool) { r -= p.w; if (r <= 0) return p.t; }
@@ -18939,10 +19712,11 @@ const Game = {
       return;
     }
 
-    // the armoured robot mini-boss leads the wave in, right before the horde
+    // the armoured mini-boss leads the wave in, right before the horde
     if (o.miniBossPending > 0 && o.spawnedThisWave === 0) {
       o.miniBossPending = 0;
-      const s = this.horde.spawnRandom('robot', this.player.pos.x, this.player.pos.z, 30);
+      const mbType = o.miniBossType || this.pickMiniBoss(o.wave);
+      const s = this.horde.spawnRandom(mbType, this.player.pos.x, this.player.pos.z, 30);
       const hpMul = (this.offHpMul != null) ? this.offHpMul
         : ((this.hordeMode && !this.freePlay) ? CFG.hordeHpMul : 1);
       s.maxHealth *= hpMul * this.modState.hp; s.health = s.maxHealth;
@@ -18951,7 +19725,7 @@ const Game = {
       s.dmgTakenMul = this.modState.playerDmg;
       s.isMiniBoss = true;
       Audio3D_SFX.growl(s.pos.x, s.pos.y, s.pos.z, 'brute');
-      UI.toast('РОБОТ-ЗОМБИ в бою', '#4ad6ff');
+      UI.toast(ZOMBIES[mbType].name + ' в бою', '#4ad6ff');
     }
 
     // spawn queue
@@ -22181,6 +22955,8 @@ const Game = {
     this.player.maxHealth = this.matchHP;
     this.player.health = this.matchHP;
     this.player.armor = 0; this.player.helmet = false;
+    this.player.heavyArmor = false; this.player.energyArmor = false;
+    this.player.armorMax = CFG.maxAP || 100;
     this.player.alive = true;
     this.player.money = Math.min(CFG.moneyCap, this.player.money + 1400);
     // a drone still in the air belongs to the previous round
@@ -22311,6 +23087,8 @@ const Game = {
       p.in.wantJump = IS_TOUCH ? (TouchUI.jumpHeld || Input.keys['Space']) : !!mv.wantJump;
     } else if (IS_TOUCH) {
       p.in.wantJump = Input.consumeJump() && p.onGround;
+      // зажатая кнопка ПРЫЖОК включает джетпак перка «ВЫСОКИЙ ПРЫЖОК»
+      if (TouchUI.jumpHeld) p.in.wantJump = true;
     } else {
       if (mv.wantJump && p.onGround) p.in.wantJump = true;
       if (!mv.wantJump) p.in.wantJump = false;
@@ -22334,7 +23112,10 @@ const Game = {
       else p.climbQueued = true;
     }
     // mech dash: the dash button / key is edge-triggered
-    if (Input.consumeDash()) this.mechDash();
+    if (Input.consumeDash()) {
+      if (this.isMechActive()) this.mechDash();
+      else if (p.perkDash) p._gearDashWant = true;   // снаряжение «РЫВОК»
+    }
 
     p._wantAim = Input.aimDown() && canLook;
 

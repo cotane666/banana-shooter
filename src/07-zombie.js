@@ -202,6 +202,187 @@ function buildZombieMesh(type) {
       new THREE.MeshBasicMaterial({ color: 0x9a3aff, transparent: true, opacity: .8 }));
     ring.position.set(0, 1.05, -.30); g.add(ring);
     parts.summonCore = core; parts.summonRing = ring;
+  } else if (ZOMBIES[type] && ZOMBIES[type].miniBoss && type !== 'robot') {
+    /* ============================================================
+       НОВЫЕ МИНИ-БОССЫ (5) — у каждого своя моделька, «кожа» и силуэт,
+       чтобы издалека читалось, кто именно идёт. Сила растёт по списку.
+       ============================================================ */
+    const glowMat = (c) => new THREE.MeshBasicMaterial({ color: c });
+    const eyePair = (c, ox, oy, oz, r) => {
+      const m = new THREE.MeshBasicMaterial({ color: c });
+      [-1, 1].forEach(s => {
+        const e = new THREE.Mesh(new THREE.SphereGeometry(r || .045, 8, 6), m);
+        e.position.set(ox * s, oy, oz); head.add(e);
+      });
+    };
+    // все мини-боссы заметно крупнее обычного зомби
+    chest.scale.set(1.35, 1.12, 1.3);
+    pelvis.scale.set(1.25, 1.05, 1.2);
+    armL.scale.set(1.45, 1.12, 1.45); armR.scale.set(1.45, 1.12, 1.45);
+    legL.scale.set(1.3, 1.05, 1.3); legR.scale.set(1.3, 1.05, 1.3);
+    skull.scale.set(1.18, 1.08, 1.18);
+
+    if (type === 'stalker') {
+      /* СТАЛКЕР — тощий, закованный в лёгкую броню охотник: капюшон,
+         зелёные глаза-щели и два кривых клинка на предплечьях. */
+      const HIDE = 0x3f4a30, PLATE = 0x59643f, GLOW = 0x9bff57;
+      chest.material = new THREE.MeshLambertMaterial({ color: HIDE });
+      pelvis.material = new THREE.MeshLambertMaterial({ color: 0x2b331f });
+      skull.material = new THREE.MeshLambertMaterial({ color: PLATE });
+      // капюшон
+      const hood = new THREE.Mesh(new THREE.ConeGeometry(.34, .55, 7, 1, true),
+        new THREE.MeshLambertMaterial({ color: HIDE, side: THREE.DoubleSide }));
+      hood.position.set(0, 1.70, .04); hood.rotation.x = -.18; g.add(hood);
+      // наплечники
+      [-1, 1].forEach(s => addBossBox(g, .30, .18, .34, PLATE, s * .48, 1.60, 0));
+      // клинки на предплечьях
+      [-1, 1].forEach(s => {
+        const blade = new THREE.Mesh(new THREE.ConeGeometry(.055, .78, 4), new THREE.MeshLambertMaterial({ color: 0xcfd8b0 }));
+        blade.position.set(s * .40, 1.02, -.46); blade.rotation.x = -1.35;
+        g.add(blade);
+      });
+      eyePair(GLOW, .07, .04, -.155, .04);
+      const lamp = new THREE.PointLight(GLOW, 3, 6, 2); lamp.position.set(0, 1.5, 0); g.add(lamp);
+    } else if (type === 'spider') {
+      /* ПАУК-МАТКА — паучиха: 6 дополнительных лап и светящийся кокон
+         с яйцами на спине, плюющиеся железы. */
+      const CHITIN = 0x4a2140, SAC = 0xff4a8a;
+      chest.material = new THREE.MeshLambertMaterial({ color: CHITIN });
+      pelvis.material = new THREE.MeshLambertMaterial({ color: 0x341428 });
+      skull.material = new THREE.MeshLambertMaterial({ color: 0x5a2a4a });
+      // лапы
+      const legMat = new THREE.MeshLambertMaterial({ color: 0x2c1024 });
+      for (let i = 0; i < 3; i++) {
+        [-1, 1].forEach(s => {
+          const hip = new THREE.Group();
+          hip.position.set(s * .30, 1.10, -.05 + i * .18);
+          const upper = new THREE.Mesh(new THREE.CylinderGeometry(.05, .04, .70, 6), legMat);
+          upper.position.set(s * .30, -.10, 0); upper.rotation.z = s * -.95;
+          const lower = new THREE.Mesh(new THREE.CylinderGeometry(.04, .025, .62, 6), legMat);
+          lower.position.set(s * .62, -.42, 0); lower.rotation.z = s * .55;
+          hip.add(upper); hip.add(lower);
+          g.add(hip);
+        });
+      }
+      // кокон с яйцами
+      const sac = new THREE.Mesh(new THREE.SphereGeometry(.30, 10, 8),
+        new THREE.MeshLambertMaterial({ color: 0x6a2a52, emissive: 0x2a0816 }));
+      sac.position.set(0, 1.12, .24); torso.add(sac); parts.eggSac = sac;
+      for (let i = 0; i < 6; i++) {
+        const a = i / 6 * Math.PI * 2;
+        const egg = new THREE.Mesh(new THREE.SphereGeometry(.06, 6, 5), glowMat(SAC));
+        egg.position.set(Math.cos(a) * .18, 1.12 + Math.sin(a) * .16, .24); torso.add(egg);
+      }
+      // 4 пары глаз
+      const em = new THREE.MeshBasicMaterial({ color: 0xff1a5a });
+      [-.10, -.03, .03, .10].forEach((ox, i) => {
+        const e = new THREE.Mesh(new THREE.SphereGeometry(i % 2 ? .028 : .038, 6, 5), em);
+        e.position.set(ox, .06 - (i > 1 ? .06 : 0), -.16); head.add(e);
+      });
+    } else if (type === 'cryomancer') {
+      /* КРИОМАНТ — ледяной маг: кристаллическая броня, посох с осколком
+         льда и морозная аура. */
+      const ICE = 0x7fd8ff, DEEP = 0x2f5f8f;
+      chest.material = new THREE.MeshLambertMaterial({ color: DEEP });
+      pelvis.material = new THREE.MeshLambertMaterial({ color: 0x24486b });
+      skull.material = new THREE.MeshLambertMaterial({ color: 0x3a6f9e });
+      // ледяные шипы на плечах и спине
+      [-1, 1].forEach(s => {
+        for (let i = 0; i < 3; i++) {
+          const shard = new THREE.Mesh(new THREE.ConeGeometry(.08, .42 + i * .12, 4),
+            new THREE.MeshLambertMaterial({ color: ICE, emissive: 0x0a2a40 }));
+          shard.position.set(s * (.42 + i * .06), 1.66 + i * .05, .02);
+          shard.rotation.z = s * -.5; g.add(shard);
+        }
+      });
+      // нагрудный кристалл
+      const gem = new THREE.Mesh(new THREE.OctahedronGeometry(.20, 0), glowMat(ICE));
+      gem.position.set(0, .18, -.20); torso.add(gem); parts.gem = gem;
+      // посох
+      const staff = new THREE.Group();
+      staff.add(mkBox(.07, 1.9, .07, 0x2a4a6a, 0, 0, 0));
+      const orb = new THREE.Mesh(new THREE.IcosahedronGeometry(.20, 0), glowMat(0xbfefff));
+      orb.position.y = 1.0; staff.add(orb);
+      staff.position.set(-1.0, 1.05, .10); g.add(staff); parts.staff = staff;
+      eyePair(ICE, .075, .04, -.155, .045);
+      const lamp = new THREE.PointLight(ICE, 4, 8, 2); lamp.position.set(0, 1.3, 0); g.add(lamp);
+    } else if (type === 'devourer') {
+      /* ПОЖИРАТЕЛЬ ПЛОТИ — груда мышц с двумя пастями, костяными шипами
+         и кровавым ореолом. */
+      const FLESH = 0x7a1020, MUSCLE = 0xb03040, BONE = 0xe8dcc8;
+      chest.material = new THREE.MeshLambertMaterial({ color: FLESH });
+      pelvis.material = new THREE.MeshLambertMaterial({ color: 0x5a0c18 });
+      skull.material = new THREE.MeshLambertMaterial({ color: MUSCLE });
+      // бугры мышц
+      for (let i = 0; i < 6; i++) {
+        const a = i / 6 * Math.PI * 2;
+        const lump = new THREE.Mesh(new THREE.SphereGeometry(U.rand(.14, .22), 7, 6),
+          new THREE.MeshLambertMaterial({ color: MUSCLE }));
+        lump.position.set(Math.cos(a) * .30, .16 + Math.sin(a) * .26, Math.sin(a) * .16 - .12);
+        torso.add(lump);
+      }
+      // нижняя пасть на животе
+      const maw = new THREE.Group();
+      maw.add(mkBox(.60, .30, .12, 0x1a0508, 0, 0, -.20));
+      for (let i = 0; i < 6; i++) {
+        const t = new THREE.Mesh(new THREE.ConeGeometry(.05, .15, 4), glowMat(BONE));
+        t.position.set(-.25 + i * .10, .13, -.22); t.rotation.x = Math.PI; maw.add(t);
+        const t2 = new THREE.Mesh(new THREE.ConeGeometry(.05, .15, 4), glowMat(BONE));
+        t2.position.set(-.25 + i * .10, -.13, -.22); maw.add(t2);
+      }
+      maw.position.set(0, -.30, 0); torso.add(maw); parts.maw = maw;
+      // костяные шипы на спине
+      for (let i = 0; i < 5; i++) {
+        const sp = new THREE.Mesh(new THREE.ConeGeometry(.07, .38 - i * .03, 4),
+          new THREE.MeshLambertMaterial({ color: BONE }));
+        sp.position.set(0, 1.72 - i * .14, .18); sp.rotation.x = -.5; g.add(sp);
+      }
+      eyePair(0xff3020, .085, .04, -.16, .05);
+      // кровавый ореол
+      const halo = new THREE.Mesh(new THREE.TorusGeometry(.55, .04, 6, 20),
+        new THREE.MeshBasicMaterial({ color: 0xff2a2a, transparent: true, opacity: .5, blending: THREE.AdditiveBlending, depthWrite: false }));
+      halo.rotation.x = Math.PI / 2; halo.position.y = 1.05; g.add(halo); parts.bloodHalo = halo;
+    } else if (type === 'titanMini') {
+      /* ТИТАН-МИНИ — уменьшенный каменный титан: глыбы, магма и кулаки-молоты
+         (отличается от робота и старшего Титана). */
+      const ROCK = 0x5a4a42, ROCK2 = 0x3e332d, MAGMA = 0xff7a2a;
+      chest.material = new THREE.MeshLambertMaterial({ color: ROCK });
+      pelvis.material = new THREE.MeshLambertMaterial({ color: ROCK2 });
+      skull.material = new THREE.MeshLambertMaterial({ color: ROCK });
+      // каменные наплечники
+      [-1, 1].forEach(s => {
+        const b = new THREE.Mesh(new THREE.DodecahedronGeometry(.38, 0), new THREE.MeshLambertMaterial({ color: ROCK2 }));
+        b.position.set(s * .58, 1.62, 0); g.add(b);
+      });
+      // трещины магмы
+      for (let i = 0; i < 4; i++) {
+        const crack = mkBox(.62 - i * .09, .05, .04, MAGMA, U.rand(-.1, .1), 1.5 - i * .17, -.19);
+        crack.rotation.z = U.rand(-.3, .3); g.add(crack);
+      }
+      // кулаки-молоты
+      [-1, 1].forEach(s => {
+        const fist = new THREE.Mesh(new THREE.DodecahedronGeometry(.24, 0), new THREE.MeshLambertMaterial({ color: ROCK2 }));
+        fist.position.set(s * .40, .60, -.10); g.add(fist);
+      });
+      eyePair(MAGMA, .09, .04, -.16, .05);
+      const core = new THREE.Mesh(new THREE.SphereGeometry(.22, 10, 8), glowMat(0xffb060));
+      core.position.set(0, 1.15, -.24); torso.add(core);
+    }
+
+    /* общая аура мини-босса: кольца у ног + цветная подсветка */
+    if (ZOMBIES[type].aura) {
+      const arcC = ZOMBIES[type].aura;
+      const aura = new THREE.Group();
+      const mkRing = (r, tube, op) => {
+        const m = new THREE.Mesh(new THREE.TorusGeometry(r, tube, 6, 26),
+          new THREE.MeshBasicMaterial({ color: arcC, transparent: true, opacity: op, blending: THREE.AdditiveBlending, depthWrite: false }));
+        m.rotation.x = Math.PI / 2; return m;
+      };
+      aura.add(mkRing(.85, .04, .5));
+      const r2 = mkRing(1.15, .026, .32); r2.position.y = .05; aura.add(r2);
+      aura.position.y = .10; g.add(aura);
+      parts.aura = aura; parts.auraRing2 = r2;
+    }
   } else if (ZOMBIES[type] && ZOMBIES[type].boss) {
     /* Every boss gets its own silhouette so it reads instantly from across the
        arena. Shared base is bulked up first, then the type-specific build adds
@@ -411,6 +592,8 @@ class Zombie {
     this.alive = true;
     this.dying = false;
     this.deadT = 0;
+    this.isBoss = !!S.boss;
+    this.isMiniBoss = !!S.miniBoss;
     this.pos = { x, y: y === undefined ? 0 : y, z };
     this.vel = { x: 0, y: 0, z: 0 };
     this.yaw = U.rand(-Math.PI, Math.PI);
@@ -445,6 +628,9 @@ class Zombie {
     this.healCd = U.rand(.5, 2.5); this.healPulse = 0; this.healFlash = 0;
     this.summonCd = U.rand(2, 5); this.summonPulse = 0;
     this.blockFlash = 0;
+    /* способности мини-боссов */
+    this.abilityCd = this.def.abilities ? U.rand(2, 5) : 0;
+    this.abilityTimer = 0;
 
     this.group = buildZombieMesh(type);
     this.group.scale.setScalar(this.scale);

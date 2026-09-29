@@ -45,6 +45,24 @@ const CFG = {
   mechDashTime: 0.28,       // сколько длится сам бросок (с)
   mechDashCd: 2.2,          // перезарядка рывка (с)
   mechDashDmg: 60,          // урон/отброс зомби, которых задели на рывке
+  /* ---- прокачка движения (снаряжение по $16000) ---- */
+  highJumpThrust: 8.5,      // тяга джетпака высокого прыжка (м/с)
+  highJumpMax: 1.1,         // секунд тяги при удержании прыжка
+  highJumpRecharge: 1.2,    // перезарядка джетпака прыжка (с)
+  gearDashSpeed: 24,        // начальная скорость рывка-перка (м/с)
+  gearDashTime: 0.28,       // длительность рывка (с)
+  gearDashCd: 3.0,          // перезарядка рывка (с)
+  /* ---- ПРЕСЕТЫ ГРАФИКИ: 0 авто · 1 низкая · 2 средняя · 3 высокая ---- */
+  gfxPresets: [
+    /* АВТО (выбирается по устройству при загрузке) */
+    { fog: 0.0075, cull: 70, near: 34, farInterval: 0.16, particleMul: 0.45, decalMul: 0.5, pixelCap: 1.0, shadow: 512, aa: false },
+    /* НИЗКАЯ — для слабых телефонов */
+    { fog: 0.0085, cull: 62, near: 30, farInterval: 0.20, particleMul: 0.35, decalMul: 0.4, pixelCap: 1.0, shadow: 512, aa: false },
+    /* СРЕДНЯЯ */
+    { fog: 0.0055, cull: 85, near: 42, farInterval: 0.12, particleMul: 1.0, decalMul: 1.0, pixelCap: 1.4, shadow: 2048, aa: true },
+    /* ВЫСОКАЯ */
+    { fog: 0.0042, cull: 130, near: 60, farInterval: 0.08, particleMul: 1.4, decalMul: 1.4, pixelCap: 2.0, shadow: 4096, aa: true }
+  ],
   maxHP: 100,
   maxAP: 100,
   stepUp: 0.62,
@@ -100,6 +118,9 @@ const CFG = {
   zombieNearDist: 42,
   zombieFarInterval: 0.12,
   zombieCullDist: 85,
+  /* runtime-настройки производительности (меняются пресетом графики) */
+  particleMul: 1,
+  decalMul: 1,
 
   /* ---- ammo crate (offline): a supply chest that tops up reserves ---- */
   crateInterval: 10,    // seconds between spawns
@@ -342,6 +363,52 @@ const WEAPONS = {
           splash: 8.5, splashDmg: 900, explosionColor: [0x9a5aff, 0x08040f], noSelfDamage: true }
 };
 
+/* ============================================================
+   МИНИ-ИЗОБРАЖЕНИЯ ОРУЖИЯ ДЛЯ МАГАЗИНА
+   Один offscreen-рендерер рисует каждую модель в PNG (вид «боком»), чтобы в
+   магазине было видно, что покупаешь. Результаты кэшируются по id.
+   ============================================================ */
+let _shopIconRenderer = null;
+const _shopIconCache = {};
+function shopWeaponIcon(id) {
+  if (_shopIconCache[id] !== undefined) return _shopIconCache[id];
+  let url = '';
+  try {
+    if (!_shopIconRenderer) {
+      const cnv = document.createElement('canvas');
+      cnv.width = 160; cnv.height = 110;
+      const r = new THREE.WebGLRenderer({ canvas: cnv, antialias: true, alpha: true, preserveDrawingBuffer: true, powerPreference: 'low-power' });
+      r.setPixelRatio(1);
+      r.setSize(160, 110, false);
+      r.outputColorSpace = THREE.SRGBColorSpace;
+      r._scene = new THREE.Scene();
+      r._scene.add(new THREE.HemisphereLight(0xffffff, 0x44505f, 1.6));
+      const d1 = new THREE.DirectionalLight(0xffffff, 2.3); d1.position.set(1.3, 1.7, 1.1); r._scene.add(d1);
+      const d2 = new THREE.DirectionalLight(0x9fc2ff, 1.0); d2.position.set(-1.5, .7, -.9); r._scene.add(d2);
+      r._cam = new THREE.PerspectiveCamera(32, 160 / 110, 0.01, 60);
+      _shopIconRenderer = r;
+    }
+    const r = _shopIconRenderer;
+    const model = buildWeaponModel(id);
+    r._scene.add(model);
+    const box = new THREE.Box3().setFromObject(model);
+    const size = new THREE.Vector3(), ctr = new THREE.Vector3();
+    box.getSize(size); box.getCenter(ctr);
+    model.position.sub(ctr);
+    // вид «боком»: смотрим чуть сверху-сбоку, ствол уходит вбок — силуэт читается
+    const maxD = Math.max(size.x, size.y, size.z) || 1;
+    r._cam.position.set(maxD * .12, maxD * .75, maxD * 1.55);
+    r._cam.lookAt(0, 0, 0);
+    r._cam.updateProjectionMatrix();
+    r.render(r._scene, r._cam);
+    url = r.domElement.toDataURL('image/png');
+    r._scene.remove(model);
+    if (typeof disposeGroup === 'function') disposeGroup(model);
+  } catch (e) { url = ''; }
+  _shopIconCache[id] = url;
+  return url;
+}
+
 const GEAR = {
   kevlar:       { name: 'БРОНЯ (KEVLAR)', price: 650,  ap: 100, helmet: false },
   kevlarHelmet: { name: 'БРОНЯ + ШЛЕМ',   price: 1000, ap: 100, helmet: true },
@@ -358,7 +425,11 @@ const GEAR = {
   frag:         { name: 'ГРАНАТА',         price: 100,  grenade: 'frag',   desc: 'Осколочная · G — бросок' },
   freezeNade:   { name: 'КРИО-ГРАНАТА',    price: 120,  grenade: 'freeze', desc: 'Замораживает зомби в области' },
   napalmNade:   { name: 'НАПАЛМ',          price: 150,  grenade: 'napalm', desc: 'Оставляет горящую лужу' },
-  stickyBomb:   { name: 'ЛИПУЧКА',         price: 300,  grenade: 'sticky', desc: 'Липнет к поверхности · взрыв по кнопке (U)' }
+  stickyBomb:   { name: 'ЛИПУЧКА',         price: 300,  grenade: 'sticky', desc: 'Липнет к поверхности · взрыв по кнопке (U)' },
+  /* ---- ПРОКАЧКА ДВИЖЕНИЯ: покупаются один раз, действуют весь забег ---- */
+  highJump:     { name: 'ВЫСОКИЙ ПРЫЖОК',  price: 16000, perk: 'highJump', desc: 'Прыжок в 1.8× выше · держи ПРЫЖОК для джетпака' },
+  dashGear:     { name: 'РЫВОК',           price: 16000, perk: 'dash',     desc: 'X или кнопка РЫВОК — быстрый рывок вперёд (перезаряд 3с)' },
+  runBoost:     { name: 'ВЫСОКАЯ СКОРОСТЬ БЕГА', price: 16000, perk: 'runSpeed', desc: '+55% к скорости бега навсегда' }
 };
 function grenadeName(kind) { return kind === 'freeze' ? 'КРИО' : kind === 'napalm' ? 'НАПАЛМ' : kind === 'sticky' ? 'ЛИПУЧКА' : 'ГРАНАТА'; }
 function todName(k) {
@@ -416,6 +487,28 @@ const ZOMBIES = {
   /* ---- robot zombie: armoured ranged MINI-BOSS, from wave 8 onward ---- */
   robot:  { name: 'РОБОТ-ЗОМБИ',  hp: 1600, speed: 1.75, dmg: 45, score: 2200, money: 950, scale: 1.85, color: 0x8b95a1, atkRange: 2.3,
             miniBoss: true, armor: .35, shoot: 'plasma', shootRange: 26, shootCd: 2.2, shootDmg: 24, shootSpeed: 34, shootGrav: 0 },
+
+  /* ============================================================
+     НОВЫЕ МИНИ-БОССЫ (5) — разные по силе, способностям и моделькам.
+     Сила растёт: сталкер < паук < криомант < пожиратель < титан-мини.
+     ============================================================ */
+  /* 1) СТАЛКЕР — слабый быстрый мини-босс: рывки к игроку */
+  stalker: { name: 'СТАЛКЕР',     hp: 900,  speed: 2.55, dmg: 34, score: 1200, money: 520, scale: 1.55, color: 0x4a5a3a, atkRange: 2.1,
+             miniBoss: true, armor: .10, abilities: ['charge'], abilityCd: 5.5, aura: 0x9bff57 },
+  /* 2) ПАУК-МАТКА — плодовитый: призывает выводок и плюётся */
+  spider:  { name: 'ПАУК-МАТКА',  hp: 1350, speed: 1.90, dmg: 30, score: 1600, money: 640, scale: 1.72, color: 0x5a2a4a, atkRange: 2.1,
+             miniBoss: true, armor: .14, abilities: ['summon', 'barrage'], abilityCd: 6.5, aura: 0xff4a8a,
+             shoot: 'spit', shootRange: 20, shootCd: 2.6, shootDmg: 18, shootSpeed: 22, shootGrav: 7 },
+  /* 3) КРИОМАНТ — морозит игрока и создаёт лёд */
+  cryomancer: { name: 'КРИОМАНТ', hp: 1750, speed: 1.60, dmg: 40, score: 2000, money: 780, scale: 1.80, color: 0x3a6f9e, atkRange: 2.2,
+             miniBoss: true, armor: .18, abilities: ['frost', 'summon'], abilityCd: 6.0, aura: 0x7fd8ff,
+             shoot: 'frost', shootRange: 24, shootCd: 2.0, shootDmg: 20, shootSpeed: 30, shootGrav: 0 },
+  /* 4) ПОЖИРАТЕЛЬ ПЛОТИ — живучий: пожирает и лечится, бьёт мощно */
+  devourer:{ name: 'ПОЖИРАТЕЛЬ ПЛОТИ', hp: 2400, speed: 1.45, dmg: 58, score: 2900, money: 1100, scale: 2.05, color: 0x7a1020, atkRange: 2.5,
+             miniBoss: true, armor: .24, abilities: ['devour', 'shockwave'], abilityCd: 7.0, aura: 0xff2a3a },
+  /* 5) ТИТАН-МИНИ — самый сильный мини-босс: ударная волна + обстрел */
+  titanMini:{ name: 'ТИТАН-МИНИ', hp: 3400, speed: 1.30, dmg: 72, score: 4200, money: 1600, scale: 2.30, color: 0x6b3b2b, atkRange: 2.8,
+             miniBoss: true, armor: .30, abilities: ['shockwave', 'charge', 'barrage'], abilityCd: 6.5, aura: 0xff7a2a },
 
   /* ---- new specials (waves 7+) ---- */
   splitter:{ name: 'ДЕЛЯЩИЙСЯ',   hp: 130, speed: 1.9, dmg: 15, score: 280, money: 110, scale: 1.1, color: 0x7a4a6a, atkRange: 1.6,
@@ -919,7 +1012,7 @@ function makeRng(seed) {
 /* ---------------- persistent settings & progress ---------------- */
 const Store = {
   key: 'cs3d.save.v1',
-  data: { sens: 2.2, fov: 80, vol: 60, quality: 1, touchSens: 1.5, name: '', best: 0, bestWave: 0, killsTotal: 0, matches: 0, wins: 0, signalSrv: 0, aimBest: 0, aimAutoFire: 1,
+  data: { sens: 2.2, fov: 80, vol: 60, quality: 1, gfx: 0, touchSens: 1.5, name: '', best: 0, bestWave: 0, killsTotal: 0, matches: 0, wins: 0, signalSrv: 0, aimBest: 0, aimAutoFire: 1,
           map: 'arena', players: 2, maxHP: 100, aimAssist: 1, horde: 0, clears: 0, freeplay: 0, rounds: 3, playTime: 0,
           offCount: 1, offHp: 1, offFree: 0, offMode: 'normal', offMods: {}, offModsRun: 0, offModPick: 0, checkpoint: null, shopAllow: {}, shopItems: {}, music: 1, sfxVol: 100, musicVol: 70,
           grenade: 'frag', buildable: 'turret', weather: 'day', trapsEnabled: 1, offCountExact: 10, offCountFixed: 0,

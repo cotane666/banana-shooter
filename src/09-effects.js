@@ -13,6 +13,11 @@ class Effects {
     this.decals = [];
     this.maxDecals = quality === 0 ? 40 : quality === 1 ? 90 : 150;
     this.maxParticles = quality === 0 ? 120 : quality === 1 ? 260 : 420;
+    /* пресет графики домножает лимиты (низкая графика = меньше частиц/декалей) */
+    const pm = (CFG && CFG.particleMul) || 1;
+    const dm = (CFG && CFG.decalMul) || 1;
+    this.maxDecals = Math.max(12, Math.round(this.maxDecals * dm));
+    this.maxParticles = Math.max(40, Math.round(this.maxParticles * pm));
 
     // tracer: thin elongated box reused from a pool
     this.tracerGeo = new THREE.BoxGeometry(.03, .03, 1);

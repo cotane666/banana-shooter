@@ -2958,6 +2958,7 @@ class Player {
     this.helmet = false;
     this.heavyArmor = false;   // reinforced armour soaks a larger share of damage
     this.energyArmor = false;  // best suit: AP 300, soaks the most
+    this.armorMax = CFG.maxAP || 100;   // AP the current suit provides (для полосы HUD)
     this.alive = true;
     this.money = 800;
     this.kills = 0;
@@ -2976,6 +2977,16 @@ class Player {
     this.droneOwned = false;  // has bought the drone: it recharges every online round
     this.turretDrone = 0;     // turret-drone charges (gear, launched with V)
     this.mechOwned = false;   // has bought the mech suit (can re-enter it)
+    /* ---- ПРОКАЧКА ДВИЖЕНИЯ (снаряжение по $16000) ---- */
+    this.perkHighJump = false;   // 1.8× прыжок (+джетпак по удержанию)
+    this.perkDash = false;       // рывок вне меха
+    this.perkRunSpeed = false;   // +55% к бегу
+    this.jumpMul = 1;            // множители, применяются в applyPerks()
+    this.runMul = 1;
+    this.dashGearCd = 0;         // перезарядка рывка-перка
+    this.dashGearT = 0;
+    this.dashGearDir = { x: 0, z: 0 };
+    this.freezeT = 0;            // замедление от КРИОМАНТА
     this.mechSuit = false;    // currently sitting in the mech cockpit
     this.jetActive = false;   // jetpack thrusting
     this.jetT = 0;            // seconds of thrust left this burst
@@ -3112,6 +3123,13 @@ class Player {
     const order = this.inv[2] ? [2, 1, 3] : [1, 3];
     const i = order.indexOf(this.slot);
     return order[(i + 1) % order.length];
+  }
+
+  /* Пересчитать множители от купленной прокачки движения. Дёшево, вызывается
+     при покупке и при загрузке сохранения. */
+  applyPerks() {
+    this.jumpMul = this.perkHighJump ? 1.8 : 1;
+    this.runMul = this.perkRunSpeed ? 1.55 : 1;
   }
 
   resetSpawn(x, y, z, yaw) {
@@ -3302,6 +3320,7 @@ class Player {
 
     let maxSpeed = input.run && !this.crouching ? CFG.runSpeed : CFG.walkSpeed;
     if (this.crouching) maxSpeed = CFG.crouchSpeed;
+    maxSpeed *= this.runMul || 1;
     if (this.isAiming && def.zoom) maxSpeed *= .35;
     maxSpeed *= (1 - U.clamp(this.reloadT > 0 ? .16 : 0, 0, 1));
 
@@ -3325,9 +3344,51 @@ class Player {
 
     // ---- jump ----
     if (input.wantJump && this.onGround) {
-      this.vel.y = CFG.jumpSpeed;
+      this.vel.y = CFG.jumpSpeed * (this.jumpMul || 1);
       this.onGround = false;
     }
+    /* ВЫСОКИЙ ПРЫЖОК: держи ПРЫЖОК — включается джетпак (как у меха, но слабее).
+       Работает и на телефоне (кнопка зажимается), и на ПК (удержание Space). */
+    if (this.perkHighJump && !this.mechSuit) {
+      if (this.hjJetActive) {
+        this.hjJetT -= dt;
+        this.vel.y = Math.max(this.vel.y, CFG.highJumpThrust || 9);
+        if (this.hjJetT <= 0) { this.hjJetActive = false; this.hjJetCd = CFG.highJumpRecharge || 1.2; }
+      } else if (this.hjJetCd > 0) {
+        this.hjJetCd -= dt;
+      } else if (input.wantJump && !this.onGround) {
+        this.hjJetActive = true; this.hjJetT = CFG.highJumpMax || 1.1;
+      }
+    } else { this.hjJetActive = false; this.hjJetCd = 0; this.hjJetT = 0; }
+
+    /* РЫВОК (снаряжение): короткий мощный рывок вперёд, вне меха. */
+    if (this.perkDash && !this.mechSuit) {
+      if (this.dashGearCd > 0) this.dashGearCd -= dt;
+      if (this._gearDashWant && this.dashGearCd <= 0) {
+        this._gearDashWant = false;
+        const f = input.f || 0, r = input.r || 0;
+        let dx = -Math.sin(this.yaw) * f + Math.cos(this.yaw) * r;
+        let dz = -Math.cos(this.yaw) * f - Math.sin(this.yaw) * r;
+        const l = Math.hypot(dx, dz);
+        if (l < .1) { dx = -Math.sin(this.yaw); dz = -Math.cos(this.yaw); }
+        else { dx /= l; dz /= l; }
+        this.dashGearDir = { x: dx, z: dz };
+        this.dashGearT = CFG.gearDashTime || .28;
+        this.dashGearCd = CFG.gearDashCd || 3;
+        Audio3D_SFX.tone(320, .12, 'sawtooth', .1, this.pos.x, this.pos.y, this.pos.z, 120);
+      }
+      if (this.dashGearT > 0) {
+        this.dashGearT -= dt;
+        const k = Math.max(0, this.dashGearT / (CFG.gearDashTime || .28));
+        const s = (CFG.gearDashSpeed || 24) * (.4 + .6 * k);
+        this.vel.x = this.dashGearDir.x * s;
+        this.vel.z = this.dashGearDir.z * s;
+        if (this.vel.y < 0) this.vel.y = 0;
+      }
+    } else { this._gearDashWant = false; this.dashGearT = 0; }
+
+    /* КРИОМАНТ: заморозка замедляет игрока */
+    if (this.freezeT > 0) { this.freezeT -= dt; maxSpeed *= .45; }
 
     /* ---- МЕХАКОСТЮМ: jetpack ----
        Hold Space in the mech: for `mechJetMax` seconds thrust lifts you, then the

@@ -495,7 +495,9 @@ const Audio3D_SFX = {
     const base = kind === 'brute' ? 52 : kind === 'runner' ? 170 : kind === 'tank' ? 44
       : kind === 'flying' ? 240 : kind === 'robot' ? 66 : kind === 'spitter' ? 130
       : kind === 'digger' ? 72 : kind === 'splitter' ? 150 : kind === 'healer' ? 300
-      : kind === 'shielder' ? 60 : kind === 'summoner' ? 46 : 96;
+      : kind === 'shielder' ? 60 : kind === 'summoner' ? 46
+      : kind === 'stalker' ? 120 : kind === 'spider' ? 88 : kind === 'cryomancer' ? 210
+      : kind === 'devourer' ? 38 : kind === 'titanMini' ? 34 : 96;
     const o = this.ctx.createOscillator();
     o.type = 'sawtooth';
     o.frequency.setValueAtTime(base * (.85 + Math.random() * .4), t);
@@ -507,6 +509,36 @@ const Audio3D_SFX = {
     g.gain.exponentialRampToValueAtTime(.001, t + .5);
     o.connect(lp); lp.connect(g); g.connect(out);
     o.start(t); o.stop(t + .55);
+  },
+  /* ЗВУКИ ЗОМБИ: рычание, стон, визг — короткие узнаваемые реплики, чтобы
+     орда «звучала» и по звуку было понятно, кто подходит. */
+  zombieVoice(x, y, z, kind) {
+    if (!this.ctx || this.muted) return;
+    const sp = this._spatial(x, y, z, 3, 42);
+    if (sp.gain <= .004) return;
+    const t = this.ctx.currentTime;
+    // визгливый / низкий тембр в зависимости от типа и случайности
+    const deep = kind === 'brute' || kind === 'tank' || kind === 'devourer' || kind === 'titanMini' || kind === 'bossBrute' || kind === 'bossTitan' || kind === 'bossFinal';
+    const high = kind === 'runner' || kind === 'crawler' || kind === 'healer' || kind === 'spitter';
+    const rnd = Math.random();
+    const f0 = deep ? U.rand(50, 78) : high ? U.rand(180, 300) : U.rand(95, 150);
+    const o = this.ctx.createOscillator();
+    o.type = rnd < .5 ? 'sawtooth' : 'square';
+    o.frequency.setValueAtTime(f0, t);
+    // «ныряющее» рычание с дрожью
+    o.frequency.linearRampToValueAtTime(f0 * U.rand(.5, .75), t + .5);
+    const lfo = this.ctx.createOscillator(); lfo.type = 'sine'; lfo.frequency.value = U.rand(9, 20);
+    const lfoG = this.ctx.createGain(); lfoG.gain.value = f0 * .12;
+    lfo.connect(lfoG); lfoG.connect(o.frequency);
+    const lp = this.ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = deep ? 620 : 1300; lp.Q.value = 4;
+    const g = this.ctx.createGain();
+    g.gain.setValueAtTime(.0001, t);
+    g.gain.linearRampToValueAtTime(sp.gain * (deep ? .30 : .20), t + .05);
+    g.gain.exponentialRampToValueAtTime(.001, t + .55);
+    const pan = this.ctx.createStereoPanner ? this.ctx.createStereoPanner() : null;
+    if (pan) { pan.pan.value = sp.pan; g.connect(pan); pan.connect(this.sfx); } else g.connect(this.sfx);
+    o.connect(lp); lp.connect(g);
+    o.start(t); o.stop(t + .6); lfo.start(t); lfo.stop(t + .6);
   },
   step(x, y, z) {
     if (!this.ctx || this.muted) return;

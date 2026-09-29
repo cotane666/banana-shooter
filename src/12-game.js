@@ -8307,10 +8307,10 @@ const Game = {
     this.updateEnv(dt);
     this.updateWeather(dt);
 
-    // ---- galaxy skins: spin the rings/dust on the viewmodel and every peer ----
-    if (this.player && this.player.vmInner) animateGalaxySkin(this.player.vmInner, dt);
+    // ---- galaxy / flesh skins: animate rings, dust, aura ----
+    if (this.player && this.player.vmInner) { animateGalaxySkin(this.player.vmInner, dt); animateFleshSkin(this.player.vmInner, dt); }
     if (this.remotePlayers) for (const rp of this.remotePlayers) {
-      if (rp.weaponGroup) animateGalaxySkin(rp.weaponGroup, dt);
+      if (rp.weaponGroup) { animateGalaxySkin(rp.weaponGroup, dt); animateFleshSkin(rp.weaponGroup, dt); }
       if (rp.mesh && rp.mesh.userData && rp.mesh.userData.galaxyChar) animateGalaxyCharacter(rp.mesh, dt);
     }
 

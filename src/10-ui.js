@@ -1312,6 +1312,7 @@ const Skins = {
     if (this._base) for (const c of this._base.children) {
       if (typeof animateGalaxySkin === 'function') animateGalaxySkin(c, 1 / 60);
       if (typeof animateGalaxyCharacter === 'function') animateGalaxyCharacter(c, 1 / 60);
+      if (typeof animateFleshSkin === 'function') animateFleshSkin(c, 1 / 60);
     }
     // idle auto-spin plus manual rotation
     if (!this.dragging) this._spin += .004;

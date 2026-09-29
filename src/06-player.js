@@ -425,6 +425,57 @@ function animateGalaxySkin(group, dt) {
    ткани, торчащие зубы/шипы, когти и вросшие глаза. Полностью другая модель.
    ============================================================ */
 const FLESH_COLORS = { meat: 0xb21a26, meat2: 0x8a0f1a, dark: 0x4a0509, blood: 0xe01f30, bone: 0xf0e8d4, eye: 0xf4efe0, iris: 0x2a8a3a, claw: 0x2a1a1c };
+/* текстура глазного яблока: белок с прожилками, радужка и зрачок */
+let _eyeTex = null;
+function eyeTexture() {
+  if (_eyeTex) return _eyeTex;
+  const c = makeCanvas(64); const x = c.getContext('2d');
+  x.fillStyle = '#f4efe0'; x.fillRect(0, 0, 64, 64);
+  // кровавые прожилки на белке
+  for (let i = 0; i < 22; i++) {
+    x.strokeStyle = 'rgba(200,30,30,' + (.2 + Math.random() * .5).toFixed(2) + ')';
+    x.lineWidth = .6 + Math.random() * .8;
+    const a = Math.random() * 6.28; const r = 8 + Math.random() * 22;
+    x.beginPath();
+    x.moveTo(32 + Math.cos(a) * r, 32 + Math.sin(a) * r);
+    x.quadraticCurveTo(32 + Math.cos(a) * r * .5, 32 + Math.sin(a) * r * .5, 32 + (Math.random() - .5) * 6, 32 + (Math.random() - .5) * 6);
+    x.stroke();
+  }
+  // радужка
+  const gr = x.createRadialGradient(32, 32, 4, 32, 32, 16);
+  gr.addColorStop(0, '#8a2a2a'); gr.addColorStop(.5, '#c0392b'); gr.addColorStop(.85, '#7a1010'); gr.addColorStop(1, 'rgba(80,16,16,0)');
+  x.fillStyle = gr; x.beginPath(); x.arc(32, 32, 16, 0, 7); x.fill();
+  // радужные волокна
+  for (let i = 0; i < 26; i++) {
+    const a = Math.random() * 6.28;
+    x.strokeStyle = 'rgba(230,90,60,.5)'; x.lineWidth = .7;
+    x.beginPath(); x.moveTo(32 + Math.cos(a) * 6, 32 + Math.sin(a) * 6); x.lineTo(32 + Math.cos(a) * 15, 32 + Math.sin(a) * 15); x.stroke();
+  }
+  // зрачок
+  x.fillStyle = '#0a0203'; x.beginPath(); x.arc(32, 32, 6, 0, 7); x.fill();
+  // блик
+  x.fillStyle = 'rgba(255,255,255,.8)'; x.beginPath(); x.arc(27, 27, 2.6, 0, 7); x.fill();
+  _eyeTex = new THREE.CanvasTexture(c); _eyeTex.colorSpace = THREE.SRGBColorSpace; return _eyeTex;
+}
+/* текстура кости: тёплый слоновый цвет с трещинами и пористостью */
+let _boneTex = null;
+function boneTexture() {
+  if (_boneTex) return _boneTex;
+  const c = makeCanvas(64); const x = c.getContext('2d');
+  x.fillStyle = '#e8dfc8'; x.fillRect(0, 0, 64, 64);
+  for (let i = 0; i < 50; i++) {
+    x.fillStyle = 'rgba(180,168,140,' + (.1 + Math.random() * .3).toFixed(2) + ')';
+    x.beginPath(); x.arc(Math.random() * 64, Math.random() * 64, 1 + Math.random() * 4, 0, 7); x.fill();
+  }
+  for (let i = 0; i < 14; i++) {
+    x.strokeStyle = 'rgba(120,105,80,.5)'; x.lineWidth = .6 + Math.random();
+    x.beginPath();
+    let bx = Math.random() * 64, by = Math.random() * 64; x.moveTo(bx, by);
+    for (let s = 0; s < 3; s++) { bx += (Math.random() - .5) * 22; by += (Math.random() - .5) * 22; x.lineTo(bx, by); }
+    x.stroke();
+  }
+  _boneTex = new THREE.CanvasTexture(c); _boneTex.colorSpace = THREE.SRGBColorSpace; return _boneTex;
+}
 function applyFleshSkin(group) {
   if (!group) return group;
   const C = FLESH_COLORS;
@@ -451,50 +502,100 @@ function applyFleshSkin(group) {
 
   const fx = new THREE.Group();
   fx.name = 'fleshFX';
-  const matBone = new THREE.MeshLambertMaterial({ color: C.bone, emissive: 0x1a1410 });
-  const matMeat = new THREE.MeshLambertMaterial({ color: C.meat, emissive: 0x1e0206 });
+  const boneTex = boneTexture(), eyeTex = eyeTexture();
+  const matBone = new THREE.MeshLambertMaterial({ map: boneTex, color: 0xffffff, emissive: 0x241c12 });
+  const matMeat = new THREE.MeshLambertMaterial({ map: tex, color: C.meat, emissive: 0x2a0308 });
   const matClaw = new THREE.MeshLambertMaterial({ color: C.claw, emissive: 0x0a0406 });
+  const matVein = new THREE.MeshLambertMaterial({ color: 0x6a0a12, emissive: 0x200306 });
+  const matTendon = new THREE.MeshLambertMaterial({ map: boneTex, color: 0xd8cbb0, emissive: 0x201a12 });
   /* bulbous lumps of muscle along the body */
-  for (let i = 0; i < 8; i++) {
-    const b = new THREE.Mesh(new THREE.SphereGeometry(.022 + Math.random() * .022, 8, 6), matMeat);
-    b.position.set((Math.random() - .5) * .12, .02 + (Math.random() - .5) * .12, -.18 + Math.random() * .28);
+  for (let i = 0; i < 12; i++) {
+    const b = new THREE.Mesh(new THREE.SphereGeometry(.02 + Math.random() * .026, 8, 6), matMeat);
+    b.position.set((Math.random() - .5) * .14, .02 + (Math.random() - .5) * .14, -.22 + Math.random() * .36);
     fx.add(b);
   }
-  /* rows of jagged teeth along the top of the receiver */
-  for (let i = 0; i < 6; i++) {
-    const t2 = new THREE.Mesh(new THREE.ConeGeometry(.012, .05 + Math.random() * .03, 4), matBone);
-    t2.position.set(-.012 + (i % 2) * .024, .052, -.02 - i * .045);
-    t2.rotation.z = (i % 2 ? 1 : -1) * .18;
+  /* rows of jagged teeth along the top of the receiver (both sides of a jaw) */
+  for (let i = 0; i < 8; i++) {
+    const t2 = new THREE.Mesh(new THREE.ConeGeometry(.011, .045 + Math.random() * .035, 4), matBone);
+    t2.position.set(-.014 + (i % 2) * .028, .056 + (i % 2) * .006, .02 - i * .042);
+    t2.rotation.z = (i % 2 ? 1 : -1) * .20;
     fx.add(t2);
+    const t3 = new THREE.Mesh(new THREE.ConeGeometry(.010, .038 + Math.random() * .03, 4), matBone);
+    t3.position.set(-.012 + (i % 2) * .024, -.010 - (i % 2) * .005, .00 - i * .042);
+    t3.rotation.x = Math.PI; t3.rotation.z = (i % 2 ? -1 : 1) * .16;
+    fx.add(t3);
   }
   /* a big curved claw near the muzzle and two lower spikes */
-  const claw = new THREE.Mesh(new THREE.ConeGeometry(.018, .11, 5), matClaw);
-  claw.position.set(.03, .02, -.30); claw.rotation.x = -1.1; fx.add(claw);
+  const claw = new THREE.Mesh(new THREE.ConeGeometry(.018, .12, 5), matClaw);
+  claw.position.set(.03, .02, -.32); claw.rotation.x = -1.1; fx.add(claw);
+  const claw2 = new THREE.Mesh(new THREE.ConeGeometry(.014, .10, 5), matBone);
+  claw2.position.set(-.03, .0, -.34); claw2.rotation.x = -1.3; claw2.rotation.z = -.2; fx.add(claw2);
   [-1, 1].forEach(s => {
-    const sp = new THREE.Mesh(new THREE.ConeGeometry(.014, .08, 4), matBone);
-    sp.position.set(s * .05, -.05, -.16); sp.rotation.x = Math.PI; sp.rotation.z = s * .3; fx.add(sp);
+    const sp = new THREE.Mesh(new THREE.ConeGeometry(.013, .09, 4), matBone);
+    sp.position.set(s * .052, -.052, -.18); sp.rotation.x = Math.PI; sp.rotation.z = s * .3; fx.add(sp);
   });
-  /* embedded eyes that stare forward */
-  const eyeMat = new THREE.MeshLambertMaterial({ color: C.eye, emissive: 0x222018 });
-  const irisMat = new THREE.MeshBasicMaterial({ color: C.iris });
-  [[-.045, .06, -.14], [.05, .05, -.20], [0, .075, -.05]].forEach(p => {
-    const e = new THREE.Mesh(new THREE.SphereGeometry(.020, 10, 8), eyeMat);
-    e.position.set(p[0], p[1], p[2]); fx.add(e);
-    const ir = new THREE.Mesh(new THREE.SphereGeometry(.010, 8, 6), irisMat);
-    ir.position.set(p[0], p[1], p[2] - .013); fx.add(ir);
+  /* embedded eyes with a real eye texture (sclera + iris + pupil) */
+  const eyeMat = new THREE.MeshLambertMaterial({ map: eyeTex, emissive: 0x2a2418 });
+  [[-.045, .062, -.14], [.05, .052, -.22], [0, .078, -.04]].forEach((p, i) => {
+    const e = new THREE.Mesh(new THREE.SphereGeometry(.022, 12, 10), eyeMat);
+    e.position.set(p[0], p[1], p[2]);
+    e.rotation.y = Math.PI;                 // face forward
+    fx.add(e);
+    // eyelid ring of flesh around the eye
+    const lid = new THREE.Mesh(new THREE.TorusGeometry(.021, .006, 6, 12), matMeat);
+    lid.position.set(p[0], p[1], p[2] + .004); fx.add(lid);
   });
+  /* ribs / bone plates embedded in the flesh */
+  for (let i = 0; i < 4; i++) {
+    const rib = new THREE.Mesh(new THREE.TorusGeometry(.045, .007, 5, 10, Math.PI), matTendon);
+    rib.position.set((i % 2 ? .04 : -.04), .01 - i * .012, -.04 - i * .05);
+    rib.rotation.set(0, Math.PI / 2, Math.PI / 2);
+    fx.add(rib);
+  }
   /* dark veins/tendons draped over the gun */
-  const veinMat = new THREE.MeshLambertMaterial({ color: C.dark });
-  for (let i = 0; i < 5; i++) {
-    const v = new THREE.Mesh(new THREE.CylinderGeometry(.005, .003, .22 + Math.random() * .16, 5), veinMat);
-    v.position.set((Math.random() - .5) * .10, (Math.random() - .5) * .06, -.10 + Math.random() * .22);
+  const veinMat = matVein;
+  for (let i = 0; i < 8; i++) {
+    const v = new THREE.Mesh(new THREE.CylinderGeometry(.005, .003, .22 + Math.random() * .20, 5), veinMat);
+    v.position.set((Math.random() - .5) * .12, (Math.random() - .5) * .08, -.12 + Math.random() * .26);
     v.rotation.set(Math.PI / 2 + U.rand(-.2, .2), 0, U.rand(0, 6.28));
     fx.add(v);
   }
+  /* tendon strands */
+  for (let i = 0; i < 3; i++) {
+    const td = new THREE.Mesh(new THREE.CylinderGeometry(.004, .006, .14 + Math.random() * .12, 5), matTendon);
+    td.position.set((Math.random() - .5) * .08, .03 + Math.random() * .02, -.06 - Math.random() * .2);
+    td.rotation.set(Math.PI / 2 + U.rand(-.3, .3), 0, U.rand(0, 6.28));
+    fx.add(td);
+  }
   group.add(fx);
+  /* ---- КРОВАВАЯ АУРА: тёмно-красное гало и капли вокруг оружия ---- */
+  const aura = new THREE.Group();
+  aura.name = 'fleshAura';
+  const ringMat = new THREE.MeshBasicMaterial({ color: 0xd01020, transparent: true, opacity: .5, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
+  const ring1 = new THREE.Mesh(new THREE.TorusGeometry(.22, .012, 6, 24), ringMat);
+  ring1.rotation.x = Math.PI / 2; ring1.scale.set(1.6, 1, .7); aura.add(ring1);
+  const ring2 = new THREE.Mesh(new THREE.TorusGeometry(.30, .008, 6, 26), ringMat);
+  ring2.rotation.x = Math.PI / 2; ring2.scale.set(1.3, 1, .9); ring2.position.y = -.04; aura.add(ring2);
+  const alight = new THREE.PointLight(0xff2a3a, 1.2, 2.6, 2);
+  aura.position.set(0, .01, -.12); aura.add(alight);
+  group.add(aura);
   group.userData.flesh = true;
+  group.userData.fleshAura = { rings: [ring1, ring2], light: alight, t: 0 };
   group.userData.skin = { id: 'sk_hardcore_wave', name: 'ПЛОТЬ', rarity: 'legendary', rarityLabel: 'ЛЕГЕНДАРНЫЙ', glow: C.blood, pattern: 'flesh', shot: 0xff2a3a, accent: C.blood, deco: 'flesh' };
   return group;
+}
+/* animate the blood aura (pulsing rings + light) */
+function animateFleshSkin(group, dt) {
+  const a = group && group.userData && group.userData.fleshAura;
+  if (!a) return;
+  a.t += dt;
+  const k = .5 + .5 * Math.sin(a.t * 3);
+  if (a.rings) {
+    a.rings[0].rotation.z += dt * .7;
+    a.rings[1].rotation.z -= dt * .5;
+    a.rings[0].material.opacity = .35 + k * .3;
+  }
+  if (a.light) a.light.intensity = .8 + k * .9;
 }
 
 /* ============================================================

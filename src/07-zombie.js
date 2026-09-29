@@ -1093,7 +1093,7 @@ class Horde {
     return this.spawn(type, best.x, best.z, y === null ? 0 : y);
   }
 
-  update(dt, player) {
+  update(dt, player, extraPlayers) {
     this.flow.update(dt, player.pos.x, player.pos.z);
     this.bucketize();
     const ctx = { player, world: this.world, flow: this.flow, neighbors: null, horde: this };
@@ -1104,6 +1104,7 @@ class Horde {
        hidden entirely — the renderer then skips them. This keeps big hordes
        (ОРДА ×10) cheap without changing what the player sees. */
     const p = player.pos;
+    const extra = (extraPlayers && extraPlayers.length) ? extraPlayers : null;
     const nearD2 = CFG.zombieNearDist * CFG.zombieNearDist;
     const cullD2 = CFG.zombieCullDist * CFG.zombieCullDist;
     this._lodAcc = (this._lodAcc || 0) + dt;
@@ -1111,12 +1112,26 @@ class Horde {
     if (farTick) this._lodAcc = 0;
     for (let i = 0; i < this.list.length; i++) {
       const z = this.list[i];
+      if (z.remoteDriven) continue;            // клиент: позиция приходит от хоста
       const dx = z.pos.x - p.x, dz = z.pos.z - p.z;
       const d2 = dx * dx + dz * dz;
       const visible = d2 <= cullD2 || z.isTarget || (z.isBoss || z.isMiniBoss);
       if (z.group) z.group.visible = visible;
       if (!visible) continue;                 // hidden: skip simulation entirely
       if (d2 > nearD2 && !farTick) continue;  // distant: update only every few frames
+      /* В КООПЕ зомби охотятся на БЛИЖАЙШЕГО игрока (хост или клиента) */
+      if (extra) {
+        let best = player, bd = d2;
+        for (let e = 0; e < extra.length; e++) {
+          const rp = extra[e];
+          if (!rp || !rp.alive) continue;
+          const ex = rp.pos.x - z.pos.x, ez = rp.pos.z - z.pos.z;
+          const ed = ex * ex + ez * ez;
+          if (ed < bd) { bd = ed; best = rp; }
+        }
+        ctx.player = best;
+        z.targetRemote = (best !== player);      // цель — удалённый игрок?
+      } else { ctx.player = player; z.targetRemote = false; }
       ctx.neighbors = this.nearby(z);
       z.update(dt * (d2 > nearD2 ? CFG.zombieFarInterval : 1), ctx);
     }

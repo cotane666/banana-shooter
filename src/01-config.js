@@ -31,6 +31,11 @@ const CFG = {
   mechArmToe: 0.12,          // наклон рук-пушек внутрь, к прицелу (радианы)
   mechDomeRadius: 1.02,      // радиус стеклянного купола кабины
   mechMissileCd: 2.6,       // секунд между залпами самонаводящихся ракет (E)
+  /* СКАЧОК НАПРЯЖЕНИЯ (R в мехе): электрическая ударная волна вокруг шасси */
+  mechSurgeCd: 14,          // перезарядка способности (с)
+  mechSurgeRadius: 11,      // радиус ударной волны (м)
+  mechSurgeDmg: 220,        // урон врагам в радиусе
+  mechSurgePush: 22,        // сила отброса
   /* мех-джетпак: держишь прыжок — 1.5с тяги, затем 1.5с перезарядки */
   mechJetMax: 1.5,
   mechJetRecharge: 1.5,
@@ -561,7 +566,8 @@ const ACHIEVEMENTS = [
      ============================================================ */
   { id: 'platinum_all', name: 'ВЛАДЫКА ГАЛАКТИКИ', desc: 'Выполнить все остальные достижения', check: s => s.otherAchievementsDone === true },
   /* ХАРДКОР — одна жизнь. Награда: кровавый скин «ПЛОТЬ». */
-  { id: 'hardcore_wave', name: 'ОДНА ЖИЗНЬ', desc: 'Дожить до 25 волны в ХАРДКОРЕ', check: s => s.hardcoreWave >= 25 }
+  { id: 'hardcore_wave', name: 'ОДНА ЖИЗНЬ', desc: 'Дожить до 25 волны в ХАРДКОРЕ', check: s => s.hardcoreWave >= 25 },
+  { id: 'hardcore_full', name: 'НЕВОЗМОЖНОЕ', desc: 'Пройти ХАРДКОР полностью (100 волн)', check: s => s.hardcoreFull === true }
 ];
 
 /* ============================================================
@@ -601,6 +607,7 @@ const ACH_PROGRESS = {
   v_streak10: ['bestHeadStreak', 10], v_total20k: ['killsTotal', 20000],
   v_clear5: ['clears', 5], v_win50: ['top3', 1], v_time3600: ['playTime', 3600],
   hardcore_wave: ['hardcoreWave', 25],
+  hardcore_full: ['hardcoreFull', 1],
   /* интересные: скорострельные и на выносливость */
   x_rampage: ['fastKills', 100], x_speedrun: ['fastClear', 1], x_marathon: ['runTime', 2700],
   /* heavy arsenal (both sets) */
@@ -776,6 +783,7 @@ function skinRarityFor(achId) {
   if (achId === 'x_rampage' || achId === 'x_speedrun') return 'legendary';
   if (achId === 'x_marathon') return 'epic';
   if (achId === 'hardcore_wave') return 'legendary';
+  if (achId === 'hardcore_full') return 'platinum';
   if (achId.startsWith('v_')) return 'legendary';
   if (achId.startsWith('m_')) return 'rare';
   if (achId.startsWith('e_')) return 'uncommon';

@@ -1285,14 +1285,15 @@ const Skins = {
       if (armR) {
         // show the soldier HOLDING the gun with both hands, using the same pose
         // as the remote players, instead of a gun glued to one arm
-        const hp = (typeof weaponHoldPose === 'function') ? weaponHoldPose(this.weaponId) : { wpos: { x: .02, y: -.60, z: 0 }, wrot: { x: -Math.PI / 2, y: 0, z: 0 }, scale: .95, reachL: 1.5, reachR: 1.32, yawL: .4, yawR: -.1 };
-        gun.position.set(hp.wpos.x, hp.wpos.y, hp.wpos.z);
-        gun.rotation.set(hp.wrot.x, hp.wrot.y, hp.wrot.z);
-        gun.scale.setScalar(hp.scale);
-        armR.add(gun);
+        const hp = (typeof weaponHoldPose === 'function') ? weaponHoldPose(this.weaponId) : { wpos: { x: .02, y: -.50, z: 0 }, wrot: { x: -Math.PI / 2, y: 0, z: 0 }, scale: .95, reachL: 1.5, reachR: 1.32, yawL: .4, yawR: -.1, elbowR: .55, elbowL: .95 };
         const pp = soldier.userData.parts;
-        if (pp.armR) { pp.armR.rotation.x = hp.reachR; pp.armR.rotation.y = hp.yawR; }
-        if (pp.armL) { pp.armL.rotation.x = hp.reachL; pp.armL.rotation.y = hp.yawL; pp.armL.rotation.z = .1; }
+        const handR = (pp.armR && pp.armR.userData && pp.armR.userData.lower) ? pp.armR.userData.lower : armR;
+        gun.position.set(hp.wpos.x, hp.wpos.y, hp.wpos.z);
+        gun.rotation.set(-Math.PI / 2 - (hp.elbowR || 0), hp.wrot.y, hp.wrot.z);
+        gun.scale.setScalar(hp.scale);
+        handR.add(gun);
+        if (pp.armR) { pp.armR.rotation.x = hp.reachR; pp.armR.rotation.y = hp.yawR; if (pp.armR.userData && pp.armR.userData.lower) pp.armR.userData.lower.rotation.x = hp.elbowR || .55; }
+        if (pp.armL) { pp.armL.rotation.x = hp.reachL; pp.armL.rotation.y = hp.yawL; pp.armL.rotation.z = .1; if (pp.armL.userData && pp.armL.userData.lower) pp.armL.userData.lower.rotation.x = hp.elbowL || .95; }
       }
       this._base.add(soldier);
       this._modelH = 2.0; this._centerY = 1.0;

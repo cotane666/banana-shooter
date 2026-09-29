@@ -559,6 +559,9 @@ const Net = {
       case 'score': case 'chat': case 'drone': case 'boom': case 'splat':
       case 'mmissile':
       case 'coopWave':
+      case 'zstate':
+      case 'zhurt':
+      case 'zhit':
         if (this.role === CS.NETROLE.HOST) this.relay(m, rec);
         this.emit(m.t, m);
         break;

@@ -1459,6 +1459,11 @@ const CFG = {
   mechArmToe: 0.12,          // наклон рук-пушек внутрь, к прицелу (радианы)
   mechDomeRadius: 1.02,      // радиус стеклянного купола кабины
   mechMissileCd: 2.6,       // секунд между залпами самонаводящихся ракет (E)
+  /* СКАЧОК НАПРЯЖЕНИЯ (R в мехе): электрическая ударная волна вокруг шасси */
+  mechSurgeCd: 14,          // перезарядка способности (с)
+  mechSurgeRadius: 11,      // радиус ударной волны (м)
+  mechSurgeDmg: 220,        // урон врагам в радиусе
+  mechSurgePush: 22,        // сила отброса
   /* мех-джетпак: держишь прыжок — 1.5с тяги, затем 1.5с перезарядки */
   mechJetMax: 1.5,
   mechJetRecharge: 1.5,
@@ -1989,7 +1994,8 @@ const ACHIEVEMENTS = [
      ============================================================ */
   { id: 'platinum_all', name: 'ВЛАДЫКА ГАЛАКТИКИ', desc: 'Выполнить все остальные достижения', check: s => s.otherAchievementsDone === true },
   /* ХАРДКОР — одна жизнь. Награда: кровавый скин «ПЛОТЬ». */
-  { id: 'hardcore_wave', name: 'ОДНА ЖИЗНЬ', desc: 'Дожить до 25 волны в ХАРДКОРЕ', check: s => s.hardcoreWave >= 25 }
+  { id: 'hardcore_wave', name: 'ОДНА ЖИЗНЬ', desc: 'Дожить до 25 волны в ХАРДКОРЕ', check: s => s.hardcoreWave >= 25 },
+  { id: 'hardcore_full', name: 'НЕВОЗМОЖНОЕ', desc: 'Пройти ХАРДКОР полностью (100 волн)', check: s => s.hardcoreFull === true }
 ];
 
 /* ============================================================
@@ -2029,6 +2035,7 @@ const ACH_PROGRESS = {
   v_streak10: ['bestHeadStreak', 10], v_total20k: ['killsTotal', 20000],
   v_clear5: ['clears', 5], v_win50: ['top3', 1], v_time3600: ['playTime', 3600],
   hardcore_wave: ['hardcoreWave', 25],
+  hardcore_full: ['hardcoreFull', 1],
   /* интересные: скорострельные и на выносливость */
   x_rampage: ['fastKills', 100], x_speedrun: ['fastClear', 1], x_marathon: ['runTime', 2700],
   /* heavy arsenal (both sets) */
@@ -2204,6 +2211,7 @@ function skinRarityFor(achId) {
   if (achId === 'x_rampage' || achId === 'x_speedrun') return 'legendary';
   if (achId === 'x_marathon') return 'epic';
   if (achId === 'hardcore_wave') return 'legendary';
+  if (achId === 'hardcore_full') return 'platinum';
   if (achId.startsWith('v_')) return 'legendary';
   if (achId.startsWith('m_')) return 'rare';
   if (achId.startsWith('e_')) return 'uncommon';
@@ -8122,6 +8130,8 @@ class Player {
     return true;
   }
   clearBag() { this.bag.length = 0; }
+  /* snapshot of the bag for a checkpoint */
+  bagSnapshot() { return (this.bag || []).map(b => ({ id: b.id, mag: b.mag, reserve: b.reserve })); }
   takeWeapon(slot) {
     if (!this.inv[slot]) return false;
     if (this.slot === slot) return true;
@@ -9748,7 +9758,7 @@ class Horde {
     return this.spawn(type, best.x, best.z, y === null ? 0 : y);
   }
 
-  update(dt, player) {
+  update(dt, player, extraPlayers) {
     this.flow.update(dt, player.pos.x, player.pos.z);
     this.bucketize();
     const ctx = { player, world: this.world, flow: this.flow, neighbors: null, horde: this };
@@ -9759,6 +9769,7 @@ class Horde {
        hidden entirely — the renderer then skips them. This keeps big hordes
        (ОРДА ×10) cheap without changing what the player sees. */
     const p = player.pos;
+    const extra = (extraPlayers && extraPlayers.length) ? extraPlayers : null;
     const nearD2 = CFG.zombieNearDist * CFG.zombieNearDist;
     const cullD2 = CFG.zombieCullDist * CFG.zombieCullDist;
     this._lodAcc = (this._lodAcc || 0) + dt;
@@ -9766,12 +9777,26 @@ class Horde {
     if (farTick) this._lodAcc = 0;
     for (let i = 0; i < this.list.length; i++) {
       const z = this.list[i];
+      if (z.remoteDriven) continue;            // клиент: позиция приходит от хоста
       const dx = z.pos.x - p.x, dz = z.pos.z - p.z;
       const d2 = dx * dx + dz * dz;
       const visible = d2 <= cullD2 || z.isTarget || (z.isBoss || z.isMiniBoss);
       if (z.group) z.group.visible = visible;
       if (!visible) continue;                 // hidden: skip simulation entirely
       if (d2 > nearD2 && !farTick) continue;  // distant: update only every few frames
+      /* В КООПЕ зомби охотятся на БЛИЖАЙШЕГО игрока (хост или клиента) */
+      if (extra) {
+        let best = player, bd = d2;
+        for (let e = 0; e < extra.length; e++) {
+          const rp = extra[e];
+          if (!rp || !rp.alive) continue;
+          const ex = rp.pos.x - z.pos.x, ez = rp.pos.z - z.pos.z;
+          const ed = ex * ex + ez * ez;
+          if (ed < bd) { bd = ed; best = rp; }
+        }
+        ctx.player = best;
+        z.targetRemote = (best !== player);      // цель — удалённый игрок?
+      } else { ctx.player = player; z.targetRemote = false; }
       ctx.neighbors = this.nearby(z);
       z.update(dt * (d2 > nearD2 ? CFG.zombieFarInterval : 1), ctx);
     }
@@ -13069,14 +13094,15 @@ const Skins = {
       if (armR) {
         // show the soldier HOLDING the gun with both hands, using the same pose
         // as the remote players, instead of a gun glued to one arm
-        const hp = (typeof weaponHoldPose === 'function') ? weaponHoldPose(this.weaponId) : { wpos: { x: .02, y: -.60, z: 0 }, wrot: { x: -Math.PI / 2, y: 0, z: 0 }, scale: .95, reachL: 1.5, reachR: 1.32, yawL: .4, yawR: -.1 };
-        gun.position.set(hp.wpos.x, hp.wpos.y, hp.wpos.z);
-        gun.rotation.set(hp.wrot.x, hp.wrot.y, hp.wrot.z);
-        gun.scale.setScalar(hp.scale);
-        armR.add(gun);
+        const hp = (typeof weaponHoldPose === 'function') ? weaponHoldPose(this.weaponId) : { wpos: { x: .02, y: -.50, z: 0 }, wrot: { x: -Math.PI / 2, y: 0, z: 0 }, scale: .95, reachL: 1.5, reachR: 1.32, yawL: .4, yawR: -.1, elbowR: .55, elbowL: .95 };
         const pp = soldier.userData.parts;
-        if (pp.armR) { pp.armR.rotation.x = hp.reachR; pp.armR.rotation.y = hp.yawR; }
-        if (pp.armL) { pp.armL.rotation.x = hp.reachL; pp.armL.rotation.y = hp.yawL; pp.armL.rotation.z = .1; }
+        const handR = (pp.armR && pp.armR.userData && pp.armR.userData.lower) ? pp.armR.userData.lower : armR;
+        gun.position.set(hp.wpos.x, hp.wpos.y, hp.wpos.z);
+        gun.rotation.set(-Math.PI / 2 - (hp.elbowR || 0), hp.wrot.y, hp.wrot.z);
+        gun.scale.setScalar(hp.scale);
+        handR.add(gun);
+        if (pp.armR) { pp.armR.rotation.x = hp.reachR; pp.armR.rotation.y = hp.yawR; if (pp.armR.userData && pp.armR.userData.lower) pp.armR.userData.lower.rotation.x = hp.elbowR || .55; }
+        if (pp.armL) { pp.armL.rotation.x = hp.reachL; pp.armL.rotation.y = hp.yawL; pp.armL.rotation.z = .1; if (pp.armL.userData && pp.armL.userData.lower) pp.armL.userData.lower.rotation.x = hp.elbowL || .95; }
       }
       this._base.add(soldier);
       this._modelH = 2.0; this._centerY = 1.0;
@@ -13674,6 +13700,9 @@ const Net = {
       case 'score': case 'chat': case 'drone': case 'boom': case 'splat':
       case 'mmissile':
       case 'coopWave':
+      case 'zstate':
+      case 'zhurt':
+      case 'zhit':
         if (this.role === CS.NETROLE.HOST) this.relay(m, rec);
         this.emit(m.t, m);
         break;
@@ -13815,26 +13844,33 @@ function buildSoldierMesh(team) {
   head.add(box(.05, .03, .06, metalMat, -.14, .12, -.05));        // side mount
   g.add(head); parts.head = head;
 
-  /* ---------------- arms (pivot at the shoulder) ---------------- */
+  /* ---------------- arms (shoulder pivot → ELBOW pivot) ---------------- */
   const arm = (side) => {
-    const p = limb(side * .33, 1.40, 0);
-    p.add(box(.15, .30, .16, bodyMat, 0, -.15, 0));               // upper arm
-    p.add(box(.14, .16, .15, bodyMat2, 0, -.32, 0));              // elbow
-    p.add(box(.13, .30, .14, bodyMat, 0, -.47, 0));               // forearm
-    p.add(box(.14, .12, .15, gloveMat, 0, -.64, -.01));           // glove
+    const p = limb(side * .33, 1.40, 0);                 // shoulder pivot
+    p.add(box(.15, .30, .16, bodyMat, 0, -.15, 0));      // upper arm
+    p.add(box(.14, .16, .15, bodyMat2, 0, -.30, 0));     // elbow joint block
+    // forearm + glove live in their OWN pivot at the elbow, so the arm can bend
+    const lower = new THREE.Group(); lower.position.set(0, -.34, 0);
+    lower.add(box(.13, .30, .14, bodyMat, 0, -.16, 0));  // forearm
+    lower.add(box(.14, .12, .15, gloveMat, 0, -.33, -.01)); // glove
+    p.add(lower);
+    p.userData.lower = lower;
     return p;
   };
   parts.armL = arm(-1);
   parts.armR = arm(1);
   g.add(parts.armL); g.add(parts.armR);
 
-  /* ---------------- legs (pivot at the hip) ---------------- */
+  /* ---------------- legs (hip pivot → KNEE pivot) ---------------- */
   const leg = (side) => {
-    const p = limb(side * .14, .88, 0);
-    p.add(box(.20, .34, .21, vestMat2, 0, -.17, 0));              // thigh
-    p.add(box(.18, .14, .19, bootMat, 0, -.36, 0));               // knee pad
-    p.add(box(.18, .32, .19, bodyMat2, 0, -.52, 0));              // shin
-    p.add(box(.20, .12, .26, bootMat, 0, -.70, -.03));            // boot
+    const p = limb(side * .14, .88, 0);                  // hip pivot
+    p.add(box(.20, .34, .21, vestMat2, 0, -.17, 0));     // thigh
+    p.add(box(.18, .14, .19, bootMat, 0, -.34, 0));      // knee pad
+    const lower = new THREE.Group(); lower.position.set(0, -.40, 0);   // knee pivot
+    lower.add(box(.18, .32, .19, bodyMat2, 0, -.16, 0));  // shin
+    lower.add(box(.20, .12, .26, bootMat, 0, -.34, -.03)); // boot
+    p.add(lower);
+    p.userData.lower = lower;
     return p;
   };
   parts.legL = leg(-1);
@@ -13889,22 +13925,26 @@ function weaponHoldPose(id) {
     reachL: twoHanded ? 1.62 : 0.85,   // left arm reaches the handguard
     yawL: twoHanded ? 0.42 : 0.16,     // left arm swings in across the body
     yawR: -0.10,
-    wpos: { x: .02, y: -.60, z: -.02 * len },
+    elbowR: 0.55, elbowL: twoHanded ? 0.95 : 0.5,   // bend at the elbow
+    wpos: { x: .02, y: -.50, z: -.10 * len },
     wrot: { x: -Math.PI / 2, y: 0.06, z: -0.05 },
     scale: .95
   };
   if (cat === 'pistol') {
     // one-handed pistol: gun centred in the right hand, close to the body
     pose.reachR = 1.28; pose.reachL = 1.15; pose.yawL = 0.30;
-    pose.wpos = { x: .0, y: -.62, z: 0 };
+    pose.elbowR = 0.9; pose.elbowL = 0.9;
+    pose.wpos = { x: .0, y: -.52, z: 0 };
     pose.wrot = { x: -Math.PI / 2, y: 0.0, z: 0.0 };
   } else if (cat === 'heavy') {
     // big launchers/miniguns are braced: left hand well forward and under
     pose.reachR = 1.30; pose.reachL = 1.70; pose.yawL = 0.5;
-    pose.wpos = { x: .05, y: -.66, z: -.06 };
+    pose.elbowR = 0.45; pose.elbowL = 0.8;
+    pose.wpos = { x: .05, y: -.56, z: -.14 };
   } else if (cat === 'sniper' || cat === 'lmg') {
     pose.reachR = 1.34; pose.reachL = 1.66; pose.yawL = 0.46;
-    pose.wpos = { x: .03, y: -.62, z: -.08 };
+    pose.elbowR = 0.5; pose.elbowL = 0.85;
+    pose.wpos = { x: .03, y: -.52, z: -.16 };
   }
   return pose;
 }
@@ -14454,8 +14494,9 @@ class RemotePlayer {
     this._weaponId = id || null;
     this._weaponSkinId = skinId || null;
     const armR = this.mesh.userData.parts.armR;
+    const handR = (armR.userData && armR.userData.lower) ? armR.userData.lower : armR;
     if (this.weaponGroup) {
-      armR.remove(this.weaponGroup);
+      this.weaponGroup.parent.remove(this.weaponGroup);
       disposeGroup(this.weaponGroup);
       this.weaponGroup = null;
     }
@@ -14464,17 +14505,16 @@ class RemotePlayer {
        shares materials with the cache — so a skin must be applied to a model
        whose materials are per-instance, never to the shared cache. */
     const w = buildSoldierWeapon(id, skinId);
-    // Seat the gun at the right hand, angled slightly across the chest, and make
-    // the LEFT arm reach the handguard, so the peer clearly holds it with both
-    // hands (not a gun glued to the end of one arm). The arm is raised forward
-    // with rotation.x, and this rotation cancels the arm's tilt so the barrel
-    // ends up roughly horizontal, pointing ahead of the soldier.
+    // Seat the gun at the right FOREARM (so it follows the elbow bend), angled
+    // slightly across the chest, while the LEFT arm reaches the handguard.
     this.hold = weaponHoldPose(id);
     const hp = this.hold;
     w.position.set(hp.wpos.x, hp.wpos.y, hp.wpos.z);
-    w.rotation.set(hp.wrot.x, hp.wrot.y, hp.wrot.z);
+    // the ORIGINAL hold used rotation.x = -PI/2 at the shoulder; now the weapon
+    // hangs off the forearm, so subtract the elbow bend to keep the barrel level
+    w.rotation.set(-Math.PI / 2 - (hp.elbowR || 0), hp.wrot.y, hp.wrot.z);
     w.scale.setScalar(hp.scale);
-    armR.add(w);
+    handR.add(w);
     this.weaponGroup = w;
     /* the galaxy gun needs its rings/dust animated each frame */
     this._galaxyGun = !!w.userData.galaxy;
@@ -14494,6 +14534,10 @@ class RemotePlayer {
     p.armR.rotation.y = hp.yawR;
     p.armR.rotation.z = -0.06;
     p.armL.rotation.z = 0.10;
+    /* bend the ELBOWS: the lower arm rotates back so the hands sit near the
+       weapon instead of the arms sticking out straight */
+    if (p.armR.userData && p.armR.userData.lower) p.armR.userData.lower.rotation.x = hp.elbowR || 0.6;
+    if (p.armL.userData && p.armL.userData.lower) p.armL.userData.lower.rotation.x = hp.elbowL || 0.6;
   }
 
   /* МЕХАКОСТЮМ: swap the soldier for a mech chassis. `on` comes from the peer's
@@ -14721,6 +14765,10 @@ class RemotePlayer {
     // legs: a real stride; a small idle offset keeps the pose from looking rigid
     p.legL.rotation.x = Math.sin(ph) * amp * spd;
     p.legR.rotation.x = -Math.sin(ph) * amp * spd;
+    /* bend the KNEES: the lower leg folds back when the thigh swings forward
+       (a straight-legged walk reads as skating) */
+    if (p.legL.userData && p.legL.userData.lower) p.legL.userData.lower.rotation.x = U.clamp(0.25 + Math.max(0, Math.sin(ph)) * (0.5 + spd * .7), 0, 1.5);
+    if (p.legR.userData && p.legR.userData.lower) p.legR.userData.lower.rotation.x = U.clamp(0.25 + Math.max(0, -Math.sin(ph)) * (0.5 + spd * .7), 0, 1.5);
 
     // arms: BOTH hands grip the weapon — the right holds the trigger, the left
     // braces the handguard (see poseArms). The left still pumps a little with
@@ -15100,7 +15148,13 @@ const Game = {
       UI.toast(on ? 'Автоогонь: ВКЛ' : 'Автоогонь: ВЫКЛ', on ? '#ff9d21' : undefined);
       Audio3D_SFX.uiClick();
     });
-    Bus.on('zombieAttack', (z, dmg) => this.playerHurt(dmg, z));    Bus.on('zombieDied', (z, hs) => this.onZombieDied(z, hs));
+    Bus.on('zombieAttack', (z, dmg) => {
+      /* В коопе зомби могут бить удалённого игрока: хост решает урон и
+         отправляет его клиенту (клиент сам зомби не симулирует). */
+      if (this.mode === CS.MODE.ONLINE && this.isCoop && z && z.targetRemote) this.hurtRemote(dmg, z);
+      else this.playerHurt(dmg, z);
+    });
+    Bus.on('zombieDied', (z, hs) => this.onZombieDied(z, hs));
     Bus.on('touchUseMedkit', () => this.useMedkit());
     Bus.on('touchUseDrone', () => { if (this.drone) this.detonateDrone(false); else this.launchDrone(); });
     /* contextual mobile actions added with the new abilities */
@@ -15153,6 +15207,9 @@ const Game = {
     Net.on('boom', b => this.onRemoteBoom(b));
     Net.on('mmissile', m => this.onRemoteMechMissile(m));
     Net.on('coopWave', m => { if (this.mode === CS.MODE.ONLINE && this.isCoop && Net.role !== CS.NETROLE.HOST) this.coopStartWave(m.w); });
+    Net.on('zstate', m => this.onZombieState(m));
+    Net.on('zhurt', m => this.onZombieHurtMsg(m));
+    Net.on('zhit', m => this.onRemoteZombieHit(m));
     Net.on('splat', s => this.onRemoteSplat(s));
     Net.on('score', s => this.onScoreMsg(s));
   },
@@ -15215,7 +15272,7 @@ const Game = {
         if (this.roundState === 'buy' || this.mode === CS.MODE.RANGE) this.toggleBuy(true);
         else { UI.toast('Магазин доступен только в фазе закупки'); Audio3D_SFX.deny(); }
         break;
-      case 'KeyR': if (!this.paused) this.player.reload(); break;
+      case 'KeyR': if (!this.paused) { if (this.isMechActive()) this.mechSurge(); else this.player.reload(); } break;
       case 'KeyH': if (!this.paused) this.useMedkit(); break;
       case 'KeyG':
         if (!this.paused) {
@@ -15344,6 +15401,7 @@ const Game = {
       wavesNoShots: this._wavesNoShots || 0,
       top3: Store.data.top3 || 0,
       hardcoreWave: this._hardcoreWave || 0,
+      hardcoreFull: Store.data.hardcoreFull === 1,
       /* финальное платиновое достижение: сколько остальных уже выполнено */
       otherDone: (typeof achOtherDone === 'function') ? achOtherDone(Store.data.ach) : 0,
       otherTotal: ACHIEVEMENTS.length - 1,
@@ -16067,7 +16125,12 @@ const Game = {
   /* Swap the arena mid-run without leaving the match: rebuild the map, then
      put the player on a fresh spawn (enemies are gone, the wave restarts). */
   buildArenaOnTheFly(mapId) {
-    // drop everything the old arena was holding BEFORE tearing it down
+    // drop everything the old arena was holding BEFORE tearing it down.
+    // The companion TURRET DRONE is NOT a transient projectile, so keep it:
+    // it used to be wiped by clearProjectiles() and simply vanished on a map
+    // change / new wave — that was the reported bug.
+    this._keepTurret = this.turretDrone;
+    if (this.turretDrone) this.turretDrone = null;
     this.clearProjectiles();
     this.clearDummyProjectiles();
     this.clearEnemyShots();
@@ -16087,6 +16150,13 @@ const Game = {
     // re-place the player and reset the drop timers
     this.fxSpawnIndex = (this.fxSpawnIndex || 0) + 1;
     this.spawnPlayerLocal(this.fxSpawnIndex);
+    // restore the drone (it re-hovers by the player on the new arena)
+    if (this._keepTurret) {
+      const td = this._keepTurret; this._keepTurret = null;
+      if (!td.mesh.parent) this.scene.add(td.mesh);
+      td.life = Math.max(td.life, 20);          // give it a fresh lease on the new arena
+      this.turretDrone = td;
+    }
     this._crateT = CFG.crateInterval;
     this._medboxT = CFG.medkitFieldInterval;
   },
@@ -17450,31 +17520,34 @@ const Game = {
   equipWeapon(id) {
     const w = WEAPONS[id];
     if (!w || !this.player) return;
-    /* из сумки — вернуть в руки; из инвентаря — переключить слот */
-    if (this.player.bagHas(id) && !this.player.has(id)) {
-      this.player.bagTake(id);
-      this.player.flashT = 0;
+    const p = this.player;
+    const inSlot = p.inv[w.slot] && p.inv[w.slot].id === id;
+    /* из сумки — вернуть в руки (проверяем реальный слот, а не has(), который
+       включает и сумку) */
+    if (p.bagHas(id) && !inSlot) {
+      p.bagTake(id);
+      p.flashT = 0;
       this.attachViewModel();
       Audio3D_SFX.reloadStep(0);
       UI.toast('Из сумки: ' + w.name, '#57d16a');
-      UI.renderBuy(this.player, this.buyTimer);
+      UI.renderBuy(p, this.buyTimer);
       if (this.mode === CS.MODE.ONLINE) this.broadcastScore();
       return;
     }
-    if (!this.player.has(id)) return;
-    if (this.player.slot === w.slot && this.player.inv[w.slot] && this.player.inv[w.slot].id === id) {
+    if (!p.has(id)) return;
+    if (inSlot && p.slot === w.slot) {
       Audio3D_SFX.uiClick();
       UI.toast('Уже в руках: ' + w.name);
       return;
     }
-    this.player.slot = w.slot;
-    this.player.deployT = Math.max(this.player.deployT, .35);
-    this.player.flashT = 0;
-    this.player.buildViewModel();
+    p.slot = w.slot;
+    p.deployT = Math.max(p.deployT, .35);
+    p.flashT = 0;
+    p.buildViewModel();
     this.attachViewModel();
     Audio3D_SFX.reloadStep(0);
     UI.toast('В руки: ' + w.name, '#57d16a');
-    UI.renderBuy(this.player, this.buyTimer);
+    UI.renderBuy(p, this.buyTimer);
     if (this.mode === CS.MODE.ONLINE) this.broadcastScore();
   },
 
@@ -18576,55 +18649,113 @@ const Game = {
   updateCoop(dt) {
     const o = this.offline;
     if (!o || o.campaignWon) return;
-    if (o.betweenWaves) {
-      o.breakT -= dt;
-      if (o.breakT <= 0) {
-        o.betweenWaves = false;
-        /* только хост задаёт номер волны; клиент ждёт его через coopWave msg */
-        if (Net.role === CS.NETROLE.HOST) {
+    /* КЛИЕНТ только принимает снапшоты зомби от хоста — сам не спавнит и не
+       симулирует волну (иначе у каждого были бы свои зомби). */
+    if (Net.role === CS.NETROLE.HOST) {
+      if (o.betweenWaves) {
+        o.breakT -= dt;
+        if (o.breakT <= 0) {
+          o.betweenWaves = false;
           this.coopStartWave(o.wave + 1);
           Net.send({ t: 'coopWave', w: o.wave });
         }
+        return;
       }
-      return;
+      // spawn queue (same tuning as single-player)
+      if (o.toSpawn > 0) {
+        o.spawnAcc = (o.spawnAcc || 0) + dt;
+        const big = this.hordeMode;
+        const waveSpd = big ? CFG.hordeSpawnInterval : CFG.zombieSpawnInterval;
+        const interval = Math.max(.10, (waveSpd - o.wave * (big ? .006 : .045)));
+        const maxAlive = big ? CFG.hordeMaxAlive : CFG.zombieMaxAlive;
+        let guard = 0, burst = big ? 8 : 6;
+        while (o.spawnAcc >= interval && o.toSpawn > 0 && guard++ < burst) {
+          o.spawnAcc -= interval;
+          if (this.horde.activeCount >= maxAlive) break;
+          const t = this.pickZombieType(o.wave);
+          const scale = 1 + (o.wave - 1) * .085;
+          const z = this.horde.spawnRandom(t, this.player.pos.x, this.player.pos.z, 26);
+          const hpMul = (this.hordeMode) ? CFG.hordeHpMul : 1;
+          z.maxHealth *= scale * hpMul; z.health = z.maxHealth;
+          z.dmg *= 1 + (o.wave - 1) * .05;
+          o.toSpawn--; o.spawnedThisWave++;
+        }
+      } else if (o.bossPending > 0) {
+        o.bossAcc = (o.bossAcc || 0) + dt;
+        if (o.bossAcc >= (this.hordeMode ? .5 : .9)) {
+          o.bossAcc = 0;
+          const b = this.spawnBoss(o.bossType);
+          if (this.isBossRush && b) b.maxHealth *= (1 + (o.wave - 1) * .35);
+          o.bossPending--;
+        }
+      } else if (this.horde.aliveCount === 0 && o.spawnedThisWave >= o.totalThisWave && !this.isBossRush) {
+        // wave cleared
+        const bonus = 400 + o.wave * 120;
+        this.player.money += bonus;
+        this.player.score += Math.round(250 + o.wave * 40);
+        o.betweenWaves = true; o.breakT = 7;
+        this.player.health = Math.min(this.matchHP || 100, this.player.health + 22);
+        Audio3D_SFX.roundEnd(true);
+        UI.center('ВОЛНА ' + o.wave + ' ЗАЧИЩЕНА', 'Бонус $' + bonus + ' · Передышка 7с', 3.0);
+        Bus.emit('waveCleared', o.wave);
+        this.coopSave();
+      }
     }
-    // spawn queue (same tuning as single-player)
-    if (o.toSpawn > 0) {
-      o.spawnAcc = (o.spawnAcc || 0) + dt;
-      const big = this.hordeMode;
-      const waveSpd = big ? CFG.hordeSpawnInterval : CFG.zombieSpawnInterval;
-      const interval = Math.max(.10, (waveSpd - o.wave * (big ? .006 : .045)));
-      const maxAlive = big ? CFG.hordeMaxAlive : CFG.zombieMaxAlive;
-      let guard = 0, burst = big ? 8 : 6;
-      while (o.spawnAcc >= interval && o.toSpawn > 0 && guard++ < burst) {
-        o.spawnAcc -= interval;
-        if (this.horde.activeCount >= maxAlive) break;
-        const t = this.pickZombieType(o.wave);
-        const scale = 1 + (o.wave - 1) * .085;
-        const z = this.horde.spawnRandom(t, this.player.pos.x, this.player.pos.z, 26);
-        const hpMul = (this.hordeMode) ? CFG.hordeHpMul : 1;
-        z.maxHealth *= scale * hpMul; z.health = z.maxHealth;
-        z.dmg *= 1 + (o.wave - 1) * .05;
-        o.toSpawn--; o.spawnedThisWave++;
+    /* ХОСТ — авторитет по зомби: рассылает их состояние клиенту, чтобы оба
+       видели ОДНИХ И ТЕХ ЖЕ зомби (а не каждый своих). */
+    if (Net.role === CS.NETROLE.HOST) {
+      this._zSnapT = (this._zSnapT || 0) - dt;
+      if (this._zSnapT <= 0) { this._zSnapT = 1 / CFG.netTickHz; this.broadcastZombies(); }
+    }
+  },
+
+  /* онлайн-кооп сохраняет прогресс в тот же слот, что и оффлайн-режим */
+  coopSave() {
+    try { this.saveCheckpoint(this.offline ? (this.offline.wave || 1) : 1); } catch (e) { }
+  },
+
+  /* host → client: compact snapshot of the shared horde */
+  broadcastZombies() {
+    if (!this.horde) return;
+    const list = [];
+    for (const z of this.horde.list) {
+      if (z.isTarget) continue;
+      list.push({
+        i: z.id, t: z.type,
+        x: +z.pos.x.toFixed(2), y: +z.pos.y.toFixed(2), z: +z.pos.z.toFixed(2),
+        yw: +z.yaw.toFixed(2), h: Math.round(z.health), m: Math.round(z.maxHealth),
+        a: z.alive && !z.dying ? 1 : 0, s: +(z.scale || 1).toFixed(2)
+      });
+    }
+    Net.send({ t: 'zstate', w: this.offline ? this.offline.wave : 0, list: list });
+  },
+
+  /* client: apply the host's horde snapshot (create/update/remove remote zombies) */
+  onZombieState(m) {
+    if (this.mode !== CS.MODE.ONLINE || !this.isCoop || Net.role === CS.NETROLE.HOST) return;
+    if (!this.horde) return;
+    const seen = {};
+    const list = m.list || [];
+    for (const s of list) {
+      seen[s.i] = true;
+      let z = this.horde.list.find(o => o.remoteId === s.i);
+      if (!z) {
+        /* клиент показывает точную копию зомби хоста (без своей симуляции) */
+        z = this.horde.spawn(s.t, s.x, s.z, s.y);
+        z.remoteId = s.i;
+        z.remoteDriven = true;
       }
-    } else if (o.bossPending > 0) {
-      o.bossAcc = (o.bossAcc || 0) + dt;
-      if (o.bossAcc >= (this.hordeMode ? .5 : .9)) {
-        o.bossAcc = 0;
-        const b = this.spawnBoss(o.bossType);
-        if (this.isBossRush && b) b.maxHealth *= (1 + (o.wave - 1) * .35);
-        o.bossPending--;
-      }
-    } else if (this.horde.aliveCount === 0 && o.spawnedThisWave >= o.totalThisWave && !this.isBossRush) {
-      // wave cleared
-      const bonus = 400 + o.wave * 120;
-      this.player.money += bonus;
-      this.player.score += Math.round(250 + o.wave * 40);
-      o.betweenWaves = true; o.breakT = 7;
-      this.player.health = Math.min(this.matchHP || 100, this.player.health + 22);
-      Audio3D_SFX.roundEnd(true);
-      UI.center('ВОЛНА ' + o.wave + ' ЗАЧИЩЕНА', 'Бонус $' + bonus + ' · Передышка 7с', 3.0);
-      Bus.emit('waveCleared', o.wave);
+      z.pos.x = s.x; z.pos.y = s.y; z.pos.z = s.z; z.yaw = s.yw || 0;
+      z.health = s.h; z.maxHealth = s.m; z.scale = s.s || z.scale || 1;
+      z.group.scale.setScalar(z.scale);
+      z.group.position.set(s.x, s.y, s.z);
+      z.group.rotation.y = z.yaw;
+      if (!s.a && z.alive) { z.alive = false; z.dying = true; z.deadT = 0; }
+    }
+    // remove zombies the host no longer has
+    for (let i = this.horde.list.length - 1; i >= 0; i--) {
+      const z = this.horde.list[i];
+      if (z.remoteDriven && !seen[z.remoteId]) { z.dispose(this.scene); this.horde.list.splice(i, 1); }
     }
   },
 
@@ -18745,6 +18876,12 @@ const Game = {
   onCampaignComplete() {    if (this._campaignDone) return;
     this._campaignDone = true;
     Store.data.clears = (Store.data.clears || 0) + 1;
+    /* ПОЛНОЕ ПРОХОЖДЕНИЕ ХАРДКОРА — отдельная веха на 100 волне */
+    if (this.isHardcore) {
+      Store.data.hardcoreFull = 1;
+      UI.center('ХАРДКОР ПРОЙДЕН!', '100 волн без единой смерти', 5.0);
+      UI.toast('ХАРДКОР ПРОЙДЕН ПОЛНОСТЬЮ — достижение «НЕВОЗМОЖНОЕ»', '#c24bff');
+    }
     Store.save();
     this.player.score += 50000;
     /* сколько занял ЭТОТ забег? меньше 1 ч 30 мин — быстрому прохождению счёт */
@@ -19681,8 +19818,8 @@ const Game = {
         p.mechMissiles = 0;
         p.buildViewModel(); this.attachViewModel();
         this.buildMechBody();
-        UI.center('МЕХАКОСТЮМ', 'ЛКМ — миниган · ПКМ — лазер · E — ракеты · G — выйти', 2.6);
-        UI.toast('Вы в кабине меха: ЛКМ миниган · ПКМ лазер · E ракеты · G выйти', '#4ad6ff');
+        UI.center('МЕХАКОСТЮМ', 'ЛКМ — миниган · ПКМ — лазер · E — ракеты · R — скачок напряжения · G — выйти', 2.6);
+        UI.toast('Вы в кабине меха: ЛКМ миниган · ПКМ лазер · E ракеты · R скачок напряжения · G выйти', '#4ad6ff');
       },
       /* visible mech chassis + cockpit around the player (third-person shell).
          In first person the cockpit frame appears as the view model braces. */
@@ -19699,8 +19836,66 @@ const Game = {
         this.mechBody = null;
       },
       /* E — launch a volley of homing missiles at nearby zombies */
-      launchMechMissiles() {
+      /* ============================================================
+         СКАЧОК НАПРЯЖЕНИЯ (R) — способность меха: мощный электрический
+         разряд вокруг шасси, большая ударная волна отбрасывает всех врагов
+         в радиусе и наносит им урон.
+         ============================================================ */
+      mechSurge() {
         const p = this.player;
+        if (!this.isMechActive() || !p.alive) { UI.toast('Скачок напряжения — только в мехакостюме', '#f5d33c'); Audio3D_SFX.deny(); return false; }
+        if (this.roundState !== 'live' || this.mode === CS.MODE.MENU) return false;
+        const now = U.now();
+        const cd = CFG.mechSurgeCd * 1000;
+        if (this._mechSurgeAt && now - this._mechSurgeAt < cd) {
+          const left = Math.ceil((cd - (now - this._mechSurgeAt)) / 1000);
+          UI.toast('Скачок через ' + left + 'с', '#f5d33c'); Audio3D_SFX.deny(); return false;
+        }
+        this._mechSurgeAt = now;
+        const R = CFG.mechSurgeRadius, dmg = CFG.mechSurgeDmg, push = CFG.mechSurgePush;
+        const c = { x: p.pos.x, y: p.pos.y + 1.2, z: p.pos.z };
+        // большой визуальный взрыв + электрическая волна
+        if (this.effects) {
+          this.effects.explosion(c.x, c.y, c.z, R, [0x7fe0ff, 0x1a2a3a]);
+          this.effects.implodeFx ? null : null;
+          for (let i = 0; i < 26; i++) {
+            const a = U.rand(0, 6.28);
+            this.effects.particle(c.x, c.y, c.z, Math.cos(a) * U.rand(6, 14), U.rand(1, 6), Math.sin(a) * U.rand(6, 14),
+              U.rand(.06, .16), 'vspark', U.rand(.3, .7));
+          }
+        }
+        Audio3D_SFX.explosionAt(c.x, c.y, c.z);
+        UI.center('СКАЧОК НАПРЯЖЕНИЯ', 'Ударная волна · ' + Math.round(R) + 'м', 1.6);
+        /* ударная волна: отбрасываем и бьём всех зомби в радиусе */
+        if (this.horde) for (const z of this.horde.list) {
+          if (!z.alive || z.dying) continue;
+          const dx = z.pos.x - c.x, dz = z.pos.z - c.z, dy = (z.pos.y + 1) - c.y;
+          const d = Math.hypot(dx, dy, dz);
+          if (d > R) continue;
+          const k = 1 - d / R;
+          z.takeDamage(dmg * (.4 + k * .6), 'body', { x: dx, y: dy, z: dz });
+          if (z.alive && !z.dying) {
+            const l = Math.max(Math.hypot(dx, dz), .01);
+            z.vel.x += (dx / l) * push * k;
+            z.vel.z += (dz / l) * push * k;
+            if (z.vel.y !== undefined) z.vel.y += push * k * .4;
+            if (typeof z.stagger === 'function') z.stagger(.6);
+          }
+          this.player.damageDealt += dmg * (.4 + k * .6);
+        }
+        /* враги-игроки: сильный отброс + урон */
+        if (this.mode === CS.MODE.ONLINE) {
+          for (const rp of this.remotePlayers) {
+            if (!rp.alive) continue;
+            const dx = rp.pos.x - c.x, dz = rp.pos.z - c.z;
+            const d = Math.hypot(dx, dz);
+            if (d <= R) this.sendPvpHit(dmg * (.4 + (1 - d / R) * .6), 'body', false, rp, 'surge');
+          }
+        }
+        return true;
+      },
+
+      launchMechMissiles() {        const p = this.player;
         if (!this.isMechActive() || !p.alive) { UI.toast('Ракеты доступны в мехакостюме', '#f5d33c'); return false; }
         if (this.roundState !== 'live' || this.mode === CS.MODE.MENU) return false;
         const now = U.now();
@@ -20707,10 +20902,10 @@ const Game = {
       stopT = groundHit.t; stopNormal = groundHit.normal; stopPoint = groundHit.point;
     }
 
-    // the opponents (everyone else in the room)
+    // the opponents (everyone else in the room) — в коопе свои не получают урон
     let pvpHit = null;
     let droneHit = null;
-    if (this.mode === CS.MODE.ONLINE) {
+    if (this.mode === CS.MODE.ONLINE && !this.isCoop) {
       const dHit = this.rayRemoteDroneAny(origin, dir, maxDist);
       if (dHit) droneHit = dHit;
       pvpHit = this.rayRemoteAny(origin, dir, maxDist);
@@ -20758,7 +20953,14 @@ const Game = {
       }
       p.bulletsHit++;
       const dmg = def.dmg * dmgMul;
-      const killed = zHit.zombie.takeDamage(dmg, zHit.part, dir);
+      /* В коопе зомби принадлежат ХОСТУ: клиент наносит визуальный удар, но
+         отправляет урон хосту, чтобы убийство засчиталось на обоих. */
+      if (this.mode === CS.MODE.ONLINE && this.isCoop && Net.role !== CS.NETROLE.HOST && zHit.zombie.remoteDriven) {
+        Net.send({ t: 'zhit', i: zHit.zombie.remoteId, dmg: Math.round(dmg), part: zHit.part, from: Net.selfId() });
+        zHit.zombie.health -= dmg;
+      } else {
+        zHit.zombie.takeDamage(dmg, zHit.part, dir);
+      }
       p.damageDealt += dmg * (zHit.part === 'head' ? CFG.headshotMultiplier : zHit.part === 'legs' ? CFG.limbMultiplier : 1);
       this.hitEffect(zHit.point, dir, zHit.part, zHit.part === 'head');
       Audio3D_SFX.hit(zHit.point.x, zHit.point.y, zHit.point.z, zHit.part === 'head');
@@ -20956,10 +21158,46 @@ const Game = {
     });
   },
 
-  playerHurt(dmg, source) {    const p = this.player;
-    if (!p.alive || (this.mode !== CS.MODE.OFFLINE && this.mode !== CS.MODE.RANGE)) return;
+  playerHurt(dmg, source) {
+    const p = this.player;
+    if (!p.alive) return;
+    /* оффлайн, полигон и онлайн-кооп (зомби бьют игрока) */
+    if (this.mode !== CS.MODE.OFFLINE && this.mode !== CS.MODE.RANGE && !(this.mode === CS.MODE.ONLINE && this.isCoop)) return;
     if (this.modState && this.modState.playerHurt !== 1) dmg *= this.modState.playerHurt;
     this.applyDamageToSelf(dmg, source ? { x: source.pos.x, y: source.pos.y, z: source.pos.z } : null);
+  },
+
+  /* КООП: зомби бьёт удалённого игрока (ими управляет только хост) — шлём ему урон */
+  hurtRemote(dmg, source) {
+    if (this.mode !== CS.MODE.ONLINE || !this.isCoop || Net.role !== CS.NETROLE.HOST) return;
+    Net.send({ t: 'zhurt', dmg: Math.round(dmg) });
+  },
+
+  onZombieHurtMsg(m) {
+    if (this.mode !== CS.MODE.ONLINE || !this.isCoop) return;
+    if (Net.role === CS.NETROLE.HOST) return;        // хост сам себе урон не шлёт
+    this.applyDamageToSelf(m.dmg, null);
+  },
+
+  /* ХОСТ: клиент нанёс урон общему зомби — применяем его на хосте */
+  onRemoteZombieHit(m) {
+    if (this.mode !== CS.MODE.ONLINE || !this.isCoop || Net.role !== CS.NETROLE.HOST) return;
+    if (!this.horde || m.i === undefined) return;
+    const z = this.horde.list.find(o => o.id === m.i);
+    if (!z || !z.alive || z.dying) return;
+    z.takeDamage(m.dmg || 0, m.part || 'body', { x: 0, y: 0, z: 0 });
+  },
+
+  /* КООП: зомби бьёт удалённого игрока (ими управляет только хост) — шлём ему урон */
+  hurtRemote(dmg, source) {
+    if (this.mode !== CS.MODE.ONLINE || !this.isCoop || Net.role !== CS.NETROLE.HOST) return;
+    Net.send({ t: 'zhurt', dmg: Math.round(dmg) });
+  },
+
+  onZombieHurtMsg(m) {
+    if (this.mode !== CS.MODE.ONLINE || !this.isCoop) return;
+    if (Net.role === CS.NETROLE.HOST) return;        // хост сам себе урон не шлёт
+    this.applyDamageToSelf(m.dmg, null);
   },
 
   /* Damage aimed at us by the shooting dummy. While our shield is up the hit is
@@ -21799,6 +22037,7 @@ const Game = {
   /* host: a round ends when only one fighter is left standing */
   checkRoundEnd() {
     if (this.mode !== CS.MODE.ONLINE || Net.role !== CS.NETROLE.HOST) return;
+    if (this.isCoop) return;                 // кооп-волны не заканчиваются по смертям игроков
     if (this.roundState === 'end') return;
     const alive = (this.player.alive ? 1 : 0) + this.remotePlayers.filter(r => r.alive).length;
     if (alive > 1) return;
@@ -22023,7 +22262,7 @@ const Game = {
     this.updateGrenades(dt);
 
     // ---- AI ----
-    if (this.horde) this.horde.update(dt, p);
+    if (this.horde) this.horde.update(dt, p, (this.mode === CS.MODE.ONLINE && this.isCoop) ? this.remotePlayers : null);
     if (this.mode === CS.MODE.OFFLINE || this.mode === CS.MODE.RANGE || (this.mode === CS.MODE.ONLINE && this.isCoop)) { this.updateBosses(dt); this.updateBossCharges(dt); }
 
     // ---- effects ----
@@ -22144,6 +22383,10 @@ const Game = {
       score: p.score,
       inv1: p.inv[1] ? p.inv[1].id : null,
       inv2: p.inv[2] ? { id: p.inv[2].id, mag: p.inv[2].mag, reserve: p.inv[2].reserve } : null,
+      /* СУМКА: вытесненное оружие тоже сохраняем, иначе после сохранения и
+         выхода оно пропадало и приходилось покупать заново. */
+      bag: (p.bag || []).map(b => ({ id: b.id, mag: b.mag, reserve: b.reserve })),
+      slot: p.slot,
       armor: p.armor, helmet: p.helmet, heavy: !!p.heavyArmor,
       medkits: p.medkits || 0, medkitUnlimited: !!p.medkitUnlimited,
       drone: p.drone || 0, droneOwned: !!p.droneOwned,
@@ -22218,6 +22461,9 @@ const Game = {
       const w = p.inv[2];
       if (w) { if (cp.inv2.mag !== undefined && w.mag !== Infinity) w.mag = cp.inv2.mag; if (cp.inv2.reserve !== undefined) w.reserve = cp.inv2.reserve; }
     }
+    /* восстановить сумку (вытесненное оружие) */
+    if (cp.bag) { p.bag.length = 0; for (const b of cp.bag) p.bag.push({ id: b.id, mag: b.mag, reserve: b.reserve }); }
+    if (cp.slot) p.slot = cp.slot;
     if (cp.inv2) { p.slot = 2; } else if (cp.inv1) { p.slot = 1; }
     p.buildViewModel(); this.attachViewModel();
     // skip the buy phase and jump into the wave

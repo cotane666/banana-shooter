@@ -3096,6 +3096,8 @@ class Player {
     return true;
   }
   clearBag() { this.bag.length = 0; }
+  /* snapshot of the bag for a checkpoint */
+  bagSnapshot() { return (this.bag || []).map(b => ({ id: b.id, mag: b.mag, reserve: b.reserve })); }
   takeWeapon(slot) {
     if (!this.inv[slot]) return false;
     if (this.slot === slot) return true;

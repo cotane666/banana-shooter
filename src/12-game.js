@@ -3598,6 +3598,8 @@ const Game = {
     this.roundState = 'buy';
     this.buyTimer = seconds;
     this.roundT = seconds;
+    /* КАРТА ВОССТАНАВЛИВАЕТСЯ к новой закупке (новый раунд/волна) */
+    if (typeof restoreMap === 'function') restoreMap();
     this.resetSkipVotes();
     UI.center(label || 'ЗАКУПКА', 'B — магазин', 1.8);
     this.roundNo++;
@@ -4051,6 +4053,7 @@ const Game = {
     if (kind === 'frag') {
       const R = 5.2, dmg = 190;
       this.effects.explosion(g.pos.x, g.pos.y, g.pos.z, R, [0xffb060, 0x151210]);
+      if (typeof damageMapAt === 'function') damageMapAt(g.pos.x, g.pos.y, g.pos.z, R, 150);
       Audio3D_SFX.explosionAt(g.pos.x, g.pos.y, g.pos.z);
       if (this.horde) for (const z of this.horde.list) {
         if (!z.alive || z.dying) continue;
@@ -4080,6 +4083,7 @@ const Game = {
     } else if (kind === 'napalm') {
       const R = 6.4, dmg = 60;
       this.effects.explosion(g.pos.x, g.pos.y, g.pos.z, R, [0xff7a1a, 0x2a0d02]);
+      if (typeof damageMapAt === 'function') damageMapAt(g.pos.x, g.pos.y, g.pos.z, R, 130);
       Audio3D_SFX.explosionAt(g.pos.x, g.pos.y, g.pos.z);
       if (this.horde) for (const z of this.horde.list) {
         if (!z.alive || z.dying) continue;
@@ -4104,6 +4108,7 @@ const Game = {
       // ЛИПУЧКА: мощный направленный взрыв по кнопке
       const R = 6.6, dmg = 260;
       this.effects.explosion(g.pos.x, g.pos.y, g.pos.z, R, [0xff5a2a, 0x1a0604]);
+      if (typeof damageMapAt === 'function') damageMapAt(g.pos.x, g.pos.y, g.pos.z, R, dmg * .6);
       Audio3D_SFX.explosionAt(g.pos.x, g.pos.y, g.pos.z);
       if (this.horde) for (const z of this.horde.list) {
         if (!z.alive || z.dying) continue;
@@ -4936,6 +4941,7 @@ const Game = {
         this.player.score += Math.round(250 + o.wave * 40);
         o.betweenWaves = true; o.breakT = 7;
         this.player.health = Math.min(this.matchHP || 100, this.player.health + 22);
+        if (typeof restoreMap === 'function') restoreMap();
         Audio3D_SFX.roundEnd(true);
         UI.center('ВОЛНА ' + o.wave + ' ЗАЧИЩЕНА', 'Бонус $' + bonus + ' · Передышка 7с', 3.0);
         Bus.emit('waveCleared', o.wave);
@@ -5090,6 +5096,8 @@ const Game = {
       if (shotsNow === (this._shotsAtWaveStart || 0)) this._wavesNoShots = (this._wavesNoShots || 0) + 1;
       else this._wavesNoShots = 0;
       this._waveKills = 0; this._waveHurt = false;
+      /* КАРТА ВОССТАНАВЛИВАЕТСЯ после завершения волны */
+      if (typeof restoreMap === 'function') restoreMap();
       Audio3D_SFX.roundEnd(true);
       /* clearing wave 100 means the campaign is finished */
       if (o.wave >= 100) {
@@ -6959,6 +6967,8 @@ const Game = {
       explode(center, pr) {
     const R = pr.splash, dmg = pr.splashDmg || pr.dmg;
     this.effects.explosion(center.x, center.y, center.z, R, pr.explosionColor, pr.nuke);
+    /* взрыв РАЗРУШАЕТ карту в радиусе */
+    if (typeof damageMapAt === 'function') damageMapAt(center.x, center.y, center.z, R * 1.05, dmg * .5);
     Audio3D_SFX.explosionAt(center.x, center.y, center.z);
     UI.hitmark(false);
     // tell the room so everyone sees and hears the rocket, not just the shooter
@@ -8071,6 +8081,7 @@ const Game = {
       else this.effects.explosion(b.x, b.y, b.z, R, b.c || null, !!b.nk);
     }
     Audio3D_SFX.explosionAt(b.x, b.y, b.z);
+    if (typeof damageMapAt === 'function') damageMapAt(b.x, b.y, b.z, R * 1.05, 90);
     // drop the cosmetic copy so it does not fly on and detonate again
     this.removeRemoteProjectileNear(b.x, b.y, b.z);
   },

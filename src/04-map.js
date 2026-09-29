@@ -20,7 +20,9 @@ const MAP = {
   id: 'arena',
   def: null,
   aimRoom: null,
-  hazards: []         // lava pools / spike strips / presses (rebuilt per map)
+  hazards: [],        // lava pools / spike strips / presses (rebuilt per map)
+  destructibles: [],  // разрушаемые чанки (укрытия) — восстанавливаются на волне
+  _chunkGid: 0
 };
 
 /* ---------------- material cache ---------------- */
@@ -85,11 +87,108 @@ function makeBoxMesh(w, h, d, mat, faceTopMat) {
   return mesh;
 }
 
-/* add a solid box: bottom-center anchored at (x,y,z). `parent` is MAP.group. */
+/* ============================================================
+   РАЗРУШАЕМОСТЬ КАРТЫ
+   damageMapAt() наносит урон разрушаемым чанкам в радиусе (взрыв/удар зомби) и
+   убирает те, чей HP упал до нуля (меш скрывается, коллизия мягко снимается).
+   restoreMap() возвращает ВСЕ чанки (вызывается на новой волне/карте).
+   ============================================================ */
+function damageMapAt(x, y, z, radius, dmg) {
+  if (!MAP.destructibles || !MAP.destructibles.length) return 0;
+  let destroyed = 0;
+  const r2 = radius * radius;
+  for (let i = 0; i < MAP.destructibles.length; i++) {
+    const b = MAP.destructibles[i];
+    if (b.removed) continue;
+    // ближайшая точка бокса к центру взрыва
+    const cx = U.clamp(x, b.minX, b.maxX);
+    const cy = U.clamp(y, b.minY, b.maxY);
+    const cz = U.clamp(z, b.minZ, b.maxZ);
+    const dx = x - cx, dy = y - cy, dz = z - cz;
+    const d2 = dx * dx + dy * dy + dz * dz;
+    if (d2 > r2) continue;
+    const k = 1 - Math.sqrt(d2) / radius;
+    b.hp -= dmg * (0.4 + k * 0.6);
+    if (b.hp <= 0) { removeMapChunk(b); destroyed++; }
+  }
+  return destroyed;
+}
+
+/* один чанк: спрятать меш и снять коллизию (мягко — бокс остаётся в списке) */
+function removeMapChunk(b) {
+  if (!b || b.removed) return;
+  b.removed = true;
+  if (b.mesh) b.mesh.visible = false;
+  if (MAP.world) MAP.world.removeBox(b);
+}
+
+/* восстановить всю карту после волны */
+function restoreMap() {
+  if (!MAP.destructibles || !MAP.destructibles.length) return 0;
+  let n = 0;
+  for (let i = 0; i < MAP.destructibles.length; i++) {
+    const b = MAP.destructibles[i];
+    if (!b.removed) continue;
+    b.removed = false;
+    b.hp = b.maxHp;
+    if (b.mesh) b.mesh.visible = true;
+    if (MAP.world) MAP.world.restoreBox(b);
+    n++;
+  }
+  return n;
+}
+
+/* add a solid box: bottom-center anchored at (x,y,z). `parent` is MAP.group.
+   Большие детали автоматически дробятся на ЧАНКИ (≈2.6м), чтобы разрушение
+   убирало ровно ту часть, в которую попали (взрыв/зомби), а не всю стену.
+   Пол, границы, рампы, платформы и крыши НЕ разрушаются. */
+const MAP_CHUNK = 2.6;
 function solid(parent, world, x, y, z, w, h, d, mat, opts) {
   opts = opts || {};
-  const aabb = aabbFromBase(x, y, z, w, h, d, opts.tag || 'solid');
+  const tag = opts.tag || 'solid';
+  /* дробим на чанки укрытия И стены (внутренние). Платформы/рампы/крыши/пол
+     остаются целыми, чтобы не ломать навигацию и прорезание дверей. */
+  const canChunk = opts.destructible !== false && !opts.rotY && (tag === 'cover' || tag === 'wall');
+  if (canChunk) {
+    const nX = Math.max(1, Math.round(w / MAP_CHUNK));
+    const nZ = Math.max(1, Math.round(d / MAP_CHUNK));
+    const nY = Math.max(1, Math.round(h / MAP_CHUNK));
+    const total = nX * nZ * nY;
+    if (total > 1 && total <= 60) {
+      const gid = (MAP._chunkGid = (MAP._chunkGid || 0) + 1);
+      const cw = w / nX, cd = d / nZ, ch = h / nY;
+      for (let iy = 0; iy < nY; iy++) {
+        for (let iz = 0; iz < nZ; iz++) {
+          for (let ix = 0; ix < nX; ix++) {
+            const cx = x - w / 2 + cw * (ix + .5);
+            const cz = z - d / 2 + cd * (iz + .5);
+            const cy = y + ch * iy;
+            const aabb = aabbFromBase(cx, cy, cz, cw, ch, cd, tag);
+            aabb.destructible = true;
+            aabb.building = gid;
+            aabb.hp = aabb.maxHp = Math.max(30, cw * ch * cd * 26);
+            if (!opts.noCollide) world.addBox(aabb);
+            if (!opts.invisible) {
+              const mesh = makeBoxMesh(cw, ch, cd, mat || MAT.concrete);
+              mesh.position.set(cx, cy + ch / 2, cz);
+              if (opts.noShadow) mesh.castShadow = false;
+              parent.add(mesh);
+              aabb.mesh = mesh;
+            }
+            MAP.destructibles.push(aabb);
+          }
+        }
+      }
+      return null;
+    }
+  }
+  const aabb = aabbFromBase(x, y, z, w, h, d, tag);
   if (!opts.noCollide) world.addBox(aabb);
+  if (opts.destructible !== false && tag === 'cover') {
+    aabb.destructible = true;
+    aabb.hp = aabb.maxHp = Math.max(30, w * h * d * 26);
+    MAP.destructibles.push(aabb);
+  }
   if (opts.invisible) return aabb;
   const mesh = makeBoxMesh(w, h, d, mat || MAT.concrete);
   mesh.position.set(x, y + h / 2, z);
@@ -207,35 +306,49 @@ function mapGround(parent, world, opts) {
 function mapPerimeter(parent, world, mat) {
   const S = MAP.size, H = MAP.wallH, t = 2.5, half = S / 2;
   mat = mat || MAT.concrete;
-  solid(parent, world, 0, 0, -half, S + t, H, t, mat, { tag: 'wall' });
-  solid(parent, world, 0, 0, half, S + t, H, t, mat, { tag: 'wall' });
-  solid(parent, world, -half, 0, 0, t, H, S + t, mat, { tag: 'wall' });
-  solid(parent, world, half, 0, 0, t, H, S + t, mat, { tag: 'wall' });
+  solid(parent, world, 0, 0, -half, S + t, H, t, mat, { tag: 'boundary' });
+  solid(parent, world, 0, 0, half, S + t, H, t, mat, { tag: 'boundary' });
+  solid(parent, world, -half, 0, 0, t, H, S + t, mat, { tag: 'boundary' });
+  solid(parent, world, half, 0, 0, t, H, S + t, mat, { tag: 'boundary' });
 }
 
-/* Cut a doorway through a wall by splitting it into two segments + lintel. */
+/* Cut a doorway through a wall by splitting it into two segments + lintel.
+   Работает и когда стена уже раздроблена на чанки: удаляем все боксы, чьи
+   центры попадают в прямоугольник стены, затем строим сегменты двери. */
 function doorwayCut(parent, world, x, z, axis, len, h, thick) {
-  const idx = world.boxes.findIndex(b =>
-    Math.abs(((b.minX + b.maxX) / 2) - x) < .01 && Math.abs(((b.minZ + b.maxZ) / 2) - z) < .01 &&
-    Math.abs((b.maxY - b.minY) - h) < .01);
-  if (idx < 0) return;
-  const b = world.boxes[idx];
-  world.boxes.splice(idx, 1);
-  if (b.mesh) { parent.remove(b.mesh); b.mesh.geometry.dispose(); }
+  const halfLen = len / 2 + 0.01, halfThick = thick / 2 + 0.01;
+  const inRect = (b) => {
+    const bcx = (b.minX + b.maxX) / 2, bcz = (b.minZ + b.maxZ) / 2;
+    if (Math.abs(bcx - x) > halfLen) return false;
+    if (Math.abs(bcz - z) > halfThick) return false;
+    if (Math.abs((b.maxY - b.minY) - h) > .01 && b.minY > 0.01) return false;
+    return true;
+  };
+  let removedAny = false;
+  for (let i = world.boxes.length - 1; i >= 0; i--) {
+    const b = world.boxes[i];
+    if (!inRect(b)) continue;
+    removedAny = true;
+    if (b.mesh) { parent.remove(b.mesh); if (b.mesh.geometry) b.mesh.geometry.dispose(); }
+    world.boxes.splice(i, 1);
+    const di = MAP.destructibles.indexOf(b); if (di >= 0) MAP.destructibles.splice(di, 1);
+  }
+  if (!removedAny) return;
   world.grid.clear();
   world.boxes.forEach((bb, i) => world._insert(bb, i));
 
   const gap = 4.2;
   const seg = (len - gap) / 2;
   const y = 0;
+  const wallMat = MAT.brick;
   if (axis === 'z') {
-    solid(parent, world, x, y, z - (gap / 2 + seg / 2), thick, h, seg, MAT.brick, { tag: 'wall' });
-    solid(parent, world, x, y, z + (gap / 2 + seg / 2), thick, h, seg, MAT.brick, { tag: 'wall' });
-    solid(parent, world, x, y + h - .9, z, thick, .9, gap, MAT.brick, { tag: 'wall' });
+    solid(parent, world, x, y, z - (gap / 2 + seg / 2), thick, h, seg, wallMat, { tag: 'wall' });
+    solid(parent, world, x, y, z + (gap / 2 + seg / 2), thick, h, seg, wallMat, { tag: 'wall' });
+    solid(parent, world, x, y + h - .9, z, thick, .9, gap, wallMat, { tag: 'wall' });
   } else {
-    solid(parent, world, x - (gap / 2 + seg / 2), y, z, seg, h, thick, MAT.brick, { tag: 'wall' });
-    solid(parent, world, x + (gap / 2 + seg / 2), y, z, seg, h, thick, MAT.brick, { tag: 'wall' });
-    solid(parent, world, x, y + h - .9, z, gap, .9, thick, MAT.brick, { tag: 'wall' });
+    solid(parent, world, x - (gap / 2 + seg / 2), y, z, seg, h, thick, wallMat, { tag: 'wall' });
+    solid(parent, world, x + (gap / 2 + seg / 2), y, z, seg, h, thick, wallMat, { tag: 'wall' });
+    solid(parent, world, x, y + h - .9, z, gap, .9, thick, wallMat, { tag: 'wall' });
   }
 }
 
@@ -962,6 +1075,8 @@ function buildMap(scene, quality, mapId) {
   MAP.zombieSpawns = [];
   MAP.sites = {};
   MAP.aimRoom = null;
+  MAP.destructibles = [];
+  MAP._chunkGid = 0;
 
   MAP.def.build(group, world);
 

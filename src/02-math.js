@@ -51,6 +51,22 @@ class CollisionWorld {
     return aabb;
   }
 
+  /* ---- РАЗРУШАЕМОСТЬ: мягко «убрать» бокс (removed) и вернуть его ---- */
+  removeBox(aabb) {
+    if (!aabb) return false;
+    const i = this.boxes.indexOf(aabb);
+    if (i < 0) return false;
+    aabb.removed = true;
+    return true;
+  }
+  restoreBox(aabb) {
+    if (!aabb) return false;
+    const i = this.boxes.indexOf(aabb);
+    if (i < 0) return false;
+    aabb.removed = false;
+    return true;
+  }
+
   _key(ix, iz) { return ix + ',' + iz; }
 
   _insert(aabb, id) {
@@ -80,6 +96,7 @@ class CollisionWorld {
         if (!arr) continue;
         for (let i = 0; i < arr.length; i++) {
           const b = this.boxes[arr[i]];
+          if (b.removed) continue;
           if (out.indexOf(b) < 0) out.push(b);
         }
       }
@@ -153,7 +170,9 @@ class CollisionWorld {
             const id = arr[i];
             if (seen.has(id)) continue;
             seen.add(id);
-            cands.push(this.boxes[id]);
+            const b = this.boxes[id];
+            if (b.removed) continue;
+            cands.push(b);
           }
         }
       }

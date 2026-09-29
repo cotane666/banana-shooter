@@ -805,6 +805,13 @@ class Zombie {
       nx += -dirZ * side * speed * dt * 1.4;
       nz += dirX * side * speed * dt * 1.4;
       this.stuckT = .8;
+      /* ЗОМБИ ЛОМАЕТ то, во что упёрся: наносим урон разрушаемым чанкам перед
+         собой, чтобы он мог пробить укрытие, а не стоять вечно. */
+      if (typeof damageMapAt === 'function') {
+        const fx = this.pos.x + dirX * (this.radius + .8);
+        const fz = this.pos.z + dirZ * (this.radius + .8);
+        damageMapAt(fx, this.pos.y + .8, fz, 1.4, this.dmg * 3.5);
+      }
     }
 
     if (stepY > this.pos.y) this.pos.y = U.lerp(this.pos.y, stepY, 1 - Math.pow(.0001, dt));

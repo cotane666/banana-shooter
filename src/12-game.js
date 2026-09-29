@@ -1126,6 +1126,7 @@ const Game = {
       } catch (e) { }
       UI.loading(100, 'Загрузка завершена');
       setTimeout(() => {
+        if (typeof ACCOUNT !== 'undefined' && ACCOUNT.init) ACCOUNT.init();
         UI.renderMenuStats();
         UI.show('menu');
         this.running = true;
@@ -1746,7 +1747,7 @@ const Game = {
       const pa = ACHIEVEMENTS.find(a => a.id === 'platinum_all');
       if (pa && achAllOthersDone(ach)) grant(pa);
     }
-    if (earned) Store.save();
+    if (earned) { Store.save(); if (typeof ACCOUNT !== 'undefined') ACCOUNT.scheduleSync(); }
     return earned;
   },
   recordRun() {
@@ -1761,6 +1762,7 @@ const Game = {
     runs.sort((a, b) => b.score - a.score);
     Store.data.runs = runs.slice(0, 10);
     Store.save();
+    if (typeof ACCOUNT !== 'undefined') ACCOUNT.scheduleSync();
   },
   /* ============================================================
      MANUAL SAVE / ZOMBIE UNSTICK / (pet removed)
@@ -8866,6 +8868,7 @@ const Game = {
     list[key] = cp;
     Store.data.checkpoint = null;            // legacy slot no longer used
     try { Store.save(); } catch (e) { }
+    if (typeof ACCOUNT !== 'undefined') ACCOUNT.scheduleSync();
   },
 
   /* Restore a saved checkpoint for a mode (default: the current one). */

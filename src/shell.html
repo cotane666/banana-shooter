@@ -40,6 +40,7 @@
       <button class="mbtn" id="btnMatch"><b>ПАРАМЕТРЫ МАТЧА</b><i>Карта · число игроков · здоровье</i></button>
       <button class="mbtn" id="btnExtras"><b>ДОСТИЖЕНИЯ И РЕКОРДЫ</b><i>Награды за вехи · таблица лучших забегов</i></button>
       <button class="mbtn" id="btnSkins"><b>ИНВЕНТАРЬ СКИНОВ</b><i>Скины за достижения · посмотреть оружие в 3D</i></button>
+      <button class="mbtn" id="btnAccount"><b>АККАУНТ</b><i>Вход по почте · перенос достижений и скинов между устройствами</i></button>
       <button class="mbtn" id="btnAndroid"><b>СКАЧАТЬ НА ANDROID</b><i>Установка на телефон / планшет</i></button>
       <button class="mbtn" id="btnIos"><b>СКАЧАТЬ НА iOS</b><i>Установка на iPhone / iPad</i></button>
       <button class="mbtn" id="btnControls"><b>УПРАВЛЕНИЕ</b><i>Клавиши и настройки</i></button>
@@ -487,8 +488,70 @@
   </div>
 </div>
 
-<!-- ============ ACHIEVEMENTS & RECORDS ============ -->
-<div id="extras" class="screen hidden">
+<!-- ============ ACCOUNT (Supabase email/password sync) ============ -->
+<div id="account" class="screen hidden">
+  <div class="panel">
+    <h2>АККАУНТ</h2>
+    <div class="hintbox" style="margin-top:0">
+      Войдите по почте и паролю — достижения, рекорды, скины и чекпойнты будут
+      переноситься между устройствами. Локальные настройки (графика, звук,
+      чувствительность) остаются у каждого устройства свои.
+    </div>
+
+    <div id="accAuthBox">
+      <label class="fld">Ник
+        <input id="accNick" maxlength="14" placeholder="Игрок" autocomplete="off">
+      </label>
+      <label class="fld">Почта
+        <input id="accEmail" type="email" placeholder="you@example.com" autocomplete="email">
+      </label>
+      <label class="fld">Пароль
+        <input id="accPass" type="password" placeholder="минимум 6 символов" autocomplete="current-password">
+      </label>
+      <div class="btnrow">
+        <button class="mbtn small primary" id="btnAccLogin">ВОЙТИ</button>
+        <button class="mbtn small" id="btnAccRegister">СОЗДАТЬ АККАУНТ</button>
+      </div>
+      <div class="hintbox" style="margin-top:10px">
+        Пароль мы не храним: остаётся только его хеш на этом устройстве, чтобы
+        прогресс разных игроков не путался на одном устройстве.
+        Код прогресса: <b id="accHash">—</b>
+        <button class="mbtn tiny" id="btnAccCopyHash">копировать</button>
+      </div>
+    </div>
+
+    <div id="accInBox" class="hidden">
+      <div class="acc-who" id="accWho"></div>
+      <div class="btnrow">
+        <button class="mbtn small primary" id="btnAccSync">СИНХРОНИЗИРОВАТЬ СЕЙЧАС</button>
+        <button class="mbtn small" id="btnAccOut">ВЫЙТИ</button>
+      </div>
+    </div>
+
+    <div class="acc-cloud">
+      <button class="mbtn small" id="btnAccCloud">НАСТРОЙКА ОБЛАКА <span id="accCloudTag">Облако не настроено</span></button>
+      <div id="accCloudForm" class="hidden">
+        <label class="fld">Supabase URL
+          <input id="accUrl" placeholder="https://xxxx.supabase.co" autocomplete="off">
+        </label>
+        <label class="fld">Публичный anon-ключ
+          <input id="accKey" placeholder="eyJhbGciOi…" autocomplete="off">
+        </label>
+        <button class="mbtn small primary" id="btnAccCloudSave">СОХРАНИТЬ</button>
+        <div class="hintbox">
+          Создайте бесплатный проект на supabase.com. В SQL Editor выполните файл
+          <b>supabase-setup.sql</b> из репозитория игры, затем скопируйте сюда URL
+          проекта и публичный anon-ключ (Project Settings → API).
+        </div>
+      </div>
+    </div>
+
+    <div class="status" id="accStatus"></div>
+    <div class="btnrow"><button class="mbtn small primary" id="btnAccountBack">НАЗАД</button></div>
+  </div>
+</div>
+
+<!-- ============ ACHIEVEMENTS & RECORDS ============ --><div id="extras" class="screen hidden">
   <div class="panel wide">
     <h2>ДОСТИЖЕНИЯ</h2>
     <div class="ach-grid" id="achGrid"></div>

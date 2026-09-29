@@ -842,6 +842,83 @@ function buildWeaponModel(id) {
       break;
     }
 
+    /* ---------------- TEC-9: boxy auto machine pistol ---------------- */
+    case 'tec9': {
+      add(B(.052, .070, .22, PAL.black, 0, -.005, -.11));             // squared receiver
+      add(B(.046, .012, .22, PAL.gun, 0, .032, -.11));                // top cover
+      for (let i = 0; i < 6; i++) add(B(.054, .040, .007, PAL.gun, 0, -.005, -.02 - i * .026));  // shroud slots
+      add(CYL(.012, .07, PAL.steel, 0, .004, -.25, 8));               // barrel
+      add(B(.040, .020, .050, PAL.black, 0, .004, -.245));            // muzzle block
+      add(B(.038, .170, .050, PAL.black, 0, -.115, -.02));            // long mag
+      add(B(.042, .026, .054, PAL.mag, 0, -.205, -.02));
+      add(B(.040, .105, .055, PAL.poly, 0, -.085, .075, .20));        // grip
+      add(B(.022, .014, .012, PAL.steel, 0, .042, -.20));             // front sight
+      add(B(.028, .012, .014, PAL.steel, 0, .040, -.02));             // rear sight
+      add(B(.024, .020, .026, PAL.black, 0, -.048, -.02));
+      add(B(.010, .018, .010, PAL.steel, 0, -.040, -.014));           // trigger
+      break;
+    }
+    /* ---------------- Five-seveN: high-velocity pistol ---------------- */
+    case 'fiveSeven': {
+      add(B(.050, .050, .185, PAL.gunLight, 0, 0, -.08));
+      add(B(.042, .012, .185, PAL.gun, 0, .026, -.08));
+      for (let i = 0; i < 4; i++) add(B(.052, .032, .008, PAL.gun, 0, -.002, -.14 + i * .016));
+      add(B(.044, .030, .16, PAL.poly, 0, -.038, -.075));
+      add(CYL(.012, .05, PAL.steel, 0, .004, -.20, 8));
+      add(B(.030, .008, .012, PAL.steel, 0, .030, -.205));
+      add(B(.046, .108, .052, PAL.poly, 0, -.088, .005, .15));
+      for (let i = 0; i < 3; i++) add(B(.048, .008, .038, PAL.black, 0, -.060 + i * .022, .006, .15));
+      add(B(.050, .024, .052, PAL.mag, 0, -.112, .004, .15));
+      add(B(.018, .012, .012, PAL.steel, 0, .032, -.155));
+      add(DOT(.005, 0x8affa0, 0, .038, -.155));
+      add(B(.028, .013, .014, PAL.steel, 0, .032, -.008));
+      add(B(.010, .018, .010, PAL.steel, 0, -.042, -.032));
+      break;
+    }
+    /* ---------------- Hand cannon: massive single-shot handgun ---------------- */
+    case 'handCannon': {
+      add(B(.062, .068, .24, PAL.steel, 0, 0, -.11));                 // huge slide
+      add(B(.052, .016, .24, PAL.gun, 0, .036, -.11));
+      for (let i = 0; i < 4; i++) add(B(.064, .044, .008, PAL.gun, 0, -.002, -.20 + i * .020));
+      add(CYL(.019, .10, PAL.steel, 0, .004, -.27, 10));              // fat barrel
+      add(B(.050, .022, .034, PAL.black, 0, .004, -.30));             // muzzle brake
+      add(CYL(.022, .016, PAL.steel, 0, .004, -.255, 10));
+      add(B(.058, .128, .060, PAL.poly, 0, -.10, .006, .17));         // heavy grip
+      add(B(.062, .028, .060, PAL.mag, 0, -.155, .006, .17));
+      add(B(.020, .016, .016, PAL.steel, 0, .044, -.20));
+      add(DOT(.006, 0xff3030, 0, .052, -.20));
+      add(B(.032, .016, .016, PAL.steel, 0, .042, 0));
+      add(B(.026, .024, .028, PAL.black, 0, -.056, -.06));
+      add(B(.012, .022, .012, PAL.steel, 0, -.046, -.052));           // trigger
+      break;
+    }
+    /* ---------------- Flare pistol: fat stubby single-shot ---------------- */
+    case 'flarePistol': {
+      add(CYL(.030, .16, PAL.black, 0, .01, -.10, 12));               // fat barrel
+      add(CYL(.036, .03, PAL.steel, 0, .01, -.185, 12));              // muzzle rim
+      add(B(.038, .050, .09, PAL.gun, 0, .012, .02));                 // frame
+      add(B(.046, .120, .058, PAL.poly, 0, -.085, .03, .30));         // grip
+      for (let i = 0; i < 3; i++) add(B(.048, .010, .046, PAL.black, 0, -.055 + i * .026, .03, .30));
+      add(B(.020, .018, .016, PAL.steel, 0, .048, -.05));             // top latch
+      add(B(.024, .030, .024, PAL.steel, 0, -.010, -.03));            // hammer break
+      add(B(.010, .020, .012, PAL.steel, 0, -.036, -.02));            // trigger
+      add(B(.030, .016, .014, PAL.steel, 0, .040, -.16));             // front sight
+      break;
+    }
+    /* ---------------- Pistol grenade launcher: fat break-action tube ---------------- */
+    case 'nadePistol': {
+      add(CYL(.045, .22, PAL.oliv, 0, .012, -.13, 14));               // fat launch tube
+      add(CYL(.052, .035, PAL.black, 0, .012, -.245, 14));            // muzzle collar
+      add(CYL(.050, .020, PAL.steel, 0, .012, -.02, 14));             // breech ring
+      add(B(.070, .075, .08, PAL.gun, 0, .008, .05));                 // breech block
+      add(B(.050, .120, .060, PAL.poly, 0, -.09, .05, .26));          // grip
+      for (let i = 0; i < 3; i++) add(B(.052, .010, .048, PAL.black, 0, -.058 + i * .026, .05, .26));
+      add(B(.020, .016, .018, PAL.steel, 0, .052, -.02));             // hammer
+      add(B(.028, .020, .020, PAL.steel, 0, .056, -.20));             // sight
+      add(B(.012, .020, .012, PAL.steel, 0, -.048, .01));             // trigger
+      break;
+    }
+
     /* ---------------- MP5-SD: integrally suppressed SMG ---------------- */
     case 'mp5': {
       add(B(.052, .075, .30, PAL.black, 0, 0, -.14));                 // receiver

@@ -42,6 +42,14 @@ canvas{display:block}
 .status.big{font-size:16px;line-height:1.5}
 .status.err{color:#ff7b6b}
 
+/* ---------- account ---------- */
+.acc-cloud{margin-top:18px;border-top:1px solid var(--line);padding-top:14px}
+#btnAccCloud span{float:right;font-size:11px;color:var(--dim)}
+.acc-who{margin:14px 0;padding:12px 14px;background:#12171c;border:1px solid var(--line);border-radius:3px}
+.acc-who b{display:block;color:var(--or2);font-size:15px;letter-spacing:1px}
+.acc-who i{display:block;font-style:normal;color:var(--dim);font-size:12px;margin-top:3px}
+#accHash{color:#4ad6ff}
+
 /* ---------- buttons ---------- */
 .mbtn{display:block;width:100%;text-align:left;background:#1d2329;border:1px solid var(--line);
   border-left:3px solid #3a444d;color:var(--txt);padding:13px 18px;border-radius:3px;cursor:pointer;
@@ -868,6 +876,7 @@ html.touch .fld input{padding:10px;font-size:15px}
       <button class="mbtn" id="btnMatch"><b>ПАРАМЕТРЫ МАТЧА</b><i>Карта · число игроков · здоровье</i></button>
       <button class="mbtn" id="btnExtras"><b>ДОСТИЖЕНИЯ И РЕКОРДЫ</b><i>Награды за вехи · таблица лучших забегов</i></button>
       <button class="mbtn" id="btnSkins"><b>ИНВЕНТАРЬ СКИНОВ</b><i>Скины за достижения · посмотреть оружие в 3D</i></button>
+      <button class="mbtn" id="btnAccount"><b>АККАУНТ</b><i>Вход по почте · перенос достижений и скинов между устройствами</i></button>
       <button class="mbtn" id="btnAndroid"><b>СКАЧАТЬ НА ANDROID</b><i>Установка на телефон / планшет</i></button>
       <button class="mbtn" id="btnIos"><b>СКАЧАТЬ НА iOS</b><i>Установка на iPhone / iPad</i></button>
       <button class="mbtn" id="btnControls"><b>УПРАВЛЕНИЕ</b><i>Клавиши и настройки</i></button>
@@ -1315,8 +1324,70 @@ html.touch .fld input{padding:10px;font-size:15px}
   </div>
 </div>
 
-<!-- ============ ACHIEVEMENTS & RECORDS ============ -->
-<div id="extras" class="screen hidden">
+<!-- ============ ACCOUNT (Supabase email/password sync) ============ -->
+<div id="account" class="screen hidden">
+  <div class="panel">
+    <h2>АККАУНТ</h2>
+    <div class="hintbox" style="margin-top:0">
+      Войдите по почте и паролю — достижения, рекорды, скины и чекпойнты будут
+      переноситься между устройствами. Локальные настройки (графика, звук,
+      чувствительность) остаются у каждого устройства свои.
+    </div>
+
+    <div id="accAuthBox">
+      <label class="fld">Ник
+        <input id="accNick" maxlength="14" placeholder="Игрок" autocomplete="off">
+      </label>
+      <label class="fld">Почта
+        <input id="accEmail" type="email" placeholder="you@example.com" autocomplete="email">
+      </label>
+      <label class="fld">Пароль
+        <input id="accPass" type="password" placeholder="минимум 6 символов" autocomplete="current-password">
+      </label>
+      <div class="btnrow">
+        <button class="mbtn small primary" id="btnAccLogin">ВОЙТИ</button>
+        <button class="mbtn small" id="btnAccRegister">СОЗДАТЬ АККАУНТ</button>
+      </div>
+      <div class="hintbox" style="margin-top:10px">
+        Пароль мы не храним: остаётся только его хеш на этом устройстве, чтобы
+        прогресс разных игроков не путался на одном устройстве.
+        Код прогресса: <b id="accHash">—</b>
+        <button class="mbtn tiny" id="btnAccCopyHash">копировать</button>
+      </div>
+    </div>
+
+    <div id="accInBox" class="hidden">
+      <div class="acc-who" id="accWho"></div>
+      <div class="btnrow">
+        <button class="mbtn small primary" id="btnAccSync">СИНХРОНИЗИРОВАТЬ СЕЙЧАС</button>
+        <button class="mbtn small" id="btnAccOut">ВЫЙТИ</button>
+      </div>
+    </div>
+
+    <div class="acc-cloud">
+      <button class="mbtn small" id="btnAccCloud">НАСТРОЙКА ОБЛАКА <span id="accCloudTag">Облако не настроено</span></button>
+      <div id="accCloudForm" class="hidden">
+        <label class="fld">Supabase URL
+          <input id="accUrl" placeholder="https://xxxx.supabase.co" autocomplete="off">
+        </label>
+        <label class="fld">Публичный anon-ключ
+          <input id="accKey" placeholder="eyJhbGciOi…" autocomplete="off">
+        </label>
+        <button class="mbtn small primary" id="btnAccCloudSave">СОХРАНИТЬ</button>
+        <div class="hintbox">
+          Создайте бесплатный проект на supabase.com. В SQL Editor выполните файл
+          <b>supabase-setup.sql</b> из репозитория игры, затем скопируйте сюда URL
+          проекта и публичный anon-ключ (Project Settings → API).
+        </div>
+      </div>
+    </div>
+
+    <div class="status" id="accStatus"></div>
+    <div class="btnrow"><button class="mbtn small primary" id="btnAccountBack">НАЗАД</button></div>
+  </div>
+</div>
+
+<!-- ============ ACHIEVEMENTS & RECORDS ============ --><div id="extras" class="screen hidden">
   <div class="panel wide">
     <h2>ДОСТИЖЕНИЯ</h2>
     <div class="ach-grid" id="achGrid"></div>
@@ -1687,6 +1758,21 @@ const WEAPONS = {
            auto: false, spread: .012, moveSpread: .055, recoil: 3.1, falloff: .74, range: 80, headMul: 2.6, sound: 'deagle' },
   revolver:{ name: 'R8 REVOLVER', cat: 'pistol', slot: 1, price: 600, dmg: 86, rpm: 100, mag: 8, reserve: 24,
            auto: false, spread: .006, moveSpread: .060, recoil: 4.2, falloff: .80, range: 90, headMul: 2.4, sound: 'deagle' },
+  /* ---- БОЛЬШЕ РАЗНООБРАЗИЯ ДЛЯ ОДНОЙ РУКИ (слот 1) ---- */
+  tec9:   { name: 'TEC-9', cat: 'pistol', slot: 1, price: 500, dmg: 24, rpm: 640, mag: 32, reserve: 120,
+           auto: true, spread: .030, moveSpread: .022, recoil: .55, falloff: .55, range: 48, headMul: 1.8, sound: 'smg' },
+  fiveSeven:{ name: 'FIVE-SEVEN', cat: 'pistol', slot: 1, price: 900, dmg: 40, rpm: 380, mag: 20, reserve: 100,
+           auto: false, spread: .010, moveSpread: .020, recoil: .95, falloff: .85, range: 85, headMul: 2.6, sound: 'pistol' },
+  handCannon:{ name: 'РУЧНАЯ ПУШКА', cat: 'pistol', slot: 1, price: 3000, dmg: 108, rpm: 78, mag: 5, reserve: 30,
+           auto: false, spread: .010, moveSpread: .090, recoil: 6.0, falloff: .88, range: 95, headMul: 2.3, sound: 'deagle' },
+  flarePistol:{ name: 'СИГНАЛЬНЫЙ ПИСТОЛЕТ', cat: 'pistol', slot: 1, price: 1400, dmg: 22, rpm: 60, mag: 4, reserve: 16,
+           auto: false, spread: .020, moveSpread: .060, recoil: 3.0, falloff: .99, range: 120, headMul: 1.4,
+           sound: 'deagle', projectile: 'rocket', projSpeed: 34, projGravity: 6,
+           splash: 3.4, splashDmg: 70, explosionColor: [0xff9a2a, 0x2a1404] },
+  nadePistol:{ name: 'ПИСТОЛЕТ-ГРАНАТОМЁТ', cat: 'pistol', slot: 1, price: 2600, dmg: 40, rpm: 55, mag: 4, reserve: 20,
+           auto: false, spread: .014, moveSpread: .060, recoil: 3.4, falloff: .99, range: 130, headMul: 1.2,
+           sound: 'deagle', projectile: 'rocket', projSpeed: 32, projGravity: 5,
+           splash: 5.4, splashDmg: 150, explosionColor: [0xffb060, 0x151210] },
 
   mp5:   { name: 'MP5-SD', cat: 'smg', slot: 2, price: 1500, dmg: 27, rpm: 750, mag: 30, reserve: 120,
            auto: true, spread: .026, moveSpread: .018, recoil: .60, falloff: .60, range: 55, headMul: 1.9, sound: 'smg' },
@@ -6271,6 +6357,83 @@ function buildWeaponModel(id) {
       add(CYL(.013, .022, PAL.steel, 0, -.028, -.045, 8));            // hammer spur
       add(B(.010, .020, .012, PAL.steel, 0, -.036, -.036));           // trigger
       add(B(.006, .014, .050, PAL.steel, 0, -.006, -.14));            // ejector rod
+      break;
+    }
+
+    /* ---------------- TEC-9: boxy auto machine pistol ---------------- */
+    case 'tec9': {
+      add(B(.052, .070, .22, PAL.black, 0, -.005, -.11));             // squared receiver
+      add(B(.046, .012, .22, PAL.gun, 0, .032, -.11));                // top cover
+      for (let i = 0; i < 6; i++) add(B(.054, .040, .007, PAL.gun, 0, -.005, -.02 - i * .026));  // shroud slots
+      add(CYL(.012, .07, PAL.steel, 0, .004, -.25, 8));               // barrel
+      add(B(.040, .020, .050, PAL.black, 0, .004, -.245));            // muzzle block
+      add(B(.038, .170, .050, PAL.black, 0, -.115, -.02));            // long mag
+      add(B(.042, .026, .054, PAL.mag, 0, -.205, -.02));
+      add(B(.040, .105, .055, PAL.poly, 0, -.085, .075, .20));        // grip
+      add(B(.022, .014, .012, PAL.steel, 0, .042, -.20));             // front sight
+      add(B(.028, .012, .014, PAL.steel, 0, .040, -.02));             // rear sight
+      add(B(.024, .020, .026, PAL.black, 0, -.048, -.02));
+      add(B(.010, .018, .010, PAL.steel, 0, -.040, -.014));           // trigger
+      break;
+    }
+    /* ---------------- Five-seveN: high-velocity pistol ---------------- */
+    case 'fiveSeven': {
+      add(B(.050, .050, .185, PAL.gunLight, 0, 0, -.08));
+      add(B(.042, .012, .185, PAL.gun, 0, .026, -.08));
+      for (let i = 0; i < 4; i++) add(B(.052, .032, .008, PAL.gun, 0, -.002, -.14 + i * .016));
+      add(B(.044, .030, .16, PAL.poly, 0, -.038, -.075));
+      add(CYL(.012, .05, PAL.steel, 0, .004, -.20, 8));
+      add(B(.030, .008, .012, PAL.steel, 0, .030, -.205));
+      add(B(.046, .108, .052, PAL.poly, 0, -.088, .005, .15));
+      for (let i = 0; i < 3; i++) add(B(.048, .008, .038, PAL.black, 0, -.060 + i * .022, .006, .15));
+      add(B(.050, .024, .052, PAL.mag, 0, -.112, .004, .15));
+      add(B(.018, .012, .012, PAL.steel, 0, .032, -.155));
+      add(DOT(.005, 0x8affa0, 0, .038, -.155));
+      add(B(.028, .013, .014, PAL.steel, 0, .032, -.008));
+      add(B(.010, .018, .010, PAL.steel, 0, -.042, -.032));
+      break;
+    }
+    /* ---------------- Hand cannon: massive single-shot handgun ---------------- */
+    case 'handCannon': {
+      add(B(.062, .068, .24, PAL.steel, 0, 0, -.11));                 // huge slide
+      add(B(.052, .016, .24, PAL.gun, 0, .036, -.11));
+      for (let i = 0; i < 4; i++) add(B(.064, .044, .008, PAL.gun, 0, -.002, -.20 + i * .020));
+      add(CYL(.019, .10, PAL.steel, 0, .004, -.27, 10));              // fat barrel
+      add(B(.050, .022, .034, PAL.black, 0, .004, -.30));             // muzzle brake
+      add(CYL(.022, .016, PAL.steel, 0, .004, -.255, 10));
+      add(B(.058, .128, .060, PAL.poly, 0, -.10, .006, .17));         // heavy grip
+      add(B(.062, .028, .060, PAL.mag, 0, -.155, .006, .17));
+      add(B(.020, .016, .016, PAL.steel, 0, .044, -.20));
+      add(DOT(.006, 0xff3030, 0, .052, -.20));
+      add(B(.032, .016, .016, PAL.steel, 0, .042, 0));
+      add(B(.026, .024, .028, PAL.black, 0, -.056, -.06));
+      add(B(.012, .022, .012, PAL.steel, 0, -.046, -.052));           // trigger
+      break;
+    }
+    /* ---------------- Flare pistol: fat stubby single-shot ---------------- */
+    case 'flarePistol': {
+      add(CYL(.030, .16, PAL.black, 0, .01, -.10, 12));               // fat barrel
+      add(CYL(.036, .03, PAL.steel, 0, .01, -.185, 12));              // muzzle rim
+      add(B(.038, .050, .09, PAL.gun, 0, .012, .02));                 // frame
+      add(B(.046, .120, .058, PAL.poly, 0, -.085, .03, .30));         // grip
+      for (let i = 0; i < 3; i++) add(B(.048, .010, .046, PAL.black, 0, -.055 + i * .026, .03, .30));
+      add(B(.020, .018, .016, PAL.steel, 0, .048, -.05));             // top latch
+      add(B(.024, .030, .024, PAL.steel, 0, -.010, -.03));            // hammer break
+      add(B(.010, .020, .012, PAL.steel, 0, -.036, -.02));            // trigger
+      add(B(.030, .016, .014, PAL.steel, 0, .040, -.16));             // front sight
+      break;
+    }
+    /* ---------------- Pistol grenade launcher: fat break-action tube ---------------- */
+    case 'nadePistol': {
+      add(CYL(.045, .22, PAL.oliv, 0, .012, -.13, 14));               // fat launch tube
+      add(CYL(.052, .035, PAL.black, 0, .012, -.245, 14));            // muzzle collar
+      add(CYL(.050, .020, PAL.steel, 0, .012, -.02, 14));             // breech ring
+      add(B(.070, .075, .08, PAL.gun, 0, .008, .05));                 // breech block
+      add(B(.050, .120, .060, PAL.poly, 0, -.09, .05, .26));          // grip
+      for (let i = 0; i < 3; i++) add(B(.052, .010, .048, PAL.black, 0, -.058 + i * .026, .05, .26));
+      add(B(.020, .016, .018, PAL.steel, 0, .052, -.02));             // hammer
+      add(B(.028, .020, .020, PAL.steel, 0, .056, -.20));             // sight
+      add(B(.012, .020, .012, PAL.steel, 0, -.048, .01));             // trigger
       break;
     }
 
@@ -15599,6 +15762,7 @@ const Game = {
       } catch (e) { }
       UI.loading(100, 'Загрузка завершена');
       setTimeout(() => {
+        if (typeof ACCOUNT !== 'undefined' && ACCOUNT.init) ACCOUNT.init();
         UI.renderMenuStats();
         UI.show('menu');
         this.running = true;
@@ -16219,7 +16383,7 @@ const Game = {
       const pa = ACHIEVEMENTS.find(a => a.id === 'platinum_all');
       if (pa && achAllOthersDone(ach)) grant(pa);
     }
-    if (earned) Store.save();
+    if (earned) { Store.save(); if (typeof ACCOUNT !== 'undefined') ACCOUNT.scheduleSync(); }
     return earned;
   },
   recordRun() {
@@ -16234,6 +16398,7 @@ const Game = {
     runs.sort((a, b) => b.score - a.score);
     Store.data.runs = runs.slice(0, 10);
     Store.save();
+    if (typeof ACCOUNT !== 'undefined') ACCOUNT.scheduleSync();
   },
   /* ============================================================
      MANUAL SAVE / ZOMBIE UNSTICK / (pet removed)
@@ -23339,6 +23504,7 @@ const Game = {
     list[key] = cp;
     Store.data.checkpoint = null;            // legacy slot no longer used
     try { Store.save(); } catch (e) { }
+    if (typeof ACCOUNT !== 'undefined') ACCOUNT.scheduleSync();
   },
 
   /* Restore a saved checkpoint for a mode (default: the current one). */
@@ -23792,6 +23958,413 @@ window.addEventListener('DOMContentLoaded', () => {
     if (t) t.textContent = 'Ошибка запуска: ' + e.message;
   }
 });
+
+
+/* ===== 13-account.js ===== */
+/* ============================================================
+   13 — АККАУНТ (Supabase): вход по email/паролю и перенос прогресса
+   ============================================================
+   Игра — статический сайт, поэтому нужен облачный бэкенд. Используется
+   Supabase (Auth + REST). Настройки проекта хранятся в localStorage
+   (`cs3d.cloud.v1`): url, anonKey, включено/выключено.
+
+   ЧТО СИНХРОНИЗИРУЕТСЯ (прогресс, переносится между устройствами):
+     • достижения (Store.data.ach)          • рекорды забегов (runs)
+     • надетые скины (skinOn, skinChar)     • чекпойнты забегов (checkpoints)
+     • статистика: лучший счёт, лучшая волна, убийства, победы, время и т.д.
+   ЛОКАЛЬНЫЕ НАСТРОЙКИ (чувствительность, графика, звук) НЕ переносятся —
+   у каждого устройства они свои.
+
+   Слияние всегда безопасное (ничего не теряется): достижения/скины/чекпойнты
+   объединяются, числовая статистика берёт максимум.
+   ============================================================ */
+
+/* ---- SHA-256 (для хранения только ХЕША пароля, не самого пароля) ---- */
+async function _sha256Hex(str) {
+  try {
+    const buf = new TextEncoder().encode(str);
+    const dig = await crypto.subtle.digest('SHA-256', buf);
+    return Array.from(new Uint8Array(dig)).map(b => b.toString(16).padStart(2, '0')).join('');
+  } catch (e) { return null; }
+}
+
+const ACCOUNT = {
+  cfg: { url: '', anonKey: '', enabled: false },
+  session: null,          // { access_token, refresh_token, user:{id,email} }
+  user: null,
+  nickname: '',
+  busy: false,
+  _syncT: 0,
+  _hash: null,            // хеш пароля (для автопривязки прогресса по нику)
+
+  /* ---------- конфигурация облака ---------- */
+  loadCfg() {
+    try {
+      const raw = localStorage.getItem('cs3d.cloud.v1');
+      if (raw) Object.assign(this.cfg, JSON.parse(raw));
+      const s = localStorage.getItem('cs3d.session.v1');
+      if (s) this.session = JSON.parse(s);
+    } catch (e) { }
+    return this.cfg;
+  },
+  saveCfg() {
+    try { localStorage.setItem('cs3d.cloud.v1', JSON.stringify(this.cfg)); } catch (e) { }
+  },
+  saveSession() {
+    try {
+      if (this.session) localStorage.setItem('cs3d.session.v1', JSON.stringify(this.session));
+      else localStorage.removeItem('cs3d.session.v1');
+    } catch (e) { }
+  },
+  configured() { return !!(this.cfg.url && this.cfg.anonKey); },
+
+  /* ---------- низкоуровневые запросы ---------- */
+  headers(auth) {
+    const h = { 'apikey': this.cfg.anonKey, 'Content-Type': 'application/json' };
+    if (auth) h['Authorization'] = 'Bearer ' + auth;
+    else h['Authorization'] = 'Bearer ' + this.cfg.anonKey;
+    return h;
+  },
+  async _req(method, path, body, authToken) {
+    if (!this.configured()) throw new Error('Облако не настроено');
+    const url = this.cfg.url.replace(/\/+$/, '') + path;
+    const res = await fetch(url, {
+      method,
+      headers: this.headers(authToken),
+      body: body ? JSON.stringify(body) : undefined
+    });
+    let data = null;
+    try { data = await res.json(); } catch (e) { }
+    if (!res.ok) {
+      const msg = (data && (data.error_description || data.msg || data.message || data.error)) || ('Ошибка ' + res.status);
+      const err = new Error(msg); err.status = res.status; err.data = data;
+      throw err;
+    }
+    return data;
+  },
+
+  /* ---------- авторизация ---------- */
+  async signUp(email, password, nick) {
+    const data = await this._req('POST', '/auth/v1/signup', {
+      email: email, password: password, data: { nick: nick || '' }
+    });
+    // при включённом подтверждении email сессии не будет — сообщаем об этом
+    if (data && data.access_token) { this._setSession(data); return { ok: true, session: true }; }
+    return { ok: true, session: false };
+  },
+  async signIn(email, password) {
+    const data = await this._req('POST', '/auth/v1/token?grant_type=password', { email: email, password: password });
+    this._setSession(data);
+    return { ok: true };
+  },
+  _setSession(data) {
+    if (!data || !data.access_token) return;
+    this.session = {
+      access_token: data.access_token,
+      refresh_token: data.refresh_token,
+      expires_at: Date.now() + (data.expires_in || 3600) * 1000,
+      user: data.user || null
+    };
+    this.user = this.session.user;
+    this.saveSession();
+    this._hash = this.session.user && this.session.user.id ? this.session.user.id : this._hash;
+  },
+  async refresh() {
+    if (!this.session || !this.session.refresh_token) return false;
+    try {
+      const data = await this._req('POST', '/auth/v1/token?grant_type=refresh_token', { refresh_token: this.session.refresh_token });
+      this._setSession(data);
+      return true;
+    } catch (e) { this.signOutLocal(); return false; }
+  },
+  async ensureFresh() {
+    if (!this.session) return false;
+    if (this.session.expires_at && Date.now() > this.session.expires_at - 60000) return await this.refresh();
+    return true;
+  },
+  signOutLocal() {
+    this.session = null; this.user = null;
+    this.saveSession();
+  },
+  async signOut() {
+    try { if (this.session) await this._req('POST', '/auth/v1/logout', null, this.session.access_token); } catch (e) { }
+    this.signOutLocal();
+    // локальный прогресс остаётся на устройстве — ничего не удаляем
+  },
+
+  /* ---------- облачное хранилище прогресса ---------- */
+  progressSubset() {
+    const d = Store.data;
+    return {
+      ach: d.ach || {},
+      runs: d.runs || [],
+      skinOn: d.skinOn || {},
+      skinChar: d.skinChar || '',
+      checkpoints: d.checkpoints || {},
+      best: d.best || 0, bestWave: d.bestWave || 0, killsTotal: d.killsTotal || 0,
+      matches: d.matches || 0, wins: d.wins || 0, signalSrv: d.signalSrv || 0,
+      aimBest: d.aimBest || 0, clears: d.clears || 0, playTime: d.playTime || 0,
+      offModsRun: d.offModsRun || 0, offModPick: d.offModPick || 0,
+      meta: { nick: this.nickname || Store.data.name || '', updated: Date.now() }
+    };
+  },
+  async push() {
+    if (!this.session || !this.user) return false;
+    await this.ensureFresh();
+    const row = { user_id: this.user.id, data: this.progressSubset(), updated_at: new Date().toISOString() };
+    await this._req('POST', '/rest/v1/player_saves', row, this.session.access_token);
+    return true;
+  },
+  async pull() {
+    if (!this.session || !this.user) return null;
+    await this.ensureFresh();
+    const rows = await this._req('GET', '/rest/v1/player_saves?user_id=eq.' + encodeURIComponent(this.user.id) + '&select=data', null, this.session.access_token);
+    if (Array.isArray(rows) && rows.length) return rows[0].data || null;
+    return null;
+  },
+
+  /* ---------- безопасное слияние ---------- */
+  mergeRemote(remote) {
+    if (!remote) return false;
+    const d = Store.data;
+    let changed = false;
+    // достижения, скины, чекпойнты — объединение
+    const mergeObj = (key) => {
+      const local = d[key] || {}, cloud = remote[key] || {};
+      const out = Object.assign({}, cloud, local);
+      if (Object.keys(out).length !== Object.keys(local).length) { d[key] = out; changed = true; }
+      else { d[key] = out; }
+    };
+    mergeObj('ach'); mergeObj('skinOn'); mergeObj('checkpoints');
+    if (remote.skinChar && remote.skinChar !== d.skinChar) { d.skinChar = remote.skinChar; changed = true; }
+    // числовая статистика — максимум (никогда не уменьшаем)
+    const nums = ['best', 'bestWave', 'killsTotal', 'matches', 'wins', 'signalSrv', 'aimBest', 'clears', 'playTime', 'offModsRun', 'offModPick'];
+    nums.forEach(k => { const v = remote[k] || 0; if (v > (d[k] || 0)) { d[k] = v; changed = true; } });
+    // рекорды забегов — объединение без дублей, топ-50
+    if (Array.isArray(remote.runs) && remote.runs.length) {
+      const seen = {};
+      const all = [];
+      (d.runs || []).concat(remote.runs).forEach(r => {
+        const key = JSON.stringify([r && r.score, r && r.wave, r && r.mode, r && r.date]);
+        if (!seen[key]) { seen[key] = 1; all.push(r); }
+      });
+      all.sort((a, b) => (b.score || 0) - (a.score || 0));
+      d.runs = all.slice(0, 50);
+      changed = true;
+    }
+    if (changed) { Store.save(); this._refreshUI(); }
+    return changed;
+  },
+
+  /* ---------- сценарии ---------- */
+  async register(email, password, nick) {
+    if (!this.configured()) throw new Error('Облако не настроено — откройте «Настройка облака»');
+    const r = await this.signUp(email, password, nick);
+    if (!r.session) return { needConfirm: true };
+    // привязываем текущий локальный прогресс к новому аккаунту
+    await this.push();
+    return { ok: true };
+  },
+  async login(email, password) {
+    if (!this.configured()) throw new Error('Облако не настроено — откройте «Настройка облака»');
+    await this.signIn(email, password);
+    // первым делом подтягиваем облако и сливаем с локальным, затем отправляем обратно
+    const remote = await this.pull();
+    this.mergeRemote(remote);
+    await this.push();
+    return { ok: true };
+  },
+  async syncNow() {
+    if (!this.session) throw new Error('Нужно войти');
+    const remote = await this.pull();
+    this.mergeRemote(remote);
+    await this.push();
+    return true;
+  },
+  scheduleSync() {
+    if (!this.session || this._syncT) return;
+    this._syncT = setTimeout(() => {
+      this._syncT = 0;
+      if (!this.session) return;
+      this.push().catch(() => { });
+    }, 4000);
+  },
+
+  /* ---------- локальная автопривязка прогресса ----------
+     Прогресс каждого игрока хранится в его браузере. Чтобы при входе с другого
+     устройства данные не «перепутались» (у всех один и тот же ключ
+     localStorage), сохраняем ХЕШ пароля и показываем его рядом с ником. */
+  async bindLocalHash(nick, email, password) {
+    const h = await _sha256Hex('bs|' + (email || '') + '|' + (password || '') + '|' + (nick || ''));
+    this._hash = h;
+    try {
+      const map = JSON.parse(localStorage.getItem('cs3d.binds.v1') || '{}');
+      map[nick || 'me'] = h;
+      localStorage.setItem('cs3d.binds.v1', JSON.stringify(map));
+      localStorage.setItem('cs3d.lastbind.v1', h);
+    } catch (e) { }
+    return h;
+  },
+  currentHash() { try { return localStorage.getItem('cs3d.lastbind.v1') || ''; } catch (e) { return ''; } },
+
+  /* ---------- UI ---------- */
+  init() {
+    this.loadCfg();
+    this.nickname = Store.data.name || '';
+    this._wire();
+    this._render();
+    // токен истекает через час — тихо обновляем при старте
+    if (this.session) this.ensureFresh().then(() => this._render()).catch(() => { });
+    // обработка возврата после подтверждения email (ссылка ведёт с ?code=…)
+    try {
+      const q = new URLSearchParams(location.search);
+      if (q.get('code') && this.configured()) {
+        this._req('POST', '/auth/v1/token?grant_type=pkce', { auth_code: q.get('code') })
+          .then(d => { this._setSession(d); this._render(); if (UI.toast) UI.toast('Почта подтверждена', '#57d16a'); })
+          .catch(() => { });
+      }
+    } catch (e) { }
+  },
+
+  _wire() {
+    const byId = id => document.getElementById(id);
+    const on = (id, fn, ev) => { const e = byId(id); if (e) e.addEventListener(ev || 'click', e2 => { e2.preventDefault(); fn(e2); }); };
+
+    on('btnAccount', () => this.open());
+    on('btnAccountBack', () => UI.show('menu'));
+    on('btnAccCloud', () => this._toggleCloudForm());
+    on('btnAccCloudSave', () => this._saveCloudForm());
+    on('btnAccLogin', () => this._doLogin());
+    on('btnAccRegister', () => this._doRegister());
+    on('btnAccSync', () => this._doSync());
+    on('btnAccOut', () => this._doOut());
+    on('btnAccCopyHash', () => {
+      const h = this.currentHash();
+      try { navigator.clipboard.writeText(h); if (UI.toast) UI.toast('Код прогресса скопирован', '#57d16a'); }
+      catch (e) { if (UI.toast) UI.toast('Код: ' + h); }
+    });
+    // Enter в полях — вход
+    ['accEmail', 'accPass'].forEach(id => {
+      const e = byId(id);
+      if (e) e.addEventListener('keydown', ev => { if (ev.key === 'Enter') this._doLogin(); });
+    });
+  },
+
+  _toggleCloudForm() {
+    const f = document.getElementById('accCloudForm');
+    if (f) f.classList.toggle('hidden');
+    const u = document.getElementById('accUrl'), k = document.getElementById('accKey');
+    if (u) u.value = this.cfg.url || '';
+    if (k) k.value = this.cfg.anonKey || '';
+  },
+  _saveCloudForm() {
+    const u = document.getElementById('accUrl'), k = document.getElementById('accKey');
+    this.cfg.url = (u ? u.value : '').trim();
+    this.cfg.anonKey = (k ? k.value : '').trim();
+    this.cfg.enabled = this.configured();
+    this.saveCfg();
+    if (UI.toast) UI.toast(this.configured() ? 'Облако подключено' : 'Заполните URL и ключ', this.configured() ? '#57d16a' : '#e33a2e');
+    this._render();
+  },
+
+  open() {
+    this._render();
+    UI.show('account');
+  },
+
+  _status(msg, color) {
+    const el = document.getElementById('accStatus');
+    if (el) { el.textContent = msg || ''; el.style.color = color || ''; }
+  },
+
+  async _doRegister() {
+    if (this.busy) return;
+    const email = (document.getElementById('accEmail') || {}).value || '';
+    const pass = (document.getElementById('accPass') || {}).value || '';
+    const nick = (document.getElementById('accNick') || {}).value || Store.data.name || '';
+    if (!email || pass.length < 6) { this._status('Введите почту и пароль (от 6 символов)', '#e33a2e'); return; }
+    this.busy = true; this._status('Создаём аккаунт…');
+    try {
+      const h = await this.bindLocalHash(nick, email, pass);
+      const r = await this.register(email, pass, nick);
+      if (r.needConfirm) this._status('Аккаунт создан. Подтвердите почту по ссылке, затем войдите.', '#ff9d21');
+      else this._status('Готово! Прогресс привязан к аккаунту.', '#57d16a');
+      if (typeof Store !== 'undefined') { Store.data.name = nick; Store.save(); }
+      this._render();
+    } catch (e) { this._status('Ошибка: ' + e.message, '#e33a2e'); }
+    this.busy = false;
+  },
+
+  async _doLogin() {
+    if (this.busy) return;
+    const email = (document.getElementById('accEmail') || {}).value || '';
+    const pass = (document.getElementById('accPass') || {}).value || '';
+    const nick = (document.getElementById('accNick') || {}).value || Store.data.name || '';
+    if (!email || !pass) { this._status('Введите почту и пароль', '#e33a2e'); return; }
+    this.busy = true; this._status('Входим и синхронизируем…');
+    try {
+      await this.bindLocalHash(nick, email, pass);
+      await this.login(email, pass);
+      this._status('Вошли. Прогресс синхронизирован.', '#57d16a');
+      this._render();
+    } catch (e) { this._status('Не удалось войти: ' + e.message, '#e33a2e'); }
+    this.busy = false;
+  },
+
+  async _doSync() {
+    if (this.busy) return;
+    this.busy = true; this._status('Синхронизация…');
+    try { await this.syncNow(); this._status('Синхронизировано.', '#57d16a'); }
+    catch (e) { this._status('Ошибка: ' + e.message, '#e33a2e'); }
+    this.busy = false;
+  },
+
+  async _doOut() {
+    await this.signOut();
+    this._status('Вы вышли. Локальный прогресс на месте.', '#ff9d21');
+    this._render();
+  },
+
+  _refreshUI() {
+    try { if (typeof UI !== 'undefined') { UI.renderMenuStats && UI.renderMenuStats(); UI.refreshChips && UI.refreshChips(); } } catch (e) { }
+  },
+
+  _render() {
+    const loggedIn = !!(this.session && this.user);
+    const authBox = document.getElementById('accAuthBox');
+    const inBox = document.getElementById('accInBox');
+    if (authBox) authBox.classList.toggle('hidden', loggedIn);
+    if (inBox) inBox.classList.toggle('hidden', !loggedIn);
+
+    const cloudTag = document.getElementById('accCloudTag');
+    if (cloudTag) {
+      cloudTag.textContent = this.configured() ? 'Облако подключено' : 'Облако не настроено';
+      cloudTag.style.color = this.configured() ? '#57d16a' : '#e33a2e';
+    }
+    const who = document.getElementById('accWho');
+    if (who) {
+      const email = loggedIn ? (this.user.email || 'аккаунт') : '';
+      who.innerHTML = loggedIn
+        ? '<b>' + U.esc(email) + '</b><i>прогресс синхронизируется автоматически</i>'
+        : '';
+    }
+    const hash = this.currentHash();
+    const hashOut = document.getElementById('accHash');
+    if (hashOut) hashOut.textContent = hash ? hash.slice(0, 16) + '…' : '—';
+
+    // подпись кнопки в меню
+    const btn = document.getElementById('btnAccount');
+    if (btn) {
+      btn.innerHTML = loggedIn
+        ? '<b>АККАУНТ</b><i>Вошли: ' + U.esc(this.user.email || '') + ' · синхронизация включена</i>'
+        : '<b>АККАУНТ</b><i>Вход по почте · перенос достижений и скинов между устройствами</i>';
+    }
+    const nick = document.getElementById('accNick');
+    if (nick && !nick.value) nick.value = this.nickname || Store.data.name || '';
+    const e0 = document.getElementById('accEmail');
+    if (e0 && loggedIn && this.user.email) e0.value = this.user.email;
+  }
+};
 </script>
 </body>
 </html>

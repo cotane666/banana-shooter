@@ -27,6 +27,14 @@ canvas{display:block}
 .status.big{font-size:16px;line-height:1.5}
 .status.err{color:#ff7b6b}
 
+/* ---------- account ---------- */
+.acc-cloud{margin-top:18px;border-top:1px solid var(--line);padding-top:14px}
+#btnAccCloud span{float:right;font-size:11px;color:var(--dim)}
+.acc-who{margin:14px 0;padding:12px 14px;background:#12171c;border:1px solid var(--line);border-radius:3px}
+.acc-who b{display:block;color:var(--or2);font-size:15px;letter-spacing:1px}
+.acc-who i{display:block;font-style:normal;color:var(--dim);font-size:12px;margin-top:3px}
+#accHash{color:#4ad6ff}
+
 /* ---------- buttons ---------- */
 .mbtn{display:block;width:100%;text-align:left;background:#1d2329;border:1px solid var(--line);
   border-left:3px solid #3a444d;color:var(--txt);padding:13px 18px;border-radius:3px;cursor:pointer;

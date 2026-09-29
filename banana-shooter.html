@@ -17046,6 +17046,7 @@ const Game = {
       rounds: MATCH.clampRounds(opts.rounds !== undefined ? opts.rounds : Store.data.rounds),
       played: 0, matchOver: false
     };
+    this._matchCounted = false;
     // settings come from the host (or from the local choice when not networked)
     const mapId = opts.map || Store.data.map;
     this.ensureMap(mapId);
@@ -18151,14 +18152,19 @@ const Game = {
      the winner's name and let the player go back to the menu or start again. */
   endMatch() {
     if (this.mode !== CS.MODE.ONLINE) return;
+    if (this.isCoop) return;                 // кооп-волны не считаются как победы в онлайне
     const o = this.online;
     if (o.matchOver && this._matchOverPending) return;   // already shown
     o.matchOver = true;
     const me = o.roundWins.me, them = o.roundWins.them;
     const won = me > them, draw = me === them;
-    Store.data.matches++;
-    if (won) Store.data.wins++;
-    Store.save();
+    /* Счёт матчей/побед начисляем РОВНО ОДИН РАЗ за матч */
+    if (!this._matchCounted) {
+      this._matchCounted = true;
+      Store.data.matches = (Store.data.matches || 0) + 1;
+      if (won) Store.data.wins = (Store.data.wins || 0) + 1;
+      Store.save();
+    }
     UI.renderMenuStats();
 
     /* Work out who actually won the match. In a two-player room it is simply
@@ -18219,6 +18225,7 @@ const Game = {
   /* Shared reset used when a rematch actually starts (host path). */
   beginRematch(rounds) {
     this._matchOverPending = false;
+    this._matchCounted = false;
     this.online.roundWins = { me: 0, them: 0 };
     this.online.scoreMe = 0; this.online.scoreThem = 0;
     this.online.played = 0;

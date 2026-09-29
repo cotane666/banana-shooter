@@ -424,7 +424,7 @@ function animateGalaxySkin(group, dt) {
    FLESH SKIN (ХАРДКОР) — «кровавый» скин из живой плоти: корпус из мышечной
    ткани, торчащие зубы/шипы, когти и вросшие глаза. Полностью другая модель.
    ============================================================ */
-const FLESH_COLORS = { meat: 0x6e0a12, meat2: 0x4a050b, dark: 0x2a0206, blood: 0xc41428, bone: 0xe8e0cc, eye: 0xf0ead8, iris: 0x2a8a3a, claw: 0x1a1012 };
+const FLESH_COLORS = { meat: 0xb21a26, meat2: 0x8a0f1a, dark: 0x4a0509, blood: 0xe01f30, bone: 0xf0e8d4, eye: 0xf4efe0, iris: 0x2a8a3a, claw: 0x2a1a1c };
 function applyFleshSkin(group) {
   if (!group) return group;
   const C = FLESH_COLORS;
@@ -434,9 +434,13 @@ function applyFleshSkin(group) {
     if (o.material.isMeshBasicMaterial) return;
     const l = o.material.color.r * .3 + o.material.color.g * .59 + o.material.color.b * .11;
     const c = new THREE.Color(l > .5 ? C.blood : l > .25 ? C.meat : C.meat2);
-    c.multiplyScalar(U.clamp(.7 + l * .9, .5, 1.3));
+    c.multiplyScalar(U.clamp(1.0 + l * 1.0, .8, 1.7));
     o.material.color.copy(c);
-    if (o.material.emissive !== undefined) o.material.emissive.setHex(l > .4 ? 0x2a0006 : 0x140003);
+    /* живая плоть слегка светится изнутри — иначе на тёмной текстуре корпус
+       выглядит чёрным */
+    if (o.material.emissive !== undefined) {
+      o.material.emissive.setHex(l > .4 ? 0x5a0a12 : 0x3a060c);
+    }
     if (tex) {
       const t2 = tex.clone(); t2.needsUpdate = true;
       t2.wrapS = t2.wrapT = THREE.RepeatWrapping; t2.repeat.set(2, 2);
@@ -2531,12 +2535,12 @@ function applyGalaxyCharacter(group) {
     if (o.material.isMeshBasicMaterial) return;
     const l = o.material.color.r * .3 + o.material.color.g * .59 + o.material.color.b * .11;
     const c = new THREE.Color(l > .62 ? C.bright : l > .34 ? C.violet : C.deep);
-    c.multiplyScalar(U.clamp(.85 + l * 1.2, .75, 1.5));
+    c.multiplyScalar(U.clamp(1.6 + l * 1.4, 1.3, 2.6));
     o.material.color.copy(c);
     /* a violet self-glow so the dark nebula map does not leave the soldier a
        black silhouette — it should read as a glowing cosmic armour */
     if (o.material.emissive !== undefined) {
-      o.material.emissive.setHex(l > .34 ? 0x552090 : 0x2c1055);
+      o.material.emissive.setHex(l > .34 ? 0x8a3ad8 : 0x4a1a88);
     }
     if (tex) {
       const t2 = tex.clone(); t2.needsUpdate = true;

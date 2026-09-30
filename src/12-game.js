@@ -7467,9 +7467,6 @@ const Game = {
           const f = b.fxs[i];
           this.breakMapAt(f.x, f.y, f.z, f.r, b.dmg * 3);
         }
-        // белая вспышка-разрез ещё раз, синхронно с «кристаллами»
-        if (this.effects && this.effects.knightSlashFx) this.effects.knightSlashFx(b.origin, b.fx, b.fz, b.reach, b.breakR * 1.1);
-        if (typeof UI !== 'undefined' && UI.knightUltStart) UI.knightUltStart((Math.random() * 9999) | 0);
       }
     }
   },

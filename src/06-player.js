@@ -2098,52 +2098,61 @@ function buildWeaponModel(id) {
       break;
     }
 
-    /* ---------------- МЕЧ РОКОЧУЩЕГО РЫЦАРЯ (как на образце): круглое навершие,
-       крестовина с самоцветом, длинный клинок с КРЮКОМ-зазубриной у острия.
-       ЧЁРНЫЙ с белой светящейся окантовкой. Плоскость клинка — к игроку,
-       острие смотрит ВНИЗ (лезвием вниз). ---- */
+    /* ---------------- МЕЧ РОКОЧУЩЕГО РЫЦАРЯ (как на образце): круглое навершие-обод,
+       рукоять с самоцветом, длинное чёрное лезвие с КРЮКОМ-зазубриной и белой
+       СВЕТЯЩЕЙСЯ окантовкой. Плоскость клинка — к игроку, острие вниз. ---- */
     case 'knightsword': {
-      const black = 0x0a0a0e, edge = 0xffffff;
-      const T = .020;                     // толщина (по Z)
+      const black = 0x0b0b10, edge = 0xffffff;
+      const T = .022;
       const ks = new THREE.Group();
       const add = (...ms) => { for (const m of ms) ks.add(m); return ms[0]; };
 
-      // --- круглое навершие (обод + заполнение) ---
-      const pom = new THREE.Mesh(new THREE.TorusGeometry(.062, .018, 6, 16), gunMat(black));
-      pom.position.set(0, .62, 0); ks.add(pom);
-      const pomE = new THREE.Mesh(new THREE.TorusGeometry(.062, .006, 6, 16), gunMat(edge));
-      pomE.position.set(0, .62, 0); ks.add(pomE);
-      add(B(.06, .07, T, black, 0, .62, 0));
+      /* --- СИЛУЭТ КЛИНКА (точки в XY, острие вниз) --- */
+      const pts = [
+        [-0.058, 0.02], [-0.058, -0.92], [-0.044, -1.24], [-0.018, -1.52],
+        [0.000, -1.60], [0.022, -1.44], [0.050, -1.06], [0.058, -0.90],
+        // КРЮК-зазубрина (торчит вбок, затем обратно)
+        [0.192, -1.03], [0.212, -0.985], [0.150, -0.78], [0.086, -0.70],
+        [0.058, -0.66], [0.058, 0.02]
+      ];
+      const shape = new THREE.Shape();
+      shape.moveTo(pts[0][0], pts[0][1]);
+      for (let i = 1; i < pts.length; i++) shape.lineTo(pts[i][0], pts[i][1]);
+      shape.closePath();
+      const cx = 0.03, cy = -0.72;                    // локальный центр для ровной окантовки
+      const mkGeo = (depth) => {
+        const geo = new THREE.ExtrudeGeometry(shape, { depth: depth, bevelEnabled: false, curveSegments: 2 });
+        geo.translate(-cx, -cy, -depth / 2);
+        return geo;
+      };
+      // белая светящаяся окантовка (чуть больше) + чёрное лезвие поверх
+      const outer = new THREE.Mesh(mkGeo(T + .006), new THREE.MeshBasicMaterial({ color: edge }));
+      outer.scale.setScalar(1.055);
+      ks.add(outer);
+      const blade = new THREE.Mesh(mkGeo(T + .002), gunMat(black));
+      ks.add(blade);
+      // тёмный центральный рёбр-дол (объём)
+      add(B(.016, 1.30, T + .01, 0x050508, 0, -0.30, 0));
 
-      // --- шейка/рукоять ---
-      add(B(.055, .16, T, black, 0, .50, 0));
-      // обмотка рукояти (диагональные белые полоски)
-      for (let i = 0; i < 4; i++) add(B(.075, .010, T + .004, edge, 0, .44 + i * .05, 0, .5));
+      /* --- круглая пятка-навершие (обод) --- */
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(.060, .017, 8, 20), gunMat(black));
+      ring.position.set(0, .80, 0); ks.add(ring);
+      const ringE = new THREE.Mesh(new THREE.TorusGeometry(.060, .006, 8, 20), new THREE.MeshBasicMaterial({ color: edge }));
+      ringE.position.set(0, .80, 0); ks.add(ringE);
+      add(B(.055, .075, T + .006, black, 0, .80, 0));
 
-      // --- длинный клинок (широкая плоскость к игроку) ---
-      const bladeW = .105;
-      add(B(bladeW, 1.02, T, black, 0, -.14, 0));
-      add(B(.013, 1.02, T + .004, edge, bladeW / 2 + .005, -.14, 0));   // правая кромка
-      add(B(.013, 1.02, T + .004, edge, -bladeW / 2 - .005, -.14, 0));  // левая кромка
+      /* --- рукоять --- */
+      add(B(.058, .19, T + .004, black, 0, .60, 0));
+      add(B(.064, .012, T + .006, edge, 0, .685, 0));   // белое кольцо к пятке
+      add(B(.064, .012, T + .006, edge, 0, .515, 0));   // белое кольцо к клинку
+      // диагональная обмототка
+      for (let i = 0; i < 3; i++) add(B(.075, .010, T + .008, edge, 0, .56 + i * .045, 0, .5));
+      // самоцвет на рукояти
+      add(DOT(.018, 0xffffff, .0, .64, .012));
+      add(DOT(.009, 0x9fd8ff, .0, .64, .016));
 
-      // --- КРЮК-зазубрина у острия (торчит вбок, как на образце) ---
-      add(B(.22, .055, T, black, .105, -.40, 0, -.85));                       // вбок вниз
-      add(B(.24, .013, T + .004, edge, .105, -.375, 0, -.85));                // окантовка крюка
-      add(B(.15, .055, T, black, .05, -.50, 0, .62));                         // обратно к острию
-      add(B(.17, .013, T + .004, edge, .05, -.475, 0, .62));
-
-      // --- острие (сужается к острию вниз) ---
-      add(B(.085, .44, T, black, 0, -.80, 0));
-      add(B(.013, .44, T + .004, edge, .045, -.80, 0));
-      add(B(.013, .44, T + .004, edge, -.045, -.80, 0));
-      add(B(.048, .24, T, black, 0, -1.12, 0));
-      add(B(.013, .24, T + .004, edge, .028, -1.12, 0));
-      add(B(.013, .24, T + .004, edge, -.028, -1.12, 0));
-      add(B(.016, .12, T, black, 0, -1.29, 0));             // самый кончик
-
-      // масштаб под вьюмодель и лёгкий наклон вперёд
-      ks.scale.setScalar(.62);
-      ks.position.set(.04, -.02, -.02);
+      ks.scale.setScalar(.60);
+      ks.position.set(.05, .06, -.03);
       ks.rotation.x = -.12;
       g.add(ks);
       break;

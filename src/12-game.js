@@ -3760,9 +3760,28 @@ const Game = {
   spawnPlayerLocal(spawnIdx) {
     const spawns = MAP.playerSpawns || [];
     const n = Math.max(1, spawns.length);
-    const idx = (typeof spawnIdx === 'number' && isFinite(spawnIdx))
+    let idx = (typeof spawnIdx === 'number' && isFinite(spawnIdx))
       ? Math.abs(Math.floor(spawnIdx)) % n
       : 0;
+    /* НЕ СПАВНИТЬ В ДРУГОМ ИГРОКЕ: если выбранная точка занята удалённым
+       игроком, ищем ближайшую свободную (это и был баг «спавн друг в друге»). */
+    const occupied = (i) => {
+      const s = spawns[i];
+      if (!s) return false;
+      for (const rp of this.remotePlayers) {
+        if (rp && rp.alive && Math.hypot(rp.pos.x - s.x, rp.pos.z - s.z) < 2.5) return true;
+      }
+      return false;
+    };
+    if (occupied(idx)) {
+      let found = -1;
+      for (let d = 1; d <= n; d++) {
+        const a = (idx + d) % n, b = (idx - d + n * 2) % n;
+        if (!occupied(a)) { found = a; break; }
+        if (!occupied(b)) { found = b; break; }
+      }
+      if (found >= 0) idx = found;
+    }
     const s = spawns[idx] || { x: 0, z: 42 };
     const y = this.world.groundAt(s.x, s.z, 3);
     const yaw = Math.atan2(-(0 - s.x), -(0 - s.z)); // face the arena centre
@@ -3939,7 +3958,14 @@ const Game = {
   itemAllowed(id) {
     if (this.mode !== CS.MODE.ONLINE) return true;
     const a = this.shopItemsAllow();
-    return a[id] !== 0;
+    if (a[id] === 0) return false;
+    /* мехакостюм и прочее снаряжение: если запрещена КАТЕГОРИЯ (gear/exp/etc),
+       предмет тоже недоступен — иначе хост отключал класс, а клиент всё равно
+       покупал (баг с мехакостюмом). */
+    const w = WEAPONS[id];
+    const cat = w ? w.cat : (GEAR[id] ? 'gear' : null);
+    if (cat && !this.shopAllows(cat)) return false;
+    return true;
   },
 
   /* Take an already-owned weapon into the hands (shop click on an owned card). */
@@ -5228,6 +5254,7 @@ const Game = {
     if (!this.horde) return;
     const seen = {};
     const list = m.list || [];
+    const now = U.now();
     for (const s of list) {
       seen[s.i] = true;
       let z = this.horde.list.find(o => o.remoteId === s.i);
@@ -5236,18 +5263,45 @@ const Game = {
         z = this.horde.spawn(s.t, s.x, s.z, s.y);
         z.remoteId = s.i;
         z.remoteDriven = true;
+        z._netFrom = { x: s.x, y: s.y, z: s.z, yw: s.yw || 0 };
+        z._netTo = { x: s.x, y: s.y, z: s.z, yw: s.yw || 0 };
+        z._netT = now;
       }
-      z.pos.x = s.x; z.pos.y = s.y; z.pos.z = s.z; z.yaw = s.yw || 0;
-      z.health = s.h; z.maxHealth = s.m; z.scale = s.s || z.scale || 1;
+      /* ПЛАВНАЯ ИНТЕРПОЛЯЦИЯ: запоминаем предыдущую и новую позицию, клиент
+         сам «догоняет» между снапшотами — зомби больше не дёргаются. */
+      z._netFrom = { x: z.pos.x, y: z.pos.y, z: z.pos.z, yw: z.yaw };
+      z._netTo = { x: s.x, y: s.y, z: s.z, yw: s.yw || 0 };
+      z._netT = now;
+      /* health/maxHealth НЕ затираем напрямую: у клиента свои попадания уже
+         уменьшили здоровье, а хост — авторитет. Берём минимум из двух, чтобы
+         попадание клиента не «откатывалось» снапшотом. */
+      if (s.m) z.maxHealth = s.m;
+      z.health = (z.health > 0 && s.h > 0) ? Math.min(z.health, s.h) : s.h;
+      z.scale = s.s || z.scale || 1;
       z.group.scale.setScalar(z.scale);
-      z.group.position.set(s.x, s.y, s.z);
-      z.group.rotation.y = z.yaw;
       if (!s.a && z.alive) { z.alive = false; z.dying = true; z.deadT = 0; }
     }
     // remove zombies the host no longer has
     for (let i = this.horde.list.length - 1; i >= 0; i--) {
       const z = this.horde.list[i];
       if (z.remoteDriven && !seen[z.remoteId]) { z.dispose(this.scene); this.horde.list.splice(i, 1); }
+    }
+  },
+
+  /* клиент: плавно подтягивает удалённых зомби к последнему снапшоту */
+  interpRemoteZombies(dt) {
+    if (!this.horde) return;
+    const now = U.now();
+    for (const z of this.horde.list) {
+      if (!z.remoteDriven || !z._netTo) continue;
+      const lag = Math.min(1, (now - z._netT) / 90);      // ~90 мс межснапшотный интервал
+      const k = 1 - Math.pow(1 - lag, 2);
+      z.pos.x = U.lerp(z._netFrom.x, z._netTo.x, k);
+      z.pos.y = U.lerp(z._netFrom.y, z._netTo.y, k);
+      z.pos.z = U.lerp(z._netFrom.z, z._netTo.z, k);
+      z.yaw = U.angleLerp(z._netFrom.yw, z._netTo.yw, k);
+      z.group.position.set(z.pos.x, z.pos.y, z.pos.z);
+      z.group.rotation.y = z.yaw;
     }
   },
 
@@ -7431,7 +7485,11 @@ const Game = {
       /* ПУЛИ РАЗРУШАЮТ карту: попадание наносит урон блоку — 10-15 пуль ломают
          деталь. Считаем урон пропорционально урону оружия. */
       if (h.box && h.box.destructible && !h.box.removed && typeof damageMapBox === 'function') {
-        const broke = damageMapBox(h.box, def.dmg * 3.2);
+        /* 10-15 попаданий ломают блок: урон пропорционален прочности блока и
+           силе оружия (35 = типовой урон), поэтому и пистолет, и винтовка
+           разрушают за примерно одинаковое число выстрелов. */
+        const perHit = (h.box.maxHp / 12) * U.clamp((def.dmg || 30) / 35, .5, 1.6);
+        const broke = damageMapBox(h.box, perHit);
         if (this.effects) {
           if (broke) this.effects.debrisBurst(h.point.x, h.point.y, h.point.z, 0xb8b2a6, 1.1);
           else if (Math.random() < .22) this.effects.debrisBurst(h.point.x, h.point.y, h.point.z, 0xb8b2a6, .55);
@@ -8835,6 +8893,8 @@ const Game = {
     this.updateBuyPhase(dt);
     if (this.mode === CS.MODE.OFFLINE && !this._modPickOpen) { this.updateOffline(dt); this.updateCrates(dt); }
     if (this.mode === CS.MODE.ONLINE && this.isCoop) { this.updateCoop(dt); this.updateCrates(dt); }
+    /* клиент плавно подтягивает зомби к снапшотам хоста */
+    if (this.mode === CS.MODE.ONLINE && this.isCoop && Net.role !== CS.NETROLE.HOST) this.interpRemoteZombies(dt);
     this.updateGrenades(dt);
 
     // ---- AI ----

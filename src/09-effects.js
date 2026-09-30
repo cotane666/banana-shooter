@@ -83,7 +83,7 @@ class Effects {
     this.slashes.push({ mesh: g, mats: [mat, coreMat], life: .22, max: .22 });
   }
 
-  /* УДАРНАЯ ВОЛНА ПО ЗЕМЛЕ (мега-молот): расходящееся кольцо + пыль по кругу. */
+  /* УДАРНАЯ ВОЛНА ПО ЗЕМЛЕ (омега-молот): расходящееся кольцо + пыль по кругу. */
   groundWave(x, y, z, radius) {
     const mat = new THREE.MeshBasicMaterial({
       color: 0xffe0a0, transparent: true, opacity: .85,
@@ -1277,7 +1277,7 @@ class Effects {
         }
       }
     }
-    // ударная волна по земле (мега-молот): кольцо расходится и гаснет
+    // ударная волна по земле (омега-молот): кольцо расходится и гаснет
     if (this.groundWaves) {
       for (let i = this.groundWaves.length - 1; i >= 0; i--) {
         const w = this.groundWaves[i];

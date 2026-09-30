@@ -222,18 +222,28 @@ const WEAPONS = {
   fists:   { name: 'КУЛАКИ', cat: 'melee', slot: 3, price: 0, dmg: 40, rpm: 150, mag: Infinity, reserve: 0,
            auto: true, spread: 0, moveSpread: 0, recoil: 1.5, falloff: 1, range: 2.2, headMul: 1.5, sound: 'knife', melee: 'fists' },
 
-  /* ---------------- МЕЧ РОКОЧУЩЕГО РЫЦАРЯ (ультимейт-оружие) ----------------
-     ЛКМ — обычные разрезы. ПКМ — УЛЬТА: экран чернеет, вперёд уходит гигантский
-     белый слеш (с рёвом рыцаря), который наносит огромный урон и сносит стены. */
-  knightsword: { name: 'МЕЧ РОКОЧУЩЕГО РЫЦАРЯ', cat: 'melee', slot: 3, price: 30000, dmg: 210, rpm: 300, mag: Infinity, reserve: 0,
+  /* ---------------- МЕЧ РОКОЧУЩЕГО РЫЦАРЯ — 3 ЭТАПА ПРОКАЧКИ ----------------
+     I  (5000)  — только удары ЛКМ.
+     II (20000) — ЛКМ + ПКМ (ульта: чёрный экран + гигантский белый слеш).
+     III(50000) — ЛКМ + ПКМ + ЛКМ-удары ВЫЛЕТАЮТ ВПЕРЁД белым слешем (те же углы
+                  и цвет, что у мини-слешей) и наносят врагам удвоенный урон. */
+  knightsword: { name: 'МЕЧ РЫЦАРЯ I', cat: 'melee', slot: 3, price: 5000, dmg: 210, rpm: 300, mag: Infinity, reserve: 0,
            auto: true, spread: 0, moveSpread: 0, recoil: 2.2, falloff: 1, range: 3.4, headMul: 2.2, sound: 'knife',
-           melee: 'knightsword', knockback: 10,
+           melee: 'knightsword', knockback: 10, swordTier: 1 },
+  knightsword2: { name: 'МЕЧ РЫЦАРЯ II', cat: 'melee', slot: 3, price: 20000, dmg: 210, rpm: 300, mag: Infinity, reserve: 0,
+           auto: true, spread: 0, moveSpread: 0, recoil: 2.2, falloff: 1, range: 3.4, headMul: 2.2, sound: 'knife',
+           melee: 'knightsword2', knockback: 10, swordTier: 2,
            ult: true, ultCd: 9, ultR: 12, ultDmg: 4200, ultBreakR: 11, ultBreakDelay: 2.4 },
+  knightsword3: { name: 'МЕЧ РЫЦАРЯ III', cat: 'melee', slot: 3, price: 50000, dmg: 210, rpm: 300, mag: Infinity, reserve: 0,
+           auto: true, spread: 0, moveSpread: 0, recoil: 2.2, falloff: 1, range: 3.4, headMul: 2.2, sound: 'knife',
+           melee: 'knightsword3', knockback: 10, swordTier: 3,
+           ult: true, ultCd: 9, ultR: 12, ultDmg: 4200, ultBreakR: 11, ultBreakDelay: 2.4,
+           slashProj: true, slashProjDmg: 420 },
 
-  /* ---------------- МЕГА-МОЛОТ (уникальное оружие ближнего боя) ----------------
+  /* ---------------- ОМЕГА-МОЛОТ (уникальное оружие ближнего боя) ----------------
      Огромный молот бьёт СВЕРХУ ВНИЗ: в точке удара поднимается ударная волна,
      которая ломает блоки и наносит огромный урон по площади всем вокруг. */
-  megahammer: { name: 'МЕГА-МОЛОТ', cat: 'melee', slot: 3, price: 12000, dmg: 900, rpm: 26, mag: Infinity, reserve: 0,
+  megahammer: { name: 'ОМЕГА-МОЛОТ', cat: 'melee', slot: 3, price: 12000, dmg: 900, rpm: 26, mag: Infinity, reserve: 0,
            auto: false, spread: 0, moveSpread: 0, recoil: 5.5, falloff: 1, range: 4.4, headMul: 2.0, sound: 'knife',
            melee: 'megahammer', knockback: 26, groundSlam: true, slamR: 9, slamDmg: 560, slamBreakR: 8 },
 

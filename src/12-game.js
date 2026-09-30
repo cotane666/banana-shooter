@@ -5955,7 +5955,7 @@ const Game = {
     for (let i = 0; i < pellets; i++) {
       const dir = this.spreadDirection(baseDir, spread, pellets > 1);
       pelletDirs.push(dir);
-      /* МЕГА-МОЛОТ: урон и ударную волну откладываем до низшей точки замаха,
+      /* ОМЕГА-МОЛОТ: урон и ударную волну откладываем до низшей точки замаха,
          чтобы они совпали с анимацией удара сверху вниз. */
       if (isMelee && def.groundSlam) {
         this._slamPending = { origin: origin, dir: dir, def: def, muzzleWorld: muzzleWorld, t: .34 };
@@ -5989,7 +5989,7 @@ const Game = {
          зависит от оружия: тяжёлое машет медленнее и шире. */
       const def2 = p.def || {};
       const w2 = (def2.melee || 'knife');
-      p.swingT = (w2 === 'megahammer') ? .62 : (w2 === 'knightsword') ? .15 : (w2 === 'katana') ? .26 : (w2 === 'fists') ? .20 : (w2 === 'hammer' || w2 === 'axe') ? .40
+      p.swingT = (w2 === 'megahammer') ? .62 : (w2.indexOf('knightsword') === 0) ? .15 : (w2 === 'katana') ? .26 : (w2 === 'fists') ? .20 : (w2 === 'hammer' || w2 === 'axe') ? .40
         : (w2 === 'chainsaw') ? .16 : (w2 === 'machete') ? .32 : .28;
       p.swingMax = p.swingT;
       p.swingKind = w2;
@@ -6001,6 +6001,102 @@ const Game = {
   /* ============================================================
      PROJECTILES (bananas)
      ============================================================ */
+  /* ============================================================
+     III ЭТАП МЕЧА РЫЦАРЯ: ЛКМ-удары ВЫЛЕТАЮТ ВПЕРЁД белым слешем
+     (те же углы и цвет, что у мини-слешей) и наносят врагам удвоенный урон.
+     Это лёгкий «летящий разрез»: летит по прямой, пробивает врагов, гаснет
+     о стену или по дальности.
+     ============================================================ */
+  spawnSlashProjectile(origin, fx, fz, dir, def) {
+    this._slashProjs = this._slashProjs || [];
+    const angle = U.rand(0, Math.PI * 2);          // угол линии — как у мини-слеша
+    const len = 5.5, thick = .28;
+    const g = new THREE.Group();
+    const mat = new THREE.MeshBasicMaterial({
+      color: 0xffffff, transparent: true, opacity: .9,
+      blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide
+    });
+    const line = new THREE.Mesh(new THREE.PlaneGeometry(len, thick), mat);
+    line.rotation.z = angle;
+    g.add(line);
+    const coreMat = new THREE.MeshBasicMaterial({
+      color: 0xffffff, transparent: true, opacity: 1,
+      blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide
+    });
+    const core = new THREE.Mesh(new THREE.PlaneGeometry(len * .98, thick * .35), coreMat);
+    core.rotation.z = angle; core.position.z = .01;
+    g.add(core);
+    // стартуем чуть впереди глаз и ориентируем на игрока (billboard)
+    const sx = origin.x + fx * 2.0, sy = origin.y + .05, sz = origin.z + fz * 2.0;
+    g.position.set(sx, sy, sz);
+    g.lookAt(origin.x, origin.y, origin.z);
+    this.scene.add(g);
+    const speed = 34;
+    this._slashProjs.push({
+      grp: g, mats: [mat, coreMat],
+      pos: { x: sx, y: sy, z: sz },
+      vel: { x: fx * speed, y: dir.y * speed * .35, z: fz * speed },
+      life: 1.15, max: 1.15, dmg: def.slashProjDmg || 420,
+      hit: {}                                   // чтобы один враг получил урон раз
+    });
+  },
+
+  updateSlashProjectiles(dt) {
+    if (!this._slashProjs || !this._slashProjs.length) return;
+    for (let i = this._slashProjs.length - 1; i >= 0; i--) {
+      const s = this._slashProjs[i];
+      s.life -= dt;
+      const nx = s.pos.x + s.vel.x * dt, ny = s.pos.y + s.vel.y * dt, nz = s.pos.z + s.vel.z * dt;
+      const segLen = Math.hypot(nx - s.pos.x, ny - s.pos.y, nz - s.pos.z);
+      const dir = segLen > 1e-6 ? { x: (nx - s.pos.x) / segLen, y: (ny - s.pos.y) / segLen, z: (nz - s.pos.z) / segLen } : { x: 0, y: 0, z: -1 };
+      // урон всем зомби по пути (один раз на каждого)
+      if (this.horde) {
+        for (const z of this.horde.list) {
+          if (!z.alive || z.dying || s.hit[z.id]) continue;
+          const h = rayZombie(s.pos, dir, z, segLen + .6);
+          if (!h) continue;
+          // плюс небольшой радиус вбок, чтобы «полоса» задевала рядом стоящих
+          const side = Math.hypot(z.pos.x - s.pos.x, z.pos.z - s.pos.z);
+          if (side > 2.6) continue;
+          s.hit[z.id] = 1;
+          const dealt = s.dmg;
+          z.takeDamage(dealt, h.part, dir);
+          this.player.damageDealt += dealt;
+          this.horde && UI.hitmark(false);
+        }
+      }
+      if (this.mode === CS.MODE.ONLINE) {
+        for (const rp of this.remotePlayers) {
+          if (!rp.alive || s.hit[rp.peerId] || this.isCoop) continue;
+          const h = this.rayRemotePlayerFor(rp, s.pos, dir, segLen + .6);
+          if (h) { s.hit[rp.peerId] = 1; this.sendPvpHit(s.dmg, h.part, h.part === 'head', rp, 'knight'); }
+        }
+      }
+      // стена/пора гаснуть
+      const wallHit = this.world.raycast(s.pos, dir, segLen + .1, ['ground']);
+      if (wallHit && wallHit.t <= segLen + .1) { this.removeSlashProjectile(i); continue; }
+      s.pos.x = nx; s.pos.y = ny; s.pos.z = nz;
+      s.grp.position.set(nx, ny, nz);
+      const k = U.clamp(s.life / s.max, 0, 1);
+      const fade = Math.sin(k * Math.PI);
+      s.mats[0].opacity = fade * .9;
+      s.mats[1].opacity = fade;
+      if (s.life <= 0) this.removeSlashProjectile(i);
+    }
+  },
+  removeSlashProjectile(i) {
+    const s = this._slashProjs[i];
+    if (s) {
+      s.grp.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material) o.material.dispose(); });
+      if (s.grp.parent) s.grp.parent.remove(s.grp);
+      this._slashProjs.splice(i, 1);
+    }
+  },
+  clearSlashProjectiles() {
+    if (!this._slashProjs) return;
+    while (this._slashProjs.length) this.removeSlashProjectile(0);
+  },
+
   spawnProjectile(def, origin, dir, owner) {
     const p = this.player;
     const spread = p.aimSpread();
@@ -7404,6 +7500,7 @@ const Game = {
   clearProjectiles() {
     for (const pr of this.projectiles) { if (pr.mesh.parent) pr.mesh.parent.remove(pr.mesh); }
     this.projectiles.length = 0;
+    this.clearSlashProjectiles();
     this.clearRemoteProjectiles();
     this.clearRemoteMechMissiles();
     this.clearPortals();
@@ -7439,13 +7536,13 @@ const Game = {
   },
 
   /* ============================================================
-     МЕГА-МОЛОТ: удар СВЕРХУ ВНИЗ. Находим точку удара перед игроком (по земле
+     ОМЕГА-МОЛОТ: удар СВЕРХУ ВНИЗ. Находим точку удара перед игроком (по земле
      или по ближайшему препятствию), затем в этой точке поднимаем УДАРНУЮ ВОЛНУ:
        • ломает блоки в радиусе slamBreakR
        • наносит огромный урон по площади всем зомби/соперникам (slamDmg)
        • отбрасывает и сбивает с ног
      ============================================================ */
-  /* Отложенный удар мега-молота: ждём низшей точки замаха и только тогда бьём —
+  /* Отложенный удар омега-молота: ждём низшей точки замаха и только тогда бьём —
      так урон/волна совпадают с анимацией (а не срабатывают в момент нажатия). */
   updateSlamPending(dt) {
     const s = this._slamPending;
@@ -7644,7 +7741,7 @@ const Game = {
 
     // ---- melee ----
     if (isMelee) {
-      /* МЕГА-МОЛОТ: удар СВЕРХУ ВНИЗ по точке перед игроком — ударная волна
+      /* ОМЕГА-МОЛОТ: удар СВЕРХУ ВНИЗ по точке перед игроком — ударная волна
          ломает блоки и наносит огромный урон по площади всем вокруг. Обрабатывается
          отдельно (это не обычный мах). */
       if (def.groundSlam) return this.meleeGroundSlam(origin, dir, def, muzzleWorld);
@@ -7688,7 +7785,7 @@ const Game = {
         Audio3D_SFX.hit(pt.x, pt.y, pt.z, part === 'head');
         any = true;
       }
-      if (!any && wallHit && wallT < Infinity && this.effects) this.effects.impact(wallHit.point, wallHit.normal, 'concrete', def.melee === 'knightsword' ? 'knight' : (p && p.skinTheme) || null);
+      if (!any && wallHit && wallT < Infinity && this.effects) this.effects.impact(wallHit.point, wallHit.normal, 'concrete', (def.melee && def.melee.indexOf('knightsword') === 0) ? 'knight' : (p && p.skinTheme) || null);
       p.bulletsHit += hitList.length;
       // ПОЛОСА УДАРА: яркая дуга проносится перед игроком
       if (this.effects) {
@@ -7701,11 +7798,13 @@ const Game = {
          (3D) белый разрез в мире — без экранного оверлея и чёрного экрана.
          Разрушение блоков — ПО ВСЕЙ ПЛОЩАДИ слеша (диск перед игроком), а не
          только в точке прицела. */
-      if (def.melee === 'knightsword') {
+      if (def.melee && def.melee.indexOf('knightsword') === 0) {
         const flat = Math.hypot(dir.x, dir.z) || 1;
         const fx = dir.x / flat, fz = dir.z / flat;
         if (this.effects && this.effects.knightSlashFx) this.effects.knightSlashFx(origin, fx, fz, 6.5, 3.2, true);
         if (Audio3D_SFX.knightCut) Audio3D_SFX.knightCut();
+        /* III ЭТАП: слеш ВЫЛЕТАЕТ ВПЕРЁД белой полосой и бьёт врагов (x2 урон) */
+        if (def.slashProj) this.spawnSlashProjectile(origin, fx, fz, dir, def);
         /* площадь слеша = диск радиусом ~radiusOfSlash, центр — впереди игрока
            на высоте глаз. Ломаем все разрушаемые блоки в этой области. */
         if (typeof damageMapAt === 'function') {
@@ -9157,6 +9256,7 @@ const Game = {
       }
       if (this.effects) this.effects.update(dt);
       this.updateProjectiles(dt);
+      this.updateSlashProjectiles(dt);
       /* The other players keep moving while we fly the drone: without this the
          remote models (and their incoming shots) froze until the drone landed. */
       if (this.mode === CS.MODE.ONLINE) {
@@ -9342,7 +9442,7 @@ const Game = {
       this.updateTurretDrone(dt);    // companion turret auto-fire
     }
     this.updateMechBody(dt);
-    /* отложенный удар мега-молота: срабатывает в НИЗШЕЙ точке замаха,
+    /* отложенный удар омега-молота: срабатывает в НИЗШЕЙ точке замаха,
        поэтому урон совпадает с анимацией, а не бьёт в момент нажатия */
     this.updateSlamPending(dt);
     /* время в мехакостюме (цель «МЕХ-МАРАФОН») и проверка мех-достижений */
@@ -9371,6 +9471,7 @@ const Game = {
 
     // ---- flying bananas ----
     this.updateProjectiles(dt);
+    this.updateSlashProjectiles(dt);
     if (this.mode === CS.MODE.RANGE) this.updateDummyProjectiles(dt);
     if (this.mode === CS.MODE.OFFLINE || this.mode === CS.MODE.RANGE) this.updateEnemyShots(dt);
     if (this.mode === CS.MODE.ONLINE) { this.updateRemoteProjectiles(dt); this.updateRemoteMechMissiles(dt); }

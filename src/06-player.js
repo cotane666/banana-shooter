@@ -2030,7 +2030,7 @@ function buildWeaponModel(id) {
       add(B(.034, .014, .10, 0x2b2f34, 0, .01, .06));                 // tape grip
       break;
     }
-    /* ---------------- МЕГА-МОЛОТ: как на образце — тёмная рукоять с обмоткой,
+    /* ---------------- ОМЕГА-МОЛОТ: как на образце — тёмная рукоять с обмоткой,
        круглый герб по центру и два раскалённых красных лезвия. ГОЛОВА ПОВЁРНУТА
        на 90°, чтобы удар приходился красными лезвиями (они сверху и снизу) ---- */
     case 'megahammer': {
@@ -2101,7 +2101,9 @@ function buildWeaponModel(id) {
     /* ---------------- МЕЧ РОКОЧУЩЕГО РЫЦАРЯ (как на образце): круглое навершие-обод,
        рукоять с самоцветом, длинное чёрное лезвие с КРЮКОМ-зазубриной и белой
        СВЕТЯЩЕЙСЯ окантовкой. Плоскость клинка — к игроку, острие вниз. ---- */
-    case 'knightsword': {
+    case 'knightsword':
+    case 'knightsword2':
+    case 'knightsword3': {
       const black = 0x0b0b10, edge = 0xffffff;
       const T = .022;
       const ks = new THREE.Group();
@@ -2147,11 +2149,10 @@ function buildWeaponModel(id) {
       add(B(.064, .012, T + .006, edge, 0, .685, 0));   // белое кольцо к пятке
       add(B(.064, .012, T + .006, edge, 0, .515, 0));   // белое кольцо к клинку
 
-      /* подгонка под экран: длина примерно как у катаны, наклон вперёд-вниз
-         (держат в руке), смещён вправо-вниз, чтобы острие было в кадре */
-      ks.scale.setScalar(.40);
-      ks.position.set(.30, -.42, -.50);
-      ks.rotation.set(-1.22, 0, .12);
+      /* ДЕРЖИМ ЛЕЗВИЕМ ВПЕРЁД: острие (local -Y) разворачиваем в -Z (вперёд) */
+      ks.scale.setScalar(.50);
+      ks.position.set(.24, -.30, -.30);
+      ks.rotation.set(1.45, 0, .10);
       g.add(ks);
       break;
     }
@@ -2175,7 +2176,7 @@ function buildWeaponModel(id) {
 /* barrel-tip Z per weapon (used for the muzzle flash / tracer origin) */
 const MUZZLE_Z = {
   knife: -0.28, machete: -0.46, katana: -0.58, axe: -0.30, chainsaw: -0.58, hammer: -0.50, fists: -0.14,
-  megahammer: -1.10, knightsword: -1.60,
+  megahammer: -1.10, knightsword: -1.60, knightsword2: -1.60, knightsword3: -1.60,
   glock: -0.22, usp: -0.36, p250: -0.20, deagle: -0.25, revolver: -0.28,
   mp5: -0.58, p90: -0.42, ump: -0.47,
   nova: -0.60, xm: -0.58,

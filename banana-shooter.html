@@ -3568,10 +3568,10 @@ function restoreMap() {
    убирало ровно ту часть, в которую попали (взрыв/зомби), а не всю стену.
    Пол, границы, рампы, платформы и крыши НЕ разрушаются. */
 const MAP_CHUNK = 2.6;
-/* теги, которые НЕЛЬЗЯ разрушить: пол, границы карты, рампы, платформы, крыши
-   и настилы — они держат навигацию и по ним ходят. Всё остальное (укрытия,
-   стены, колонны, декор) ломается взрывом или 10-15 пулями. */
-const MAP_INDESTRUCTIBLE = { ground: 1, boundary: 1, ramp: 1, plat: 1, deck: 1, roof: 1 };
+/* НЕЛЬЗЯ разрушить только ПОЛ и ГРАНИЦЫ карты (они держат мир). Всё
+   остальное — укрытия, стены, колонны, а также РАМПЫ, ПЛАТФОРМЫ, НАСТИЛЫ и
+   КРЫШИ — ломается взрывом (мгновенно) или пулями/ближним боем. */
+const MAP_INDESTRUCTIBLE = { ground: 1, boundary: 1 };
 function _destructibleTag(tag) { return !MAP_INDESTRUCTIBLE[tag]; }
 function solid(parent, world, x, y, z, w, h, d, mat, opts) {
   opts = opts || {};
@@ -11144,6 +11144,7 @@ const TouchUI = {
         '<button id="tDrone" class="tbtn act accent">ДРОН</button>' +
         '<button id="tGrenade" class="tbtn act accent">ГРАНАТА</button>' +
         '<button id="tGrenadeKind" class="tbtn act">ТИП</button>' +
+        '<button id="tSticky" class="tbtn act accent">ВЗРЫВ</button>' +
         '<button id="tMissiles" class="tbtn act accent">РАКЕТЫ</button>' +
         '<button id="tSurge" class="tbtn act accent">СКАЧОК</button>' +
         '<button id="tMech" class="tbtn act accent">ВЫЙТИ</button>' +
@@ -11174,6 +11175,7 @@ const TouchUI = {
       drone: document.getElementById('tDrone'),
       grenade: document.getElementById('tGrenade'),
       grenadeKind: document.getElementById('tGrenadeKind'),
+      sticky: document.getElementById('tSticky'),
       missiles: document.getElementById('tMissiles'),
       surge: document.getElementById('tSurge'),
       mech: document.getElementById('tMech'),
@@ -11231,6 +11233,7 @@ const TouchUI = {
     // contextual actions (only shown when useful)
     E.grenade.addEventListener('touchstart', e => { swallow(e); Bus.emit('touchGrenade'); E.grenade.classList.add('down'); setTimeout(() => E.grenade.classList.remove('down'), 160); }, { passive: false });
     E.grenadeKind.addEventListener('touchstart', e => { swallow(e); Bus.emit('touchCycleGrenade'); E.grenadeKind.classList.add('down'); setTimeout(() => E.grenadeKind.classList.remove('down'), 160); }, { passive: false });
+    E.sticky.addEventListener('touchstart', e => { swallow(e); Bus.emit('touchDetonateStickies'); E.sticky.classList.add('down'); setTimeout(() => E.sticky.classList.remove('down'), 160); }, { passive: false });
     E.missiles.addEventListener('touchstart', e => { swallow(e); Bus.emit('touchMechMissiles'); E.missiles.classList.add('down'); setTimeout(() => E.missiles.classList.remove('down'), 160); }, { passive: false });
     E.surge.addEventListener('touchstart', e => { swallow(e); Bus.emit('touchMechSurge'); E.surge.classList.add('down'); setTimeout(() => E.surge.classList.remove('down'), 160); }, { passive: false });
     E.mech.addEventListener('touchstart', e => { swallow(e); Bus.emit('touchMechToggle'); E.mech.classList.add('down'); setTimeout(() => E.mech.classList.remove('down'), 160); }, { passive: false });
@@ -11402,6 +11405,13 @@ const TouchUI = {
     dim(E.grenade, gN > 0 && !inMech && round !== 'buy');
     dim(E.grenadeKind, gAny > 0 && !inMech && round !== 'buy');
     if (gAny > 0 && gN > 0) E.grenade.textContent = grenadeName(gk) + ' ×' + gN;
+    // --- детонация липучек: только когда есть прилипшая готовая липучка ---
+    let stickyReady = 0;
+    if (Game && Game._grenades) {
+      for (const gg of Game._grenades) if (gg.sticky && gg.stuck && gg.ownerLocal && gg.armed) stickyReady++;
+    }
+    dim(E.sticky, stickyReady > 0 && !inMech);
+    if (stickyReady > 0) E.sticky.textContent = 'ВЗРЫВ ×' + stickyReady;
 
     // --- medkit: only with charges (and not at full HP) ---
     const maxHP = (Game && Game.matchHP) || CFG.maxHP;
@@ -16419,6 +16429,7 @@ const Game = {
     /* contextual mobile actions added with the new abilities */
     Bus.on('touchGrenade', () => this.throwGrenade());
     Bus.on('touchCycleGrenade', () => this.cycleGrenade());
+    Bus.on('touchDetonateStickies', () => this.detonateStickies());
     Bus.on('touchMechMissiles', () => this.launchMechMissiles());
     Bus.on('touchMechSurge', () => this.mechSurge());
     Bus.on('touchMechToggle', () => {
@@ -22360,6 +22371,12 @@ const Game = {
       const wallHit = this.world.raycast(origin, dir, reach, ['ground']);
       const wallT = (wallHit && wallHit.t > .2) ? wallHit.t : Infinity;   // t≈0 — луч стартует в геометрии, игнор
       let any = false;
+      /* БЛИЖНИЙ БОЙ ЛОМАЕТ КАРТУ: 6-8 ударов разрушают блок (урон = прочность/7). */
+      if (wallHit && wallHit.box && wallHit.box.destructible && !wallHit.box.removed && typeof damageMapBox === 'function') {
+        const broke = damageMapBox(wallHit.box, Math.max(6, wallHit.box.maxHp / 7));
+        if (this.effects) this.effects.debrisBurst(wallHit.point.x, wallHit.point.y, wallHit.point.z, 0xb8b2a6, broke ? 1.1 : .5);
+        if (broke) any = true;
+      }
       for (const h of hitList) {
         if (wallT < h.dist - .35) continue;                  // за стеной
         const zb = h.z;
@@ -22550,16 +22567,16 @@ const Game = {
     }
   },
 
-  /* Разрушение карты взрывом + ПЫЛЬ/ЧАСТИЦЫ на разрушенных кусках. */
+  /* Разрушение карты взрывом + ПЫЛЬ/ЧАСТИЦЫ. ЛЮБОЙ взрыв ломает блоки
+     МГНОВЕННО (весь блок в радиусе исчезает сразу, а не копит урон). */
   breakMapAt(x, y, z, radius, dmg) {
     if (typeof damageMapAt !== 'function') return 0;
-    const destroyed = damageMapAt(x, y, z, radius, dmg);
+    const destroyed = damageMapAt(x, y, z, radius, Infinity);
     if (destroyed && this.effects) {
       const b = MAP._lastBreak || { x: x, y: y, z: z };
       this.effects.debrisBurst(b.x, b.y, b.z, 0xb8b2a6, 1.4);
-      // ещё несколько клубов пыли по площади
-      for (let i = 0; i < Math.min(5, destroyed); i++) {
-        this.effects.debrisBurst(x + U.rand(-radius * .5, radius * .5), y + U.rand(0, 1.2), z + U.rand(-radius * .5, radius * .5), 0xb8b2a6, .8);
+      for (let i = 0; i < Math.min(6, destroyed); i++) {
+        this.effects.debrisBurst(x + U.rand(-radius * .5, radius * .5), y + U.rand(0, 1.4), z + U.rand(-radius * .5, radius * .5), 0xb8b2a6, .9);
       }
     }
     return destroyed;

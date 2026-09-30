@@ -266,6 +266,7 @@ const TouchUI = {
         '<button id="tDrone" class="tbtn act accent">ДРОН</button>' +
         '<button id="tGrenade" class="tbtn act accent">ГРАНАТА</button>' +
         '<button id="tGrenadeKind" class="tbtn act">ТИП</button>' +
+        '<button id="tSticky" class="tbtn act accent">ВЗРЫВ</button>' +
         '<button id="tMissiles" class="tbtn act accent">РАКЕТЫ</button>' +
         '<button id="tSurge" class="tbtn act accent">СКАЧОК</button>' +
         '<button id="tMech" class="tbtn act accent">ВЫЙТИ</button>' +
@@ -296,6 +297,7 @@ const TouchUI = {
       drone: document.getElementById('tDrone'),
       grenade: document.getElementById('tGrenade'),
       grenadeKind: document.getElementById('tGrenadeKind'),
+      sticky: document.getElementById('tSticky'),
       missiles: document.getElementById('tMissiles'),
       surge: document.getElementById('tSurge'),
       mech: document.getElementById('tMech'),
@@ -353,6 +355,7 @@ const TouchUI = {
     // contextual actions (only shown when useful)
     E.grenade.addEventListener('touchstart', e => { swallow(e); Bus.emit('touchGrenade'); E.grenade.classList.add('down'); setTimeout(() => E.grenade.classList.remove('down'), 160); }, { passive: false });
     E.grenadeKind.addEventListener('touchstart', e => { swallow(e); Bus.emit('touchCycleGrenade'); E.grenadeKind.classList.add('down'); setTimeout(() => E.grenadeKind.classList.remove('down'), 160); }, { passive: false });
+    E.sticky.addEventListener('touchstart', e => { swallow(e); Bus.emit('touchDetonateStickies'); E.sticky.classList.add('down'); setTimeout(() => E.sticky.classList.remove('down'), 160); }, { passive: false });
     E.missiles.addEventListener('touchstart', e => { swallow(e); Bus.emit('touchMechMissiles'); E.missiles.classList.add('down'); setTimeout(() => E.missiles.classList.remove('down'), 160); }, { passive: false });
     E.surge.addEventListener('touchstart', e => { swallow(e); Bus.emit('touchMechSurge'); E.surge.classList.add('down'); setTimeout(() => E.surge.classList.remove('down'), 160); }, { passive: false });
     E.mech.addEventListener('touchstart', e => { swallow(e); Bus.emit('touchMechToggle'); E.mech.classList.add('down'); setTimeout(() => E.mech.classList.remove('down'), 160); }, { passive: false });
@@ -524,6 +527,13 @@ const TouchUI = {
     dim(E.grenade, gN > 0 && !inMech && round !== 'buy');
     dim(E.grenadeKind, gAny > 0 && !inMech && round !== 'buy');
     if (gAny > 0 && gN > 0) E.grenade.textContent = grenadeName(gk) + ' ×' + gN;
+    // --- детонация липучек: только когда есть прилипшая готовая липучка ---
+    let stickyReady = 0;
+    if (Game && Game._grenades) {
+      for (const gg of Game._grenades) if (gg.sticky && gg.stuck && gg.ownerLocal && gg.armed) stickyReady++;
+    }
+    dim(E.sticky, stickyReady > 0 && !inMech);
+    if (stickyReady > 0) E.sticky.textContent = 'ВЗРЫВ ×' + stickyReady;
 
     // --- medkit: only with charges (and not at full HP) ---
     const maxHP = (Game && Game.matchHP) || CFG.maxHP;

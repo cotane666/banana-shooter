@@ -7705,6 +7705,7 @@ const Game = {
         const flat = Math.hypot(dir.x, dir.z) || 1;
         const fx = dir.x / flat, fz = dir.z / flat;
         if (this.effects && this.effects.knightSlashFx) this.effects.knightSlashFx(origin, fx, fz, 6.5, 3.2, true);
+        if (Audio3D_SFX.knightCut) Audio3D_SFX.knightCut();
         /* площадь слеша = диск радиусом ~radiusOfSlash, центр — впереди игрока
            на высоте глаз. Ломаем все разрушаемые блоки в этой области. */
         if (typeof damageMapAt === 'function') {

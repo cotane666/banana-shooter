@@ -700,7 +700,18 @@ const ACHIEVEMENTS = [
   { id: 'platinum_all', name: 'ВЛАДЫКА ГАЛАКТИКИ', desc: 'Выполнить все остальные достижения', check: s => s.otherAchievementsDone === true },
   /* ХАРДКОР — одна жизнь. Награда: кровавый скин «ПЛОТЬ». */
   { id: 'hardcore_wave', name: 'ОДНА ЖИЗНЬ', desc: 'Дожить до 25 волны в ХАРДКОРЕ', check: s => s.hardcoreWave >= 25 },
-  { id: 'hardcore_full', name: 'НЕВОЗМОЖНОЕ', desc: 'Пройти ХАРДКОР полностью (100 волн)', check: s => s.hardcoreFull === true }
+  { id: 'hardcore_full', name: 'НЕВОЗМОЖНОЕ', desc: 'Пройти ХАРДКОР полностью (100 волн)', check: s => s.hardcoreFull === true },
+  /* ============================================================
+     МЕХАКОСТЮМ — достижения, открывающие СКИНЫ НА МЕХА (см. MECH_SKINS ниже).
+     Помечены `mech: true`: награда — раскраска шасси, а не оружия, и они не
+     участвуют в платиновом достижении (чтобы не усложнять его).
+     ============================================================ */
+  { id: 'mc_first',    mech: 1, name: 'ЗАПРАВКА',          desc: 'Убить первого зомби из мехакостюма', check: s => s.mechKills >= 1 },
+  { id: 'mc_rookie',   mech: 1, name: 'СТАЛЬНОЙ ПАРЕНЬ',   desc: '25 убийств из мехакостюма',          check: s => s.mechKills >= 25 },
+  { id: 'mc_time',     mech: 1, name: 'МЕХ-МАРАФОН',       desc: 'Провести 10 минут в мехакостюме',    check: s => s.mechTime >= 600 },
+  { id: 'mc_miniboss', mech: 1, name: 'ГРОЗА КОРПОРАЦИЙ',  desc: 'Убить мини-босса из мехакостюма',    check: s => s.mechMiniBossKills >= 1 },
+  { id: 'mc_ace',      mech: 1, name: 'АС МЕХАКОСТЮМА',    desc: '250 убийств из мехакостюма',         check: s => s.mechKills >= 250 },
+  { id: 'mc_titan',    mech: 1, name: 'ТИТАН',             desc: '500 убийств из мехакостюма',         check: s => s.mechKills >= 500 }
 ];
 
 /* ============================================================
@@ -741,6 +752,9 @@ const ACH_PROGRESS = {
   v_clear5: ['clears', 5], v_win50: ['top3', 1], v_time3600: ['playTime', 3600],
   hardcore_wave: ['hardcoreWave', 25],
   hardcore_full: ['hardcoreFull', 1],
+  /* мехакостюм — цели для мех-скинов */
+  mc_first: ['mechKills', 1], mc_rookie: ['mechKills', 25], mc_time: ['mechTime', 600],
+  mc_miniboss: ['mechMiniBossKills', 1], mc_ace: ['mechKills', 250], mc_titan: ['mechKills', 500],
   /* интересные: скорострельные и на выносливость */
   x_rampage: ['fastKills', 100], x_speedrun: ['fastClear', 1], x_marathon: ['runTime', 2700],
   /* heavy arsenal (both sets) */
@@ -797,15 +811,23 @@ function achOtherDone(ach) {
   ach = ach || {};
   let n = 0;
   for (let i = 0; i < ACHIEVEMENTS.length; i++) {
-    const id = ACHIEVEMENTS[i].id;
-    if (id === 'platinum_all') continue;
-    if (ach[id]) n++;
+    const a = ACHIEVEMENTS[i];
+    if (a.id === 'platinum_all' || a.mech) continue;   // мех-скины не влияют на платину
+    if (ach[a.id]) n++;
+  }
+  return n;
+}
+function achOtherTotal() {
+  let n = 0;
+  for (let i = 0; i < ACHIEVEMENTS.length; i++) {
+    const a = ACHIEVEMENTS[i];
+    if (a.id === 'platinum_all' || a.mech) continue;
+    n++;
   }
   return n;
 }
 function achAllOthersDone(ach) {
-  const total = ACHIEVEMENTS.length - 1;
-  return achOtherDone(ach) >= total;
+  return achOtherDone(ach) >= achOtherTotal();
 }
 
 /* ============================================================
@@ -917,6 +939,13 @@ function skinRarityFor(achId) {
   if (achId === 'x_marathon') return 'epic';
   if (achId === 'hardcore_wave') return 'legendary';
   if (achId === 'hardcore_full') return 'platinum';
+  /* МЕХАКОСТЮМ: награда — скин на МЕХА (не на оружие). Реальная раскраска
+     берётся из MECH_SKINS; редкость здесь нужна для карточек. */
+  if (achId === 'mc_first') return 'common';
+  if (achId === 'mc_rookie') return 'uncommon';
+  if (achId === 'mc_time') return 'rare';
+  if (achId === 'mc_miniboss') return 'epic';
+  if (achId.startsWith('mc_')) return 'legendary';
   if (achId.startsWith('v_')) return 'legendary';
   if (achId.startsWith('m_')) return 'rare';
   if (achId.startsWith('e_')) return 'uncommon';
@@ -972,6 +1001,15 @@ const SKINS = (() => {
   return ACHIEVEMENTS.map(a => {
     const rar = skinRarityFor(a.id);
     const rd = SKIN_RARITIES[rar];
+    /* МЕХАКОСТЮМ: у этих достижений награда — раскраска МЕХА (MECH_SKINS).
+       Обычного скина на оружие нет, но запись нужна для карточки достижения
+       (чтобы UI показал награду). */
+    if (a.mech) {
+      return { id: 'sk_' + a.id, ach: a.id, mech: true, name: 'СКИН МЕХА · ' + a.name,
+        rarity: rar, rarityLabel: rd.label, rarityColor: rd.color,
+        body: 0x39434c, steel: 0x9aa4ae, mag: 0x111316, grip: 0x060608, accent: rd.color, glow: rd.color, shot: rd.color,
+        tint: [0x39434c, 0x9aa4ae], deco: rd.deco, beads: rd.beads, glowMul: rd.glow };
+    }
     let pal, deco = rd.deco, beads = rd.beads;
     if (rar === 'platinum') {
       /* «ГАЛАКТИКА» — единственная в своём роде, не зависит от палитр */
@@ -990,6 +1028,7 @@ const SKINS = (() => {
     return {
       id: 'sk_' + a.id,
       ach: a.id,
+      mech: 0,                                 // обычный скин на ОРУЖИЕ
       name: 'СКИН · ' + a.name,
       rarity: rar,
       rarityLabel: rd.label,
@@ -1008,9 +1047,38 @@ const SKINS = (() => {
 })();
 function skinById(id) { for (let i = 0; i < SKINS.length; i++) if (SKINS[i].id === id) return SKINS[i]; return null; }
 function skinForAchievement(achId) { for (let i = 0; i < SKINS.length; i++) if (SKINS[i].ach === achId) return SKINS[i]; return null; }
+
+/* ============================================================
+   MECH SKINS — раскраски МЕХАКОСТЮМА. Каждая открывается мех-достижением
+   (ACHIEVEMENTS с `mech: true`). Мех — многоматериальная модель (корпус, тёмная
+   броня, белые вставки, золото, красные ракеты), поэтому у скина есть роль для
+   каждого материала: body / dark / white / gold / red, плюс accent (свечение
+   лампы и бликов) и своё имя.
+   ============================================================ */
+const MECH_SKINS = [
+  { id: 'mch_none',   ach: null,          name: 'СТАНДАРТНЫЙ', rarity: 'common', exact: 1,
+    body: 0x2b4a8f, dark: 0x1b2026, white: 0xdfe6f0, gold: 0xd8b45a, red: 0xc4302a, accent: 0x6fc8ff, glow: 0 },
+  { id: 'mch_basic',  ach: 'mc_first',    name: 'ЗАВОДСКОЙ', rarity: 'common',
+    body: 0x4a5560, dark: 0x20262c, white: 0xc8d0d8, gold: 0xb8a45a, red: 0xb03028, accent: 0xff8a3a, glow: .15 },
+  { id: 'mch_rookie', ach: 'mc_rookie',   name: 'КАМУФЛЯЖ', rarity: 'uncommon',
+    body: 0x4a5a34, dark: 0x1a2214, white: 0xd8dcc0, gold: 0xc8a84a, red: 0xa83028, accent: 0x9bd85a, glow: .25 },
+  { id: 'mch_time',   ach: 'mc_time',     name: 'ПЕСЧАНЫЙ ШТОРМ', rarity: 'rare',
+    body: 0xb09a5a, dark: 0x3a3020, white: 0xf0e8d0, gold: 0xffd06a, red: 0xc04828, accent: 0xffc060, glow: .4 },
+  { id: 'mch_mini',   ach: 'mc_miniboss', name: 'ПУРПУРНЫЙ РАЗРУШИТЕЛЬ', rarity: 'epic',
+    body: 0x5a2a8a, dark: 0x1c0e2a, white: 0xe8d8ff, gold: 0xb060ff, red: 0xff3a6a, accent: 0xe06bff, glow: .65,
+    emissive: 0x2a0a44 },
+  { id: 'mch_ace',    ach: 'mc_ace',      name: 'ЗОЛОТОЙ АС', rarity: 'legendary',
+    body: 0xc8a24a, dark: 0x2a2010, white: 0xfff0c0, gold: 0xffd06a, red: 0xc03828, accent: 0xffd06a, glow: .8,
+    emissive: 0x2a1e06 },
+  { id: 'mch_titan',  ach: 'mc_titan',    name: 'ТИТАН', rarity: 'legendary',
+    body: 0x2a2010, dark: 0x0e0c08, white: 0xffe0a0, gold: 0xffb020, red: 0xff2a3a, accent: 0xff6a1a, glow: 1.0,
+    emissive: 0x3a1400 }
+];
+function mechSkinById(id) { for (let i = 0; i < MECH_SKINS.length; i++) if (MECH_SKINS[i].id === id) return MECH_SKINS[i]; return null; }
+function mechSkinForAch(achId) { for (let i = 0; i < MECH_SKINS.length; i++) if (MECH_SKINS[i].ach === achId) return MECH_SKINS[i]; return null; }
 function skinRarityCounts() {
   const c = {}; SKIN_RARITY_ORDER.forEach(r => c[r] = 0);
-  SKINS.forEach(s => c[s.rarity] = (c[s.rarity] || 0) + 1);
+  SKINS.forEach(s => { if (s.mech) return; c[s.rarity] = (c[s.rarity] || 0) + 1; });
   return c;
 }
 /* a CSS colour for a rarity (used by the UI cards) */
@@ -1057,7 +1125,7 @@ const Store = {
           offCount: 1, offHp: 1, offFree: 0, offMode: 'normal', offMods: {}, offModsRun: 0, offModPick: 0, checkpoint: null, shopAllow: {}, shopItems: {}, music: 1, sfxVol: 100, musicVol: 70,
           grenade: 'frag', buildable: 'turret', weather: 'day', trapsEnabled: 1, offCountExact: 10, offCountFixed: 0,
           timeOfDay: 'day', skyWeather: 'clear', envAuto: 0, envOff: 0, envAutoSpeed: 1, menuTour: 1,
-          ach: {}, runs: [], skinOn: {}, skinChar: '',
+          ach: {}, runs: [], skinOn: {}, skinChar: '', mechSkin: '',
           /* галактический скин персонажа открыт вместе с платиновым достижением */
           /* one saved run per offline mode: { normal|horde|freehorde|custom|bossrush|daily|endless: checkpoint } */
           checkpoints: {} },

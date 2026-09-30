@@ -1091,12 +1091,13 @@ const UI = {
         const pct = on ? 100 : Math.round(pr.frac * 100);
         const barCol = on ? '#ffd24a' : rcol;
         const readout = on ? 'ВЫПОЛНЕНО' : (pr.suffix ? achProgressText(pr.have, pr.goal) + pr.suffix : achProgressText(pr.have, pr.goal));
+        const rewardTxt = sk ? ('Награда: скин ' + (sk.mech ? 'МЕХА' : '') + ' · ' + U.esc(sk.rarityLabel)) : '';
         return '<div class="achcard' + (on ? ' on' : '') + (sk && sk.rarity === 'platinum' ? ' plat' : '') + '" data-ach="' + a.id + '"><b><span class="sw" style="display:inline-block;width:10px;height:10px;' +
           'border-radius:2px;margin-right:6px;vertical-align:-1px;border:1px solid rgba(255,255,255,.3);background:' + swatch + '"></span>' +
           (on ? '🏆 ' : '🔒 ') + U.esc(a.name) + '</b><i>' + U.esc(a.desc) + '</i>' +
           '<div class="achprog"><div class="achbar"><span style="width:' + pct + '%;background:' + barCol + '"></span></div>' +
           '<em style="color:' + barCol + '">' + U.esc(readout) + '</em></div>' +
-          (sk ? '<i style="display:block;margin-top:3px;color:' + rcol + '">Награда: скин · ' + U.esc(sk.rarityLabel) + '</i>' : '') +
+          (sk ? '<i style="display:block;margin-top:3px;color:' + rcol + '">' + rewardTxt + '</i>' : '') +
           '</div>';
       }).join('');
     }
@@ -1237,7 +1238,7 @@ const Skins = {
     const counts = skinRarityCounts();
     el.innerHTML = SKIN_RARITY_ORDER.map(r => {
       const total = counts[r] || 0;
-      const owned = SKINS.filter(s => s.rarity === r && ach[s.ach]).length;
+      const owned = SKINS.filter(s => !s.mech && s.rarity === r && ach[s.ach]).length;
       const c = rarityHex(r);
       return '<span class="rarstat" style="color:' + c + '"><i style="background:' + c + '"></i>' +
         SKIN_RARITIES[r].label + ' ' + owned + '/' + total + '</span>';
@@ -1255,13 +1256,15 @@ const Skins = {
     this.camera.aspect = w / h; this.camera.updateProjectionMatrix();
   },
 
-  /* the two preview targets: the gun, or the player holding it */
+  /* the preview targets: the gun, the player holding it, or the MECH CHASSIS
+     (which has its own set of skins unlocked by mech achievements). */
   renderTargets() {
     const el = $('skinTargetChips');
     if (!el) return;
     const galOn = Store.data.skinChar === 'galaxy';
     el.innerHTML = '<button data-t="weapon"' + (this.target === 'weapon' ? ' class="on"' : '') + '>ОРУЖИЕ</button>' +
       '<button data-t="player"' + (this.target === 'player' ? ' class="on"' : '') + '>ПЕРСОНАЖ</button>' +
+      '<button data-t="mech"' + (this.target === 'mech' ? ' class="on"' : '') + '>МЕХ</button>' +
       '<button data-t="galchar"' + (galOn ? ' class="on"' : '') + ' style="margin-left:8px">ГАЛАКТИКА: ' + (galOn ? 'ВКЛ' : 'ВЫКЛ') + '</button>';
     Array.from(el.children).forEach(b => b.addEventListener('click', () => {
       if (b.dataset.t === 'galchar') {
@@ -1270,13 +1273,23 @@ const Skins = {
         Store.save(); this.renderTargets(); this.rebuild();
         Audio3D_SFX.uiClick(); return;
       }
-      this.target = b.dataset.t; this.renderTargets(); this.rebuild();
+      this.target = b.dataset.t; this.renderTargets(); this.renderWeaponList(); this.renderGrid(); this.rebuild();
     }));
   },
 
   renderWeaponList() {
     const sel = $('skinWeaponSel');
     if (!sel) return;
+    if (this.target === 'mech') {
+      /* для меха выбор оружия не нужен — прячем поле и показываем подпись */
+      sel.style.display = 'none';
+      const fld = sel.closest ? sel.closest('.skin-fld') : null;
+      if (fld) { fld.dataset._hide = '1'; fld.style.display = 'none'; }
+      return;
+    }
+    const fld = sel.closest ? sel.closest('.skin-fld') : null;
+    if (fld && fld.dataset._hide) { fld.style.display = ''; delete fld.dataset._hide; }
+    sel.style.display = '';
     const list = this.weapons();
     if (list.indexOf(this.weaponId) < 0) this.weaponId = list[0];
     sel.innerHTML = list.map(id => '<option value="' + id + '"' + (id === this.weaponId ? ' selected' : '') + '>' + U.esc(WEAPONS[id].name) + '</option>').join('');
@@ -1286,9 +1299,10 @@ const Skins = {
   renderGrid() {
     const el = $('skinGrid');
     if (!el) return;
+    if (this.target === 'mech') return this.renderMechGrid(el);
     const ach = Store.data.ach || {};
     const skinOn = Store.data.skinOn = Store.data.skinOn || {};
-    el.innerHTML = SKINS.map(sk => {
+    el.innerHTML = SKINS.filter(sk => !sk.mech).map(sk => {
       const unlocked = !!ach[sk.ach];
       const on = skinOn[this.weaponId] === sk.id;
       const swatch = '#' + sk.glow.toString(16).padStart(6, '0');
@@ -1317,12 +1331,55 @@ const Skins = {
     }));
   },
 
+  /* сетка МЕХ-скинов: открываются мех-достижениями, надеваются на мехакостюм */
+  renderMechGrid(el) {
+    const ach = Store.data.ach || {};
+    const cur = Store.data.mechSkin || '';
+    el.innerHTML = MECH_SKINS.map(sk => {
+      const unlocked = !sk.ach || !!ach[sk.ach];
+      const on = cur === sk.id || (!sk.ach && !cur);
+      const swatch = '#' + sk.accent.toString(16).padStart(6, '0');
+      const rcol = rarityHex(sk.rarity);
+      const achDef = sk.ach ? ACHIEVEMENTS.find(a => a.id === sk.ach) : null;
+      const hint = !sk.ach ? 'Стандартная раскраска меха' : (unlocked ? (on ? 'ВЫБРАН' : 'ОТКРЫТ · нажмите') : '🔒 ' + achDef.desc);
+      return '<div class="skincard rar-' + sk.rarity + (unlocked ? '' : ' locked') + (on ? ' on' : '') + '" data-ms="' + sk.id + '"' +
+        ' style="border-left-color:' + rcol + '">' +
+        '<b><span class="sw" style="background:' + swatch + '"></span>' + U.esc(sk.name) + '</b>' +
+        '<u class="rar" style="color:' + rcol + '">' + U.esc(SKIN_RARITIES[sk.rarity].label) + '</u>' +
+        '<i>' + hint + '</i></div>';
+    }).join('');
+    Array.from(el.children).forEach(card => card.addEventListener('click', () => {
+      const skid = card.dataset.ms;
+      const sk = mechSkinById(skid);
+      if (!sk) return;
+      const unlocked = !sk.ach || !!ach[sk.ach];
+      if (!unlocked) { UI.toast('Скин меха закрыт: ' + ACHIEVEMENTS.find(a => a.id === sk.ach).name, '#f5d33c'); Audio3D_SFX.deny(); return; }
+      // повторное нажатие на стандартный/надетый скин снимает выбор
+      if (Store.data.mechSkin === skid) Store.data.mechSkin = '';
+      else Store.data.mechSkin = skid;
+      Store.save();
+      Audio3D_SFX.uiClick();
+      Game && Game.applyMechSkinEverywhere && Game.applyMechSkinEverywhere();
+      this.renderGrid(); this.rebuild();
+      const el2 = $('skinStatus');
+      const worn = mechSkinById(Store.data.mechSkin);
+      if (el2) el2.textContent = worn ? ('Надет на меха: ' + worn.name) : 'Стандартная раскраска меха';
+    }));
+  },
+
   rebuild() {
     if (!this._base) return;
     while (this._base.children.length) { const c = this._base.children[0]; this._base.remove(c); disposeGroup(c); }
     const skinId = Store.data.skinOn[this.weaponId];
     const skin = skinId ? skinById(skinId) : null;
-    if (this.target === 'player') {
+    if (this.target === 'mech') {
+      /* полное шасси меха, раскрашенное надетым мех-скином */
+      const mech = buildMechChassis();
+      const p = mech.userData && mech.userData.pilot;
+      if (p) p.visible = true;                 // в превью пилот виден
+      this._base.add(mech);
+      this._modelH = 4.2; this._centerY = 1.9;
+    } else if (this.target === 'player') {
       // a soldier holding the previewed weapon, so the skin is seen in context
       const soldier = buildSoldierMesh('ct');
       if (Store.data.skinChar === 'galaxy' && typeof applyGalaxyCharacter === 'function') applyGalaxyCharacter(soldier);
@@ -1367,7 +1424,7 @@ const Skins = {
     this.root.rotation.y = this.rotY + this._spin;
     this.root.rotation.x = this.rotX;
     // frame the model: pull the camera back so tall (player) models fit
-    const fit = this.target === 'player' ? 2.6 : 1.35;
+    const fit = this.target === 'mech' ? 2.2 : this.target === 'player' ? 2.6 : 1.35;
     this.camera.position.set(0, .1, this.dist * fit);
     this.camera.lookAt(0, this._centerY || 0, 0);
     this.renderer.clear();

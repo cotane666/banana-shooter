@@ -2268,7 +2268,18 @@ const ACHIEVEMENTS = [
   { id: 'platinum_all', name: 'ВЛАДЫКА ГАЛАКТИКИ', desc: 'Выполнить все остальные достижения', check: s => s.otherAchievementsDone === true },
   /* ХАРДКОР — одна жизнь. Награда: кровавый скин «ПЛОТЬ». */
   { id: 'hardcore_wave', name: 'ОДНА ЖИЗНЬ', desc: 'Дожить до 25 волны в ХАРДКОРЕ', check: s => s.hardcoreWave >= 25 },
-  { id: 'hardcore_full', name: 'НЕВОЗМОЖНОЕ', desc: 'Пройти ХАРДКОР полностью (100 волн)', check: s => s.hardcoreFull === true }
+  { id: 'hardcore_full', name: 'НЕВОЗМОЖНОЕ', desc: 'Пройти ХАРДКОР полностью (100 волн)', check: s => s.hardcoreFull === true },
+  /* ============================================================
+     МЕХАКОСТЮМ — достижения, открывающие СКИНЫ НА МЕХА (см. MECH_SKINS ниже).
+     Помечены `mech: true`: награда — раскраска шасси, а не оружия, и они не
+     участвуют в платиновом достижении (чтобы не усложнять его).
+     ============================================================ */
+  { id: 'mc_first',    mech: 1, name: 'ЗАПРАВКА',          desc: 'Убить первого зомби из мехакостюма', check: s => s.mechKills >= 1 },
+  { id: 'mc_rookie',   mech: 1, name: 'СТАЛЬНОЙ ПАРЕНЬ',   desc: '25 убийств из мехакостюма',          check: s => s.mechKills >= 25 },
+  { id: 'mc_time',     mech: 1, name: 'МЕХ-МАРАФОН',       desc: 'Провести 10 минут в мехакостюме',    check: s => s.mechTime >= 600 },
+  { id: 'mc_miniboss', mech: 1, name: 'ГРОЗА КОРПОРАЦИЙ',  desc: 'Убить мини-босса из мехакостюма',    check: s => s.mechMiniBossKills >= 1 },
+  { id: 'mc_ace',      mech: 1, name: 'АС МЕХАКОСТЮМА',    desc: '250 убийств из мехакостюма',         check: s => s.mechKills >= 250 },
+  { id: 'mc_titan',    mech: 1, name: 'ТИТАН',             desc: '500 убийств из мехакостюма',         check: s => s.mechKills >= 500 }
 ];
 
 /* ============================================================
@@ -2309,6 +2320,9 @@ const ACH_PROGRESS = {
   v_clear5: ['clears', 5], v_win50: ['top3', 1], v_time3600: ['playTime', 3600],
   hardcore_wave: ['hardcoreWave', 25],
   hardcore_full: ['hardcoreFull', 1],
+  /* мехакостюм — цели для мех-скинов */
+  mc_first: ['mechKills', 1], mc_rookie: ['mechKills', 25], mc_time: ['mechTime', 600],
+  mc_miniboss: ['mechMiniBossKills', 1], mc_ace: ['mechKills', 250], mc_titan: ['mechKills', 500],
   /* интересные: скорострельные и на выносливость */
   x_rampage: ['fastKills', 100], x_speedrun: ['fastClear', 1], x_marathon: ['runTime', 2700],
   /* heavy arsenal (both sets) */
@@ -2365,15 +2379,23 @@ function achOtherDone(ach) {
   ach = ach || {};
   let n = 0;
   for (let i = 0; i < ACHIEVEMENTS.length; i++) {
-    const id = ACHIEVEMENTS[i].id;
-    if (id === 'platinum_all') continue;
-    if (ach[id]) n++;
+    const a = ACHIEVEMENTS[i];
+    if (a.id === 'platinum_all' || a.mech) continue;   // мех-скины не влияют на платину
+    if (ach[a.id]) n++;
+  }
+  return n;
+}
+function achOtherTotal() {
+  let n = 0;
+  for (let i = 0; i < ACHIEVEMENTS.length; i++) {
+    const a = ACHIEVEMENTS[i];
+    if (a.id === 'platinum_all' || a.mech) continue;
+    n++;
   }
   return n;
 }
 function achAllOthersDone(ach) {
-  const total = ACHIEVEMENTS.length - 1;
-  return achOtherDone(ach) >= total;
+  return achOtherDone(ach) >= achOtherTotal();
 }
 
 /* ============================================================
@@ -2485,6 +2507,13 @@ function skinRarityFor(achId) {
   if (achId === 'x_marathon') return 'epic';
   if (achId === 'hardcore_wave') return 'legendary';
   if (achId === 'hardcore_full') return 'platinum';
+  /* МЕХАКОСТЮМ: награда — скин на МЕХА (не на оружие). Реальная раскраска
+     берётся из MECH_SKINS; редкость здесь нужна для карточек. */
+  if (achId === 'mc_first') return 'common';
+  if (achId === 'mc_rookie') return 'uncommon';
+  if (achId === 'mc_time') return 'rare';
+  if (achId === 'mc_miniboss') return 'epic';
+  if (achId.startsWith('mc_')) return 'legendary';
   if (achId.startsWith('v_')) return 'legendary';
   if (achId.startsWith('m_')) return 'rare';
   if (achId.startsWith('e_')) return 'uncommon';
@@ -2540,6 +2569,15 @@ const SKINS = (() => {
   return ACHIEVEMENTS.map(a => {
     const rar = skinRarityFor(a.id);
     const rd = SKIN_RARITIES[rar];
+    /* МЕХАКОСТЮМ: у этих достижений награда — раскраска МЕХА (MECH_SKINS).
+       Обычного скина на оружие нет, но запись нужна для карточки достижения
+       (чтобы UI показал награду). */
+    if (a.mech) {
+      return { id: 'sk_' + a.id, ach: a.id, mech: true, name: 'СКИН МЕХА · ' + a.name,
+        rarity: rar, rarityLabel: rd.label, rarityColor: rd.color,
+        body: 0x39434c, steel: 0x9aa4ae, mag: 0x111316, grip: 0x060608, accent: rd.color, glow: rd.color, shot: rd.color,
+        tint: [0x39434c, 0x9aa4ae], deco: rd.deco, beads: rd.beads, glowMul: rd.glow };
+    }
     let pal, deco = rd.deco, beads = rd.beads;
     if (rar === 'platinum') {
       /* «ГАЛАКТИКА» — единственная в своём роде, не зависит от палитр */
@@ -2558,6 +2596,7 @@ const SKINS = (() => {
     return {
       id: 'sk_' + a.id,
       ach: a.id,
+      mech: 0,                                 // обычный скин на ОРУЖИЕ
       name: 'СКИН · ' + a.name,
       rarity: rar,
       rarityLabel: rd.label,
@@ -2576,9 +2615,38 @@ const SKINS = (() => {
 })();
 function skinById(id) { for (let i = 0; i < SKINS.length; i++) if (SKINS[i].id === id) return SKINS[i]; return null; }
 function skinForAchievement(achId) { for (let i = 0; i < SKINS.length; i++) if (SKINS[i].ach === achId) return SKINS[i]; return null; }
+
+/* ============================================================
+   MECH SKINS — раскраски МЕХАКОСТЮМА. Каждая открывается мех-достижением
+   (ACHIEVEMENTS с `mech: true`). Мех — многоматериальная модель (корпус, тёмная
+   броня, белые вставки, золото, красные ракеты), поэтому у скина есть роль для
+   каждого материала: body / dark / white / gold / red, плюс accent (свечение
+   лампы и бликов) и своё имя.
+   ============================================================ */
+const MECH_SKINS = [
+  { id: 'mch_none',   ach: null,          name: 'СТАНДАРТНЫЙ', rarity: 'common', exact: 1,
+    body: 0x2b4a8f, dark: 0x1b2026, white: 0xdfe6f0, gold: 0xd8b45a, red: 0xc4302a, accent: 0x6fc8ff, glow: 0 },
+  { id: 'mch_basic',  ach: 'mc_first',    name: 'ЗАВОДСКОЙ', rarity: 'common',
+    body: 0x4a5560, dark: 0x20262c, white: 0xc8d0d8, gold: 0xb8a45a, red: 0xb03028, accent: 0xff8a3a, glow: .15 },
+  { id: 'mch_rookie', ach: 'mc_rookie',   name: 'КАМУФЛЯЖ', rarity: 'uncommon',
+    body: 0x4a5a34, dark: 0x1a2214, white: 0xd8dcc0, gold: 0xc8a84a, red: 0xa83028, accent: 0x9bd85a, glow: .25 },
+  { id: 'mch_time',   ach: 'mc_time',     name: 'ПЕСЧАНЫЙ ШТОРМ', rarity: 'rare',
+    body: 0xb09a5a, dark: 0x3a3020, white: 0xf0e8d0, gold: 0xffd06a, red: 0xc04828, accent: 0xffc060, glow: .4 },
+  { id: 'mch_mini',   ach: 'mc_miniboss', name: 'ПУРПУРНЫЙ РАЗРУШИТЕЛЬ', rarity: 'epic',
+    body: 0x5a2a8a, dark: 0x1c0e2a, white: 0xe8d8ff, gold: 0xb060ff, red: 0xff3a6a, accent: 0xe06bff, glow: .65,
+    emissive: 0x2a0a44 },
+  { id: 'mch_ace',    ach: 'mc_ace',      name: 'ЗОЛОТОЙ АС', rarity: 'legendary',
+    body: 0xc8a24a, dark: 0x2a2010, white: 0xfff0c0, gold: 0xffd06a, red: 0xc03828, accent: 0xffd06a, glow: .8,
+    emissive: 0x2a1e06 },
+  { id: 'mch_titan',  ach: 'mc_titan',    name: 'ТИТАН', rarity: 'legendary',
+    body: 0x2a2010, dark: 0x0e0c08, white: 0xffe0a0, gold: 0xffb020, red: 0xff2a3a, accent: 0xff6a1a, glow: 1.0,
+    emissive: 0x3a1400 }
+];
+function mechSkinById(id) { for (let i = 0; i < MECH_SKINS.length; i++) if (MECH_SKINS[i].id === id) return MECH_SKINS[i]; return null; }
+function mechSkinForAch(achId) { for (let i = 0; i < MECH_SKINS.length; i++) if (MECH_SKINS[i].ach === achId) return MECH_SKINS[i]; return null; }
 function skinRarityCounts() {
   const c = {}; SKIN_RARITY_ORDER.forEach(r => c[r] = 0);
-  SKINS.forEach(s => c[s.rarity] = (c[s.rarity] || 0) + 1);
+  SKINS.forEach(s => { if (s.mech) return; c[s.rarity] = (c[s.rarity] || 0) + 1; });
   return c;
 }
 /* a CSS colour for a rarity (used by the UI cards) */
@@ -2625,7 +2693,7 @@ const Store = {
           offCount: 1, offHp: 1, offFree: 0, offMode: 'normal', offMods: {}, offModsRun: 0, offModPick: 0, checkpoint: null, shopAllow: {}, shopItems: {}, music: 1, sfxVol: 100, musicVol: 70,
           grenade: 'frag', buildable: 'turret', weather: 'day', trapsEnabled: 1, offCountExact: 10, offCountFixed: 0,
           timeOfDay: 'day', skyWeather: 'clear', envAuto: 0, envOff: 0, envAutoSpeed: 1, menuTour: 1,
-          ach: {}, runs: [], skinOn: {}, skinChar: '',
+          ach: {}, runs: [], skinOn: {}, skinChar: '', mechSkin: '',
           /* галактический скин персонажа открыт вместе с платиновым достижением */
           /* one saved run per offline mode: { normal|horde|freehorde|custom|bossrush|daily|endless: checkpoint } */
           checkpoints: {} },
@@ -8330,7 +8398,65 @@ function buildMechChassis() {
   pilot.traverse(o => { if (o.isMesh) o.castShadow = false; });
   g.add(pilot);
   g.userData.pilot = pilot;
+  /* раскраска по надетому мех-скину (по умолчанию — стандартная синяя) */
+  applyMechSkin(g, (typeof mechSkinById === 'function' ? mechSkinById(Store.data.mechSkin) : null) || null);
   return g;
+}
+
+/* ============================================================
+   МЕХ-СКИНЫ — раскраска шасси по РОЛЯМ материалов (корпус / тёмная броня /
+   белые вставки / золото / красные ракеты). Исходный цвет каждого меша
+   запоминается (userData.bc), поэтому скин можно менять в любой момент и
+   раскраска всегда считается от оригинала, а не накладывается поверх.
+   ============================================================ */
+function applyMechSkin(mesh, skin) {
+  if (!mesh || !mesh.traverse) return mesh;
+  if (!skin) skin = (typeof mechSkinById === 'function' ? mechSkinById('mch_none') : null);
+  const roleOf = (hex) => {
+    switch (hex) {
+      case 0x2b4a8f: return 'body';
+      case 0x1d3568: return 'body2';        // тёмный корпус (тот же оттенок, темнее)
+      case 0x1b2026: return 'dark';
+      case 0xdfe6f0: return 'white';
+      case 0xd8b45a: return 'gold';
+      case 0xc4302a: return 'red';
+      default: return null;
+    }
+  };
+  const shade = (hex, tint, mul) => {
+    const src = new THREE.Color(hex);
+    const l = src.r * .3 + src.g * .59 + src.b * .11;
+    const c = new THREE.Color(tint);
+    c.multiplyScalar(U.clamp(.55 + l * 1.8, .45, 1.55) * (mul || 1));
+    return c;
+  };
+  if (!skin) return mesh;
+  const exact = !!skin.exact;                          // стандартная раскраска: цвета один-в-один
+  mesh.traverse(o => {
+    if (!o.isMesh || !o.material || !o.material.color) return;
+    if (o.material.isMeshBasicMaterial) return;          // стёкла/лампы не трогаем
+    if (o.userData.bc === undefined) o.userData.bc = o.material.color.getHex();
+    if (o.userData.be === undefined) o.userData.be = o.material.emissive ? o.material.emissive.getHex() : 0;
+    const hex = o.userData.bc;
+    const role = roleOf(hex);
+    if (!role) return;
+    let tint = skin.body, mul = 1;
+    if (role === 'body') tint = skin.body;
+    else if (role === 'body2') { tint = skin.body; mul = .82; }
+    else if (role === 'dark') tint = skin.dark;
+    else if (role === 'white') tint = skin.white;
+    else if (role === 'gold') tint = skin.gold;
+    else if (role === 'red') tint = skin.red;
+    if (exact) o.material.color.setHex(hex);
+    else o.material.color.copy(shade(hex, tint, mul));
+    if (o.material.emissive !== undefined) {
+      if (skin.emissive !== undefined && (role === 'gold' || role === 'body2')) o.material.emissive.setHex(skin.emissive);
+      else o.material.emissive.setHex(o.userData.be || 0);
+    }
+    o.material.needsUpdate = true;
+  });
+  mesh.userData.mechSkin = skin;
+  return mesh;
 }
 
 /* Animate a mech chassis' legs. Shared by the local first-person mech and the
@@ -14154,12 +14280,13 @@ const UI = {
         const pct = on ? 100 : Math.round(pr.frac * 100);
         const barCol = on ? '#ffd24a' : rcol;
         const readout = on ? 'ВЫПОЛНЕНО' : (pr.suffix ? achProgressText(pr.have, pr.goal) + pr.suffix : achProgressText(pr.have, pr.goal));
+        const rewardTxt = sk ? ('Награда: скин ' + (sk.mech ? 'МЕХА' : '') + ' · ' + U.esc(sk.rarityLabel)) : '';
         return '<div class="achcard' + (on ? ' on' : '') + (sk && sk.rarity === 'platinum' ? ' plat' : '') + '" data-ach="' + a.id + '"><b><span class="sw" style="display:inline-block;width:10px;height:10px;' +
           'border-radius:2px;margin-right:6px;vertical-align:-1px;border:1px solid rgba(255,255,255,.3);background:' + swatch + '"></span>' +
           (on ? '🏆 ' : '🔒 ') + U.esc(a.name) + '</b><i>' + U.esc(a.desc) + '</i>' +
           '<div class="achprog"><div class="achbar"><span style="width:' + pct + '%;background:' + barCol + '"></span></div>' +
           '<em style="color:' + barCol + '">' + U.esc(readout) + '</em></div>' +
-          (sk ? '<i style="display:block;margin-top:3px;color:' + rcol + '">Награда: скин · ' + U.esc(sk.rarityLabel) + '</i>' : '') +
+          (sk ? '<i style="display:block;margin-top:3px;color:' + rcol + '">' + rewardTxt + '</i>' : '') +
           '</div>';
       }).join('');
     }
@@ -14300,7 +14427,7 @@ const Skins = {
     const counts = skinRarityCounts();
     el.innerHTML = SKIN_RARITY_ORDER.map(r => {
       const total = counts[r] || 0;
-      const owned = SKINS.filter(s => s.rarity === r && ach[s.ach]).length;
+      const owned = SKINS.filter(s => !s.mech && s.rarity === r && ach[s.ach]).length;
       const c = rarityHex(r);
       return '<span class="rarstat" style="color:' + c + '"><i style="background:' + c + '"></i>' +
         SKIN_RARITIES[r].label + ' ' + owned + '/' + total + '</span>';
@@ -14318,13 +14445,15 @@ const Skins = {
     this.camera.aspect = w / h; this.camera.updateProjectionMatrix();
   },
 
-  /* the two preview targets: the gun, or the player holding it */
+  /* the preview targets: the gun, the player holding it, or the MECH CHASSIS
+     (which has its own set of skins unlocked by mech achievements). */
   renderTargets() {
     const el = $('skinTargetChips');
     if (!el) return;
     const galOn = Store.data.skinChar === 'galaxy';
     el.innerHTML = '<button data-t="weapon"' + (this.target === 'weapon' ? ' class="on"' : '') + '>ОРУЖИЕ</button>' +
       '<button data-t="player"' + (this.target === 'player' ? ' class="on"' : '') + '>ПЕРСОНАЖ</button>' +
+      '<button data-t="mech"' + (this.target === 'mech' ? ' class="on"' : '') + '>МЕХ</button>' +
       '<button data-t="galchar"' + (galOn ? ' class="on"' : '') + ' style="margin-left:8px">ГАЛАКТИКА: ' + (galOn ? 'ВКЛ' : 'ВЫКЛ') + '</button>';
     Array.from(el.children).forEach(b => b.addEventListener('click', () => {
       if (b.dataset.t === 'galchar') {
@@ -14333,13 +14462,23 @@ const Skins = {
         Store.save(); this.renderTargets(); this.rebuild();
         Audio3D_SFX.uiClick(); return;
       }
-      this.target = b.dataset.t; this.renderTargets(); this.rebuild();
+      this.target = b.dataset.t; this.renderTargets(); this.renderWeaponList(); this.renderGrid(); this.rebuild();
     }));
   },
 
   renderWeaponList() {
     const sel = $('skinWeaponSel');
     if (!sel) return;
+    if (this.target === 'mech') {
+      /* для меха выбор оружия не нужен — прячем поле и показываем подпись */
+      sel.style.display = 'none';
+      const fld = sel.closest ? sel.closest('.skin-fld') : null;
+      if (fld) { fld.dataset._hide = '1'; fld.style.display = 'none'; }
+      return;
+    }
+    const fld = sel.closest ? sel.closest('.skin-fld') : null;
+    if (fld && fld.dataset._hide) { fld.style.display = ''; delete fld.dataset._hide; }
+    sel.style.display = '';
     const list = this.weapons();
     if (list.indexOf(this.weaponId) < 0) this.weaponId = list[0];
     sel.innerHTML = list.map(id => '<option value="' + id + '"' + (id === this.weaponId ? ' selected' : '') + '>' + U.esc(WEAPONS[id].name) + '</option>').join('');
@@ -14349,9 +14488,10 @@ const Skins = {
   renderGrid() {
     const el = $('skinGrid');
     if (!el) return;
+    if (this.target === 'mech') return this.renderMechGrid(el);
     const ach = Store.data.ach || {};
     const skinOn = Store.data.skinOn = Store.data.skinOn || {};
-    el.innerHTML = SKINS.map(sk => {
+    el.innerHTML = SKINS.filter(sk => !sk.mech).map(sk => {
       const unlocked = !!ach[sk.ach];
       const on = skinOn[this.weaponId] === sk.id;
       const swatch = '#' + sk.glow.toString(16).padStart(6, '0');
@@ -14380,12 +14520,55 @@ const Skins = {
     }));
   },
 
+  /* сетка МЕХ-скинов: открываются мех-достижениями, надеваются на мехакостюм */
+  renderMechGrid(el) {
+    const ach = Store.data.ach || {};
+    const cur = Store.data.mechSkin || '';
+    el.innerHTML = MECH_SKINS.map(sk => {
+      const unlocked = !sk.ach || !!ach[sk.ach];
+      const on = cur === sk.id || (!sk.ach && !cur);
+      const swatch = '#' + sk.accent.toString(16).padStart(6, '0');
+      const rcol = rarityHex(sk.rarity);
+      const achDef = sk.ach ? ACHIEVEMENTS.find(a => a.id === sk.ach) : null;
+      const hint = !sk.ach ? 'Стандартная раскраска меха' : (unlocked ? (on ? 'ВЫБРАН' : 'ОТКРЫТ · нажмите') : '🔒 ' + achDef.desc);
+      return '<div class="skincard rar-' + sk.rarity + (unlocked ? '' : ' locked') + (on ? ' on' : '') + '" data-ms="' + sk.id + '"' +
+        ' style="border-left-color:' + rcol + '">' +
+        '<b><span class="sw" style="background:' + swatch + '"></span>' + U.esc(sk.name) + '</b>' +
+        '<u class="rar" style="color:' + rcol + '">' + U.esc(SKIN_RARITIES[sk.rarity].label) + '</u>' +
+        '<i>' + hint + '</i></div>';
+    }).join('');
+    Array.from(el.children).forEach(card => card.addEventListener('click', () => {
+      const skid = card.dataset.ms;
+      const sk = mechSkinById(skid);
+      if (!sk) return;
+      const unlocked = !sk.ach || !!ach[sk.ach];
+      if (!unlocked) { UI.toast('Скин меха закрыт: ' + ACHIEVEMENTS.find(a => a.id === sk.ach).name, '#f5d33c'); Audio3D_SFX.deny(); return; }
+      // повторное нажатие на стандартный/надетый скин снимает выбор
+      if (Store.data.mechSkin === skid) Store.data.mechSkin = '';
+      else Store.data.mechSkin = skid;
+      Store.save();
+      Audio3D_SFX.uiClick();
+      Game && Game.applyMechSkinEverywhere && Game.applyMechSkinEverywhere();
+      this.renderGrid(); this.rebuild();
+      const el2 = $('skinStatus');
+      const worn = mechSkinById(Store.data.mechSkin);
+      if (el2) el2.textContent = worn ? ('Надет на меха: ' + worn.name) : 'Стандартная раскраска меха';
+    }));
+  },
+
   rebuild() {
     if (!this._base) return;
     while (this._base.children.length) { const c = this._base.children[0]; this._base.remove(c); disposeGroup(c); }
     const skinId = Store.data.skinOn[this.weaponId];
     const skin = skinId ? skinById(skinId) : null;
-    if (this.target === 'player') {
+    if (this.target === 'mech') {
+      /* полное шасси меха, раскрашенное надетым мех-скином */
+      const mech = buildMechChassis();
+      const p = mech.userData && mech.userData.pilot;
+      if (p) p.visible = true;                 // в превью пилот виден
+      this._base.add(mech);
+      this._modelH = 4.2; this._centerY = 1.9;
+    } else if (this.target === 'player') {
       // a soldier holding the previewed weapon, so the skin is seen in context
       const soldier = buildSoldierMesh('ct');
       if (Store.data.skinChar === 'galaxy' && typeof applyGalaxyCharacter === 'function') applyGalaxyCharacter(soldier);
@@ -14430,7 +14613,7 @@ const Skins = {
     this.root.rotation.y = this.rotY + this._spin;
     this.root.rotation.x = this.rotX;
     // frame the model: pull the camera back so tall (player) models fit
-    const fit = this.target === 'player' ? 2.6 : 1.35;
+    const fit = this.target === 'mech' ? 2.2 : this.target === 'player' ? 2.6 : 1.35;
     this.camera.position.set(0, .1, this.dist * fit);
     this.camera.lookAt(0, this._centerY || 0, 0);
     this.renderer.clear();
@@ -15844,12 +16027,19 @@ class RemotePlayer {
   /* МЕХАКОСТЮМ: swap the soldier for a mech chassis. `on` comes from the peer's
      state packet; the mesh is built once and reused. The nameplate moves onto
      the mech so it stays readable over the taller silhouette. */
-  setMech(on) {
+  setMech(on, skinId) {
     on = !!on;
-    if (on === this.mech && (!on || this.mechMesh)) return;
+    skinId = skinId || '';
+    if (on === this.mech && skinId === this._mechSkinId && (!on || this.mechMesh)) return;
     this.mech = on;
+    this._mechSkinId = skinId;
     if (on) {
       if (!this.mechMesh) this.mechMesh = buildMechChassis();
+      // раскраска: у соперника свой мех-скин (приходит в пакете состояния)
+      if (typeof applyMechSkin === 'function') {
+        const sk = (typeof mechSkinById === 'function') ? (mechSkinById(skinId) || mechSkinById('mch_none')) : null;
+        applyMechSkin(this.mechMesh, sk);
+      }
       if (this.mesh.parent) this.mesh.parent.add(this.mechMesh);
       if (this.plate) {
         if (this.plate.parent) this.plate.parent.remove(this.plate);
@@ -16751,6 +16941,8 @@ const Game = {
       accuracy: shots > 0 ? (hits / shots) * 100 : 0,
       /* run-level counters kept on the game object */
       mechKills: this._mechKills || 0,
+      mechTime: this._mechTime || 0,
+      mechMiniBossKills: this._mechMiniBossKills || 0,
       knifeKills: this._knifeKills || 0,
       bestHeadStreak: this._bestHeadStreak || 0,
       medkitsUsed: this._medkitsUsed || 0,
@@ -16786,7 +16978,7 @@ const Game = {
       hardcoreFull: Store.data.hardcoreFull === 1,
       /* финальное платиновое достижение: сколько остальных уже выполнено */
       otherDone: (typeof achOtherDone === 'function') ? achOtherDone(Store.data.ach) : 0,
-      otherTotal: ACHIEVEMENTS.length - 1,
+      otherTotal: (typeof achOtherTotal === 'function') ? achOtherTotal() : (ACHIEVEMENTS.length - 1),
       otherAchievementsDone: (typeof achAllOthersDone === 'function') ? achAllOthersDone(Store.data.ach) : false
     };
   },
@@ -17366,6 +17558,7 @@ const Game = {
     this._bossKills = 0;
     /* fresh run counters for the new achievement set */
     this._mechKills = 0; this._knifeKills = 0; this._bestHeadStreak = 0;
+    this._mechTime = 0; this._mechMiniBossKills = 0;
     this._headStreak = 0; this._medkitsUsed = 0; this._maxWaveKills = 0;
     this._perfectWaves = 0; this._noDamageWaves = 0;
     this._waveKills = 0; this._waveHurt = false; this._runDeaths = 0;
@@ -21468,6 +21661,13 @@ const Game = {
           this.scene.add(this.mechBody);
         }
       },
+      /* применяет надетый мех-скин ко всем существующим шасси (своё, припаркованное,
+         у соперников/кооп-напарников) — вызывается при выборе скина */
+      applyMechSkinEverywhere() {
+        const sk = (typeof mechSkinById === 'function') ? (mechSkinById(Store.data.mechSkin) || mechSkinById('mch_none')) : null;
+        if (this.mechBody && typeof applyMechSkin === 'function') applyMechSkin(this.mechBody, sk);
+        if (this.parkedMech && this.parkedMech.mesh && typeof applyMechSkin === 'function') applyMechSkin(this.parkedMech.mesh, sk);
+      },
       removeMechBody() {
         if (!this.mechBody) return;
         if (this.mechBody.parent) this.mechBody.parent.remove(this.mechBody);
@@ -23030,7 +23230,10 @@ const Game = {
     if (this._killTimes.length > (this._fastKills || 0)) this._fastKills = this._killTimes.length;
     // which weapon did the killing blow? (mech kit / knife / heavy guns)
     const held = p.weapon && p.weapon.id;
-    if (this.isMechActive()) this._mechKills = (this._mechKills || 0) + 1;
+    if (this.isMechActive()) {
+      this._mechKills = (this._mechKills || 0) + 1;
+      if (z.isMiniBoss) this._mechMiniBossKills = (this._mechMiniBossKills || 0) + 1;
+    }
     else if (held === 'knife') this._knifeKills = (this._knifeKills || 0) + 1;
     // heavy-weapon kill goals: count the killing blow per heavy gun
     const HV = { minigun: 1, rpg: 1, laser: 1, laserCannon: 1, atomicRpg: 1, yhs: 1, rocketgun: 1 };
@@ -23268,6 +23471,7 @@ const Game = {
       mg: wpn && wpn.mag !== Infinity ? wpn.mag : null,
       sp: +(p.spinT || 0).toFixed(2),           // minigun spin-up, for the barrels
       mc: p.mechSuit ? 1 : 0,                   // in the mech: show the chassis remotely
+      ms: (p.mechSuit && Store.data.mechSkin) || null,  // worn mech skin, shown to peers
       md: p.dashActive ? 1 : 0,                 // mech dash in progress
       mj: p.jetActive ? 1 : 0,                  // mech jetpack thrusting
       mp: +(p.pitch || 0).toFixed(3),           // aim pitch, so the arms track remotely
@@ -23302,7 +23506,7 @@ const Game = {
     rp.setGalaxyChar(s.cs === 1);
     rp.spinT = (s.sp !== undefined) ? s.sp : 0;
     // in the mech: hide the soldier and show the chassis instead
-    rp.setMech(s.mc);
+    rp.setMech(s.mc, s.ms);
     if (rp.mech && rp._mechFired === undefined) rp._mechFired = false;
     // mech ability flags (dash / jetpack) so the opponent sees the effects.
     // A short impulse (dash) would often fall between two packets, so latch a
@@ -23997,6 +24201,12 @@ const Game = {
       this.updateTurretDrone(dt);    // companion turret auto-fire
     }
     this.updateMechBody(dt);
+    /* время в мехакостюме (цель «МЕХ-МАРАФОН») и проверка мех-достижений */
+    if (this.isMechActive() && this.roundState === 'live') {
+      this._mechTime = (this._mechTime || 0) + dt;
+      this._mechAchT = (this._mechAchT || 0) + dt;
+      if (this._mechAchT >= 3) { this._mechAchT = 0; this.checkAchievements(); }
+    }
     this.updateMechMissiles(dt);
 
     // ---- environment ----
@@ -24809,6 +25019,7 @@ const ACCOUNT = {
       runs: d.runs || [],
       skinOn: d.skinOn || {},
       skinChar: d.skinChar || '',
+      mechSkin: d.mechSkin || '',
       checkpoints: d.checkpoints || {},
       best: d.best || 0, bestWave: d.bestWave || 0, killsTotal: d.killsTotal || 0,
       matches: d.matches || 0, wins: d.wins || 0, signalSrv: d.signalSrv || 0,
@@ -24854,6 +25065,7 @@ const ACCOUNT = {
     };
     mergeObj('ach'); mergeObj('skinOn'); mergeObj('checkpoints');
     if (remote.skinChar && remote.skinChar !== d.skinChar) { d.skinChar = remote.skinChar; changed = true; }
+    if (remote.mechSkin && remote.mechSkin !== d.mechSkin) { d.mechSkin = remote.mechSkin; changed = true; }
     // числовая статистика — максимум (никогда не уменьшаем)
     const nums = ['best', 'bestWave', 'killsTotal', 'matches', 'wins', 'signalSrv', 'aimBest', 'clears', 'playTime', 'offModsRun', 'offModPick'];
     nums.forEach(k => { const v = remote[k] || 0; if (v > (d[k] || 0)) { d[k] = v; changed = true; } });

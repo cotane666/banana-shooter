@@ -159,6 +159,7 @@ const ACCOUNT = {
       runs: d.runs || [],
       skinOn: d.skinOn || {},
       skinChar: d.skinChar || '',
+      mechSkin: d.mechSkin || '',
       checkpoints: d.checkpoints || {},
       best: d.best || 0, bestWave: d.bestWave || 0, killsTotal: d.killsTotal || 0,
       matches: d.matches || 0, wins: d.wins || 0, signalSrv: d.signalSrv || 0,
@@ -204,6 +205,7 @@ const ACCOUNT = {
     };
     mergeObj('ach'); mergeObj('skinOn'); mergeObj('checkpoints');
     if (remote.skinChar && remote.skinChar !== d.skinChar) { d.skinChar = remote.skinChar; changed = true; }
+    if (remote.mechSkin && remote.mechSkin !== d.mechSkin) { d.mechSkin = remote.mechSkin; changed = true; }
     // числовая статистика — максимум (никогда не уменьшаем)
     const nums = ['best', 'bestWave', 'killsTotal', 'matches', 'wins', 'signalSrv', 'aimBest', 'clears', 'playTime', 'offModsRun', 'offModPick'];
     nums.forEach(k => { const v = remote[k] || 0; if (v > (d[k] || 0)) { d[k] = v; changed = true; } });

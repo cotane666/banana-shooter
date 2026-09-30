@@ -777,12 +777,19 @@ class RemotePlayer {
   /* МЕХАКОСТЮМ: swap the soldier for a mech chassis. `on` comes from the peer's
      state packet; the mesh is built once and reused. The nameplate moves onto
      the mech so it stays readable over the taller silhouette. */
-  setMech(on) {
+  setMech(on, skinId) {
     on = !!on;
-    if (on === this.mech && (!on || this.mechMesh)) return;
+    skinId = skinId || '';
+    if (on === this.mech && skinId === this._mechSkinId && (!on || this.mechMesh)) return;
     this.mech = on;
+    this._mechSkinId = skinId;
     if (on) {
       if (!this.mechMesh) this.mechMesh = buildMechChassis();
+      // раскраска: у соперника свой мех-скин (приходит в пакете состояния)
+      if (typeof applyMechSkin === 'function') {
+        const sk = (typeof mechSkinById === 'function') ? (mechSkinById(skinId) || mechSkinById('mch_none')) : null;
+        applyMechSkin(this.mechMesh, sk);
+      }
       if (this.mesh.parent) this.mesh.parent.add(this.mechMesh);
       if (this.plate) {
         if (this.plate.parent) this.plate.parent.remove(this.plate);
@@ -1684,6 +1691,8 @@ const Game = {
       accuracy: shots > 0 ? (hits / shots) * 100 : 0,
       /* run-level counters kept on the game object */
       mechKills: this._mechKills || 0,
+      mechTime: this._mechTime || 0,
+      mechMiniBossKills: this._mechMiniBossKills || 0,
       knifeKills: this._knifeKills || 0,
       bestHeadStreak: this._bestHeadStreak || 0,
       medkitsUsed: this._medkitsUsed || 0,
@@ -1719,7 +1728,7 @@ const Game = {
       hardcoreFull: Store.data.hardcoreFull === 1,
       /* финальное платиновое достижение: сколько остальных уже выполнено */
       otherDone: (typeof achOtherDone === 'function') ? achOtherDone(Store.data.ach) : 0,
-      otherTotal: ACHIEVEMENTS.length - 1,
+      otherTotal: (typeof achOtherTotal === 'function') ? achOtherTotal() : (ACHIEVEMENTS.length - 1),
       otherAchievementsDone: (typeof achAllOthersDone === 'function') ? achAllOthersDone(Store.data.ach) : false
     };
   },
@@ -2299,6 +2308,7 @@ const Game = {
     this._bossKills = 0;
     /* fresh run counters for the new achievement set */
     this._mechKills = 0; this._knifeKills = 0; this._bestHeadStreak = 0;
+    this._mechTime = 0; this._mechMiniBossKills = 0;
     this._headStreak = 0; this._medkitsUsed = 0; this._maxWaveKills = 0;
     this._perfectWaves = 0; this._noDamageWaves = 0;
     this._waveKills = 0; this._waveHurt = false; this._runDeaths = 0;
@@ -6401,6 +6411,13 @@ const Game = {
           this.scene.add(this.mechBody);
         }
       },
+      /* применяет надетый мех-скин ко всем существующим шасси (своё, припаркованное,
+         у соперников/кооп-напарников) — вызывается при выборе скина */
+      applyMechSkinEverywhere() {
+        const sk = (typeof mechSkinById === 'function') ? (mechSkinById(Store.data.mechSkin) || mechSkinById('mch_none')) : null;
+        if (this.mechBody && typeof applyMechSkin === 'function') applyMechSkin(this.mechBody, sk);
+        if (this.parkedMech && this.parkedMech.mesh && typeof applyMechSkin === 'function') applyMechSkin(this.parkedMech.mesh, sk);
+      },
       removeMechBody() {
         if (!this.mechBody) return;
         if (this.mechBody.parent) this.mechBody.parent.remove(this.mechBody);
@@ -7963,7 +7980,10 @@ const Game = {
     if (this._killTimes.length > (this._fastKills || 0)) this._fastKills = this._killTimes.length;
     // which weapon did the killing blow? (mech kit / knife / heavy guns)
     const held = p.weapon && p.weapon.id;
-    if (this.isMechActive()) this._mechKills = (this._mechKills || 0) + 1;
+    if (this.isMechActive()) {
+      this._mechKills = (this._mechKills || 0) + 1;
+      if (z.isMiniBoss) this._mechMiniBossKills = (this._mechMiniBossKills || 0) + 1;
+    }
     else if (held === 'knife') this._knifeKills = (this._knifeKills || 0) + 1;
     // heavy-weapon kill goals: count the killing blow per heavy gun
     const HV = { minigun: 1, rpg: 1, laser: 1, laserCannon: 1, atomicRpg: 1, yhs: 1, rocketgun: 1 };
@@ -8201,6 +8221,7 @@ const Game = {
       mg: wpn && wpn.mag !== Infinity ? wpn.mag : null,
       sp: +(p.spinT || 0).toFixed(2),           // minigun spin-up, for the barrels
       mc: p.mechSuit ? 1 : 0,                   // in the mech: show the chassis remotely
+      ms: (p.mechSuit && Store.data.mechSkin) || null,  // worn mech skin, shown to peers
       md: p.dashActive ? 1 : 0,                 // mech dash in progress
       mj: p.jetActive ? 1 : 0,                  // mech jetpack thrusting
       mp: +(p.pitch || 0).toFixed(3),           // aim pitch, so the arms track remotely
@@ -8235,7 +8256,7 @@ const Game = {
     rp.setGalaxyChar(s.cs === 1);
     rp.spinT = (s.sp !== undefined) ? s.sp : 0;
     // in the mech: hide the soldier and show the chassis instead
-    rp.setMech(s.mc);
+    rp.setMech(s.mc, s.ms);
     if (rp.mech && rp._mechFired === undefined) rp._mechFired = false;
     // mech ability flags (dash / jetpack) so the opponent sees the effects.
     // A short impulse (dash) would often fall between two packets, so latch a
@@ -8930,6 +8951,12 @@ const Game = {
       this.updateTurretDrone(dt);    // companion turret auto-fire
     }
     this.updateMechBody(dt);
+    /* время в мехакостюме (цель «МЕХ-МАРАФОН») и проверка мех-достижений */
+    if (this.isMechActive() && this.roundState === 'live') {
+      this._mechTime = (this._mechTime || 0) + dt;
+      this._mechAchT = (this._mechAchT || 0) + dt;
+      if (this._mechAchT >= 3) { this._mechAchT = 0; this.checkAchievements(); }
+    }
     this.updateMechMissiles(dt);
 
     // ---- environment ----

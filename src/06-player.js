@@ -2609,7 +2609,65 @@ function buildMechChassis() {
   pilot.traverse(o => { if (o.isMesh) o.castShadow = false; });
   g.add(pilot);
   g.userData.pilot = pilot;
+  /* раскраска по надетому мех-скину (по умолчанию — стандартная синяя) */
+  applyMechSkin(g, (typeof mechSkinById === 'function' ? mechSkinById(Store.data.mechSkin) : null) || null);
   return g;
+}
+
+/* ============================================================
+   МЕХ-СКИНЫ — раскраска шасси по РОЛЯМ материалов (корпус / тёмная броня /
+   белые вставки / золото / красные ракеты). Исходный цвет каждого меша
+   запоминается (userData.bc), поэтому скин можно менять в любой момент и
+   раскраска всегда считается от оригинала, а не накладывается поверх.
+   ============================================================ */
+function applyMechSkin(mesh, skin) {
+  if (!mesh || !mesh.traverse) return mesh;
+  if (!skin) skin = (typeof mechSkinById === 'function' ? mechSkinById('mch_none') : null);
+  const roleOf = (hex) => {
+    switch (hex) {
+      case 0x2b4a8f: return 'body';
+      case 0x1d3568: return 'body2';        // тёмный корпус (тот же оттенок, темнее)
+      case 0x1b2026: return 'dark';
+      case 0xdfe6f0: return 'white';
+      case 0xd8b45a: return 'gold';
+      case 0xc4302a: return 'red';
+      default: return null;
+    }
+  };
+  const shade = (hex, tint, mul) => {
+    const src = new THREE.Color(hex);
+    const l = src.r * .3 + src.g * .59 + src.b * .11;
+    const c = new THREE.Color(tint);
+    c.multiplyScalar(U.clamp(.55 + l * 1.8, .45, 1.55) * (mul || 1));
+    return c;
+  };
+  if (!skin) return mesh;
+  const exact = !!skin.exact;                          // стандартная раскраска: цвета один-в-один
+  mesh.traverse(o => {
+    if (!o.isMesh || !o.material || !o.material.color) return;
+    if (o.material.isMeshBasicMaterial) return;          // стёкла/лампы не трогаем
+    if (o.userData.bc === undefined) o.userData.bc = o.material.color.getHex();
+    if (o.userData.be === undefined) o.userData.be = o.material.emissive ? o.material.emissive.getHex() : 0;
+    const hex = o.userData.bc;
+    const role = roleOf(hex);
+    if (!role) return;
+    let tint = skin.body, mul = 1;
+    if (role === 'body') tint = skin.body;
+    else if (role === 'body2') { tint = skin.body; mul = .82; }
+    else if (role === 'dark') tint = skin.dark;
+    else if (role === 'white') tint = skin.white;
+    else if (role === 'gold') tint = skin.gold;
+    else if (role === 'red') tint = skin.red;
+    if (exact) o.material.color.setHex(hex);
+    else o.material.color.copy(shade(hex, tint, mul));
+    if (o.material.emissive !== undefined) {
+      if (skin.emissive !== undefined && (role === 'gold' || role === 'body2')) o.material.emissive.setHex(skin.emissive);
+      else o.material.emissive.setHex(o.userData.be || 0);
+    }
+    o.material.needsUpdate = true;
+  });
+  mesh.userData.mechSkin = skin;
+  return mesh;
 }
 
 /* Animate a mech chassis' legs. Shared by the local first-person mech and the

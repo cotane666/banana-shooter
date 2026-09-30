@@ -195,6 +195,8 @@ kbd{background:#0c0f12;border:1px solid var(--line);border-bottom:2px solid #333
 .bar.hp i{background:linear-gradient(90deg,#2f8f3f,#5fd47a)}
 .bar.hp.low i{background:linear-gradient(90deg,#8f2f2f,#e05141)}
 .bar.ap i{background:linear-gradient(90deg,#2d6bb0,#68b6ff)}
+.bar.ap.low i{background:linear-gradient(90deg,#8f2f7a,#d051c0)}
+.bar.ap.energy i{background:linear-gradient(90deg,#5a2db0,#9d68ff)}
 .bar em{position:absolute;right:7px;top:1px;font-style:normal;font-size:12px;font-weight:700;
   color:#fff;text-shadow:0 1px 3px #000;line-height:17px}
 .hud-tl:before{content:"HP / БРОНЯ";position:absolute;top:-17px;left:2px;font-size:9.5px;

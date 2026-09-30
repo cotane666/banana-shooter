@@ -499,8 +499,12 @@ const UI = {
     e.hpFill.style.transform = 'scaleX(' + (hp / maxHP) + ')';
     e.hpVal.textContent = Math.max(0, Math.round(p.health));
     e.hpFill.parentElement.classList.toggle('low', hp <= maxHP * .35);
-    e.apFill.style.transform = 'scaleX(' + (U.clamp(p.armor, 0, CFG.maxAP) / (CFG.maxAP || 100)) + ')';
+    const apMax = p.armorMax || CFG.maxAP || 100;
+    e.apFill.style.transform = 'scaleX(' + (U.clamp(p.armor, 0, apMax) / apMax) + ')';
     e.apVal.textContent = Math.round(p.armor);
+    const apBar = e.apFill.parentElement;
+    apBar.classList.toggle('low', p.armor > 0 && p.armor <= apMax * .35);
+    apBar.classList.toggle('energy', !!p.energyArmor);
     this.lowHP(hp > 0 && hp <= maxHP * .32);
 
     // ammo

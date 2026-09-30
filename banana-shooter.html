@@ -210,6 +210,8 @@ kbd{background:#0c0f12;border:1px solid var(--line);border-bottom:2px solid #333
 .bar.hp i{background:linear-gradient(90deg,#2f8f3f,#5fd47a)}
 .bar.hp.low i{background:linear-gradient(90deg,#8f2f2f,#e05141)}
 .bar.ap i{background:linear-gradient(90deg,#2d6bb0,#68b6ff)}
+.bar.ap.low i{background:linear-gradient(90deg,#8f2f7a,#d051c0)}
+.bar.ap.energy i{background:linear-gradient(90deg,#5a2db0,#9d68ff)}
 .bar em{position:absolute;right:7px;top:1px;font-style:normal;font-size:12px;font-weight:700;
   color:#fff;text-shadow:0 1px 3px #000;line-height:17px}
 .hud-tl:before{content:"HP / БРОНЯ";position:absolute;top:-17px;left:2px;font-size:9.5px;
@@ -13252,8 +13254,12 @@ const UI = {
     e.hpFill.style.transform = 'scaleX(' + (hp / maxHP) + ')';
     e.hpVal.textContent = Math.max(0, Math.round(p.health));
     e.hpFill.parentElement.classList.toggle('low', hp <= maxHP * .35);
-    e.apFill.style.transform = 'scaleX(' + (U.clamp(p.armor, 0, CFG.maxAP) / (CFG.maxAP || 100)) + ')';
+    const apMax = p.armorMax || CFG.maxAP || 100;
+    e.apFill.style.transform = 'scaleX(' + (U.clamp(p.armor, 0, apMax) / apMax) + ')';
     e.apVal.textContent = Math.round(p.armor);
+    const apBar = e.apFill.parentElement;
+    apBar.classList.toggle('low', p.armor > 0 && p.armor <= apMax * .35);
+    apBar.classList.toggle('energy', !!p.energyArmor);
     this.lowHP(hp > 0 && hp <= maxHP * .32);
 
     // ammo
@@ -18846,12 +18852,17 @@ const Game = {
       return;
     }
 
-    if (this.player.armor >= 100 && (!g.helmet || this.player.helmet) && !this.player.heavyArmor && !this.player.energyArmor) { Audio3D_SFX.deny(); UI.toast('Уже куплено'); return; }
+    /* KEKLAR нельзя купить поверх укреплённой/энергоброни: иначе он ПОНИЖАЛ бы
+       броню со 200/300 до 100. */
+    if (this.player.heavyArmor || this.player.energyArmor) { Audio3D_SFX.deny(); UI.toast('Уже есть броня лучше'); return; }
+    if (this.player.armor >= 100 && (!g.helmet || this.player.helmet)) { Audio3D_SFX.deny(); UI.toast('Уже куплено'); return; }
     if (!free && this.player.money < g.price) { Audio3D_SFX.deny(); UI.toast('Не хватает денег'); return; }
     if (!free) { this.player.money -= g.price; this.player.moneySpent = (this.player.moneySpent || 0) + g.price; }
     this.player.armor = g.ap;
     if (g.helmet) this.player.helmet = true;
     this.player.armorMax = g.ap;
+    // обычная броня не может быть поверх укреплённой — сбрасываем флаги тяжести
+    this.player.heavyArmor = false; this.player.energyArmor = false;
     Audio3D_SFX.buy();
     UI.toast('Куплено: ' + g.name, '#57d16a');
     UI.renderBuy(this.player, this.buyTimer);
@@ -22493,6 +22504,14 @@ const Game = {
       p.armor -= absorbed;
       actual -= absorbed;
       if (p.armor < 0) p.armor = 0;
+      /* БРОНЯ РАЗРУШЕНА: когда AP упал до нуля, костюм уничтожен — снимаем
+         флаги, иначе он навсегда висел как «купленный» и новую броню нельзя
+         было взять (баг с энерго-/укреплённой бронёй). */
+      if (p.armor <= 0 && (p.heavyArmor || p.energyArmor)) {
+        p.heavyArmor = false; p.energyArmor = false;
+        p.armorMax = CFG.maxAP || 100;
+        UI.toast('Броня разрушена — купите новую', '#e33a2e');
+      }
     }
     p.health -= actual;
     if (actual > 0) this._waveHurt = true;
@@ -23639,7 +23658,8 @@ const Game = {
          выхода оно пропадало и приходилось покупать заново. */
       bag: (p.bag || []).map(b => ({ id: b.id, mag: b.mag, reserve: b.reserve })),
       slot: p.slot,
-      armor: p.armor, helmet: p.helmet, heavy: !!p.heavyArmor,
+      armor: p.armor, armorMax: p.armorMax, helmet: p.helmet,
+      heavy: !!p.heavyArmor, energy: !!p.energyArmor,
       medkits: p.medkits || 0, medkitUnlimited: !!p.medkitUnlimited,
       drone: p.drone || 0, droneOwned: !!p.droneOwned,
       // which offline preset this run used, so resuming restores the same mode
@@ -23705,7 +23725,8 @@ const Game = {
     o.wave = Math.max(0, cp.wave - 1);         // startWave() increments
     const p = this.player;
     p.money = cp.money; p.score = cp.score;
-    p.armor = cp.armor; p.helmet = cp.helmet; p.heavyArmor = cp.heavy;
+    p.armor = cp.armor; p.helmet = cp.helmet; p.heavyArmor = cp.heavy; p.energyArmor = !!cp.energy;
+    p.armorMax = cp.armorMax || (p.energyArmor ? 300 : p.heavyArmor ? 200 : CFG.maxAP || 100);
     p.medkits = cp.medkits; p.medkitUnlimited = cp.medkitUnlimited;
     p.drone = cp.drone; p.droneOwned = cp.droneOwned;
     if (cp.inv1) p.give(cp.inv1);

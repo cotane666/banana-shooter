@@ -2061,10 +2061,10 @@ function buildWeaponModel(id) {
       add(B(.018, .10, .02, brass, 0, .02, -1.20));
       add(B(.06, .018, .02, brass, 0, .07, -1.20));
       [-1, 1].forEach(s => add(B(.014, .05, .02, brass, s * .045, .045, -1.20, 0, 0, s * -.5)));
-      // --- два раскалённых красных лезвия (уголки) по бокам ---
-      const mkBlade = (s) => {
+      // --- раскалённые красные лезвия со ВСЕХ ЧЕТЫРЁХ сторон головы ---
+      const mkBlade = (angle) => {
         const bl = new THREE.Group();
-        // основной клин, сужается к внешнему краю
+        // основной клин, сужается к внешнему краю (растёт вдоль +X)
         const a = new THREE.Mesh(new THREE.BoxGeometry(.20, .26, .13), gunMat(glowRed));
         a.material.emissive = new THREE.Color(0x8a0a0a);
         a.position.set(0, 0, 0); bl.add(a);
@@ -2078,11 +2078,13 @@ function buildWeaponModel(id) {
         // тёмная арматура у основания
         const cap = new THREE.Mesh(new THREE.BoxGeometry(.08, .22, .17), gunMat(0x1c1e22));
         cap.position.set(-.10, 0, 0); bl.add(cap);
-        bl.position.set(s * .21, .02, -.99);
-        bl.rotation.z = s * -.06;
+        // ставим лезвие по кругу: направление задаётся углом
+        bl.position.set(Math.cos(angle) * .21, .02 + Math.sin(angle) * .21, -.99);
+        bl.rotation.z = angle;
         return bl;
       };
-      add(mkBlade(1), mkBlade(-1));
+      // 4 стороны крест-накрест (сверху, снизу, слева, справа в плоскости головы)
+      add(mkBlade(0), mkBlade(Math.PI / 2), mkBlade(Math.PI), mkBlade(-Math.PI / 2));
       // --- красные электрические искры-трещины на голове ---
       const sparks = new THREE.MeshBasicMaterial({ color: hot });
       for (let i = 0; i < 5; i++) {

@@ -7505,8 +7505,12 @@ const Game = {
     // The floor is included here (and pulled out below): bullets used to skip
     // the ground entirely, so shots into the floor left no impact or bullet hole.
     const allHits = this.world.raycastAll(origin, dir, maxDist);
-    const wallHits = allHits.filter(h => h.box.tag !== 'ground');
-    const groundHit = allHits.find(h => h.box.tag === 'ground') || null;
+    const wallHits = [];
+    let groundHit = null;
+    for (let i = 0; i < allHits.length; i++) {
+      if (allHits[i].box.tag === 'ground') { if (!groundHit) groundHit = allHits[i]; }
+      else wallHits.push(allHits[i]);
+    }
     const zHit = this.horde ? this.horde.raycast(origin, dir, maxDist) : null;
     let dmgMul = 1;
     let stopT = maxDist;
@@ -7602,6 +7606,8 @@ const Game = {
       this.hitEffect(zHit.point, dir, zHit.part, zHit.part === 'head');
       Audio3D_SFX.hit(zHit.point.x, zHit.point.y, zHit.point.z, zHit.part === 'head');
       this.effects.tracer(muzzleWorld, zHit.point, 1, true, _shotCol);
+      /* ВЗРЫВНЫЕ ПУЛИ: пуля детонирует по площади (AoE, как снаряд РПГ) */
+      if (def.bulletSplash) this.bulletExplode(zHit.point, def);
       return;
     }
 
@@ -7614,9 +7620,68 @@ const Game = {
       const surf = (stopNormal && Math.abs(stopNormal.y) > .7) ? 'concrete' : 'concrete';
       this.effects.impact(stopPoint, stopNormal, surf, (p && p.skinTheme) || null);
       Audio3D_SFX.tone(140, .06, 'triangle', .05, stopPoint.x, stopPoint.y, stopPoint.z, 90);
+      /* ВЗРЫВНЫЕ ПУЛИ: попадание в стену тоже даёт взрыв по площади */
+      if (def.bulletSplash) this.bulletExplode(stopPoint, def);
     } else {
       this.effects.tracer(muzzleWorld, end, 1, false, _shotCol);
+      /* пуля ушла в небо — детонируем на пределе дальности, если это взрывная */
+      if (def.bulletSplash) this.bulletExplode(end, def);
     }
+  },
+
+  /* ============================================================
+     ВЗРЫВНЫЕ ПУЛИ (Y.H.S): пуля детонирует при попадании. AoE-радиус и урон —
+     как у снаряда РПГ: задевает всех в радиусе, ломает карту, толкает.
+     Общий метод — используется и на сервере (локально), и в коопе.
+     ============================================================ */
+  bulletExplode(center, def) {
+    /* Y.H.S стреляет почти 100 раз/с — взрыв на КАЖДОЙ пуле убьёт производительность
+       (и мгновенно снесёт всю карту). Прямой урон пули остаётся всегда, а
+       площадь-взрыв детонирует с небольшим кулдауном (по умолчанию ~11 раз/с). */
+    const now = U.now();
+    const cdMs = (def.bulletSplashCd !== undefined ? def.bulletSplashCd : .09) * 1000;
+    if (this._bulletBoomAt && now - this._bulletBoomAt < cdMs) return 0;
+    this._bulletBoomAt = now;
+    const R = def.bulletSplash;
+    const dmg = def.bulletSplashDmg || def.dmg || 100;
+    const col = def.bulletExplosionColor || [0xffa22a, 0x1a0d05];
+    this.effects.explosion(center.x, center.y, center.z, R, col);
+    /* взрыв РАЗРУШАЕТ карту в радиусе (мгновенно) */
+    this.breakMapAt(center.x, center.y, center.z, R * 1.05, dmg * .5);
+    Audio3D_SFX.explosionAt(center.x, center.y, center.z);
+    // зомби в радиусе
+    if (this.horde) {
+      for (const z of this.horde.list) {
+        if (!z.alive || z.dying) continue;
+        const d = Math.hypot(z.pos.x - center.x, (z.pos.y + 1) - center.y, z.pos.z - center.z);
+        if (d > R) continue;
+        const k = 1 - d / R;
+        const dealt = dmg * k;
+        if (this.mode === CS.MODE.ONLINE && this.isCoop && Net.role !== CS.NETROLE.HOST && z.remoteDriven) {
+          Net.send({ t: 'zhit', i: z.remoteId, dmg: Math.round(dealt), part: 'body', from: Net.selfId() });
+          z.health -= dealt;
+        } else {
+          z.takeDamage(dealt, 'body', { x: 0, y: 0, z: 0 });
+        }
+        this.player.damageDealt += dealt;
+      }
+    }
+    // игроки-соперники (онлайн, не кооп)
+    if (this.mode === CS.MODE.ONLINE && !this.isCoop) {
+      for (const rp of this.remotePlayers) {
+        if (!rp.alive) continue;
+        const d = Math.hypot(rp.pos.x - center.x, (rp.pos.y + 1) - center.y, rp.pos.z - center.z);
+        if (d <= R) this.sendPvpHit(dmg * (1 - d / R), 'body', false, rp, 'yhs');
+      }
+    }
+    // сообщаем кооп-напарникам, чтобы они увидели взрыв и получили урон
+    if (this.mode === CS.MODE.ONLINE && Net.connected) {
+      Net.send({ t: 'boom', from: Net.selfId(), x: +center.x.toFixed(2), y: +center.y.toFixed(2), z: +center.z.toFixed(2), r: R, c: col });
+    }
+    // лёгкая отдача по себе, если стрелял в упор (не в ноль, чтобы не мешало)
+    const p = this.player;
+    const ds = Math.hypot(p.pos.x - center.x, (p.pos.y + 1) - center.y, p.pos.z - center.z);
+    if (ds <= R * .55) this.applyDamageToSelf(dmg * (1 - ds / (R * .55)) * .12, center);
   },
 
   /* Разрушение карты взрывом + ПЫЛЬ/ЧАСТИЦЫ. ЛЮБОЙ взрыв ломает блоки

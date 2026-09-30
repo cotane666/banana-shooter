@@ -617,6 +617,10 @@ class Zombie {
     this.losT = U.rand(0, .25);
     this.hasLOS = false;
     this.stuckT = 0;
+    /* «ПРОЛОМ»: зомби бьёт препятствие перед собой и ломает его. Кулдаун —
+       чтобы не бить каждый кадр; разные типы ломают с разной силой. */
+    this.breakCd = U.rand(.15, .6);
+    this.breakPower = S.breakPower !== undefined ? S.breakPower : 1;
     this.lastPos = { x, z };
     this.speedMul = 1;
     this.frozen = false;
@@ -974,30 +978,29 @@ class Zombie {
     // block if the step is too tall (wall)
     const canStep = (gy - this.pos.y) < 1.25;
     let nx = this.pos.x + moveX * dt, nz = this.pos.z + moveZ * dt;
-    if (!canStep || ctx.world.overlaps(nx, gy + .05, nz, this.radius * .92, this.height * .8)) {
+    const blockedBy = ctx.world.overlaps(nx, gy + .05, nz, this.radius * .92, this.height * .8);
+    if (!canStep || blockedBy) {
+      /* ЗОМБИ ИДЁТ НАПРОЛОМ: упёрся в препятствие — сразу начинает его ломать
+         (не стоит и не «жуёт» вечно). Урон зависит от силы зомби. */
+      this.smashAhead(ctx, dirX, dirZ, dt);
       // wall or too-tall step → try sliding along each axis
       const gyX = ctx.world.groundAt(this.pos.x + moveX * dt, this.pos.z, this.pos.y + 2.6);
       const gyZ = ctx.world.groundAt(this.pos.x, this.pos.z + moveZ * dt, this.pos.y + 2.6);
       const okX = (gyX - this.pos.y) < 1.25 && !ctx.world.overlaps(this.pos.x + moveX * dt, gyX + .05, this.pos.z, this.radius * .92, this.height * .8);
       const okZ = (gyZ - this.pos.y) < 1.25 && !ctx.world.overlaps(this.pos.x, gyZ + .05, this.pos.z + moveZ * dt, this.radius * .92, this.height * .8);
-      if (okX) { nx = this.pos.x + moveX * dt; nz = this.pos.z; stepY = gyX; }
-      else if (okZ) { nx = this.pos.x; nz = this.pos.z + moveZ * dt; stepY = gyZ; }
+      if (okX) { nx = this.pos.x + moveX * dt; nz = this.pos.z; stepY = gyX; this.stuckT = Math.max(0, this.stuckT - dt); }
+      else if (okZ) { nx = this.pos.x; nz = this.pos.z + moveZ * dt; stepY = gyZ; this.stuckT = Math.max(0, this.stuckT - dt); }
       else { nx = this.pos.x; nz = this.pos.z; stepY = this.pos.y; this.stuckT += dt; }
     } else this.stuckT = Math.max(0, this.stuckT - dt * .5);
 
-    if (this.stuckT > 1.4) {
+    if (this.stuckT > 1.0) {
       // nudge sideways to escape a corner
       const side = (this.id % 2 ? 1 : -1);
       nx += -dirZ * side * speed * dt * 1.4;
       nz += dirX * side * speed * dt * 1.4;
-      this.stuckT = .8;
-      /* ЗОМБИ ЛОМАЕТ то, во что упёрся: наносим урон разрушаемым чанкам перед
-         собой, чтобы он мог пробить укрытие, а не стоять вечно. */
-      if (typeof damageMapAt === 'function') {
-        const fx = this.pos.x + dirX * (this.radius + .8);
-        const fz = this.pos.z + dirZ * (this.radius + .8);
-        damageMapAt(fx, this.pos.y + .8, fz, 1.4, this.dmg * 3.5);
-      }
+      this.stuckT = .6;
+      // ещё раз бьёт препятствие (страховка в углу)
+      this.smashAhead(ctx, dirX, dirZ, dt);
     }
 
     if (stepY > this.pos.y) this.pos.y = U.lerp(this.pos.y, stepY, 1 - Math.pow(.0001, dt));
@@ -1016,6 +1019,27 @@ class Zombie {
     }
 
     this.applyVisual(dt, Math.hypot(moveX, moveZ));
+  }
+
+  /* ЗОМБИ ЛОМАЕТ ПРЕПЯТСТВИЕ ПЕРЕД СОБОЙ. Бьёт разрушаемые чанки в конусе по
+     направлению движения — так зомби не «жуёт» стену, а активно проламывает
+     укрытия и идёт напролом. Урон масштабируется силой типа зомби. */
+  smashAhead(ctx, dirX, dirZ, dt) {
+    if (this.breakCd > 0) { this.breakCd -= dt; return; }
+    if (typeof damageMapAt !== 'function') return;
+    this.breakCd = .34;
+    const reach = this.radius + .75 + .22 * this.scale;
+    const fx = this.pos.x + dirX * reach;
+    const fz = this.pos.z + dirZ * reach;
+    const cy = this.pos.y + this.height * .5;
+    /* урон = прочность обычной части (~1.3³·26 ≈ 57) / 1.4 → любой блок ломается
+       с 1-2 ударов; крупные куски — чуть дольше. Боссы ломают быстрее. */
+    const base = Math.max(22, this.dmg * 2.4) * (this.breakPower || 1);
+    const broken = damageMapAt(fx, cy, fz, Math.max(1.2, this.radius + .7), base);
+    if (broken && this.game && this.game.effects) {
+      try { this.game.effects.debrisBurst(fx, cy, fz, 0xb8b2a6, .8, null, 3); } catch (e) { }
+    }
+    return broken;
   }
 
   /* КЛИЕНТ в коопе: зомби двигает хост (позиция приходит снапшотами), но
@@ -1308,8 +1332,7 @@ class Horde {
      popping into existence right in front of them. */
   spawnRandom(type, aroundX, aroundZ, minDist) {
     const spawns = MAP.zombieSpawns;
-    const pl = this.game && this.game.player;
-    const pyaw = pl ? pl.yaw : 0;
+    const pl = this.game && this.game.player;    const pyaw = pl ? pl.yaw : 0;
     const fx = -Math.sin(pyaw), fz = -Math.cos(pyaw);   // player forward
     let best = null, bestScore = -1e9;
     for (let i = 0; i < 16; i++) {
@@ -1379,6 +1402,7 @@ class Horde {
         z.targetRemote = (best !== player);      // цель — удалённый игрок?
       } else { ctx.player = player; z.targetRemote = false; }
       ctx.neighbors = this.nearby(z);
+      z.game = this.game;
       z.update(dt * (d2 > nearD2 ? CFG.zombieFarInterval : 1), ctx);
     }
     // reap

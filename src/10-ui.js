@@ -791,6 +791,7 @@ const UI = {
         if (w.pierce) stats.push(['ПРОБИВ', 'НАСКВОЗЬ']);
         if (w.beam) stats.push(['ЛУЧ', w.beamMax + 'с']);
         if (w.splash) stats.push(['РАДИУС', w.splash + 'м']);
+        if (w.bulletSplash) stats.push(['РАДИУС', w.bulletSplash + 'м'], ['ВЗРЫВНЫЕ', 'ДА']);
         mkCard(id, w.name, w.cat.toUpperCase(), w.price, stats, owned || inBag, !free && player.money < w.price,
           () => Bus.emit('buy', id),
           () => Bus.emit('equip', id), id);

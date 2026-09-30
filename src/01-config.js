@@ -304,15 +304,17 @@ const WEAPONS = {
            beam: true, beamMax: 10, beamVent: 3.5, beamDps: 320, beamColor: 0xff6a2a },
 
   /* ---------------- heavy: atomic "freedom" RPG ---------------- */
-  atomicRpg: { name: 'АТОМНОЕ РПГ СВОБОДЫ', cat: 'heavy', slot: 2, price: 20000, dmg: 1300, rpm: 34, mag: 1, reserve: 20,
+  atomicRpg: { name: 'АТОМНОЕ РПГ СВОБОДЫ', cat: 'heavy', slot: 2, price: 60000, dmg: 1300, rpm: 34, mag: 1, reserve: 20,
          auto: false, spread: .006, moveSpread: .070, recoil: 7.3, falloff: .99, range: 260, headMul: 1.2,
          sound: 'awp', projectile: 'rocket', projSpeed: 52, projGravity: 3,
          splash: 14.0, splashDmg: 1200, explosionColor: [0x39ff5a, 0x0a1a0a], noSelfDamage: true, nuke: true },
 
-  /* ---------------- Y.H.S: absurdly strong, absurdly fast MG ---------------- */
+  /* ---------------- Y.H.S: absurdly strong, absurdly fast MG ----------------
+     ВЗРЫВНЫЕ ПУЛИ: каждая пуля детонирует при попадании (AoE, радиус как у
+     снаряда РПГ). dmg — прямой урон пули, splash/splashDmg — взрыв. */
   yhs: { name: 'Y.H.S', cat: 'heavy', slot: 2, price: 80000, dmg: 180, rpm: 5750, mag: 2000, reserve: 0,
          auto: true, spread: .030, moveSpread: .020, recoil: .35, falloff: .85, range: 140, headMul: 2.3,
-         sound: 'rifle', spinUp: .35 },
+         sound: 'rifle', spinUp: .35, bulletSplash: 7.0, bulletSplashDmg: 210, bulletExplosionColor: [0xffa22a, 0x1a0d05] },
 
   /* ---------------- guided missile launcher (player steers the rocket) ---------------- */
   rocketgun: { name: 'РАКЕТНИЦА', cat: 'heavy', slot: 2, price: 14000, dmg: 220, rpm: 30, mag: 1, reserve: 8,
@@ -512,11 +514,11 @@ const BUY_CATS = [
 
 /* ---------------- zombie types ---------------- */
 const ZOMBIES = {
-  walker: { name: 'Ходок',        hp: 100,  speed: 1.65, dmg: 13, score: 100, money: 55, scale: 1.00, color: 0x6b7f52, atkRange: 1.5 },
-  runner: { name: 'Бегун',        hp: 70,   speed: 4.30, dmg: 11, score: 150, money: 65, scale: 0.94, color: 0x8a6b3c, atkRange: 1.5 },
-  tank:   { name: 'Толстяк',      hp: 340,  speed: 1.15, dmg: 27, score: 260, money: 110, scale: 1.38, color: 0x4d6b3f, atkRange: 1.9 },
-  crawler:{ name: 'Ползун',       hp: 55,   speed: 3.10, dmg: 9,  score: 130, money: 60, scale: 0.80, color: 0x7a5a52, atkRange: 1.4 },
-  brute:  { name: 'Громила',      hp: 620,  speed: 1.55, dmg: 36, score: 480, money: 190, scale: 1.62, color: 0x3f5236, atkRange: 2.1 },
+  walker: { name: 'Ходок',        hp: 100,  speed: 1.65, dmg: 13, score: 100, money: 55, scale: 1.00, color: 0x6b7f52, atkRange: 1.5, breakPower: 1.0 },
+  runner: { name: 'Бегун',        hp: 70,   speed: 4.30, dmg: 11, score: 150, money: 65, scale: 0.94, color: 0x8a6b3c, atkRange: 1.5, breakPower: 0.8 },
+  tank:   { name: 'Толстяк',      hp: 340,  speed: 1.15, dmg: 27, score: 260, money: 110, scale: 1.38, color: 0x4d6b3f, atkRange: 1.9, breakPower: 1.7 },
+  crawler:{ name: 'Ползун',       hp: 55,   speed: 3.10, dmg: 9,  score: 130, money: 60, scale: 0.80, color: 0x7a5a52, atkRange: 1.4, breakPower: 0.6 },
+  brute:  { name: 'Громила',      hp: 620,  speed: 1.55, dmg: 36, score: 480, money: 190, scale: 1.62, color: 0x3f5236, atkRange: 2.1, breakPower: 2.4 },
   spitter:{ name: 'Плевун',       hp: 90,   speed: 2.10, dmg: 18, score: 220, money: 90, scale: 1.0,  color: 0x6f7d2e, atkRange: 1.6,
             shoot: 'spit', shootRange: 17, shootCd: 2.4, shootDmg: 16, shootSpeed: 23, shootGrav: 6 },
 
@@ -548,7 +550,7 @@ const ZOMBIES = {
              miniBoss: true, armor: .24, abilities: ['devour', 'shockwave'], abilityCd: 7.0, aura: 0xff2a3a },
   /* 5) ТИТАН-МИНИ — самый сильный мини-босс: ударная волна + обстрел */
   titanMini:{ name: 'ТИТАН-МИНИ', hp: 3400, speed: 1.30, dmg: 72, score: 4200, money: 1600, scale: 2.30, color: 0x6b3b2b, atkRange: 2.8,
-             miniBoss: true, armor: .30, abilities: ['shockwave', 'charge', 'barrage'], abilityCd: 6.5, aura: 0xff7a2a },
+             miniBoss: true, armor: .30, abilities: ['shockwave', 'charge', 'barrage'], abilityCd: 6.5, aura: 0xff7a2a, breakPower: 3.2 },
 
   /* ---- new specials (waves 7+) ---- */
   splitter:{ name: 'ДЕЛЯЩИЙСЯ',   hp: 130, speed: 1.9, dmg: 15, score: 280, money: 110, scale: 1.1, color: 0x7a4a6a, atkRange: 1.6,

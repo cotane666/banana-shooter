@@ -5989,7 +5989,7 @@ const Game = {
          зависит от оружия: тяжёлое машет медленнее и шире. */
       const def2 = p.def || {};
       const w2 = (def2.melee || 'knife');
-      p.swingT = (w2 === 'megahammer') ? .62 : (w2 === 'katana') ? .26 : (w2 === 'fists') ? .20 : (w2 === 'hammer' || w2 === 'axe') ? .40
+      p.swingT = (w2 === 'megahammer') ? .62 : (w2 === 'knightsword') ? .15 : (w2 === 'katana') ? .26 : (w2 === 'fists') ? .20 : (w2 === 'hammer' || w2 === 'axe') ? .40
         : (w2 === 'chainsaw') ? .16 : (w2 === 'machete') ? .32 : .28;
       p.swingMax = p.swingT;
       p.swingKind = w2;

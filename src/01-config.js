@@ -225,7 +225,7 @@ const WEAPONS = {
   /* ---------------- МЕЧ РОКОЧУЩЕГО РЫЦАРЯ (ультимейт-оружие) ----------------
      ЛКМ — обычные разрезы. ПКМ — УЛЬТА: экран чернеет, вперёд уходит гигантский
      белый слеш (с рёвом рыцаря), который наносит огромный урон и сносит стены. */
-  knightsword: { name: 'МЕЧ РОКОЧУЩЕГО РЫЦАРЯ', cat: 'melee', slot: 3, price: 30000, dmg: 260, rpm: 96, mag: Infinity, reserve: 0,
+  knightsword: { name: 'МЕЧ РОКОЧУЩЕГО РЫЦАРЯ', cat: 'melee', slot: 3, price: 30000, dmg: 210, rpm: 300, mag: Infinity, reserve: 0,
            auto: true, spread: 0, moveSpread: 0, recoil: 2.2, falloff: 1, range: 3.4, headMul: 2.2, sound: 'knife',
            melee: 'knightsword', knockback: 10,
            ult: true, ultCd: 9, ultR: 12, ultDmg: 4200, ultBreakR: 11, ultBreakDelay: 2.4 },

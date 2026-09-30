@@ -107,6 +107,10 @@ class Effects {
 
   /* УЛЬТА МЕЧА РОКОЧУЩЕГО РЫЦАРЯ: объёмный БЕЛЫЙ разрез вдоль полосы (в мире).
      `mini` — короткая ДУГА-ПОЛУМЕСЯЦ (след меча) для обычного удара ЛКМ. */
+  _whiteSparkMat() {
+    if (!this._whiteSpark) this._whiteSpark = new THREE.MeshBasicMaterial({ color: 0xffffff, blending: THREE.AdditiveBlending, transparent: true, depthWrite: false });
+    return this._whiteSpark;
+  }
   knightSlashFx(origin, fx, fz, reach, R, mini) {
     const yaw = Math.atan2(fx, fz);
     const life = mini ? .34 : .5;
@@ -115,16 +119,18 @@ class Effects {
     g.rotation.y = yaw;
 
     if (mini) {
-      /* ДУГА-СЛЕД: серп-полумесяц в вертикальной плоскости, смотрит вдоль удара */
+      /* ДУГА-СЛЕД: серп-полумесяц, каждый удар — ПОД РАЗНЫМ УГЛОМ (случайный
+         наклон/поворот), чтобы взмахи не выглядели одинаково. */
       const rad = reach * .5;
+      const tilt = U.rand(-1.1, 1.1);                // случайный наклон дуги
+      const twist = U.rand(-.55, .55);               // случайный поворот плоскости
       const arcMat = new THREE.MeshBasicMaterial({
         color: 0xffffff, transparent: true, opacity: 0,
         blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide
       });
       const arc = new THREE.Mesh(new THREE.TorusGeometry(rad, rad * .12, 6, 20, Math.PI * 1.15), arcMat);
       arc.position.set(0, rad * .15, reach * .35);
-      arc.rotation.y = Math.PI / 2;                 // плоскость дуги — поперёк удара
-      arc.rotation.z = -Math.PI * .12;
+      arc.rotation.set(twist, Math.PI / 2, -Math.PI * .12 + tilt);
       g.add(arc);
       const coreMat = new THREE.MeshBasicMaterial({
         color: 0xffffff, transparent: true, opacity: 0,
@@ -138,12 +144,14 @@ class Effects {
       this.scene.add(g);
       this.knightSlashes = this.knightSlashes || [];
       this.knightSlashes.push({ grp: g, mats: [arcMat, coreMat], light: light, life: life, max: life });
+      /* искры — тоже белые (жёлтых частиц нет) */
       for (let i = 0; i < 9; i++) {
         const t = U.rand(0, reach);
         const sx = origin.x + fx * t + (-fz) * U.rand(-R * .4, R * .4);
         const sz = origin.z + fz * t + (fx) * U.rand(-R * .4, R * .4);
-        this.particle(sx, origin.y - .4 + U.rand(0, 1.2), sz, U.rand(-3, 3), U.rand(2, 7), U.rand(-3, 3),
+        const sp = this.particle(sx, origin.y - .4 + U.rand(0, 1.2), sz, U.rand(-3, 3), U.rand(2, 7), U.rand(-3, 3),
           U.rand(.08, .20), 'spark', U.rand(.25, .55));
+        if (sp) sp.material = this._whiteSparkMat();
       }
       return;
     }
@@ -895,12 +903,14 @@ class Effects {
     if (theme === 'flesh') { this.fleshImpact(pos, normal); return; }
     if (theme === 'galaxy') { this.galaxyImpact(pos, normal); return; }
     const n = normal || { x: 0, y: 1, z: 0 };
+    const knight = theme === 'knight';                 // меч рыцаря: БЕЛЫЕ искры
     for (let i = 0; i < 5; i++) {
-      this.particle(pos.x, pos.y, pos.z,
+      const p = this.particle(pos.x, pos.y, pos.z,
         n.x * U.rand(1, 5) + U.rand(-2, 2),
         n.y * U.rand(1, 5) + U.rand(0, 3),
         n.z * U.rand(1, 5) + U.rand(-2, 2),
         U.rand(.03, .09), 'spark', U.rand(.12, .3));
+      if (knight && p) p.material = this._whiteSparkMat();
     }
     for (let i = 0; i < 3; i++) {
       this.particle(pos.x, pos.y, pos.z,

@@ -8069,38 +8069,28 @@ function buildWeaponModel(id) {
     }
 
     /* ---------------- МЕЧ РОКОЧУЩЕГО РЫЦАРЯ (как в Deltarune): ПОЛНОСТЬЮ ЧЁРНЫЙ
-       (клинок, гарда и рукоять) с белой окантовкой по всем краям. Клинок смотрит
-       ВПЕРЁД (-Z). Никаких красных/золотых деталей. ---- */
+       (клинок и рукоять, БЕЗ гарды/крестовины) с белой окантовкой по краям.
+       Клинок смотрит ВПЕРЁД (-Z). ---- */
     case 'knightsword': {
       const black = 0x08080a, edge = 0xf4f4f8;
       const BW = .19;    // ширина клинка (плоский, широкий)
       const T = .030;    // толщина
-      // тело клинка (плоский широкий чёрный), острие — вперёд
-      add(B(BW, T, 1.05, black, 0, .02, -.92));
-      add(B(BW * .62, T, .26, black, 0, .02, -1.50));
+      // рукоять — ЧЁРНАЯ с белой окантовкой (идёт назад от клинка)
+      add(CYL(.034, .34, black, 0, .02, -.10, 10));
+      add(CYL(.040, .014, edge, 0, .02, -.25, 12));      // белое кольцо (к клинку)
+      add(CYL(.040, .014, edge, 0, .02, .07, 12));       // белое кольцо (пятка)
+      // клинок — от рукояти ВПЕРЁД, широкий и плоский
+      add(B(BW, T, 1.10, black, 0, .02, -.94));
+      add(B(BW * .62, T, .26, black, 0, .02, -1.54));
       // БЕЛАЯ ОКАНТОВКА: обе кромки клинка
-      add(B(.018, T + .006, 1.05, edge, BW / 2 + .007, .02, -.92));
-      add(B(.018, T + .006, 1.05, edge, -BW / 2 - .007, .02, -.92));
+      add(B(.018, T + .006, 1.10, edge, BW / 2 + .007, .02, -.94));
+      add(B(.018, T + .006, 1.10, edge, -BW / 2 - .007, .02, -.94));
       // окантовка острия (скосы + торец)
-      add(B(.018, T + .006, .27, edge, .080, .02, -1.50));
-      add(B(.018, T + .006, .27, edge, -.080, .02, -1.50));
-      add(B(BW * .62 + .020, T + .006, .018, edge, 0, .02, -1.63));
-      // белые поперечины у основания клинка (соединяют окантовку с гардой)
-      add(B(BW + .036, T + .010, .022, edge, 0, .02, -.42));
-      // гарда — чёрная с белой окантовкой
-      add(B(.42, .052, .085, black, 0, .02, -.36));
-      add(B(.46, .018, .022, edge, 0, .045, -.36));       // белый верх гарды
-      add(B(.46, .018, .022, edge, 0, -.005, -.36));      // белый низ гарды
-      [-1, 1].forEach(s => {
-        add(B(.055, .14, .055, black, s * .19, .02, -.34));       // плечи
-        add(B(.060, .018, .060, edge, s * .19, .10, -.34));       // белый верх плеча
-        add(B(.060, .018, .060, edge, s * .19, -.06, -.34));      // белый низ плеча
-      });
-      // рукоять — ЧЁРНАЯ с белой окантовкой, без навершия-самоцвета
-      add(CYL(.032, .30, black, 0, .02, -.15, 10));
-      add(CYL(.038, .014, edge, 0, .02, -.30, 12));      // белое кольцо у гарды
-      add(CYL(.038, .014, edge, 0, .02, .00, 12));       // белое кольцо у пятки
-      add(CYL(.034, .03, black, 0, .02, .015, 12));      // пятка рукояти
+      add(B(.018, T + .006, .27, edge, .080, .02, -1.54));
+      add(B(.018, T + .006, .27, edge, -.080, .02, -1.54));
+      add(B(BW * .62 + .020, T + .006, .018, edge, 0, .02, -1.67));
+      // белая поперечина у основания клинка (стык с рукоятью)
+      add(B(BW + .040, T + .012, .026, edge, 0, .02, -.36));
       break;
     }
 
@@ -12314,6 +12304,10 @@ class Effects {
 
   /* УЛЬТА МЕЧА РОКОЧУЩЕГО РЫЦАРЯ: объёмный БЕЛЫЙ разрез вдоль полосы (в мире).
      `mini` — короткая ДУГА-ПОЛУМЕСЯЦ (след меча) для обычного удара ЛКМ. */
+  _whiteSparkMat() {
+    if (!this._whiteSpark) this._whiteSpark = new THREE.MeshBasicMaterial({ color: 0xffffff, blending: THREE.AdditiveBlending, transparent: true, depthWrite: false });
+    return this._whiteSpark;
+  }
   knightSlashFx(origin, fx, fz, reach, R, mini) {
     const yaw = Math.atan2(fx, fz);
     const life = mini ? .34 : .5;
@@ -12322,16 +12316,18 @@ class Effects {
     g.rotation.y = yaw;
 
     if (mini) {
-      /* ДУГА-СЛЕД: серп-полумесяц в вертикальной плоскости, смотрит вдоль удара */
+      /* ДУГА-СЛЕД: серп-полумесяц, каждый удар — ПОД РАЗНЫМ УГЛОМ (случайный
+         наклон/поворот), чтобы взмахи не выглядели одинаково. */
       const rad = reach * .5;
+      const tilt = U.rand(-1.1, 1.1);                // случайный наклон дуги
+      const twist = U.rand(-.55, .55);               // случайный поворот плоскости
       const arcMat = new THREE.MeshBasicMaterial({
         color: 0xffffff, transparent: true, opacity: 0,
         blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide
       });
       const arc = new THREE.Mesh(new THREE.TorusGeometry(rad, rad * .12, 6, 20, Math.PI * 1.15), arcMat);
       arc.position.set(0, rad * .15, reach * .35);
-      arc.rotation.y = Math.PI / 2;                 // плоскость дуги — поперёк удара
-      arc.rotation.z = -Math.PI * .12;
+      arc.rotation.set(twist, Math.PI / 2, -Math.PI * .12 + tilt);
       g.add(arc);
       const coreMat = new THREE.MeshBasicMaterial({
         color: 0xffffff, transparent: true, opacity: 0,
@@ -12345,12 +12341,14 @@ class Effects {
       this.scene.add(g);
       this.knightSlashes = this.knightSlashes || [];
       this.knightSlashes.push({ grp: g, mats: [arcMat, coreMat], light: light, life: life, max: life });
+      /* искры — тоже белые (жёлтых частиц нет) */
       for (let i = 0; i < 9; i++) {
         const t = U.rand(0, reach);
         const sx = origin.x + fx * t + (-fz) * U.rand(-R * .4, R * .4);
         const sz = origin.z + fz * t + (fx) * U.rand(-R * .4, R * .4);
-        this.particle(sx, origin.y - .4 + U.rand(0, 1.2), sz, U.rand(-3, 3), U.rand(2, 7), U.rand(-3, 3),
+        const sp = this.particle(sx, origin.y - .4 + U.rand(0, 1.2), sz, U.rand(-3, 3), U.rand(2, 7), U.rand(-3, 3),
           U.rand(.08, .20), 'spark', U.rand(.25, .55));
+        if (sp) sp.material = this._whiteSparkMat();
       }
       return;
     }
@@ -13102,12 +13100,14 @@ class Effects {
     if (theme === 'flesh') { this.fleshImpact(pos, normal); return; }
     if (theme === 'galaxy') { this.galaxyImpact(pos, normal); return; }
     const n = normal || { x: 0, y: 1, z: 0 };
+    const knight = theme === 'knight';                 // меч рыцаря: БЕЛЫЕ искры
     for (let i = 0; i < 5; i++) {
-      this.particle(pos.x, pos.y, pos.z,
+      const p = this.particle(pos.x, pos.y, pos.z,
         n.x * U.rand(1, 5) + U.rand(-2, 2),
         n.y * U.rand(1, 5) + U.rand(0, 3),
         n.z * U.rand(1, 5) + U.rand(-2, 2),
         U.rand(.03, .09), 'spark', U.rand(.12, .3));
+      if (knight && p) p.material = this._whiteSparkMat();
     }
     for (let i = 0; i < 3; i++) {
       this.particle(pos.x, pos.y, pos.z,
@@ -23512,7 +23512,7 @@ const Game = {
         Audio3D_SFX.hit(pt.x, pt.y, pt.z, part === 'head');
         any = true;
       }
-      if (!any && wallHit && wallT < Infinity && this.effects) this.effects.impact(wallHit.point, wallHit.normal, 'concrete');
+      if (!any && wallHit && wallT < Infinity && this.effects) this.effects.impact(wallHit.point, wallHit.normal, 'concrete', def.melee === 'knightsword' ? 'knight' : (p && p.skinTheme) || null);
       p.bulletsHit += hitList.length;
       // ПОЛОСА УДАРА: яркая дуга проносится перед игроком
       if (this.effects) {

@@ -7688,7 +7688,7 @@ const Game = {
         Audio3D_SFX.hit(pt.x, pt.y, pt.z, part === 'head');
         any = true;
       }
-      if (!any && wallHit && wallT < Infinity && this.effects) this.effects.impact(wallHit.point, wallHit.normal, 'concrete');
+      if (!any && wallHit && wallT < Infinity && this.effects) this.effects.impact(wallHit.point, wallHit.normal, 'concrete', def.melee === 'knightsword' ? 'knight' : (p && p.skinTheme) || null);
       p.bulletsHit += hitList.length;
       // ПОЛОСА УДАРА: яркая дуга проносится перед игроком
       if (this.effects) {

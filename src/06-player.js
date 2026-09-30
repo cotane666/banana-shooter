@@ -3377,10 +3377,12 @@ class Player {
     const def = WEAPONS[id];
     if (!def) return false;
     const slot = def.slot;
-    if (slot === 3) { this.inv[3] = { id: id || 'knife', mag: Infinity, reserve: 0 }; return true; }
+    /* ЕДИНЫЙ путь для ВСЕХ слотов (включая БЛИЖНИЙ БОЙ, слот 3): если слот
+       занят ДРУГИМ оружием — вытесненное уходит в СУМКУ (а не пропадает),
+       чтобы его можно было вернуть во время закупки. Так мечи/топоры и
+       3 ступени меча рыцаря ведут себя точно как прочее оружие.
+       Нож в сумку не кладём (toBag его игнорирует) — он и так базовый. */
     const had = this.inv[slot];
-    /* если слот занят ДРУГИМ оружием — вытесненное уходит в сумку (а не
-       пропадает), чтобы его можно было вернуть во время закупки */
     if (had && had.id !== id) this.toBag(had);
     this.inv[slot] = { id, mag: def.mag, reserve: def.reserve };
     if (had && had.id === id) { this.inv[slot].mag = had.mag; this.inv[slot].reserve = had.reserve; }

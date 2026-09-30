@@ -9578,6 +9578,7 @@ const Game = {
       score: p.score,
       inv1: p.inv[1] ? p.inv[1].id : null,
       inv2: p.inv[2] ? { id: p.inv[2].id, mag: p.inv[2].mag, reserve: p.inv[2].reserve } : null,
+      inv3: p.inv[3] ? { id: p.inv[3].id, mag: p.inv[3].mag, reserve: p.inv[3].reserve } : null,
       /* СУМКА: вытесненное оружие тоже сохраняем, иначе после сохранения и
          выхода оно пропадало и приходилось покупать заново. */
       bag: (p.bag || []).map(b => ({ id: b.id, mag: b.mag, reserve: b.reserve })),
@@ -9659,10 +9660,14 @@ const Game = {
       const w = p.inv[2];
       if (w) { if (cp.inv2.mag !== undefined && w.mag !== Infinity) w.mag = cp.inv2.mag; if (cp.inv2.reserve !== undefined) w.reserve = cp.inv2.reserve; }
     }
+    /* оружие ближнего боя (слот 3): если в сохранении был не нож — вернуть его */
+    if (cp.inv3 && cp.inv3.id && cp.inv3.id !== 'knife') p.give(cp.inv3.id);
     /* восстановить сумку (вытесненное оружие) */
     if (cp.bag) { p.bag.length = 0; for (const b of cp.bag) p.bag.push({ id: b.id, mag: b.mag, reserve: b.reserve }); }
     if (cp.slot) p.slot = cp.slot;
-    if (cp.inv2) { p.slot = 2; } else if (cp.inv1) { p.slot = 1; }
+    /* приоритет отдаём тому, что реально было в руках; ближний бой (3) не теряем */
+    if (cp.slot === 3) p.slot = 3;
+    else if (cp.inv2) { p.slot = 2; } else if (cp.inv1) { p.slot = 1; }
     p.buildViewModel(); this.attachViewModel();
     // skip the buy phase and jump into the wave
     this.roundState = 'live';

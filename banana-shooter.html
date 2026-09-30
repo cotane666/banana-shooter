@@ -3511,9 +3511,19 @@ function damageMapAt(x, y, z, radius, dmg) {
   if (!MAP.destructibles || !MAP.destructibles.length) return 0;
   let destroyed = 0;
   const r2 = radius * radius;
-  for (let i = 0; i < MAP.destructibles.length; i++) {
-    const b = MAP.destructibles[i];
-    if (b.removed) continue;
+  /* ОПТИМИЗАЦИЯ: вместо перебора ВСЕХ разрушаемых частей (тысячи) берём
+     кандидатов из пространственного грида по AABB взрыва — это в разы
+     меньше работы. Грид общий с коллизиями, поэтому части уже в нём. */
+  let list;
+  if (MAP.world && MAP.world.query) {
+    const bb = AABB(x - radius, y - radius, z - radius, x + radius, y + radius, z + radius);
+    list = MAP.world.query(bb, []);
+  } else {
+    list = MAP.destructibles;
+  }
+  for (let i = 0; i < list.length; i++) {
+    const b = list[i];
+    if (b.removed || !b.destructible) continue;
     // ближайшая точка бокса к центру взрыва
     const cx = U.clamp(x, b.minX, b.maxX);
     const cy = U.clamp(y, b.minY, b.maxY);
@@ -3550,21 +3560,22 @@ function removeMapChunk(b) {
     const it = b._chunkGroup.items[b._chunkIndex];
     it.visible = false;
     it.mtx.copy(ZERO_M4);
-    _chunkDirty = true;
+    b._chunkGroup.dirty = true;             // обновляем ТОЛЬКО затронутую группу
   } else if (b.mesh) b.mesh.visible = false;
   if (MAP.world) MAP.world.removeBox(b);
 }
 
-/* пометить инстанс-буферы к обновлению */
+/* пометить инстанс-буферы к обновлению — только изменённые группы */
 const ZERO_M4 = new THREE.Matrix4().makeScale(0, 0, 0);
 let _chunkDirty = false;
 function _flushChunkInstances() {
   if (!MAP._chunkGroups) return;
   for (const key in MAP._chunkGroups) {
     const grp = MAP._chunkGroups[key];
-    if (!grp.mesh) continue;
+    if (!grp.mesh || !grp.dirty) continue;
     for (let i = 0; i < grp.items.length; i++) grp.mesh.setMatrixAt(i, grp.items[i].mtx);
     grp.mesh.instanceMatrix.needsUpdate = true;
+    grp.dirty = false;
   }
   _chunkDirty = false;
 }
@@ -3583,6 +3594,7 @@ function restoreMap() {
       const it = b._chunkGroup.items[b._chunkIndex];
       it.visible = true;
       it.mtx.makeScale(it.w, it.h, it.d).setPosition(it.x, it.y, it.z);
+      b._chunkGroup.dirty = true;
     } else if (b.mesh) b.mesh.visible = true;
     if (MAP.world) MAP.world.restoreBox(b);
     n++;
@@ -3595,7 +3607,7 @@ function restoreMap() {
    Большие детали автоматически дробятся на ЧАНКИ (≈1.3м), чтобы разрушение
    убирало ровно ту часть, в которую попали (взрыв/зомби), а не всю стену.
    Пол и границы карты НЕ разрушаются. */
-const MAP_CHUNK = 1.3;
+const MAP_CHUNK = 1.7;
 /* НЕЛЬЗЯ разрушить только ПОЛ и ГРАНИЦЫ карты (они держат мир). Всё
    остальное — укрытия, стены, колонны, а также РАМПЫ, ПЛАТФОРМЫ, НАСТИЛЫ и
    КРЫШИ — ломается взрывом (мгновенно) или пулями/ближним боем. */

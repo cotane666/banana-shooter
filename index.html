@@ -772,6 +772,12 @@ html.touch #fps{font-size:9px;right:4px;bottom:2px}
 
 /* panels need to be usable with a thumb */
 html.touch .panel{padding:15px 14px;width:min(96vw,620px);border-top-width:2px}
+/* На телефоне прокручивается ВСЯ площадь экрана, а не только сама панель,
+   поэтому свайп работает и по тёмным полям по краям (раньше там была
+   «мёртвая зона» и приходилось попадать пальцем точно в панель). */
+html.touch .screen{display:block;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;
+  padding:calc(12px + env(safe-area-inset-top,0px)) 0 calc(22px + env(safe-area-inset-bottom,0px))}
+html.touch .screen>.panel{margin:0 auto;max-height:none;overflow:visible}
 html.touch .panel h2{font-size:15px;letter-spacing:2px;margin-bottom:11px}
 html.touch .mbtn{padding:11px 13px;margin-bottom:8px}
 html.touch .mbtn b{font-size:14px}

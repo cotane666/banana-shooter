@@ -202,6 +202,33 @@ function buildZombieMesh(type) {
       new THREE.MeshBasicMaterial({ color: 0x9a3aff, transparent: true, opacity: .8 }));
     ring.position.set(0, 1.05, -.30); g.add(ring);
     parts.summonCore = core; parts.summonRing = ring;
+  } else if (type === 'bomber') {
+    /* ПОДРЫВНИК: обмотанный взрывчаткой — красные шашки и мигающий фитиль */
+    chest.scale.set(1.15, 1.1, 1.2);
+    pelvis.scale.set(1.1, 1.02, 1.1);
+    const crateMat = new THREE.MeshLambertMaterial({ color: 0x3a2018 });
+    const stickMat = new THREE.MeshLambertMaterial({ color: 0xd23a1a, emissive: 0x3a0800 });
+    // пояс шашек вокруг торса
+    for (let i = 0; i < 6; i++) {
+      const a = i / 6 * Math.PI * 2;
+      const st = new THREE.Mesh(new THREE.BoxGeometry(.09, .26, .09), stickMat);
+      st.position.set(Math.cos(a) * .30, .10, Math.sin(a) * .20 - .02);
+      st.rotation.z = Math.cos(a) * .3; st.rotation.x = Math.sin(a) * .3;
+      torso.add(st);
+    }
+    // большая бомба на груди с мигающим огоньком
+    const bomb = new THREE.Mesh(new THREE.SphereGeometry(.20, 10, 8), crateMat);
+    bomb.position.set(0, .14, -.20); bomb.scale.set(1, 1.15, 1); torso.add(bomb);
+    const fuseLamp = new THREE.Mesh(new THREE.SphereGeometry(.06, 8, 6),
+      new THREE.MeshBasicMaterial({ color: 0xff3020 }));
+    fuseLamp.position.set(0, .38, -.20); torso.add(fuseLamp);
+    parts.fuseLamp = fuseLamp;
+    // красные глаза
+    const eyeMatB = new THREE.MeshBasicMaterial({ color: 0xff3a1a });
+    [-.08, .08].forEach(ox => {
+      const e = new THREE.Mesh(new THREE.SphereGeometry(.04, 6, 5), eyeMatB);
+      e.position.set(ox, .04, -.155); head.add(e);
+    });
   } else if (ZOMBIES[type] && ZOMBIES[type].miniBoss && type !== 'robot') {
     /* ============================================================
        НОВЫЕ МИНИ-БОССЫ (5) — у каждого своя моделька, «кожа» и силуэт,
@@ -791,6 +818,8 @@ class Zombie {
     const distXZ = Math.hypot(toP.x, toP.z);
     const targetYaw = Math.atan2(-toP.x, -toP.z);
     this.yaw = U.angleLerp(this.yaw, targetYaw, 1 - Math.pow(0.00005, dt));
+    /* ПОДРЫВНИК: мигает чаще, когда игрок рядом (визуальный отсчёт) */
+    if (this.def.explosive) this._fuseNear = U.clamp(1 - distXZ / 10, 0, 1);
 
     // ---- line of sight (refreshed a few times a second) ----
     this.losT -= dt;
@@ -841,9 +870,13 @@ class Zombie {
     // Reach must account for body radius, otherwise large zombies can never land a hit.
     const reach = this.atkRange + this.radius;
     if (distXZ <= reach && this.attackCd <= 0 && Math.abs(toP.y) < 2.4) {
-      this.attackCd = 1.15;
-      this.attackT = .38;
-      this.pendingHit = true;
+      /* ПОДРЫВНИК: дойдя до игрока, не бьёт, а ДЕТОНИРУЕТ */
+      if (this.def.explosive) { this.breakCd = 0; this.die(false); }
+      else {
+        this.attackCd = 1.15;
+        this.attackT = .38;
+        this.pendingHit = true;
+      }
     }
     if (this.attackT > 0) {
       this.attackT -= dt;
@@ -1025,6 +1058,14 @@ class Zombie {
      направлению движения — так зомби не «жуёт» стену, а активно проламывает
      укрытия и идёт напролом. Урон масштабируется силой типа зомби. */
   smashAhead(ctx, dirX, dirZ, dt) {
+    /* ПОДРЫВНИК при ударе в стену НЕ бьёт её вручную, а ДЕТОНИРУЕТ — взрыв
+       сносит препятствие и он погибает (см. bomberExplode в Game). Детонация
+       НЕ зависит от кулдауна. */
+    if (this.def.explosive) {
+      if (this.dying || !this.alive) return;
+      this.die(false);
+      return;
+    }
     if (this.breakCd > 0) { this.breakCd -= dt; return; }
     if (typeof damageMapAt !== 'function') return;
     this.breakCd = .34;
@@ -1151,6 +1192,15 @@ class Zombie {
       p.summonCore.scale.setScalar(.9 + k * .5 * (.4 + bob));
       p.summonCore.material.opacity = .5 + k * .5;
       if (p.summonRing) { p.summonRing.rotation.z += dt * 2.4; p.summonRing.rotation.x = .6 + Math.sin(ph) * .4; }
+    }
+    /* ПОДРЫВНИК: фитиль мигает всё быстрее по мере приближения (чем ближе — тем чаще) */
+    if (p.fuseLamp) {
+      const near = this._fuseNear || 0;
+      const rate = 1.8 + near * 6;
+      this._fuseT = (this._fuseT || 0) + dt * rate;
+      const on = Math.sin(this._fuseT * Math.PI * 2) > 0;
+      p.fuseLamp.material.color.setHex(on ? 0xff4020 : 0x601000);
+      p.fuseLamp.scale.setScalar(on ? 1.3 : .8);
     }
     if (p.plate) p.plate.material.emissive.setHex(this.blockFlash > 0 ? 0x2a3550 : 0x0a0e16);
     if (this.blockFlash > 0) this.blockFlash -= dt;

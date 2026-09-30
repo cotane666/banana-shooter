@@ -1598,14 +1598,18 @@ const Game = {
       case 'KeyH': if (!this.paused) this.useMedkit(); break;
       case 'KeyG':
         if (!this.paused) {
-          // in the mech G leaves the cockpit; if the suit is owned and you are
-          // near the parked mech, G re-enters; otherwise G throws a grenade
+          /* G — ВСЕГДА бросок гранаты (если есть граната). Раньше при наличии
+             мехакостюма G уходило на посадку в мех и гранату БРОСИТЬ БЫЛО
+             НЕЛЬЗЯ. Теперь: в мехе — выйти, а на земле — граната. */
           const pp = this.player;
+          const gk = Store.data.grenade || 'frag';
+          const haveNade = pp && pp.grenades && (pp.grenades[gk] || 0) > 0;
           if (this.isMechActive()) this.exitMechSuit();
+          else if (haveNade) this.throwGrenade();
           else if (pp && pp.mechOwned) {
             const d = this.parkedMechDist();
             if (d < 0 || d <= 6) this.equipMechSuit();
-            else { UI.toast('Подойдите к меху, чтобы сесть в него', '#f5d33c'); Audio3D_SFX.deny(); }
+            else { UI.toast('Нет гранат · подойдите к меху, чтобы сесть', '#f5d33c'); Audio3D_SFX.deny(); }
           }
           else this.throwGrenade();
         }
@@ -4941,6 +4945,8 @@ const Game = {
     if (wave >= 8) pool.push({ t: 'shielder', w: Math.min(3, (wave - 7) * .36) });
     if (wave >= 9) pool.push({ t: 'healer', w: Math.min(2, (wave - 8) * .30) });
     if (wave >= 10) pool.push({ t: 'summoner', w: Math.min(2, (wave - 9) * .26) });
+    /* ПОДРЫВНИК — бежит и взрывается (ломает стены). Появляется с 6-й волны. */
+    if (wave >= 6) pool.push({ t: 'bomber', w: Math.min(3.5, (wave - 5) * .45) });
     return pool;
   },
   /* Мини-боссы в обычной волне: чем дальше, тем чаще и сильнее варианты.
@@ -6484,8 +6490,8 @@ const Game = {
         }
         Audio3D_SFX.explosionAt(c.x, c.y, c.z);
         UI.center('СКАЧОК НАПРЯЖЕНИЯ', 'Ударная волна · ' + Math.round(R) + 'м', 1.6);
-        /* ударная волна РАЗРУШАЕТ карту в радиусе (мгновенно) */
-        this.breakMapAt(c.x, c.y, c.z, R * 1.02, dmg);
+        /* ударная волна РАЗРУШАЕТ карту в МЕНЬШЕМ радиусе (иначе сносит пол-карты) */
+        this.breakMapAt(c.x, c.y, c.z, (CFG.mechSurgeBreakR || R * .7), dmg);
         /* ударная волна: отбрасываем и бьём всех зомби в радиусе */
         if (this.horde) for (const z of this.horde.list) {
           if (!z.alive || z.dying) continue;
@@ -8143,6 +8149,9 @@ const Game = {
     }
     this.checkAchievements();
     UI.feed('<b>' + U.esc(p.name) + '</b> <span class="z">✖ ' + def.name + (headshot ? ' (в голову)' : '') + '</span> +$' + def.money);
+    /* ПОДРЫВНИК: детонирует при смерти — сносит стены и бьёт всех вокруг,
+       после чего погибает (тело остаётся, оседает как обычное). */
+    if (def.explosive) this.bomberExplode(z);
     /* the "В ГОЛОВУ!" pop-up is spammy on a phone — keep it on PC only */
     if (headshot && !IS_TOUCH) UI.toast('В ГОЛОВУ! +$' + def.money + ' +' + Math.round(def.score * 1.5) + ' очков', '#ff9d21');
     Bus.emit('kill', z, headshot);
@@ -8150,6 +8159,48 @@ const Game = {
 
   onZombieHit(z, part, dmg, dir) {
     if (part === 'head') { /* handled in onZombieDied for kills */ }
+  },
+
+  /* ============================================================
+     ВЗРЫВНОЙ ЗОМБИ (ПОДРЫВНИК): при смерти детонирует — сносит стены и всё
+     вокруг. Использует те же механики, что и взрыв снаряда: урон по площади,
+     разрушение карты, урон игроку и соперникам/кооп-напарникам.
+     ============================================================ */
+  bomberExplode(z) {
+    const def = z.def || {};
+    const R = def.blastR || 6.5;
+    const dmg = def.blastDmg || 90;
+    const c = { x: z.pos.x, y: z.pos.y + .9, z: z.pos.z };
+    if (this.effects) this.effects.explosion(c.x, c.y, c.z, R, [0xff5a1a, 0x1a0a05]);
+    this.breakMapAt(c.x, c.y, c.z, R * 1.02, dmg * 4);
+    Audio3D_SFX.explosionAt(c.x, c.y, c.z);
+    if (this.mode === CS.MODE.ONLINE && Net.connected) {
+      Net.send({ t: 'boom', from: Net.selfId(), x: +c.x.toFixed(2), y: +c.y.toFixed(2), z: +c.z.toFixed(2), r: R, c: [0xff5a1a, 0x1a0a05] });
+    }
+    // зомби вокруг
+    if (this.horde) {
+      for (const o of this.horde.list) {
+        if (o === z || !o.alive || o.dying) continue;
+        const d = Math.hypot(o.pos.x - c.x, (o.pos.y + 1) - c.y, o.pos.z - c.z);
+        if (d > R) continue;
+        o.takeDamage(dmg * (1 - d / R), 'body', { x: 0, y: 0, z: 0 });
+      }
+    }
+    // игрок
+    const p = this.player;
+    if (p && p.alive) {
+      const d = Math.hypot(p.pos.x - c.x, (p.pos.y + 1) - c.y, p.pos.z - c.z);
+      if (d <= R) this.playerHurt(dmg * (1 - d / R), z);
+    }
+    // соперники / кооп-напарники
+    if (this.mode === CS.MODE.ONLINE) {
+      for (const rp of this.remotePlayers) {
+        if (!rp.alive) continue;
+        const d = Math.hypot(rp.pos.x - c.x, (rp.pos.y + 1) - c.y, rp.pos.z - c.z);
+        if (d <= R) this.sendPvpHit(dmg * (1 - d / R), 'body', false, rp, 'bomber');
+      }
+    }
+    UI.center('ПОДРЫВНИК', 'Взрыв · ' + Math.round(R) + 'м', 1.5);
   },
 
   /* ============================================================

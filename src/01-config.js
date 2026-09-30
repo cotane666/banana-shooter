@@ -33,9 +33,10 @@ const CFG = {
   mechMissileCd: 2.6,       // секунд между залпами самонаводящихся ракет (E)
   /* СКАЧОК НАПРЯЖЕНИЯ (R в мехе): электрическая ударная волна вокруг шасси */
   mechSurgeCd: 14,          // перезарядка способности (с)
-  mechSurgeRadius: 33,      // радиус ударной волны (м) — ×3
-  mechSurgeDmg: 660,        // урон врагам в радиусе — ×3
-  mechSurgePush: 66,        // сила отброса — ×3
+  mechSurgeRadius: 16,      // радиус ударной волны (м) — было 33, уменьшено
+  mechSurgeDmg: 660,        // урон врагам в радиусе
+  mechSurgePush: 66,        // сила отброса
+  mechSurgeBreakR: 12,      // радиус РАЗРУШЕНИЯ карты (меньше волны, чтобы не сносить пол-карты)
   /* мех-джетпак: держишь прыжок — 1.5с тяги, затем 1.5с перезарядки */
   mechJetMax: 1.5,
   mechJetRecharge: 1.5,
@@ -562,6 +563,10 @@ const ZOMBIES = {
              frontalShield: true, shieldArc: .6, shieldReduction: .92 },
   summoner:{ name: 'ПРИЗЫВАТЕЛЬ', hp: 420, speed: 1.35, dmg: 18, score: 900, money: 420, scale: 1.35, color: 0x6b3f8f, atkRange: 1.8,
              summons: true, summonCd: 6.5, summonCount: 4 },
+  /* ВЗРЫВНОЙ: бежит на игрока и детонирует, разнося стены и всё вокруг.
+     После взрыва погибает. breakPower высокий — ломает препятствия. */
+  bomber: { name: 'ПОДРЫВНИК',   hp: 90,   speed: 2.6,  dmg: 8,  score: 340, money: 150, scale: 1.15, color: 0x8a3a1a, atkRange: 1.9,
+             explosive: true, blastR: 6.5, blastDmg: 95, breakPower: 2.6 },
 
   /* ---- BOSSES (spawned on dedicated boss waves) ----
      Every boss has its own `abilities` list. `Game.updateBosses` fires one at

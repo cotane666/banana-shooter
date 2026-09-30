@@ -105,6 +105,39 @@ class Effects {
     }
   }
 
+  /* УЛЬТА МЕЧА РОКОЧУЩЕГО РЫЦАРЯ: объёмный БЕЛЫЙ разрез вдоль полосы (в мире).
+     Длинная светящаяся плоскость, проносящаяся вперёд, + белые искры и вспышка. */
+  knightSlashFx(origin, fx, fz, reach, R) {
+    const yaw = Math.atan2(fx, fz);
+    const g = new THREE.Group();
+    g.position.set(origin.x, origin.y, origin.z);
+    g.rotation.y = yaw;
+    const mat = new THREE.MeshBasicMaterial({
+      color: 0xffffff, transparent: true, opacity: 0,
+      blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide
+    });
+    const plane = new THREE.Mesh(new THREE.PlaneGeometry(R * 1.1, reach), mat);
+    plane.rotation.x = -Math.PI / 2; plane.position.set(0, 0, reach * .5);
+    g.add(plane);
+    const coreMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
+    const core = new THREE.Mesh(new THREE.PlaneGeometry(R * .22, reach), coreMat);
+    core.rotation.x = -Math.PI / 2; core.position.set(0, .03, reach * .5);
+    g.add(core);
+    const light = new THREE.PointLight(0xffffff, 0, reach * 1.6, 2);
+    light.position.set(0, 2, reach * .4); g.add(light);
+    this.scene.add(g);
+    this.knightSlashes = this.knightSlashes || [];
+    this.knightSlashes.push({ grp: g, mats: [mat, coreMat], light: light, life: .5, max: .5 });
+    for (let i = 0; i < 30; i++) {
+      const t = U.rand(0, reach);
+      const sx = origin.x + fx * t + (-fz) * U.rand(-R * .5, R * .5);
+      const sz = origin.z + fz * t + (fx) * U.rand(-R * .5, R * .5);
+      this.particle(sx, origin.y - .2 + U.rand(0, .6), sz, U.rand(-4, 4), U.rand(2, 9), U.rand(-4, 4),
+        U.rand(.10, .26), 'spark', U.rand(.3, .7));
+    }
+  }
+
+
   /* ПЫЛЬ И ОСКОЛКИ при разрушении объекта карты.
      Осколки — РВАНОЙ формы (как в Human Fall Flat: бетонные обломки), с
      текстурой материала, разлетаются и падают под гравитацией. */
@@ -1206,6 +1239,23 @@ class Effects {
           if (w.mesh.geometry) w.mesh.geometry.dispose();
           w.mat.dispose();
           this.groundWaves.splice(i, 1);
+        }
+      }
+    }
+    // ульта рыцаря: белый разрез вспыхивает и быстро гаснет
+    if (this.knightSlashes) {
+      for (let i = this.knightSlashes.length - 1; i >= 0; i--) {
+        const s = this.knightSlashes[i];
+        s.life -= dt;
+        const k = Math.max(0, s.life / s.max);
+        const env = Math.sin(k * Math.PI);              // 0→1→0
+        s.mats[0].opacity = env * .85;
+        s.mats[1].opacity = env;
+        if (s.light) s.light.intensity = env * 200;
+        if (s.life <= 0) {
+          s.grp.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material) o.material.dispose(); });
+          if (s.grp.parent) s.grp.parent.remove(s.grp);
+          this.knightSlashes.splice(i, 1);
         }
       }
     }

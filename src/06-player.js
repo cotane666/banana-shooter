@@ -2098,6 +2098,32 @@ function buildWeaponModel(id) {
       break;
     }
 
+    /* ---------------- МЕЧ РОКОЧУЩЕГО РЫЦАРЯ: чёрное лезвие с белой окантовкой,
+       крестовина-щиток и красная рукоять. Длинный, тяжёлый двуручник ---- */
+    case 'knightsword': {
+      const blade = 0x121216, edge = 0xe8e8ee, guard = 0x2a2a30, grip = 0x6a1420, gold = 0xb08a3a;
+      // длинное лезвие вдоль -Z (острие вперёд)
+      add(B(.055, .020, .92, blade, 0, .02, -.86));                    // тело клинка
+      add(B(.030, .020, .30, blade, 0, .02, -1.44));                   // острие
+      // белая окантовка вдоль обеих кромок
+      add(B(.010, .021, .92, edge, .030, .02, -.86));
+      add(B(.010, .021, .92, edge, -.030, .02, -.86));
+      add(B(.008, .021, .28, edge, .014, .02, -1.45));                  // окантовка острия
+      // белая «спина» клинка (обух)
+      add(B(.024, .010, .90, edge, 0, .034, -.86));
+      // крестовина-щиток
+      add(B(.30, .045, .06, guard, 0, .02, -.36));
+      add(B(.34, .020, .05, gold, 0, .02, -.36));
+      [-1, 1].forEach(s => add(B(.05, .09, .05, guard, s * .13, .02, -.34, 0, 0, s * .5)));
+      // рукоять с обмоткой
+      add(CYL(.024, .30, grip, 0, .02, -.16, 10));
+      for (let i = 0; i < 6; i++) add(B(.056, .012, .012, 0x2a0a0e, 0, .02, -.05 - i * .045, 0, 0, .5));
+      // навершие
+      add(CYL(.036, .05, gold, 0, .02, .02, 10));
+      add(DOT(.016, 0xffd24a, 0, .02, .02));
+      break;
+    }
+
     /* ---------------- Fists: bare hands (short-range) ---------------- */
     case 'fists': {
       add(B(.055, .055, .09, 0xd8a878, 0, .0, -.10));                 // fist
@@ -2117,7 +2143,7 @@ function buildWeaponModel(id) {
 /* barrel-tip Z per weapon (used for the muzzle flash / tracer origin) */
 const MUZZLE_Z = {
   knife: -0.28, machete: -0.46, katana: -0.58, axe: -0.30, chainsaw: -0.58, hammer: -0.50, fists: -0.14,
-  megahammer: -1.10,
+  megahammer: -1.10, knightsword: -1.60,
   glock: -0.22, usp: -0.36, p250: -0.20, deagle: -0.25, revolver: -0.28,
   mp5: -0.58, p90: -0.42, ump: -0.47,
   nova: -0.60, xm: -0.58,

@@ -7456,6 +7456,100 @@ const Game = {
     if (this.player && this.player.alive) this.meleeGroundSlam(s.origin, s.dir, s.def, s.muzzleWorld);
   },
 
+  /* ============================================================
+     МЕЧ РОКОЧУЩЕГО РЫЦАРЯ — УЛЬТА (ПКМ): SANGUINE SLASH.
+     Экран чернеет, вперёд уходит гигантский белый разрез, который сносит всё
+     по широкой прямой полосе: огромный урон зомби/соперникам и разрушение
+     стен. Играет рёв рыцаря (встроенный mp3).
+     ============================================================ */
+  knightUlt() {
+    const p = this.player;
+    if (!p || !p.alive) return false;
+    const def = p.def || {};
+    if (!def.ult) return false;
+    if (this.roundState !== 'live' || this.mode === CS.MODE.MENU) return false;
+    const now = U.now();
+    const cd = (def.ultCd || 9) * 1000;
+    if (this._knightUltAt && now - this._knightUltAt < cd) {
+      const left = Math.ceil((cd - (now - this._knightUltAt)) / 1000);
+      UI.toast('Слеш через ' + left + 'с', '#c8c8d8'); Audio3D_SFX.deny && Audio3D_SFX.deny();
+      return false;
+    }
+    this._knightUltAt = now;
+    const R = def.ultR || 12;
+    const dmg = def.ultDmg || 4000;
+    const breakR = def.ultBreakR || 10;
+
+    // экранный эффект: чёрный экран + гигантский белый слеш
+    if (typeof UI !== 'undefined' && UI.knightUltStart) UI.knightUltStart((Math.random() * 9999) | 0);
+    // рёв рыцаря
+    if (Audio3D_SFX.knightSlash) Audio3D_SFX.knightSlash();
+    // отдача камеры
+    p.recoil = (p.recoil || 0) + .2;
+    p.viewPunchP = (p.viewPunchP || 0) + .14;
+
+    const dir = this.cameraDir();
+    const origin = { x: p.pos.x, y: p.pos.y + 1.2, z: p.pos.z };
+    const flat = Math.hypot(dir.x, dir.z) || 1;
+    const fx = dir.x / flat, fz = dir.z / flat;      // плоское направление взгляда
+
+    // «разрез» идёт широкой прямой полосой по направлению взгляда
+    const reach = (def.range || 3) + R * 2.2;
+    const halfW = R * .9;                            // полудлина луча разреза
+
+    // разрушаем карту вдоль полосы (несколько точек) + большой разрез у игрока
+    this.breakMapAt(origin.x + fx * reach * .5, origin.y, origin.z + fz * reach * .5, breakR, dmg * 2);
+    for (let s = 0; s < 6; s++) {
+      const t = (s / 5) * reach;
+      this.breakMapAt(origin.x + fx * t, origin.y, origin.z + fz * t, breakR * .7, dmg);
+    }
+
+    // урон по зомби: все, кто попал в полосу разреза
+    let hits = 0;
+    if (this.horde) {
+      for (const z of this.horde.list) {
+        if (!z.alive || z.dying) continue;
+        const rx = z.pos.x - origin.x, rz = z.pos.z - origin.z;
+        const along = rx * fx + rz * fz;             // вдоль разреза
+        const side = Math.abs(-rx * fz + rz * fx);   // поперёк
+        if (along < -1.5 || along > reach) continue;
+        if (side > halfW) continue;
+        const k = 1 - U.clamp(along / reach, 0, 1) * .4;
+        const dealt = dmg * k;
+        z.takeDamage(dealt, 'body', { x: fx, y: .2, z: fz });
+        if (z.alive && !z.dying) {
+          z.vel.x += fx * 16; z.vel.z += fz * 16;
+          if (typeof z.stagger === 'function') z.stagger(1.0);
+        }
+        this.player.damageDealt += dealt;
+        hits++;
+      }
+    }
+    // соперники (онлайн)
+    if (this.mode === CS.MODE.ONLINE && !this.isCoop) {
+      for (const rp of this.remotePlayers) {
+        if (!rp.alive) continue;
+        const rx = rp.pos.x - origin.x, rz = rp.pos.z - origin.z;
+        const along = rx * fx + rz * fz, side = Math.abs(-rx * fz + rz * fx);
+        if (along >= -1.5 && along <= reach && side <= halfW) this.sendPvpHit(dmg, 'body', false, rp, 'knight');
+      }
+    } else if (this.mode === CS.MODE.ONLINE && this.isCoop) {
+      for (const rp of this.remotePlayers) {
+        if (!rp.alive) continue;
+        const rx = rp.pos.x - origin.x, rz = rp.pos.z - origin.z;
+        const along = rx * fx + rz * fz, side = Math.abs(-rx * fz + rz * fx);
+        if (along >= -1.5 && along <= reach && side <= halfW) this.sendPvpHit(dmg, 'body', false, rp, 'knight');
+      }
+    }
+    // белый «разрез» в мире (объёмная вспышка вдоль полосы)
+    if (this.effects && this.effects.knightSlashFx) {
+      this.effects.knightSlashFx(origin, fx, fz, reach, R);
+    }
+    if (hits) UI.hitmark(true);
+    p.bulletsFired += 1;
+    return true;
+  },
+
   meleeGroundSlam(origin, dir, def, muzzleWorld) {
     const p = this.player;
     const R = def.slamR || 9;
@@ -9145,6 +9239,11 @@ const Game = {
       } else if (flameFiring) {
         // held fire: a cone of flame that burns everything in front
         this.updateFlamer(dt);
+      } else if (def.ult && Input.aimDown() && canLook && !this._ultAimLatch) {
+        /* ПКМ (на телефоне — кнопка ПРИЦЕЛ) — УЛЬТА МЕЧА РОКОЧУЩЕГО РЫЦАРЯ.
+           По ФРОНТУ нажатия, чтобы не срабатывала без конца (ПРИЦЕЛ — тумблер). */
+        this._ultAimLatch = true;
+        this.knightUlt();
       } else if (def.beam && p.triggerDown && beamReady) {
         // held fire: a continuous piercing beam instead of bullets
         this.updateBeam(dt);
@@ -9169,6 +9268,8 @@ const Game = {
       if (p.def && p.def.beam) this.stopBeam();
       if (!p.triggerDown) p._semiLatch = false;
     }
+    /* сбрасываем «защёлку» ульты, когда кнопка прицела/ПКМ отпущена */
+    if (!Input.aimDown()) this._ultAimLatch = false;
 
     // ---- movement is frozen during the buy phase (CS-style freeze time) ----
     const frozen = this.roundState === 'buy' || this.shooterPickOpen || this.enemySpawnOpen || this._modPickOpen;
@@ -9194,6 +9295,8 @@ const Game = {
 
     // ---- effects ----
     if (this.effects) this.effects.update(dt);
+    /* экранный эффект ульты рыцаря (чёрный экран + белый слеш) */
+    if (typeof UI !== 'undefined' && UI.knightUltTick) UI.knightUltTick(dt);
     if (this.mode === CS.MODE.OFFLINE || this.mode === CS.MODE.RANGE) {
       this.updateFields(dt);         // acid pools / frost patches
       this.updateChronoFields(dt);   // time-dilation bubbles

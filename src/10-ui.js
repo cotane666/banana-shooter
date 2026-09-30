@@ -26,7 +26,7 @@ const UI = {
       'modScreen', 'modGrid', 'modActive',
       'extras', 'achGrid', 'recTable', 'btnExtrasBack', 'weaponWheel', 'wwInner',
       'skins', 'skinCanvas', 'skinGrid', 'skinStatus', 'skinWeaponSel', 'skinTargetChips', 'btnSkinsBack', 'btnSkins', 'skinRarityBar',
-      'medkitTag', 'droneTag', 'grenadeTag', 'zResetTag', 'jetTag', 'dashTag', 'shieldTag', 'heatTag', 'missileHud', 'mhTime', 'mhReadout',
+      'medkitTag', 'droneTag', 'grenadeTag', 'zResetTag', 'jetTag', 'dashTag', 'shieldTag', 'heatTag', 'missileHud', 'mhTime', 'mhReadout', 'knightUlt',
       'sdScreen', 'sdGrid', 'sdSearch', 'sdToggle2', 'sdClose', 'sdConfig',
       'esScreen', 'esGrid', 'esSearch', 'esCount', 'esCountNum', 'esCountChips', 'esClear', 'esClose', 'esConfig',
       'account', 'accAuthBox', 'accInBox', 'accWho', 'accStatus', 'accNick', 'accEmail', 'accPass',
@@ -490,6 +490,94 @@ const UI = {
   },
   lowHP(on) { this.el.lowhp.style.display = on ? 'block' : 'none'; },
 
+  /* ============================================================
+     УЛЬТА МЕЧА РОКОЧУЩЕГО РЫЦАРЯ: чёрный экран + гигантский БЕЛЫЙ слеш,
+     проносящийся вперёд. Рисуется на 2D-canvas поверх игры. Полностью
+     кинематографично: экран гаснет, вспыхивает белая полоса-разрез, идёт
+     «зазубренный» белый след и угасание.
+     ============================================================ */
+  knightUltStart(seed) {
+    const cv = this.el.knightUlt;
+    if (!cv) return;
+    this._ultCv = cv; this._ultCtx = cv.getContext('2d');
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const w = cv.clientWidth || window.innerWidth, h = cv.clientHeight || window.innerHeight;
+    cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr);
+    this._ultW = w; this._ultH = h; this._ultDpr = dpr;
+    cv.classList.remove('hidden');
+    this._ultT = 0; this._ultDur = 1.15;
+    this._ultSeed = seed || (Math.random() * 1000 | 0);
+    this._ultRaf = null;
+  },
+  knightUltTick(dt) {
+    if (this._ultT === undefined || this._ultT === null) return false;
+    this._ultT += dt;
+    const k = U.clamp(this._ultT / this._ultDur, 0, 1);
+    this._drawKnightUlt(k);
+    if (k >= 1) { this.knightUltEnd(); return false; }
+    return true;
+  },
+  knightUltEnd() {
+    this._ultT = null;
+    if (this._ultCv) this._ultCv.classList.add('hidden');
+  },
+  _drawKnightUlt(k) {
+    const ctx = this._ultCtx, W = this._ultW, H = this._ultH, dpr = this._ultDpr;
+    if (!ctx) return;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    // 1) фон: экран резко чернеет (0 → .96 за первые 12% времени)
+    const blackA = U.clamp(k / .12, 0, 1) * .96;
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = 'rgba(0,0,0,' + blackA.toFixed(3) + ')';
+    ctx.fillRect(0, 0, W, H);
+    // 2) белый слеш: проносится слева-вправо (по дуге) за ~0.55 времени
+    const sweep = U.clamp((k - .05) / .5, 0, 1);
+    const e = 1 - Math.pow(1 - sweep, 2);                       // ease-out
+    const fade = 1 - U.clamp((k - .62) / .34, 0, 1);            // гаснет к концу
+    // геометрия «клика» меча: длинная сужающаяся полоса с загнутым концом
+    const cx = -W * .15 + e * W * 1.15, cy = H * .52 - Math.sin(e * Math.PI) * H * .10;
+    const len = W * .95, thick = H * .11 * fade;
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    // свечение вокруг полосы
+    ctx.shadowColor = 'rgba(255,255,255,.95)';
+    ctx.shadowBlur = 40 * fade;
+    ctx.strokeStyle = 'rgba(255,255,255,' + (.92 * fade).toFixed(3) + ')';
+    ctx.lineCap = 'round';
+    // основной клинок
+    ctx.lineWidth = thick;
+    ctx.beginPath();
+    ctx.moveTo(cx - len * .5, cy + thick * .2);
+    ctx.quadraticCurveTo(cx, cy - thick * .5, cx + len * .5, cy - Math.sin(e * Math.PI) * H * .04);
+    ctx.stroke();
+    // тонкое яркое ядро
+    ctx.shadowBlur = 14 * fade;
+    ctx.strokeStyle = 'rgba(255,255,255,' + fade.toFixed(3) + ')';
+    ctx.lineWidth = Math.max(2, thick * .28);
+    ctx.beginPath();
+    ctx.moveTo(cx - len * .5, cy + thick * .2);
+    ctx.quadraticCurveTo(cx, cy - thick * .5, cx + len * .5, cy - Math.sin(e * Math.PI) * H * .04);
+    ctx.stroke();
+    // зазубрины/искры вдоль разреза
+    ctx.shadowBlur = 10 * fade;
+    const rng = makeRng(this._ultSeed || 7);
+    for (let i = 0; i < 22; i++) {
+      const t = rng();
+      const px = cx - len * .5 + t * len;
+      const py = cy + (rng() - .5) * thick * 2.4;
+      const s = (2 + rng() * 7) * fade;
+      ctx.fillStyle = 'rgba(255,255,255,' + ((.5 + rng() * .5) * fade).toFixed(3) + ')';
+      ctx.fillRect(px, py, s * 2.2, s * .5);
+    }
+    ctx.restore();
+    // 3) в конце чёрный резко спадает (белая вспышка уходит)
+    if (k > .82) {
+      const out = U.clamp((k - .82) / .18, 0, 1);
+      ctx.fillStyle = 'rgba(0,0,0,' + ((1 - out) * .96).toFixed(3) + ')';
+      ctx.fillRect(0, 0, W, H);
+    }
+  },
+
   updateHUD(p, mode, extra) {
     const e = this.el;
     if (!e.hud || e.hud.classList.contains('hidden')) return;
@@ -792,6 +880,7 @@ const UI = {
         if (w.beam) stats.push(['ЛУЧ', w.beamMax + 'с']);
         if (w.splash) stats.push(['РАДИУС', w.splash + 'м']);
         if (w.bulletSplash) stats.push(['РАДИУС', w.bulletSplash + 'м'], ['ВЗРЫВНЫЕ', 'ДА']);
+        if (w.ult) stats.push(['ПКМ', 'УЛЬТА · СЛЕШ'], ['ПЕРЕЗАРЯД', (w.ultCd || 9) + 'с']);
         mkCard(id, w.name, w.cat.toUpperCase(), w.price, stats, owned || inBag, !free && player.money < w.price,
           () => Bus.emit('buy', id),
           () => Bus.emit('equip', id), id);

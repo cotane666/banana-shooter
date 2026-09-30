@@ -227,7 +227,7 @@ const WEAPONS = {
      II (20000) — ЛКМ + ПКМ (ульта: чёрный экран + гигантский белый слеш).
      III(50000) — ЛКМ + ПКМ + ЛКМ-удары ВЫЛЕТАЮТ ВПЕРЁД белым слешем (те же углы
                   и цвет, что у мини-слешей) и наносят врагам удвоенный урон. */
-  knightsword: { name: 'МЕЧ РЫЦАРЯ I', cat: 'melee', slot: 3, price: 5000, dmg: 210, rpm: 300, mag: Infinity, reserve: 0,
+  knightsword: { name: 'МЕЧ РЫЦАРЯ I', cat: 'melee', slot: 3, price: 10000, dmg: 210, rpm: 300, mag: Infinity, reserve: 0,
            auto: true, spread: 0, moveSpread: 0, recoil: 2.2, falloff: 1, range: 3.4, headMul: 2.2, sound: 'knife',
            melee: 'knightsword', knockback: 10, swordTier: 1 },
   knightsword2: { name: 'МЕЧ РЫЦАРЯ II', cat: 'melee', slot: 3, price: 30000, dmg: 210, rpm: 300, mag: Infinity, reserve: 0,

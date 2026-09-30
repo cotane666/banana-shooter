@@ -12693,7 +12693,11 @@ const UI = {
       'skins', 'skinCanvas', 'skinGrid', 'skinStatus', 'skinWeaponSel', 'skinTargetChips', 'btnSkinsBack', 'btnSkins', 'skinRarityBar',
       'medkitTag', 'droneTag', 'grenadeTag', 'zResetTag', 'jetTag', 'dashTag', 'shieldTag', 'heatTag', 'missileHud', 'mhTime', 'mhReadout',
       'sdScreen', 'sdGrid', 'sdSearch', 'sdToggle2', 'sdClose', 'sdConfig',
-      'esScreen', 'esGrid', 'esSearch', 'esCount', 'esClear', 'esClose', 'esConfig'];
+      'esScreen', 'esGrid', 'esSearch', 'esCount', 'esCountNum', 'esCountChips', 'esClear', 'esClose', 'esConfig',
+      'account', 'accAuthBox', 'accInBox', 'accWho', 'accStatus', 'accNick', 'accEmail', 'accPass',
+      'accCloudTag', 'accCloudHint', 'accCloudForm', 'accUrl', 'accKey', 'accHash',
+      'btnAccount', 'btnAccountBack', 'btnAccLogin', 'btnAccRegister', 'btnAccSync', 'btnAccOut',
+      'btnAccCloud', 'btnAccCloudSave', 'btnAccCopyHash'];
     ids.forEach(i => this.el[i] = $(i));
     this.buildBuyCats();
     this.buildChips();
@@ -12701,7 +12705,7 @@ const UI = {
 
   /* ---------------- screens ---------------- */
   show(name) {
-    ['loading', 'menu', 'controls', 'lobby', 'hud', 'buy', 'scoreboard', 'pause', 'connect', 'android', 'ios', 'credits', 'matchEnd', 'custom', 'clickToPlay', 'sdScreen', 'esScreen', 'modScreen', 'extras', 'skins'].forEach(s => {
+    ['loading', 'menu', 'controls', 'lobby', 'hud', 'buy', 'scoreboard', 'pause', 'connect', 'android', 'ios', 'credits', 'matchEnd', 'custom', 'clickToPlay', 'sdScreen', 'esScreen', 'modScreen', 'extras', 'skins', 'account'].forEach(s => {
       const e = this.el[s];
       if (!e) return;
       const on = s === name;
@@ -12710,12 +12714,12 @@ const UI = {
     this.current = name;
   },
   hideOverlays() {
-    ['buy', 'scoreboard', 'pause', 'controls', 'lobby', 'menu', 'connect', 'android', 'ios', 'credits', 'matchEnd', 'custom', 'sdScreen', 'esScreen', 'modScreen', 'extras', 'skins'].forEach(s => {
+    ['buy', 'scoreboard', 'pause', 'controls', 'lobby', 'menu', 'connect', 'android', 'ios', 'credits', 'matchEnd', 'custom', 'sdScreen', 'esScreen', 'modScreen', 'extras', 'skins', 'account'].forEach(s => {
       if (this.el[s]) this.el[s].classList.add('hidden');
     });
   },
   overlayOpen() {
-    return ['buy', 'scoreboard', 'pause', 'controls', 'lobby', 'menu', 'connect', 'android', 'ios', 'credits', 'matchEnd', 'custom', 'sdScreen', 'esScreen', 'modScreen', 'extras', 'skins'].some(s => this.el[s] && !this.el[s].classList.contains('hidden'));
+    return ['buy', 'scoreboard', 'pause', 'controls', 'lobby', 'menu', 'connect', 'android', 'ios', 'credits', 'matchEnd', 'custom', 'sdScreen', 'esScreen', 'modScreen', 'extras', 'skins', 'account'].some(s => this.el[s] && !this.el[s].classList.contains('hidden'));
   },
 
   /* ============================================================

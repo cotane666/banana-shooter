@@ -763,7 +763,7 @@ const UI = {
     const shopAllows = (cat) => !allow || allow[cat] !== 0;
     const itemAllow = (typeof Game !== 'undefined' && Game.shopItemAllow) ? Game.shopItemAllow : null;
     const itemAllowed = (id) => !itemAllow || itemAllow[id] !== 0;
-    const mkCard = (id, name, desc, price, stats, owned, cant, onClick, onOwned, iconId) => {
+    const mkCard = (id, name, desc, price, stats, owned, cant, onClick, onOwned, iconId, cantMsg) => {
       n++;
       const d = document.createElement('div');
       d.className = 'bcard' + (cant ? ' cant' : '') + (owned ? ' own' : '');
@@ -783,7 +783,8 @@ const UI = {
         if (owned) { if (onOwned) onOwned(); return; }
         if (!cant) { onClick(); return; }
         Audio3D_SFX.deny();
-        if (id === 'medkit') UI.toast('Аптечек максимум: ' + CFG.medkitMax);
+        if (cantMsg) UI.toast(cantMsg);
+        else if (id === 'medkit') UI.toast('Аптечек максимум: ' + CFG.medkitMax);
         else UI.toast('Недостаточно денег');
       });
       wrap.appendChild(d);
@@ -872,6 +873,9 @@ const UI = {
         const owned = player.has(id);
         const inBag = player.bagHas && player.bagHas(id) && !(player.inv[w.slot] && player.inv[w.slot].id === id);
         const equipped = owned && !inBag && player.slot === w.slot && player.inv[w.slot] && player.inv[w.slot].id === id;
+        /* последовательная прокачка меча: II и III закрыты, пока нет предыдущего */
+        const need = (typeof WEAPON_UPGRADE_CHAIN !== 'undefined') ? WEAPON_UPGRADE_CHAIN[id] : null;
+        const needsPrev = need && !owned && !player.has(need);
         const rpm = Math.round(w.rpm);
         const stats = [['УРОН', w.dmg], ['ТЕМП', rpm]];
         if (w.mag !== Infinity) stats.push(['МАГ', w.mag]);
@@ -881,9 +885,11 @@ const UI = {
         if (w.splash) stats.push(['РАДИУС', w.splash + 'м']);
         if (w.bulletSplash) stats.push(['РАДИУС', w.bulletSplash + 'м'], ['ВЗРЫВНЫЕ', 'ДА']);
         if (w.ult) stats.push(['ПКМ', 'УЛЬТА · СЛЕШ'], ['ПЕРЕЗАРЯД', (w.ultCd || 9) + 'с']);
-        mkCard(id, w.name, w.cat.toUpperCase(), w.price, stats, owned || inBag, !free && player.money < w.price,
+        const cardDesc = needsPrev ? ('СНАЧАЛА: ' + ((WEAPONS[need] && WEAPONS[need].name) || need)) : w.cat.toUpperCase();
+        mkCard(id, w.name, cardDesc, w.price, stats, owned || inBag, needsPrev || (!free && player.money < w.price),
           () => Bus.emit('buy', id),
-          () => Bus.emit('equip', id), id);
+          () => Bus.emit('equip', id), id,
+          needsPrev ? ('Сначала купите ' + ((WEAPONS[need] && WEAPONS[need].name) || need)) : null);
         if (equipped) { const c = wrap.lastChild; if (c) { c.classList.add('equipped'); const pr = c.querySelector('.pr'); if (pr) pr.textContent = 'В РУКАХ'; } }
         else if (inBag) { const c = wrap.lastChild; if (c) { c.classList.add('inbag'); const pr = c.querySelector('.pr'); if (pr) pr.textContent = 'В СУМКЕ'; } }
       });

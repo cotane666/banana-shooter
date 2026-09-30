@@ -4025,6 +4025,13 @@ const Game = {
     if (!this.shopAllows(w.cat)) { Audio3D_SFX.deny(); UI.toast('Этот класс оружия выключен хостом'); return; }
     if (!this.itemAllowed(id)) { Audio3D_SFX.deny(); UI.toast('Это оружие выключено хостом'); return; }
     if (this.player.has(id)) { Audio3D_SFX.deny(); UI.toast('Уже куплено'); return; }
+    /* последовательная прокачка меча: II требует I, III требует II */
+    const need = (typeof WEAPON_UPGRADE_CHAIN !== 'undefined') ? WEAPON_UPGRADE_CHAIN[id] : null;
+    if (need && !this.player.has(need)) {
+      Audio3D_SFX.deny();
+      UI.toast('Сначала купите ' + ((WEAPONS[need] && WEAPONS[need].name) || need));
+      return;
+    }
     const free = this.isFreeShop();
     if (!free && this.player.money < w.price) { Audio3D_SFX.deny(); UI.toast('Не хватает денег'); return; }
     if (!free) { this.player.money -= w.price; this.player.moneySpent = (this.player.moneySpent || 0) + w.price; }

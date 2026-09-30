@@ -1804,11 +1804,11 @@ const WEAPONS = {
   knightsword: { name: 'МЕЧ РЫЦАРЯ I', cat: 'melee', slot: 3, price: 5000, dmg: 210, rpm: 300, mag: Infinity, reserve: 0,
            auto: true, spread: 0, moveSpread: 0, recoil: 2.2, falloff: 1, range: 3.4, headMul: 2.2, sound: 'knife',
            melee: 'knightsword', knockback: 10, swordTier: 1 },
-  knightsword2: { name: 'МЕЧ РЫЦАРЯ II', cat: 'melee', slot: 3, price: 20000, dmg: 210, rpm: 300, mag: Infinity, reserve: 0,
+  knightsword2: { name: 'МЕЧ РЫЦАРЯ II', cat: 'melee', slot: 3, price: 30000, dmg: 210, rpm: 300, mag: Infinity, reserve: 0,
            auto: true, spread: 0, moveSpread: 0, recoil: 2.2, falloff: 1, range: 3.4, headMul: 2.2, sound: 'knife',
            melee: 'knightsword2', knockback: 10, swordTier: 2,
            ult: true, ultCd: 9, ultR: 12, ultDmg: 4200, ultBreakR: 11, ultBreakDelay: 2.4 },
-  knightsword3: { name: 'МЕЧ РЫЦАРЯ III', cat: 'melee', slot: 3, price: 50000, dmg: 210, rpm: 300, mag: Infinity, reserve: 0,
+  knightsword3: { name: 'МЕЧ РЫЦАРЯ III', cat: 'melee', slot: 3, price: 666666, dmg: 210, rpm: 300, mag: Infinity, reserve: 0,
            auto: true, spread: 0, moveSpread: 0, recoil: 2.2, falloff: 1, range: 3.4, headMul: 2.2, sound: 'knife',
            melee: 'knightsword3', knockback: 10, swordTier: 3,
            ult: true, ultCd: 9, ultR: 12, ultDmg: 4200, ultBreakR: 11, ultBreakDelay: 2.4,
@@ -2073,6 +2073,12 @@ const GEAR = {
   runBoost:     { name: 'ВЫСОКАЯ СКОРОСТЬ БЕГА', price: 16000, perk: 'runSpeed', desc: '+55% к скорости бега навсегда' }
 };
 function grenadeName(kind) { return kind === 'freeze' ? 'КРИО' : kind === 'napalm' ? 'НАПАЛМ' : kind === 'sticky' ? 'ЛИПУЧКА' : 'ГРАНАТА'; }
+/* ---- ПОСЛЕДОВАТЕЛЬНАЯ ПРОКАЧКА МЕЧА РЫЦАРЯ ----
+   II и III нельзя купить «перепрыгнув» этап: сначала I, потом II, потом III. */
+const WEAPON_UPGRADE_CHAIN = {
+  knightsword2: 'knightsword',
+  knightsword3: 'knightsword2'
+};
 function todName(k) {
   return ({ day: 'ДЕНЬ', sunset: 'ЗАКАТ', night: 'НОЧЬ', dawn: 'РАССВЕТ' })[k] || 'ДЕНЬ';
 }
@@ -8170,10 +8176,12 @@ function buildWeaponModel(id) {
       add(B(.064, .012, T + .006, edge, 0, .685, 0));   // белое кольцо к пятке
       add(B(.064, .012, T + .006, edge, 0, .515, 0));   // белое кольцо к клинку
 
-      /* ДЕРЖИМ ЛЕЗВИЕМ ВПЕРЁД: острие (local -Y) разворачиваем в -Z (вперёд) */
-      ks.scale.setScalar(.50);
-      ks.position.set(.24, -.30, -.30);
-      ks.rotation.set(1.45, 0, .10);
+      /* ДЕРЖИМ ЛЕЗВИЕМ ВВЕРХ-ВЛЕВО (по экрану), плоскость клинка — К КАМЕРЕ.
+         Ось клинка (local -Y) поворачиваем вверх, а сам клинок наклоняем;
+         так меч читается целиком от навершия до кончика, а не «палкой в объектив». */
+      ks.scale.setScalar(.34);
+      ks.position.set(.40, -.20, -.44);
+      ks.rotation.set(0, 0, -2.50);
       g.add(ks);
       break;
     }
@@ -14607,7 +14615,7 @@ const UI = {
     const shopAllows = (cat) => !allow || allow[cat] !== 0;
     const itemAllow = (typeof Game !== 'undefined' && Game.shopItemAllow) ? Game.shopItemAllow : null;
     const itemAllowed = (id) => !itemAllow || itemAllow[id] !== 0;
-    const mkCard = (id, name, desc, price, stats, owned, cant, onClick, onOwned, iconId) => {
+    const mkCard = (id, name, desc, price, stats, owned, cant, onClick, onOwned, iconId, cantMsg) => {
       n++;
       const d = document.createElement('div');
       d.className = 'bcard' + (cant ? ' cant' : '') + (owned ? ' own' : '');
@@ -14627,7 +14635,8 @@ const UI = {
         if (owned) { if (onOwned) onOwned(); return; }
         if (!cant) { onClick(); return; }
         Audio3D_SFX.deny();
-        if (id === 'medkit') UI.toast('Аптечек максимум: ' + CFG.medkitMax);
+        if (cantMsg) UI.toast(cantMsg);
+        else if (id === 'medkit') UI.toast('Аптечек максимум: ' + CFG.medkitMax);
         else UI.toast('Недостаточно денег');
       });
       wrap.appendChild(d);
@@ -14716,6 +14725,9 @@ const UI = {
         const owned = player.has(id);
         const inBag = player.bagHas && player.bagHas(id) && !(player.inv[w.slot] && player.inv[w.slot].id === id);
         const equipped = owned && !inBag && player.slot === w.slot && player.inv[w.slot] && player.inv[w.slot].id === id;
+        /* последовательная прокачка меча: II и III закрыты, пока нет предыдущего */
+        const need = (typeof WEAPON_UPGRADE_CHAIN !== 'undefined') ? WEAPON_UPGRADE_CHAIN[id] : null;
+        const needsPrev = need && !owned && !player.has(need);
         const rpm = Math.round(w.rpm);
         const stats = [['УРОН', w.dmg], ['ТЕМП', rpm]];
         if (w.mag !== Infinity) stats.push(['МАГ', w.mag]);
@@ -14725,9 +14737,11 @@ const UI = {
         if (w.splash) stats.push(['РАДИУС', w.splash + 'м']);
         if (w.bulletSplash) stats.push(['РАДИУС', w.bulletSplash + 'м'], ['ВЗРЫВНЫЕ', 'ДА']);
         if (w.ult) stats.push(['ПКМ', 'УЛЬТА · СЛЕШ'], ['ПЕРЕЗАРЯД', (w.ultCd || 9) + 'с']);
-        mkCard(id, w.name, w.cat.toUpperCase(), w.price, stats, owned || inBag, !free && player.money < w.price,
+        const cardDesc = needsPrev ? ('СНАЧАЛА: ' + ((WEAPONS[need] && WEAPONS[need].name) || need)) : w.cat.toUpperCase();
+        mkCard(id, w.name, cardDesc, w.price, stats, owned || inBag, needsPrev || (!free && player.money < w.price),
           () => Bus.emit('buy', id),
-          () => Bus.emit('equip', id), id);
+          () => Bus.emit('equip', id), id,
+          needsPrev ? ('Сначала купите ' + ((WEAPONS[need] && WEAPONS[need].name) || need)) : null);
         if (equipped) { const c = wrap.lastChild; if (c) { c.classList.add('equipped'); const pr = c.querySelector('.pr'); if (pr) pr.textContent = 'В РУКАХ'; } }
         else if (inBag) { const c = wrap.lastChild; if (c) { c.classList.add('inbag'); const pr = c.querySelector('.pr'); if (pr) pr.textContent = 'В СУМКЕ'; } }
       });
@@ -20020,6 +20034,13 @@ const Game = {
     if (!this.shopAllows(w.cat)) { Audio3D_SFX.deny(); UI.toast('Этот класс оружия выключен хостом'); return; }
     if (!this.itemAllowed(id)) { Audio3D_SFX.deny(); UI.toast('Это оружие выключено хостом'); return; }
     if (this.player.has(id)) { Audio3D_SFX.deny(); UI.toast('Уже куплено'); return; }
+    /* последовательная прокачка меча: II требует I, III требует II */
+    const need = (typeof WEAPON_UPGRADE_CHAIN !== 'undefined') ? WEAPON_UPGRADE_CHAIN[id] : null;
+    if (need && !this.player.has(need)) {
+      Audio3D_SFX.deny();
+      UI.toast('Сначала купите ' + ((WEAPONS[need] && WEAPONS[need].name) || need));
+      return;
+    }
     const free = this.isFreeShop();
     if (!free && this.player.money < w.price) { Audio3D_SFX.deny(); UI.toast('Не хватает денег'); return; }
     if (!free) { this.player.money -= w.price; this.player.moneySpent = (this.player.moneySpent || 0) + w.price; }

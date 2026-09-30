@@ -230,11 +230,11 @@ const WEAPONS = {
   knightsword: { name: 'МЕЧ РЫЦАРЯ I', cat: 'melee', slot: 3, price: 5000, dmg: 210, rpm: 300, mag: Infinity, reserve: 0,
            auto: true, spread: 0, moveSpread: 0, recoil: 2.2, falloff: 1, range: 3.4, headMul: 2.2, sound: 'knife',
            melee: 'knightsword', knockback: 10, swordTier: 1 },
-  knightsword2: { name: 'МЕЧ РЫЦАРЯ II', cat: 'melee', slot: 3, price: 20000, dmg: 210, rpm: 300, mag: Infinity, reserve: 0,
+  knightsword2: { name: 'МЕЧ РЫЦАРЯ II', cat: 'melee', slot: 3, price: 30000, dmg: 210, rpm: 300, mag: Infinity, reserve: 0,
            auto: true, spread: 0, moveSpread: 0, recoil: 2.2, falloff: 1, range: 3.4, headMul: 2.2, sound: 'knife',
            melee: 'knightsword2', knockback: 10, swordTier: 2,
            ult: true, ultCd: 9, ultR: 12, ultDmg: 4200, ultBreakR: 11, ultBreakDelay: 2.4 },
-  knightsword3: { name: 'МЕЧ РЫЦАРЯ III', cat: 'melee', slot: 3, price: 50000, dmg: 210, rpm: 300, mag: Infinity, reserve: 0,
+  knightsword3: { name: 'МЕЧ РЫЦАРЯ III', cat: 'melee', slot: 3, price: 666666, dmg: 210, rpm: 300, mag: Infinity, reserve: 0,
            auto: true, spread: 0, moveSpread: 0, recoil: 2.2, falloff: 1, range: 3.4, headMul: 2.2, sound: 'knife',
            melee: 'knightsword3', knockback: 10, swordTier: 3,
            ult: true, ultCd: 9, ultR: 12, ultDmg: 4200, ultBreakR: 11, ultBreakDelay: 2.4,
@@ -499,6 +499,12 @@ const GEAR = {
   runBoost:     { name: 'ВЫСОКАЯ СКОРОСТЬ БЕГА', price: 16000, perk: 'runSpeed', desc: '+55% к скорости бега навсегда' }
 };
 function grenadeName(kind) { return kind === 'freeze' ? 'КРИО' : kind === 'napalm' ? 'НАПАЛМ' : kind === 'sticky' ? 'ЛИПУЧКА' : 'ГРАНАТА'; }
+/* ---- ПОСЛЕДОВАТЕЛЬНАЯ ПРОКАЧКА МЕЧА РЫЦАРЯ ----
+   II и III нельзя купить «перепрыгнув» этап: сначала I, потом II, потом III. */
+const WEAPON_UPGRADE_CHAIN = {
+  knightsword2: 'knightsword',
+  knightsword3: 'knightsword2'
+};
 function todName(k) {
   return ({ day: 'ДЕНЬ', sunset: 'ЗАКАТ', night: 'НОЧЬ', dawn: 'РАССВЕТ' })[k] || 'ДЕНЬ';
 }

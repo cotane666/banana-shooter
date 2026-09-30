@@ -1467,6 +1467,7 @@ const Game = {
     Bus.on('touchGrenade', () => this.throwGrenade());
     Bus.on('touchCycleGrenade', () => this.cycleGrenade());
     Bus.on('touchMechMissiles', () => this.launchMechMissiles());
+    Bus.on('touchMechSurge', () => this.mechSurge());
     Bus.on('touchMechToggle', () => {
       if (this.isMechActive()) this.exitMechSuit();
       else if (this.player && this.player.mechOwned && this.parkedMechDist() <= 6) this.equipMechSuit();
@@ -3076,7 +3077,7 @@ const Game = {
     if (kind === 'shockwave') {
       this.effects.explosion(z.pos.x, z.pos.y + .4, z.pos.z, 8.0, [z.def.aura || 0xffb347, 0x2a1a0a]);
       Audio3D_SFX.explosionAt(z.pos.x, z.pos.y, z.pos.z);
-      if (typeof damageMapAt === 'function') damageMapAt(z.pos.x, z.pos.y + .4, z.pos.z, 8.0, 260);
+      this.breakMapAt(z.pos.x, z.pos.y + .4, z.pos.z, 8.0, 260);
       const R = 10;
       const ds = Math.hypot(p.pos.x - z.pos.x, p.pos.z - z.pos.z);
       if (ds <= R) {
@@ -4263,7 +4264,7 @@ const Game = {
     if (kind === 'frag') {
       const R = 5.2, dmg = 190;
       this.effects.explosion(g.pos.x, g.pos.y, g.pos.z, R, [0xffb060, 0x151210]);
-      if (typeof damageMapAt === 'function') damageMapAt(g.pos.x, g.pos.y, g.pos.z, R, 150);
+      this.breakMapAt(g.pos.x, g.pos.y, g.pos.z, R, 150);
       Audio3D_SFX.explosionAt(g.pos.x, g.pos.y, g.pos.z);
       if (this.horde) for (const z of this.horde.list) {
         if (!z.alive || z.dying) continue;
@@ -4293,7 +4294,7 @@ const Game = {
     } else if (kind === 'napalm') {
       const R = 6.4, dmg = 60;
       this.effects.explosion(g.pos.x, g.pos.y, g.pos.z, R, [0xff7a1a, 0x2a0d02]);
-      if (typeof damageMapAt === 'function') damageMapAt(g.pos.x, g.pos.y, g.pos.z, R, 130);
+      this.breakMapAt(g.pos.x, g.pos.y, g.pos.z, R, 130);
       Audio3D_SFX.explosionAt(g.pos.x, g.pos.y, g.pos.z);
       if (this.horde) for (const z of this.horde.list) {
         if (!z.alive || z.dying) continue;
@@ -4318,7 +4319,7 @@ const Game = {
       // ЛИПУЧКА: мощный направленный взрыв по кнопке
       const R = 6.6, dmg = 260;
       this.effects.explosion(g.pos.x, g.pos.y, g.pos.z, R, [0xff5a2a, 0x1a0604]);
-      if (typeof damageMapAt === 'function') damageMapAt(g.pos.x, g.pos.y, g.pos.z, R, dmg * .6);
+      this.breakMapAt(g.pos.x, g.pos.y, g.pos.z, R, dmg * .6);
       Audio3D_SFX.explosionAt(g.pos.x, g.pos.y, g.pos.z);
       if (this.horde) for (const z of this.horde.list) {
         if (!z.alive || z.dying) continue;
@@ -7223,7 +7224,7 @@ const Game = {
     const R = pr.splash, dmg = pr.splashDmg || pr.dmg;
     this.effects.explosion(center.x, center.y, center.z, R, pr.explosionColor, pr.nuke);
     /* взрыв РАЗРУШАЕТ карту в радиусе */
-    if (typeof damageMapAt === 'function') damageMapAt(center.x, center.y, center.z, R * 1.05, dmg * .5);
+    this.breakMapAt(center.x, center.y, center.z, R * 1.05, dmg * .5);
     Audio3D_SFX.explosionAt(center.x, center.y, center.z);
     UI.hitmark(false);
     // tell the room so everyone sees and hears the rocket, not just the shooter
@@ -7427,6 +7428,15 @@ const Game = {
       if (zHit && zHit.t < h.t) break;             // zombie is in front of this wall
       const thick = (h.t2 !== undefined ? (h.t2 - h.t) : 1.0);
       const penetrable = (h.box.tag === 'cover' || h.box.tag === 'wood') && thick < 0.75 && dmgMul > .35;
+      /* ПУЛИ РАЗРУШАЮТ карту: попадание наносит урон блоку — 10-15 пуль ломают
+         деталь. Считаем урон пропорционально урону оружия. */
+      if (h.box && h.box.destructible && !h.box.removed && typeof damageMapBox === 'function') {
+        const broke = damageMapBox(h.box, def.dmg * 3.2);
+        if (this.effects) {
+          if (broke) this.effects.debrisBurst(h.point.x, h.point.y, h.point.z, 0xb8b2a6, 1.1);
+          else if (Math.random() < .22) this.effects.debrisBurst(h.point.x, h.point.y, h.point.z, 0xb8b2a6, .55);
+        }
+      }
       if (penetrable) { dmgMul *= CFG.wallbangLoss; continue; }
       stopT = h.t; stopNormal = h.normal; stopPoint = h.point;
       break;
@@ -7515,6 +7525,21 @@ const Game = {
     } else {
       this.effects.tracer(muzzleWorld, end, 1, false, _shotCol);
     }
+  },
+
+  /* Разрушение карты взрывом + ПЫЛЬ/ЧАСТИЦЫ на разрушенных кусках. */
+  breakMapAt(x, y, z, radius, dmg) {
+    if (typeof damageMapAt !== 'function') return 0;
+    const destroyed = damageMapAt(x, y, z, radius, dmg);
+    if (destroyed && this.effects) {
+      const b = MAP._lastBreak || { x: x, y: y, z: z };
+      this.effects.debrisBurst(b.x, b.y, b.z, 0xb8b2a6, 1.4);
+      // ещё несколько клубов пыли по площади
+      for (let i = 0; i < Math.min(5, destroyed); i++) {
+        this.effects.debrisBurst(x + U.rand(-radius * .5, radius * .5), y + U.rand(0, 1.2), z + U.rand(-radius * .5, radius * .5), 0xb8b2a6, .8);
+      }
+    }
+    return destroyed;
   },
 
   hitEffect(point, dir, part, headshot) {
@@ -8373,7 +8398,7 @@ const Game = {
       else this.effects.explosion(b.x, b.y, b.z, R, b.c || null, !!b.nk);
     }
     Audio3D_SFX.explosionAt(b.x, b.y, b.z);
-    if (typeof damageMapAt === 'function') damageMapAt(b.x, b.y, b.z, R * 1.05, 90);
+    this.breakMapAt(b.x, b.y, b.z, R * 1.05, 90);
     // drop the cosmetic copy so it does not fly on and detonate again
     this.removeRemoteProjectileNear(b.x, b.y, b.z);
   },

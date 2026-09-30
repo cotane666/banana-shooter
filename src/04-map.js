@@ -213,10 +213,23 @@ function damageMapAt(x, y, z, radius, dmg) {
     if (d2 > r2) continue;
     const k = 1 - Math.sqrt(d2) / radius;
     b.hp -= dmg * (0.4 + k * 0.6);
-    if (b.hp <= 0) { removeMapChunk(b); destroyed++; }
+    if (b.hp <= 0) {
+      // запоминаем центр куска для пыли
+      MAP._lastBreak = { x: (b.minX + b.maxX) / 2, y: (b.minY + b.maxY) / 2, z: (b.minZ + b.maxZ) / 2 };
+      removeMapChunk(b); destroyed++;
+    }
   }
   if (destroyed) _flushChunkInstances();
   return destroyed;
+}
+
+/* урон по КОНКРЕТНОМУ боксу (попадание пули): 10-15 пуль ломают блок.
+   Возвращает true, если блок разрушен. */
+function damageMapBox(b, dmg) {
+  if (!b || b.removed || !b.destructible) return false;
+  b.hp -= dmg;
+  if (b.hp <= 0) { removeMapChunk(b); _flushChunkInstances(); return true; }
+  return false;
 }
 
 /* один чанк: спрятать инстанс (масштаб 0) и снять коллизию */
@@ -273,18 +286,31 @@ function restoreMap() {
    убирало ровно ту часть, в которую попали (взрыв/зомби), а не всю стену.
    Пол, границы, рампы, платформы и крыши НЕ разрушаются. */
 const MAP_CHUNK = 2.6;
+/* теги, которые НЕЛЬЗЯ разрушить: пол, границы карты, рампы, платформы, крыши
+   и настилы — они держат навигацию и по ним ходят. Всё остальное (укрытия,
+   стены, колонны, декор) ломается взрывом или 10-15 пулями. */
+const MAP_INDESTRUCTIBLE = { ground: 1, boundary: 1, ramp: 1, plat: 1, deck: 1, roof: 1 };
+function _destructibleTag(tag) { return !MAP_INDESTRUCTIBLE[tag]; }
 function solid(parent, world, x, y, z, w, h, d, mat, opts) {
   opts = opts || {};
   const tag = opts.tag || 'solid';
-  /* дробим на чанки укрытия И стены (внутренние). Платформы/рампы/крыши/пол
+  /* дробим на чанки укрытия и стены (внутренние). Платформы/рампы/крыши/пол
      остаются целыми, чтобы не ломать навигацию и прорезание дверей. */
-  const canChunk = opts.destructible !== false && !opts.rotY && (tag === 'cover' || tag === 'wall');
+  const canChunk = opts.destructible !== false && !opts.rotY && _destructibleTag(tag);
   if (canChunk) {
-    const nX = Math.max(1, Math.round(w / MAP_CHUNK));
-    const nZ = Math.max(1, Math.round(d / MAP_CHUNK));
-    const nY = Math.max(1, Math.round(h / MAP_CHUNK));
-    const total = nX * nZ * nY;
-    if (total > 1 && total <= 60) {
+    /* адаптивный размер чанка: если при 2.6 м кусков получается слишком много,
+       увеличиваем шаг, чтобы число чанков осталось разумным (производительность). */
+    let chunk = MAP_CHUNK;
+    let nX, nZ, nY, total;
+    for (let attempt = 0; attempt < 6; attempt++) {
+      nX = Math.max(1, Math.round(w / chunk));
+      nZ = Math.max(1, Math.round(d / chunk));
+      nY = Math.max(1, Math.round(h / chunk));
+      total = nX * nZ * nY;
+      if (total <= 80) break;
+      chunk *= 1.6;
+    }
+    if (total > 1) {
       const gid = (MAP._chunkGid = (MAP._chunkGid || 0) + 1);
       const cw = w / nX, cd = d / nZ, ch = h / nY;
       for (let iy = 0; iy < nY; iy++) {
@@ -303,7 +329,7 @@ function solid(parent, world, x, y, z, w, h, d, mat, opts) {
   }
   const aabb = aabbFromBase(x, y, z, w, h, d, tag);
   if (!opts.noCollide) world.addBox(aabb);
-  if (opts.destructible !== false && tag === 'cover') {
+  if (opts.destructible !== false && _destructibleTag(tag)) {
     aabb.destructible = true;
     aabb.hp = aabb.maxHp = Math.max(30, w * h * d * 26);
     MAP.destructibles.push(aabb);
@@ -436,11 +462,17 @@ function mapPerimeter(parent, world, mat) {
    центры попадают в прямоугольник стены, затем строим сегменты двери. */
 function doorwayCut(parent, world, x, z, axis, len, h, thick) {
   const halfLen = len / 2 + 0.01, halfThick = thick / 2 + 0.01;
+  /* Берём ТОЛЬКО стены (tag 'wall') внутри прямоугольника проёма и не выше
+     самой стены. Раньше проверка высоты пропускала бокс ПОЛА (он ниже нуля),
+     и doorwayCut на картах БУНКЕР/ЛАБОРАТОРИЯ удалял пол — игрок проваливался.
+     Учитываем и чанки стен: их высота может отличаться от `h`, поэтому высоту
+     не сверяем точно, а ограничиваем сверху. */
   const inRect = (b) => {
+    if (b.tag !== 'wall') return false;
     const bcx = (b.minX + b.maxX) / 2, bcz = (b.minZ + b.maxZ) / 2;
     if (Math.abs(bcx - x) > halfLen) return false;
     if (Math.abs(bcz - z) > halfThick) return false;
-    if (Math.abs((b.maxY - b.minY) - h) > .01 && b.minY > 0.01) return false;
+    if (b.minY < -0.1 || b.maxY > h + 0.1) return false;   // только тело стены
     return true;
   };
   let removedAny = false;

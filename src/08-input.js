@@ -267,6 +267,7 @@ const TouchUI = {
         '<button id="tGrenade" class="tbtn act accent">ГРАНАТА</button>' +
         '<button id="tGrenadeKind" class="tbtn act">ТИП</button>' +
         '<button id="tMissiles" class="tbtn act accent">РАКЕТЫ</button>' +
+        '<button id="tSurge" class="tbtn act accent">СКАЧОК</button>' +
         '<button id="tMech" class="tbtn act accent">ВЫЙТИ</button>' +
         '<button id="tTurret" class="tbtn act accent">ТУРЕЛЬ</button>' +
         '<button id="tDummy" class="tbtn act accent">МАНЕКЕН</button>' +
@@ -296,6 +297,7 @@ const TouchUI = {
       grenade: document.getElementById('tGrenade'),
       grenadeKind: document.getElementById('tGrenadeKind'),
       missiles: document.getElementById('tMissiles'),
+      surge: document.getElementById('tSurge'),
       mech: document.getElementById('tMech'),
       turret: document.getElementById('tTurret'),
       dummy: document.getElementById('tDummy'),
@@ -352,6 +354,7 @@ const TouchUI = {
     E.grenade.addEventListener('touchstart', e => { swallow(e); Bus.emit('touchGrenade'); E.grenade.classList.add('down'); setTimeout(() => E.grenade.classList.remove('down'), 160); }, { passive: false });
     E.grenadeKind.addEventListener('touchstart', e => { swallow(e); Bus.emit('touchCycleGrenade'); E.grenadeKind.classList.add('down'); setTimeout(() => E.grenadeKind.classList.remove('down'), 160); }, { passive: false });
     E.missiles.addEventListener('touchstart', e => { swallow(e); Bus.emit('touchMechMissiles'); E.missiles.classList.add('down'); setTimeout(() => E.missiles.classList.remove('down'), 160); }, { passive: false });
+    E.surge.addEventListener('touchstart', e => { swallow(e); Bus.emit('touchMechSurge'); E.surge.classList.add('down'); setTimeout(() => E.surge.classList.remove('down'), 160); }, { passive: false });
     E.mech.addEventListener('touchstart', e => { swallow(e); Bus.emit('touchMechToggle'); E.mech.classList.add('down'); setTimeout(() => E.mech.classList.remove('down'), 160); }, { passive: false });
     E.turret.addEventListener('touchstart', e => { swallow(e); Bus.emit('touchTurretGear'); E.turret.classList.add('down'); setTimeout(() => E.turret.classList.remove('down'), 160); }, { passive: false });
     E.dummy.addEventListener('touchstart', e => { swallow(e); Bus.emit('touchRangeDummy'); E.dummy.classList.add('down'); setTimeout(() => E.dummy.classList.remove('down'), 160); }, { passive: false });
@@ -504,6 +507,13 @@ const TouchUI = {
     // --- mech-only abilities + РЫВОК-перк (доступен и без меха) ---
     dim(E.dash, inMech || (!!(p && p.perkDash) && !inMech));
     dim(E.missiles, inMech);
+    dim(E.surge, inMech);
+    if (inMech && E.surge) {
+      const cd = CFG.mechSurgeCd * 1000;
+      const left = (Game && Game._mechSurgeAt) ? (cd - (U.now() - Game._mechSurgeAt)) : 0;
+      E.surge.style.opacity = (blocked || left > 0) ? '.35' : '1';
+      E.surge.textContent = left > 0 ? ('СКАЧОК ' + Math.ceil(left / 1000)) : 'СКАЧОК';
+    }
     if (inMech) E.missiles.style.opacity = (blocked || !!(Game && Game._mechMissileAt && U.now() - Game._mechMissileAt < CFG.mechMissileCd * 1000)) ? '.35' : '1';
     dim(E.mech, inMech || (!!(p && p.mechOwned) && (Game.parkedMechDist ? Game.parkedMechDist() <= 6 : false)));
 

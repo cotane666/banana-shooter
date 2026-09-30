@@ -83,6 +83,30 @@ class Effects {
     this.slashes.push({ mesh: g, mats: [mat, coreMat], life: .22, max: .22 });
   }
 
+  /* ПЫЛЬ И ОСКОЛКИ при разрушении объекта карты: облако пыли + летящие куски */
+  debrisBurst(x, y, z, color, size) {
+    const c = color === undefined ? 0xb8b2a6 : color;
+    const n = (this.quality === 0 || ((CFG && CFG.particleMul) < .6)) ? 8 : 16;
+    // пыль (серые клубы, всплывают медленно)
+    for (let i = 0; i < n; i++) {
+      this.particle(x + U.rand(-.5, .5), y + U.rand(-.4, .6), z + U.rand(-.5, .5),
+        U.rand(-3, 3), U.rand(.5, 3.2), U.rand(-3, 3), U.rand(.10, .26), 'smoke', U.rand(.5, 1.1));
+    }
+    // осколки (мелкие кубики цвета материала)
+    for (let i = 0; i < n; i++) {
+      const m = new THREE.Mesh(this.particleGeo, new THREE.MeshLambertMaterial({ color: c }));
+      m.position.set(x + U.rand(-.4, .4), y + U.rand(-.2, .8), z + U.rand(-.4, .4));
+      m.scale.setScalar(U.rand(.03, .09) * (size || 1));
+      m.visible = true;
+      this.scene.add(m);
+      this.particles.push({
+        mesh: m, vx: U.rand(-5, 5), vy: U.rand(1, 6), vz: U.rand(-5, 5),
+        life: U.rand(.5, 1.1), max: 1.1, grav: 16, type: 'debris',
+        spin: { x: U.rand(-8, 8), y: U.rand(-8, 8), z: U.rand(-8, 8) }
+      });
+    }
+  }
+
   _holeTexture(col) {
     const c = makeCanvas(64); const x = c.getContext('2d');
     x.clearRect(0, 0, 64, 64);
@@ -1202,6 +1226,10 @@ class Effects {
           // a compound FX (implosion group / chrono dome): dispose, never pool
           if (p.mesh.parent) p.mesh.parent.remove(p.mesh);
           p.mesh.traverse && p.mesh.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material) o.material.dispose(); });
+        } else if (p.type === 'debris') {
+          // у осколков свой материал — убираем полностью, в пул не кладём
+          if (p.mesh.parent) p.mesh.parent.remove(p.mesh);
+          if (p.mesh.material) p.mesh.material.dispose();
         } else {
           p.mesh.visible = false;
           if (p.mesh.parent) p.mesh.parent.remove(p.mesh);
@@ -1239,6 +1267,11 @@ class Effects {
       if (p.type === 'smoke') {
         p.mesh.scale.multiplyScalar(1 + dt * 1.8);
         if (p.mesh.material.opacity !== undefined && p.mesh.material === this.smokeMat) { }
+      }
+      if (p.spin) {
+        p.mesh.rotation.x += p.spin.x * dt;
+        p.mesh.rotation.y += p.spin.y * dt;
+        p.mesh.rotation.z += p.spin.z * dt;
       }
       if (p.life < .25 && p.mesh.material && p.mesh.material.opacity !== undefined && p.type === 'spark') {
         p.mesh.material = p.mesh.material; // shared material; fade via scale

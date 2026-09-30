@@ -12322,40 +12322,44 @@ class Effects {
     g.rotation.y = yaw;
 
     if (mini) {
-      /* ДУГА-СЛЕД: серп-полумесяц ПЛОСКОСТЬЮ К ИГРОКУ (виден как разрез), а не
-         на ребро. Каждый удар — ПОД РАЗНЫМ УГЛОМ: дуга крутится в плоскости
-         экрана (rotation.z) на случайный угол + лёгкий 3D-наклон. */
-      const rad = reach * .5;
-      const spin = U.rand(0, Math.PI * 2);           // основной угол разреза
-      const tiltX = U.rand(-.45, .45);               // лёгкий наклон к/от камеры
-      const tiltY = U.rand(-.45, .45);
-      const arcMat = new THREE.MeshBasicMaterial({
+      /* МИНИ-СЛЕШ: ПРЯМАЯ тонкая линия, которая всегда ПРОХОДИТ ЧЕРЕЗ ПРИЦЕЛ,
+         но под РАЗНЫМ УГЛОМ. Делаем её billboard-плоскостью: ставим в точку
+         прицела, разворачиваем к игроку и крутим вокруг оси взгляда на случайный
+         угол — на экране это прямая через crosshair под любым наклоном. */
+      const angle = U.rand(0, Math.PI * 2);          // угол линии на экране
+      const len = reach * 1.7;                       // длина линии
+      const thick = len * .035;                      // толщина
+      const cxp = origin.x + fx * 2.6, cyp = origin.y + .05, czp = origin.z + fz * 2.6;
+      const mat = new THREE.MeshBasicMaterial({
         color: 0xffffff, transparent: true, opacity: 0,
         blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide
       });
-      const arc = new THREE.Mesh(new THREE.TorusGeometry(rad, rad * .13, 6, 22, Math.PI * 1.12), arcMat);
-      arc.position.set(0, 0, reach * .40);
-      arc.rotation.set(tiltX, tiltY, spin);          // в плоскости экрана, разный угол
-      g.add(arc);
+      const line = new THREE.Mesh(new THREE.PlaneGeometry(len, thick), mat);
+      line.rotation.z = angle;
+      g.add(line);
       const coreMat = new THREE.MeshBasicMaterial({
         color: 0xffffff, transparent: true, opacity: 0,
         blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide
       });
-      const core = new THREE.Mesh(new THREE.TorusGeometry(rad, rad * .04, 6, 22, Math.PI * 1.12), coreMat);
-      core.position.copy(arc.position); core.rotation.copy(arc.rotation);
+      const core = new THREE.Mesh(new THREE.PlaneGeometry(len * .99, thick * .4), coreMat);
+      core.rotation.z = angle; core.position.z = .01;
       g.add(core);
+      // ставим группу в точку прицела и разворачиваем к игроку (billboard)
+      g.position.set(cxp, cyp, czp);
+      g.lookAt(origin.x, origin.y, origin.z);
       const light = new THREE.PointLight(0xffffff, 0, R * 3, 2);
-      light.position.set(0, .4, reach * .40); g.add(light);
+      light.position.set(0, 0, .3); g.add(light);
       this.scene.add(g);
       this.knightSlashes = this.knightSlashes || [];
-      this.knightSlashes.push({ grp: g, mats: [arcMat, coreMat], light: light, life: life, max: life });
-      /* искры — тоже белые (жёлтых частиц нет) */
-      for (let i = 0; i < 9; i++) {
-        const t = U.rand(0, reach);
-        const sx = origin.x + fx * t + (-fz) * U.rand(-R * .4, R * .4);
-        const sz = origin.z + fz * t + (fx) * U.rand(-R * .4, R * .4);
-        const sp = this.particle(sx, origin.y - .4 + U.rand(0, 1.2), sz, U.rand(-3, 3), U.rand(2, 7), U.rand(-3, 3),
-          U.rand(.08, .20), 'spark', U.rand(.25, .55));
+      this.knightSlashes.push({ grp: g, mats: [mat, coreMat], light: light, life: life, max: life });
+      /* белые искры вдоль линии (жёлтых частиц нет) */
+      const ca = Math.cos(angle), sa = Math.sin(angle);
+      for (let i = 0; i < 10; i++) {
+        const u = U.rand(-len * .5, len * .5);
+        const sx = cxp + (fx) * (ca * u) + (-fz) * (sa * u);
+        const sz = czp + (fz) * (ca * u) + (fx) * (sa * u);
+        const sp = this.particle(sx, cyp + (sa * u) * .4, sz, U.rand(-3, 3), U.rand(2, 7), U.rand(-3, 3),
+          U.rand(.07, .18), 'spark', U.rand(.22, .5));
         if (sp) sp.material = this._whiteSparkMat();
       }
       return;

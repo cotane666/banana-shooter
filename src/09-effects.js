@@ -111,8 +111,65 @@ class Effects {
     if (!this._whiteSpark) this._whiteSpark = new THREE.MeshBasicMaterial({ color: 0xffffff, blending: THREE.AdditiveBlending, transparent: true, depthWrite: false });
     return this._whiteSpark;
   }
-  knightSlashFx(origin, fx, fz, reach, R, mini) {
-    const yaw = Math.atan2(fx, fz);
+
+  /* ============================================================
+     SWOON — красная пиксельная надпись (как в Deltarune у Рокочущего рыцаря),
+     всплывающая над врагом, убитым ПКМ-ультой. Рисуется пиксель-за-пикселем
+     на canvas (крупные квадраты), с чёрной обводкой — аутентичный вид.
+     ============================================================ */
+  swoonTexture() {
+    if (this._swoonTex) return this._swoonTex;
+    // 5×7 пиксельные глифы для S W O O N
+    const G = {
+      S: ['01111', '10000', '10000', '01110', '00001', '00001', '11110'],
+      W: ['10001', '10001', '10001', '10101', '10101', '11011', '10001'],
+      O: ['01110', '10001', '10001', '10001', '10001', '10001', '01110'],
+      N: ['10001', '11001', '11001', '10101', '10011', '10011', '10001']
+    };
+    const word = 'SWOON';
+    const PX = 14;                                  // размер пикселя
+    const gw = 5, gh = 7, gap = 1;
+    const W = (gw * word.length + gap * (word.length - 1)) * PX;
+    const H = gh * PX;
+    const c = makeCanvas(1); c.width = W; c.height = H;
+    const x = c.getContext('2d');
+    x.imageSmoothingEnabled = false;
+    x.clearRect(0, 0, W, H);
+    const drawWord = (col, ox, oy) => {
+      x.fillStyle = col;
+      let cx = ox;
+      for (const ch of word) {
+        const rows = G[ch];
+        for (let r = 0; r < gh; r++) for (let cc = 0; cc < gw; cc++) {
+          if (rows[r][cc] === '1') x.fillRect(cx + cc * PX, oy + r * PX, PX, PX);
+        }
+        cx += (gw + gap) * PX;
+      }
+    };
+    // чёрная обводка (сдвиги), затем красная заливка
+    const o = PX * .34;
+    for (const [dx, dy] of [[-o, 0], [o, 0], [0, -o], [0, o], [-o, -o], [o, o], [-o, o], [o, -o]]) drawWord('#1a0000', dx, dy);
+    drawWord('#e01010', 0, 0);                      // ярко-красный
+    drawWord('#ff3a2a', PX * .18, PX * .18);         // светлый блик
+    const t = new THREE.CanvasTexture(c);
+    t.colorSpace = THREE.SRGBColorSpace;
+    t.magFilter = THREE.NearestFilter;
+    t.minFilter = THREE.NearestFilter;
+    this._swoonTex = t;
+    return t;
+  }
+  swoon(x, y, z) {
+    const tex = this.swoonTexture();
+    const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false, depthWrite: false });
+    const sp = new THREE.Sprite(mat);
+    sp.position.set(x, y, z);
+    sp.scale.set(3.0, .86, 1);
+    sp.renderOrder = 12;
+    this.scene.add(sp);
+    this.swoons = this.swoons || [];
+    this.swoons.push({ mesh: sp, mat: mat, life: 1.6, max: 1.6, y0: y });
+  }
+  knightSlashFx(origin, fx, fz, reach, R, mini) {    const yaw = Math.atan2(fx, fz);
     const life = mini ? .34 : .5;
     const g = new THREE.Group();
     g.position.set(origin.x, origin.y, origin.z);
@@ -1308,6 +1365,24 @@ class Effects {
           s.grp.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material) o.material.dispose(); });
           if (s.grp.parent) s.grp.parent.remove(s.grp);
           this.knightSlashes.splice(i, 1);
+        }
+      }
+    }
+    // SWOON: всплывает вверх, слегка пульсирует и гаснет в конце
+    if (this.swoons) {
+      for (let i = this.swoons.length - 1; i >= 0; i--) {
+        const s = this.swoons[i];
+        s.life -= dt;
+        const k = U.clamp(s.life / s.max, 0, 1);
+        const rise = (1 - k) * .9;                     // поднимается вверх
+        s.mesh.position.y = s.y0 + rise;
+        const pop = k > .8 ? (1 - k) / .2 : 1;         // короткий «выход» в начале
+        s.mesh.scale.set(3.0 * (.5 + pop * .5), .86 * (.5 + pop * .5), 1);
+        s.mat.opacity = k < .25 ? k / .25 : 1;         // гаснет только в конце
+        if (s.life <= 0) {
+          if (s.mesh.parent) s.mesh.parent.remove(s.mesh);
+          s.mat.dispose();
+          this.swoons.splice(i, 1);
         }
       }
     }

@@ -7633,6 +7633,7 @@ const Game = {
         if (side > halfW) continue;
         const k = 1 - U.clamp(along / reach, 0, 1) * .4;
         const dealt = dmg * k;
+        z._knightUltHit = true;                 // если погибнет — покажем SWOON
         z.takeDamage(dealt, 'body', { x: fx, y: .2, z: fz });
         if (z.alive && !z.dying) {
           z.vel.x += fx * 16; z.vel.z += fz * 16;
@@ -8468,6 +8469,11 @@ const Game = {
       if (!anyLeft) this.refreshMusic();
       if (z.isBoss) { this._bossKills = (this._bossKills || 0) + 1; }
       if (z.isMiniBoss) { this._miniBossKills = (this._miniBossKills || 0) + 1; }
+    }
+    /* SWOON: если врага убила ПКМ-ульта меча рыцаря — над ним всплывает
+       красная пиксельная надпись «SWOON» (как в Deltarune). */
+    if (z._knightUltHit && z.pos && this.effects && this.effects.swoon) {
+      this.effects.swoon(z.pos.x, z.pos.y + 2.1 * (z.scale || 1) + .5, z.pos.z);
     }
     this.checkAchievements();
     UI.feed('<b>' + U.esc(p.name) + '</b> <span class="z">✖ ' + def.name + (headshot ? ' (в голову)' : '') + '</span> +$' + def.money);

@@ -109,7 +109,7 @@ class Effects {
      `mini` — короткая ДУГА-ПОЛУМЕСЯЦ (след меча) для обычного удара ЛКМ. */
   knightSlashFx(origin, fx, fz, reach, R, mini) {
     const yaw = Math.atan2(fx, fz);
-    const life = mini ? .18 : .5;
+    const life = mini ? .34 : .5;
     const g = new THREE.Group();
     g.position.set(origin.x, origin.y, origin.z);
     g.rotation.y = yaw;

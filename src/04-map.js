@@ -1504,10 +1504,13 @@ function buildAimRoom(parent, world) {
   gp.receiveShadow = true;
   parent.add(gp);
 
-  solid(parent, world, minX - T / 2, 0, cz, T, H, halfD * 2 + T * 2, MAT.concrete, { tag: 'wall' });
-  solid(parent, world, maxX + T / 2, 0, cz, T, H, halfD * 2 + T * 2, MAT.concrete, { tag: 'wall' });
-  solid(parent, world, cx, 0, minZ - T / 2, halfW * 2 + T * 2, H, T, MAT.concrete, { tag: 'wall' });
-  solid(parent, world, cx, 0, maxZ + T / 2, halfW * 2 + T * 2, H, T, MAT.concrete, { tag: 'wall' });
+  /* Стены комнаты пристрелки — ЦЕЛЬНЫЕ (не дробим на чанки): иначе в углах
+     чанки соседних стен накладываются копланарно и мерцают. Тег boundary —
+     они и не должны разрушаться (это каркас тира). */
+  solid(parent, world, minX - T / 2, 0, cz, T, H, halfD * 2 + T * 2, MAT.concrete, { tag: 'boundary' });
+  solid(parent, world, maxX + T / 2, 0, cz, T, H, halfD * 2 + T * 2, MAT.concrete, { tag: 'boundary' });
+  solid(parent, world, cx, 0, minZ - T / 2, halfW * 2 + T * 2, H, T, MAT.concrete, { tag: 'boundary' });
+  solid(parent, world, cx, 0, maxZ + T / 2, halfW * 2 + T * 2, H, T, MAT.concrete, { tag: 'boundary' });
 
   const roof = new THREE.Mesh(
     new THREE.BoxGeometry(halfW * 2 + T * 2, .5, halfD * 2 + T * 2),

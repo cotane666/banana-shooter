@@ -313,26 +313,36 @@ const Audio3D_SFX = {
   },
 
   /* ---------- laser cannon ---------- */
-  /* charging whirr as the barrel winds up */
+  /* charging whirr as the barrel winds up — БАСОВЫЙ, не писклявый */
   cannonSpin(x, y, z) {
     if (!this.ctx || this.muted) return;
     const sp = this._spatial(x, y, z, 3, 130);
     if (sp.gain <= .002) return;
     const t = this.ctx.currentTime;
-    const out = this.ctx.createGain(); out.gain.value = sp.gain * .55;
+    const out = this.ctx.createGain(); out.gain.value = sp.gain * .6;
     const pan = this.ctx.createStereoPanner ? this.ctx.createStereoPanner() : null;
     if (pan) { pan.pan.value = sp.pan; out.connect(pan); pan.connect(this.sfx); } else out.connect(this.sfx);
+    // низкий «гул» вместо высокого визга
     const o = this.ctx.createOscillator();
     o.type = 'sawtooth';
-    o.frequency.setValueAtTime(90, t);
-    o.frequency.exponentialRampToValueAtTime(520, t + .45);
-    const lp = this.ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 1600;
+    o.frequency.setValueAtTime(48, t);
+    o.frequency.exponentialRampToValueAtTime(190, t + .5);
+    const lp = this.ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 620; lp.Q.value = 3;
     const g = this.ctx.createGain();
-    g.gain.setValueAtTime(.14, t);
-    g.gain.linearRampToValueAtTime(.24, t + .38);
-    g.gain.exponentialRampToValueAtTime(.001, t + .55);
+    g.gain.setValueAtTime(.16, t);
+    g.gain.linearRampToValueAtTime(.30, t + .4);
+    g.gain.exponentialRampToValueAtTime(.001, t + .6);
     o.connect(lp); lp.connect(g); g.connect(out);
-    o.start(t); o.stop(t + .58);
+    o.start(t); o.stop(t + .62);
+    // суб-бас для «мощи»
+    const sub = this.ctx.createOscillator(); sub.type = 'sine';
+    sub.frequency.setValueAtTime(36, t);
+    sub.frequency.exponentialRampToValueAtTime(64, t + .5);
+    const sg = this.ctx.createGain();
+    sg.gain.setValueAtTime(.20, t);
+    sg.gain.exponentialRampToValueAtTime(.001, t + .6);
+    sub.connect(sg); sg.connect(out);
+    sub.start(t); sub.stop(t + .62);
   },
   /* the beam itself: a sustained laser whine that RISES over time.
      `heat` (0..1) is the fraction of the beam's burn time elapsed: as it climbs
@@ -350,49 +360,55 @@ const Audio3D_SFX = {
     // sustained tone would be exhausting over a long burst.
     out.gain.linearRampToValueAtTime(Math.max(sp.gain, .3) * .5, t + .05);
 
-    // --- main laser tone: a bright saw that sweeps up as it heats ---
+    // --- main laser tone: НИЗКИЙ гул, слегка поднимается с нагревом ---
     const o = this.ctx.createOscillator(); o.type = 'sawtooth';
-    o.frequency.setValueAtTime(520, t);
-    const olp = this.ctx.createBiquadFilter(); olp.type = 'lowpass'; olp.frequency.value = 3200; olp.Q.value = 6;
-    const og = this.ctx.createGain(); og.gain.value = .10;
+    o.frequency.setValueAtTime(140, t);
+    const olp = this.ctx.createBiquadFilter(); olp.type = 'lowpass'; olp.frequency.value = 900; olp.Q.value = 6;
+    const og = this.ctx.createGain(); og.gain.value = .16;
     o.connect(olp); olp.connect(og); og.connect(out);
     o.start(t);
 
-    // --- a fifth above, detuned, so it shimmers like an energy weapon ---
+    // --- суб-бас: добавляет «мощь» и убирает писк ---
+    const osub = this.ctx.createOscillator(); osub.type = 'sine';
+    osub.frequency.setValueAtTime(70, t);
+    const osg = this.ctx.createGain(); osg.gain.value = .12;
+    osub.connect(osg); osg.connect(out);
+    osub.start(t);
+
+    // --- чуть выше, расстроенный, для «энергетического» шлейфа ---
     const o2 = this.ctx.createOscillator(); o2.type = 'square';
-    o2.frequency.setValueAtTime(522.2, t);
-    const o2g = this.ctx.createGain(); o2g.gain.value = .05;
+    o2.frequency.setValueAtTime(141.5, t);
+    const o2g = this.ctx.createGain(); o2g.gain.value = .035;
     o2.connect(o2g); o2g.connect(out);
     o2.start(t);
 
-    // --- ring modulation: a low LFO multiplying the tone gives the classic
-    //     "pew / laser" warble, and its rate climbs with the heat ---
+    // --- ring modulation: низкий LFO даёт мягкий «рокот», а не писк ---
     const trem = this.ctx.createGain(); trem.gain.value = 0;
-    const lfo = this.ctx.createOscillator(); lfo.type = 'sine'; lfo.frequency.value = 26;
-    const lfoGain = this.ctx.createGain(); lfoGain.gain.value = .06;
+    const lfo = this.ctx.createOscillator(); lfo.type = 'sine'; lfo.frequency.value = 14;
+    const lfoGain = this.ctx.createGain(); lfoGain.gain.value = .05;
     lfo.connect(lfoGain); lfoGain.connect(trem.gain);
     // route the detuned tone through the tremolo gain
     o2.disconnect(); o2.connect(trem); trem.connect(out);
     lfo.start(t);
 
-    // --- airy hiss that sharpens as it heats ---
+    // --- глухой низкий «воздух» вместо резкого шипения ---
     const src = this.ctx.createBufferSource(); src.buffer = this.noiseBuf; src.loop = true;
-    const bp = this.ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 2600; bp.Q.value = 1.1;
-    const ng = this.ctx.createGain(); ng.gain.value = .07;
+    const bp = this.ctx.createBiquadFilter(); bp.type = 'lowpass'; bp.frequency.value = 700; bp.Q.value = .8;
+    const ng = this.ctx.createGain(); ng.gain.value = .05;
     src.connect(bp); bp.connect(ng); ng.connect(out);
     src.start(t);
 
-    // --- ignition zap on top ---
+    // --- ignition: глухой низкий «вумп» вместо визга ---
     const zap = this.ctx.createOscillator(); zap.type = 'triangle';
-    zap.frequency.setValueAtTime(3000, t);
-    zap.frequency.exponentialRampToValueAtTime(600, t + .16);
+    zap.frequency.setValueAtTime(320, t);
+    zap.frequency.exponentialRampToValueAtTime(90, t + .18);
     const zg = this.ctx.createGain();
-    zg.gain.setValueAtTime(.18, t);
-    zg.gain.exponentialRampToValueAtTime(.001, t + .18);
+    zg.gain.setValueAtTime(.16, t);
+    zg.gain.exponentialRampToValueAtTime(.001, t + .2);
     zap.connect(zg); zg.connect(out);
-    zap.start(t); zap.stop(t + .2);
+    zap.start(t); zap.stop(t + .22);
 
-    this._beamSnd = { o, o2, o2g, src, out, olp, bp, ng, lfo, lfoGain, trem, pan, heat: 0 };
+    this._beamSnd = { o, osub, osg, o2, o2g, src, out, olp, bp, ng, lfo, lfoGain, trem, pan, heat: 0 };
   },
   /* Update the rising character of the beam. `heat` is 0..1. */
   cannonBeamHeat(heat) {
@@ -402,18 +418,19 @@ const Audio3D_SFX = {
     if (heat < s.heat - .05) { /* restarted */ }
     s.heat = heat;
     const t = this.ctx.currentTime, now = .08;
-    // sweep the base frequency up (520 Hz → ~1750 Hz) as the beam heats up
-    const base = 520 + heat * 1230;
+    // base гудит 140 → ~320 Hz с нагревом (остаётся басовым)
+    const base = 140 + heat * 180;
     s.o.frequency.setTargetAtTime(base, t, now);
+    if (s.osub) s.osub.frequency.setTargetAtTime(70 + heat * 60, t, now);
     s.o2.frequency.setTargetAtTime(base * 1.004, t, now);
-    // open the low-pass so it gets brighter / angrier
-    s.olp.frequency.setTargetAtTime(3200 + heat * 5200, t, now);
-    // faster and deeper warble
-    s.lfo.frequency.setTargetAtTime(26 + heat * 70, t, now);
-    s.lfoGain.gain.setTargetAtTime(.06 + heat * .10, t, now);
-    // hiss gets sharper and louder
-    s.bp.frequency.setTargetAtTime(2600 + heat * 3600, t, now);
-    s.ng.gain.setTargetAtTime(.07 + heat * .06, t, now);
+    // фильтр приоткрывается, но остаётся глухим
+    s.olp.frequency.setTargetAtTime(900 + heat * 1100, t, now);
+    // мягкий рокот
+    s.lfo.frequency.setTargetAtTime(14 + heat * 30, t, now);
+    s.lfoGain.gain.setTargetAtTime(.05 + heat * .07, t, now);
+    // «воздух» чуть поднимается, но не пищит
+    s.bp.frequency.setTargetAtTime(700 + heat * 600, t, now);
+    s.ng.gain.setTargetAtTime(.05 + heat * .05, t, now);
   },
   cannonBeamStop() {
     if (!this._beamSnd) return;
@@ -426,8 +443,8 @@ const Audio3D_SFX = {
     } catch (e) { }
     const stop = (n) => { try { n.stop(); } catch (e) { } };
     const off = (n) => { try { n.disconnect(); } catch (e) { } };
-    stop(s.o); stop(s.o2); stop(s.lfo); stop(s.src);
-    setTimeout(() => { off(s.out); off(s.o); off(s.o2); off(s.lfo); off(s.lfoGain); off(s.trem); off(s.src); off(s.olp); off(s.bp); off(s.ng); }, 160);
+    stop(s.o); if (s.osub) stop(s.osub); stop(s.o2); stop(s.lfo); stop(s.src);
+    setTimeout(() => { off(s.out); off(s.o); if (s.osub) off(s.osub); if (s.osg) off(s.osg); off(s.o2); off(s.lfo); off(s.lfoGain); off(s.trem); off(s.src); off(s.olp); off(s.bp); off(s.ng); }, 160);
   },
   /* overheat: a descending vent hiss */
   cannonOverheat() {

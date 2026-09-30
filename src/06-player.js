@@ -1957,50 +1957,67 @@ function buildWeaponModel(id) {
 
     /* ---------------- Machete: long heavy chopping blade ---------------- */
     case 'machete': {
-      add(B(.016, .075, .42, PAL.steel, 0, .02, -.24));               // broad blade
-      add(B(.018, .014, .40, PAL.black, 0, .02, -.23));               // spine
-      add(B(.005, .060, .20, PAL.gunLight, 0, .02, -.30, .12));       // edge bevel
-      add(B(.020, .10, .05, PAL.black, 0, .0, -.02));                 // guard
-      add(B(.036, .052, .16, PAL.poly, 0, -.004, .09));               // handle
-      for (let i = 0; i < 4; i++) add(B(.039, .012, .016, PAL.black, 0, -.004, .03 + i * .032));
-      add(B(.040, .018, .03, PAL.black, 0, .006, .17));               // pommel
-      add(B(.010, .020, .010, PAL.steel, 0, .006, .18));
+      add(B(.018, .085, .50, PAL.steel, 0, .02, -.28));               // broad blade
+      add(B(.020, .016, .48, PAL.gun, 0, .02, -.27));                 // thick spine
+      add(B(.006, .070, .30, PAL.gunLight, 0, .02, -.34, .10));       // edge bevel
+      add(B(.022, .016, .34, PAL.black, .006, .05, -.26));            // blood groove line
+      // handle with riveted slabs
+      add(B(.038, .058, .17, PAL.poly, 0, -.004, .09));
+      for (let i = 0; i < 3; i++) add(B(.042, .012, .014, PAL.steel, 0, -.004, .045 + i * .04));  // rivets
+      add(B(.044, .020, .032, PAL.black, 0, .006, .175));             // pommel
+      add(B(.012, .022, .012, PAL.steel, 0, .006, .185));
       break;
     }
     /* ---------------- Katana: long thin curved blade ---------------- */
     case 'katana': {
-      add(B(.010, .045, .54, PAL.steel, 0, .02, -.30));               // long blade
-      add(B(.012, .008, .54, PAL.steel, .003, .046, -.30, .06));      // back edge highlight
-      add(B(.006, .034, .30, PAL.gunLight, -.002, .02, -.36, .10));   // edge
-      add(B(.030, .050, .045, PAL.black, 0, .0, -.02));               // tsuba
-      for (let i = 0; i < 5; i++) add(B(.028, .010, .022, PAL.poly, 0, -.004, .02 + i * .026));  // wrapped grip
-      add(B(.030, .014, .032, PAL.steel, 0, .006, .16));              // kashira
+      add(B(.011, .050, .62, PAL.steel, 0, .024, -.34));              // long blade
+      add(B(.013, .008, .62, PAL.steel, .004, .050, -.34, .05));      // back edge highlight
+      add(B(.007, .036, .40, PAL.gunLight, -.003, .022, -.40, .08));  // cutting edge
+      // hamon (temper line) — thin wavy strip
+      for (let i = 0; i < 8; i++) add(B(.012, .004, .034, PAL.gunLight, .002, .026, -.10 - i * .06, i % 2 ? .1 : -.1));
+      add(B(.034, .056, .050, PAL.black, 0, .0, -.015));              // tsuba (guard)
+      add(CYL(.024, .012, PAL.steel, 0, .0, -.045, 12));              // habaki collar
+      for (let i = 0; i < 6; i++) add(B(.030, .011, .022, i % 2 ? PAL.black : 0x24303a, 0, -.004, .02 + i * .026));  // wrapped grip
+      add(B(.032, .016, .034, PAL.steel, 0, .006, .17));              // kashira (pommel cap)
       break;
     }
     /* ---------------- Axe: wooden haft + steel head ---------------- */
     case 'axe': {
       const wood = 0x6a4a24, metal = 0x9aa2ab;
-      add(CYL(.014, .016, .46, 8, wood, 0, .01, -.16, Math.PI / 2));
-      const head = new THREE.Mesh(new THREE.BoxGeometry(.055, .16, .11), new THREE.MeshLambertMaterial({ color: metal }));
-      head.position.set(0, .055, -.30); g.add(head);
-      const blade = new THREE.Mesh(new THREE.ConeGeometry(.095, .16, 4), new THREE.MeshLambertMaterial({ color: 0xc8ccd2 }));
-      blade.rotation.z = Math.PI / 2; blade.position.set(0, .055, -.37); g.add(blade);
-      add(B(.030, .060, .03, 0x4a3320, 0, .01, -.06));                // binding
+      // haft along Z (CYL builds a Z-aligned cylinder)
+      add(CYL(.015, .60, wood, 0, .01, -.20, 8));
+      add(CYL(.016, .10, 0x4a3320, 0, .01, -.46, 8));                 // gripped lower haft
+      // steel head: socket + curved crescent bit
+      add(B(.045, .075, .075, 0x6a7076, 0, .045, -.42));              // head socket
+      const bit = new THREE.Mesh(new THREE.CylinderGeometry(.115, .115, .022, 3, 1, false, 0, Math.PI * 1.35), gunMat(0xc8ccd2));
+      bit.rotation.set(Math.PI / 2, 0, Math.PI / 2); bit.position.set(0, .055, -.52); g.add(bit);   // crescent blade
+      add(B(.026, .050, .05, 0x8a9096, 0, .10, -.44, 0, 0, 0));       // reinforced top
+      add(B(.020, .12, .02, 0x7a5a34, 0, .01, -.30));                 // leather wrap
       break;
     }
     /* ---------------- Chainsaw: body, blade bar and teeth ---------------- */
     case 'chainsaw': {
-      const body = 0xd8a52a, dark = 0x2b2f34, steel = 0x9aa2ab, chain = 0x6a6f74;
-      add(B(.075, .10, .22, body, 0, .0, .06));                       // engine block
-      add(B(.080, .035, .10, dark, 0, .06, .02));                     // top handle
-      add(B(.030, .09, .12, dark, 0, -.03, .16));                     // rear grip
-      add(CYL(.020, .020, .06, 10, dark, 0, -.06, .04, Math.PI / 2)); // front grip
-      add(B(.045, .055, .50, steel, 0, .01, -.30));                   // blade bar
-      for (let i = 0; i < 14; i++) {                                  // chain teeth
-        add(B(.050, .012, .014, chain, 0, .045, -.12 - i * .032));
-        add(B(.050, .012, .014, chain, 0, -.025, -.12 - i * .032));
+      const body = 0xd8a52a, dark = 0x2b2f34, steel = 0x9aa2ab, chain = 0x8a8f94, bladeBar = 0xb8bec4;
+      // engine block with cooling fins
+      add(B(.085, .115, .24, body, 0, 0, .06));
+      for (let i = 0; i < 4; i++) add(B(.088, .010, .20, 0xc08c1e, 0, -.04 + i * .028, .06));  // fins
+      add(B(.070, .050, .08, dark, 0, .075, .10));                    // top cover
+      add(B(.028, .085, .12, dark, 0, -.035, .19));                   // rear grip
+      add(CYL(.022, .16, dark, 0, .00, .18, 8));                      // wrap handle
+      add(B(.030, .030, .05, dark, 0, .055, .01));                    // front handle
+      add(B(.020, .020, .04, 0xd02020, .045, .02, .06));              // starter knob
+      // guide bar (long, rounded at the tip)
+      add(B(.048, .120, .60, bladeBar, 0, .01, -.36));                // bar
+      add(B(.050, .040, .05, bladeBar, 0, .01, -.62));                // nose radius block
+      add(CYL(.022, .044, steel, 0, .01, -.63, 12));                  // sprocket nose
+      // chain: teeth run along BOTH edges of the bar
+      const teeth = [];
+      for (let i = 0; i < 18; i++) {
+        teeth.push(B(.052, .014, .016, chain, 0, .072, -.12 - i * .030));
+        teeth.push(B(.052, .014, .016, chain, 0, -.052, -.12 - i * .030));
       }
-      add(B(.055, .05, .05, dark, 0, .01, -.55));                     // bar nose
+      add.apply(null, teeth);
+      g.userData.chainsaw = true;      // помечаем — анимируется на холостом ходу
       break;
     }
     /* ---------------- Hammer: heavy sledge ---------------- */

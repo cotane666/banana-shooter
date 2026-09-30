@@ -7319,19 +7319,48 @@ const Game = {
 
     // ---- melee ----
     if (isMelee) {
-      const hit = this.horde ? this.horde.raycast(origin, dir, def.range) : null;
-      const wallHit = this.world.raycast(origin, dir, def.range, ['ground']);
-      if (hit && (!wallHit || hit.t < wallHit.t)) {
-        p.bulletsHit++;
-        hit.zombie.takeDamage(def.dmg, hit.part, dir);
-        // тяжёлое оружие ближнего боя отбрасывает зомби
-        if (def.knockback && hit.zombie && hit.zombie.alive) {
-          hit.zombie.vel.x += dir.x * def.knockback; hit.zombie.vel.z += dir.z * def.knockback;
+      /* БОЛЬШИЕ ХИТБОКСЫ: удар ближнего боя бьёт по КОНУСУ, а не по тонкому
+         лучу — проверяем всех зомби в радиусе маха и в передней полусфере.
+         Так мечом реально «размахиваешь» и задеваешь нескольких. */
+      const reach = (def.range || 2.4) * 1.5;
+      const halfArc = Math.cos(.9);                    // ~±52° по горизонтали
+      const hitList = [];
+      if (this.horde) {
+        for (const z of this.horde.list) {
+          if (!z.alive || z.dying) continue;
+          const ocx = z.pos.x - origin.x, ocy = (z.pos.y + .9 * z.scale) - origin.y, ocz = z.pos.z - origin.z;
+          const d2 = ocx * ocx + ocy * ocy + ocz * ocz;
+          if (d2 > reach * reach) continue;
+          const dist = Math.sqrt(d2) || 1;
+          const fdot = (ocx * dir.x + ocy * dir.y + ocz * dir.z) / dist;
+          if (fdot < halfArc) continue;                // не в передней полусфере
+          hitList.push({ z: z, dist: dist });
         }
-        this.hitEffect(hit.point, dir, hit.part, hit.part === 'head');
-        Audio3D_SFX.hit(hit.point.x, hit.point.y, hit.point.z, hit.part === 'head');
-      } else if (wallHit && this.effects) {
-        this.effects.impact(wallHit.point, wallHit.normal, 'concrete');
+      }
+      const wallHit = this.world.raycast(origin, dir, reach, ['ground']);
+      const wallT = (wallHit && wallHit.t > .2) ? wallHit.t : Infinity;   // t≈0 — луч стартует в геометрии, игнор
+      let any = false;
+      for (const h of hitList) {
+        if (wallT < h.dist - .35) continue;                  // за стеной
+        const zb = h.z;
+        // попадание в голову, если прицел выше груди
+        const headY = zb.pos.y + 1.45 * zb.scale;
+        const part = (origin.y > headY - .25 && h.dist < reach * .9) ? 'head' : 'body';
+        zb.takeDamage(def.dmg, part, dir);
+        if (def.knockback && zb.alive) { zb.vel.x += dir.x * def.knockback; zb.vel.z += dir.z * def.knockback; }
+        const pt = { x: zb.pos.x, y: zb.pos.y + (part === 'head' ? 1.45 : .9) * zb.scale, z: zb.pos.z };
+        this.hitEffect(pt, dir, part, part === 'head');
+        Audio3D_SFX.hit(pt.x, pt.y, pt.z, part === 'head');
+        any = true;
+      }
+      if (!any && wallHit && wallT < Infinity && this.effects) this.effects.impact(wallHit.point, wallHit.normal, 'concrete');
+      p.bulletsHit += hitList.length;
+      // ПОЛОСА УДАРА: яркая дуга проносится перед игроком
+      if (this.effects) {
+        const meleeKind = def.melee || 'knife';
+        const col = meleeKind === 'chainsaw' ? 0xffb347 : meleeKind === 'hammer' || meleeKind === 'axe' ? 0xffe08a : 0xffffff;
+        this.effects.slashTrail(origin.x + dir.x * .7, origin.y + dir.y * .7 - .15, origin.z + dir.z * .7,
+          dir.x, dir.y, dir.z, def.range + .7, p.swingSide || 1, col);
       }
       if (this.mode === CS.MODE.ONLINE) this.traceRemotePlayer(origin, dir, Math.min(def.range, maxDist), def, dir);
       return;
@@ -9118,6 +9147,14 @@ const Game = {
         -recoilYaw * 4.5 - runK * .3,
         -reloadK * .55 + runK * .18
       );
+      /* ---- БЕНЗОПИЛА: жужжит на холостом ходу, дёргается при «газе» ---- */
+      if (vm.userData.chainsaw) {
+        const buzz = Math.sin(U.now() * .045) * .012;
+        const hot = (p.swingT > 0) ? 1 : 0;
+        vm.position.x += buzz * (1 + hot);
+        vm.position.y += Math.cos(U.now() * .052) * .010 * (1 + hot);
+        vm.rotation.z += buzz * .6 + hot * .05;
+      }
       /* ---- МАХ БЛИЖНЕГО БОЯ ----
          Пока идёт замах, viewmodel проигрывает широкую дугу: заносится вбок и
          вверх, затем резко проносится через центр и «доводится» вниз. Это и

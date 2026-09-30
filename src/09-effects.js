@@ -47,8 +47,40 @@ class Effects {
     this.tracerPool = [];
     this.particlePool = [];
     this.fields = [];            // damaging acid pools / frost patches (ticked by Game)
+    this.slashes = [];           // полосы-следы от ударов ближнего боя
     this._scorchAcc = 0;
     this._t = 0;
+  }
+
+  /* ПОЛОСА УДАРА БЛИЖНЕГО БОЯ: яркая дуга, которая проносится перед игроком и
+     быстро гаснет. Растёт из текущего угла маха в след удара. */
+  slashTrail(cx, cy, cz, dx, dy, dz, len, side, color) {
+    const g = new THREE.Group();
+    const c = color === undefined ? 0xffffff : color;
+    // основа полосы — сильно сплющенная дуга (torus-сегмент)
+    const mat = new THREE.MeshBasicMaterial({
+      color: c, transparent: true, opacity: .85,
+      blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide
+    });
+    const arc = new THREE.Mesh(new THREE.TorusGeometry(len * .62, len * .045, 5, 14, Math.PI * .95), mat);
+    arc.rotation.z = -Math.PI * .5 * (side || 1);
+    g.add(arc);
+    // тонкий яркий сердечник
+    const coreMat = new THREE.MeshBasicMaterial({
+      color: 0xffffff, transparent: true, opacity: .95,
+      blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide
+    });
+    const core = new THREE.Mesh(new THREE.TorusGeometry(len * .62, len * .016, 5, 14, Math.PI * .95), coreMat);
+    core.rotation.z = arc.rotation.z; core.position.z = .01;
+    g.add(core);
+    // ориентируем дугу по направлению взгляда (плоскость вдоль луча)
+    g.position.set(cx, cy, cz);
+    const yaw = Math.atan2(dx, dz);
+    g.rotation.order = 'YXZ';
+    g.rotation.y = yaw + Math.PI / 2;
+    g.rotation.x = -Math.asin(U.clamp(dy, -1, 1)) * .5;
+    this.scene.add(g);
+    this.slashes.push({ mesh: g, mats: [mat, coreMat], life: .22, max: .22 });
   }
 
   _holeTexture(col) {
@@ -1086,6 +1118,21 @@ class Effects {
           if (a.mesh.parent) a.mesh.parent.remove(a.mesh);
           if (a.mesh.geometry) a.mesh.geometry.dispose();
           this.arcs.splice(i, 1);
+        }
+      }
+    }
+    // полосы-следы от ударов ближнего боя
+    if (this.slashes) {
+      for (let i = this.slashes.length - 1; i >= 0; i--) {
+        const s = this.slashes[i];
+        s.life -= dt;
+        const k = Math.max(0, s.life / s.max);
+        for (const m of s.mats) m.opacity = k * .9;
+        s.mesh.scale.setScalar(1 + (1 - k) * .5);
+        if (s.life <= 0) {
+          if (s.mesh.parent) s.mesh.parent.remove(s.mesh);
+          s.mesh.traverse(o => { if (o.geometry) o.geometry.dispose(); });
+          this.slashes.splice(i, 1);
         }
       }
     }

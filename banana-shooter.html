@@ -22969,7 +22969,6 @@ const Game = {
     p.recoil = (p.recoil || 0) + .16;
     p.viewPunchP = (p.viewPunchP || 0) + .12;
     p.viewPunchY = (p.viewPunchY || 0) + U.rand(-.06, .06);
-    UI.center('МЕГА-МОЛОТ', 'Ударная волна · ' + Math.round(R) + 'м', 1.4);
 
     // ломаем карту в радиусе (мгновенно)
     this.breakMapAt(c.x, c.y, c.z, breakR, dmg);
@@ -25036,20 +25035,22 @@ const Game = {
         const side = p.swingSide || 1;
         const kind = p.swingKind || 'knife';
         if (kind === 'megahammer') {
-          /* СВЕРХУ ВНИЗ: сначала молот заносится высоко над головой (windUp),
-             затем резко падает вниз (slam), затем медленный возврат. */
-          const windUp = U.clamp(k / .45, 0, 1);
-          const slam = U.clamp((k - .45) / .22, 0, 1);
-          const follow = U.clamp((k - .67) / .33, 0, 1);
+          /* СВЕРХУ ВНИЗ: быстрый занос НАД головой (windUp), затем молот РЕЗКО
+             падает вниз и уходит НИЖЕ линии (slam), после — возврат к нейтрали.
+             Ключевое: пронос должен уйти в минус по rotation.x (голова молота
+             вниз), иначе движение читается как удар снизу вверх. */
+          const windUp = U.clamp(k / .30, 0, 1);
+          const slam = U.clamp((k - .30) / .30, 0, 1);
+          const follow = U.clamp((k - .60) / .40, 0, 1);
           const wind = Math.sin(windUp * Math.PI * .5);
-          const slamE = 1 - Math.pow(1 - slam, 2);            // резкий, но сглаженный
-          // заносим руку/молот вверх (rotation.x сильно вверх), потом вниз
-          vm.rotation.x += wind * 1.5 - slamE * 1.5 + follow * .1;
-          vm.rotation.y += -side * .20 * (wind * .7 - slamE * 1.0);
-          vm.position.y += wind * .26 - slamE * .34;
-          vm.position.z += wind * .10 - slamE * .18;
-          // камера клюёт вниз при ударе
-          this.camera.rotation.x += (slamE * .10 - wind * .04) * (1 - follow);
+          const slamE = 1 - Math.pow(1 - slam, 2);            // резкий разгон вниз
+          // заносим вверх (+), затем обрушиваем вниз (−) с заходом ниже линии
+          vm.rotation.x += wind * .95 - slamE * 2.5 + follow * 1.55;
+          vm.rotation.z += side * .15 * (wind * .5 - slamE * .8);
+          vm.position.y += wind * .30 - slamE * .48 + follow * .18;
+          vm.position.z += wind * .12 - slamE * .10 - follow * .02;
+          // камера клюёт ВНИЗ при ударе (отрицательный x = взгляд вниз)
+          this.camera.rotation.x += (-slamE * .13 + wind * .05) * (1 - follow);
         } else {
         // кривая: быстро вверх-назад (0..0.35), резкий пронос (0.35..0.75), возврат
         const windUp = U.clamp(k / .35, 0, 1);

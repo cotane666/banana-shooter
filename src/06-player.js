@@ -2030,6 +2030,27 @@ function buildWeaponModel(id) {
       add(B(.034, .014, .10, 0x2b2f34, 0, .01, .06));                 // tape grip
       break;
     }
+    /* ---------------- МЕГА-МОЛОТ: огромный молот, бьёт сверху вниз ---------------- */
+    case 'megahammer': {
+      const wood = 0x4a3018, steelC = 0x6a7076, darkC = 0x2b2f34, goldC = 0xc8942a;
+      add(CYL(.030, .80, wood, 0, .02, -.34, 10));                    // длинная рукоять
+      add(CYL(.020, .10, darkC, 0, .02, .02, 8));                     // пятка рукояти
+      add(B(.050, .050, .10, goldC, 0, .02, -.70));                    // золотая обмотка
+      // ОГРОМНАЯ стальная голова
+      add(B(.34, .34, .40, steelC, 0, .02, -.86));                    // тело головы
+      add(B(.38, .10, .44, darkC, 0, .02, -.86));                      // обруч по центру
+      add(B(.30, .30, .06, 0x8b939d, 0, .02, -1.06));                  // ударная грань (перед)
+      add(B(.30, .30, .06, 0x8b939d, 0, .02, -.66));                   // обух
+      // острые шипы на голове
+      for (let i = 0; i < 4; i++) {
+        const a = i / 4 * Math.PI * 2;
+        add(B(.06, .20, .06, steelC, Math.cos(a) * .20, Math.sin(a) * .20, -.86, 0, 0, a));
+      }
+      add(CYL(.05, .12, goldC, 0, .02, -.44, 10));                    // золотое кольцо у головы
+      add(B(.034, .014, .12, darkC, 0, .02, .10));                     // обмотка на рукояти
+      break;
+    }
+
     /* ---------------- Fists: bare hands (short-range) ---------------- */
     case 'fists': {
       add(B(.055, .055, .09, 0xd8a878, 0, .0, -.10));                 // fist
@@ -2049,6 +2070,7 @@ function buildWeaponModel(id) {
 /* barrel-tip Z per weapon (used for the muzzle flash / tracer origin) */
 const MUZZLE_Z = {
   knife: -0.28, machete: -0.46, katana: -0.58, axe: -0.30, chainsaw: -0.58, hammer: -0.50, fists: -0.14,
+  megahammer: -1.10,
   glock: -0.22, usp: -0.36, p250: -0.20, deagle: -0.25, revolver: -0.28,
   mp5: -0.58, p90: -0.42, ump: -0.47,
   nova: -0.60, xm: -0.58,

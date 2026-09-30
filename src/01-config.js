@@ -222,6 +222,16 @@ const WEAPONS = {
   fists:   { name: 'КУЛАКИ', cat: 'melee', slot: 3, price: 0, dmg: 40, rpm: 150, mag: Infinity, reserve: 0,
            auto: true, spread: 0, moveSpread: 0, recoil: 1.5, falloff: 1, range: 2.2, headMul: 1.5, sound: 'knife', melee: 'fists' },
 
+  /* ---------------- МЕГА-МОЛОТ (уникальное оружие ближнего боя) ----------------
+     Огромный молот бьёт СВЕРХУ ВНИЗ: в точке удара поднимается ударная волна,
+     которая ломает блоки и наносит огромный урон по площади всем вокруг. */
+  /* ---------------- МЕГА-МОЛОТ (уникальное оружие ближнего боя) ----------------
+     Огромный молот бьёт СВЕРХУ ВНИЗ: в точке удара поднимается ударная волна,
+     которая ломает блоки и наносит огромный урон по площади всем вокруг. */
+  megahammer: { name: 'МЕГА-МОЛОТ', cat: 'melee', slot: 3, price: 12000, dmg: 900, rpm: 26, mag: Infinity, reserve: 0,
+           auto: false, spread: 0, moveSpread: 0, recoil: 5.5, falloff: 1, range: 4.4, headMul: 2.0, sound: 'knife',
+           melee: 'megahammer', knockback: 26, groundSlam: true, slamR: 9, slamDmg: 560, slamBreakR: 8 },
+
   glock: { name: 'GLOCK-18', cat: 'pistol', slot: 1, price: 200, dmg: 28, rpm: 420, mag: 20, reserve: 100,
            auto: false, spread: .020, moveSpread: .030, recoil: .85, falloff: .62, range: 60, headMul: 2.0, sound: 'pistol' },
   usp:   { name: 'USP-S', cat: 'pistol', slot: 1, price: 200, dmg: 35, rpm: 352, mag: 12, reserve: 48,

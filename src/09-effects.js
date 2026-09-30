@@ -83,6 +83,28 @@ class Effects {
     this.slashes.push({ mesh: g, mats: [mat, coreMat], life: .22, max: .22 });
   }
 
+  /* УДАРНАЯ ВОЛНА ПО ЗЕМЛЕ (мега-молот): расходящееся кольцо + пыль по кругу. */
+  groundWave(x, y, z, radius) {
+    const mat = new THREE.MeshBasicMaterial({
+      color: 0xffe0a0, transparent: true, opacity: .85,
+      blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide
+    });
+    const ring = new THREE.Mesh(new THREE.RingGeometry(.72, 1.0, 40), mat);
+    ring.rotation.x = -Math.PI / 2;
+    ring.position.set(x, y, z);
+    this.scene.add(ring);
+    this.groundWaves = this.groundWaves || [];
+    this.groundWaves.push({ mesh: ring, mat: mat, life: .5, max: .5, r: radius });
+    // пыль, отлетающая по кругу
+    const n = (this.quality === 0) ? 10 : 22;
+    for (let i = 0; i < n; i++) {
+      const a = i / n * Math.PI * 2 + U.rand(-.15, .15);
+      this.particle(x + Math.cos(a) * .8, y + .1, z + Math.sin(a) * .8,
+        Math.cos(a) * U.rand(6, 16), U.rand(.5, 2.5), Math.sin(a) * U.rand(6, 16),
+        U.rand(.12, .28), 'smoke', U.rand(.5, 1.1));
+    }
+  }
+
   /* ПЫЛЬ И ОСКОЛКИ при разрушении объекта карты.
      Осколки — РВАНОЙ формы (как в Human Fall Flat: бетонные обломки), с
      текстурой материала, разлетаются и падают под гравитацией. */
@@ -1157,8 +1179,7 @@ class Effects {
       }
     }
     // полосы-следы от ударов ближнего боя
-    if (this.slashes) {
-      for (let i = this.slashes.length - 1; i >= 0; i--) {
+    if (this.slashes) {      for (let i = this.slashes.length - 1; i >= 0; i--) {
         const s = this.slashes[i];
         s.life -= dt;
         const k = Math.max(0, s.life / s.max);
@@ -1168,6 +1189,23 @@ class Effects {
           if (s.mesh.parent) s.mesh.parent.remove(s.mesh);
           s.mesh.traverse(o => { if (o.geometry) o.geometry.dispose(); });
           this.slashes.splice(i, 1);
+        }
+      }
+    }
+    // ударная волна по земле (мега-молот): кольцо расходится и гаснет
+    if (this.groundWaves) {
+      for (let i = this.groundWaves.length - 1; i >= 0; i--) {
+        const w = this.groundWaves[i];
+        w.life -= dt;
+        const k = Math.max(0, w.life / w.max);
+        const e = 1 - Math.pow(1 - (1 - k), 3);        // ease-out
+        w.mesh.scale.setScalar(.4 + e * (w.r || 8));
+        w.mat.opacity = k * .85;
+        if (w.life <= 0) {
+          if (w.mesh.parent) w.mesh.parent.remove(w.mesh);
+          if (w.mesh.geometry) w.mesh.geometry.dispose();
+          w.mat.dispose();
+          this.groundWaves.splice(i, 1);
         }
       }
     }

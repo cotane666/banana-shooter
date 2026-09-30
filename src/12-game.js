@@ -5983,7 +5983,7 @@ const Game = {
          зависит от оружия: тяжёлое машет медленнее и шире. */
       const def2 = p.def || {};
       const w2 = (def2.melee || 'knife');
-      p.swingT = (w2 === 'katana') ? .26 : (w2 === 'fists') ? .20 : (w2 === 'hammer' || w2 === 'axe') ? .40
+      p.swingT = (w2 === 'megahammer') ? .62 : (w2 === 'katana') ? .26 : (w2 === 'fists') ? .20 : (w2 === 'hammer' || w2 === 'axe') ? .40
         : (w2 === 'chainsaw') ? .16 : (w2 === 'machete') ? .32 : .28;
       p.swingMax = p.swingT;
       p.swingKind = w2;
@@ -7432,6 +7432,79 @@ const Game = {
     return { x: dx / l, y: dy / l, z: dz / l };
   },
 
+  /* ============================================================
+     МЕГА-МОЛОТ: удар СВЕРХУ ВНИЗ. Находим точку удара перед игроком (по земле
+     или по ближайшему препятствию), затем в этой точке поднимаем УДАРНУЮ ВОЛНУ:
+       • ломает блоки в радиусе slamBreakR
+       • наносит огромный урон по площади всем зомби/соперникам (slamDmg)
+       • отбрасывает и сбивает с ног
+     ============================================================ */
+  meleeGroundSlam(origin, dir, def, muzzleWorld) {
+    const p = this.player;
+    const R = def.slamR || 9;
+    const dmg = def.slamDmg || 500;
+    const breakR = def.slamBreakR || R * .85;
+    // точка удара: чуть впереди игрока, на уровне земли под ней
+    let sx = origin.x + dir.x * 3.0, sz = origin.z + dir.z * 3.0;
+    sx = U.clamp(sx, -MAP.size / 2 + 2, MAP.size / 2 - 2);
+    sz = U.clamp(sz, -MAP.size / 2 + 2, MAP.size / 2 - 2);
+    let sy = (this.world.groundAt(sx, sz, origin.y + 3) || origin.y);
+    const c = { x: sx, y: sy + .4, z: sz };
+
+    // визуал: большая вспышка ударной волны + пыль + свет
+    if (this.effects) {
+      this.effects.explosion(c.x, c.y, c.z, R, [0xffd070, 0x2a2010]);
+      this.effects.groundWave(c.x, sy + .05, c.z, R);
+      for (let i = 0; i < 26; i++) {
+        const a = U.rand(0, 6.28);
+        this.effects.particle(c.x, c.y, c.z, Math.cos(a) * U.rand(4, 14), U.rand(1, 6), Math.sin(a) * U.rand(4, 14),
+          U.rand(.08, .2), 'smoke', U.rand(.5, 1.2));
+      }
+    }
+    Audio3D_SFX.explosionAt(c.x, c.y, c.z);
+    /* удар встряхивает камеру: резкий подъём + боковой толчок */
+    p.recoil = (p.recoil || 0) + .16;
+    p.viewPunchP = (p.viewPunchP || 0) + .12;
+    p.viewPunchY = (p.viewPunchY || 0) + U.rand(-.06, .06);
+    UI.center('МЕГА-МОЛОТ', 'Ударная волна · ' + Math.round(R) + 'м', 1.4);
+
+    // ломаем карту в радиусе (мгновенно)
+    this.breakMapAt(c.x, c.y, c.z, breakR, dmg);
+
+    // урон + отброс по зомби
+    if (this.horde) {
+      for (const z of this.horde.list) {
+        if (!z.alive || z.dying) continue;
+        const dx = z.pos.x - c.x, dz = z.pos.z - c.z, dy = (z.pos.y + 1) - c.y;
+        const d = Math.hypot(dx, dy, dz);
+        if (d > R) continue;
+        const k = 1 - d / R;
+        const dealt = dmg * (.5 + k * .5);
+        z.takeDamage(dealt, 'body', { x: dx, y: dy, z: dz });
+        if (z.alive && !z.dying) {
+          const l = Math.max(Math.hypot(dx, dz), .01);
+          z.vel.x += (dx / l) * 24 * k;
+          z.vel.z += (dz / l) * 24 * k;
+          if (z.vel.y !== undefined) z.vel.y += 7 * k;
+          if (typeof z.stagger === 'function') z.stagger(1.0);
+        }
+        this.player.damageDealt += dealt;
+      }
+    }
+    // соперники (онлайн, не кооп)
+    if (this.mode === CS.MODE.ONLINE && !this.isCoop) {
+      for (const rp of this.remotePlayers) {
+        if (!rp.alive) continue;
+        const d = Math.hypot(rp.pos.x - c.x, (rp.pos.y + 1) - c.y, rp.pos.z - c.z);
+        if (d <= R) this.sendPvpHit(dmg * (.5 + (1 - d / R) * .5), 'body', false, rp, 'slam');
+      }
+    }
+    // отдача: игрока слегка вдавливает в землю/подбрасывает вид
+    if (this.effects) this.effects.slashTrail(c.x, c.y, c.z, 0, 1, 0, R * .5, 1, 0xffe0a0);
+    p.bulletsHit++;
+    if (this.mode === CS.MODE.ONLINE) this.traceRemotePlayer(origin, dir, def.range, def, dir);
+  },
+
   traceShot(origin, dir, def, isMelee, muzzleWorld) {
     const p = this.player;
     const maxDist = def.range || 100;
@@ -7441,6 +7514,10 @@ const Game = {
 
     // ---- melee ----
     if (isMelee) {
+      /* МЕГА-МОЛОТ: удар СВЕРХУ ВНИЗ по точке перед игроком — ударная волна
+         ломает блоки и наносит огромный урон по площади всем вокруг. Обрабатывается
+         отдельно (это не обычный мах). */
+      if (def.groundSlam) return this.meleeGroundSlam(origin, dir, def, muzzleWorld);
       /* БОЛЬШИЕ ХИТБОКСЫ: удар ближнего боя бьёт по КОНУСУ, а не по тонкому
          лучу — проверяем всех зомби в радиусе маха и в передней полусфере.
          Так мечом реально «размахиваешь» и задеваешь нескольких. */
@@ -9455,6 +9532,22 @@ const Game = {
         const k = 1 - p.swingT / (p.swingMax || .28);        // 0 → 1 за замах
         const side = p.swingSide || 1;
         const kind = p.swingKind || 'knife';
+        if (kind === 'megahammer') {
+          /* СВЕРХУ ВНИЗ: сначала молот заносится высоко над головой (windUp),
+             затем резко падает вниз (slam), затем медленный возврат. */
+          const windUp = U.clamp(k / .45, 0, 1);
+          const slam = U.clamp((k - .45) / .22, 0, 1);
+          const follow = U.clamp((k - .67) / .33, 0, 1);
+          const wind = Math.sin(windUp * Math.PI * .5);
+          const slamE = 1 - Math.pow(1 - slam, 2);            // резкий, но сглаженный
+          // заносим руку/молот вверх (rotation.x сильно вверх), потом вниз
+          vm.rotation.x += wind * 1.5 - slamE * 1.5 + follow * .1;
+          vm.rotation.y += -side * .20 * (wind * .7 - slamE * 1.0);
+          vm.position.y += wind * .26 - slamE * .34;
+          vm.position.z += wind * .10 - slamE * .18;
+          // камера клюёт вниз при ударе
+          this.camera.rotation.x += (slamE * .10 - wind * .04) * (1 - follow);
+        } else {
         // кривая: быстро вверх-назад (0..0.35), резкий пронос (0.35..0.75), возврат
         const windUp = U.clamp(k / .35, 0, 1);
         const slash = U.clamp((k - .35) / .40, 0, 1);
@@ -9473,6 +9566,7 @@ const Game = {
         // тяжёлое оружие покачивает камеру на проносе
         if ((kind === 'hammer' || kind === 'axe') && slash > 0 && slash < 1) {
           this.camera.rotation.z += side * .05 * Math.sin(slash * Math.PI);
+        }
         }
       }
       if (p.flashT <= 0 && p.flashMesh) p.flashMesh.material.opacity = 0;

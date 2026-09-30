@@ -3409,11 +3409,35 @@ function makeBoxMesh(w, h, d, mat, faceTopMat) {
    сотни кусков карты дают несколько draw call вместо сотен, что критично для
    телефона.
    ============================================================ */
-/* ключ инстанс-группы: материал + цвет. Размер задаётся масштабом матрицы,
-   поэтому куски любых размеров делят одну InstancedMesh (единый unit-куб). */
-function _chunkInstanceKey(mat) {
+/* ключ инстанс-группы: материал + цвет + ВАРИАНТ рваной геометрии. */
+function _chunkInstanceKey(mat, variant) {
   const tex = (mat && mat.userData && mat.userData.tex) || 'flat';
-  return tex + '|' + (mat && mat.color ? mat.color.getHexString() : 'ffffff');
+  return tex + '|' + (mat && mat.color ? mat.color.getHexString() : 'ffffff') + '|' + (variant | 0);
+}
+
+/* РВАНЫЕ КУСКИ (как в Human Fall Flat): несколько вариантов геометрии, где
+   углы единичного куба смещены случайно — грани получаются неправильными,
+   а не ровными квадратиками. Варианты переиспользуются через InstancedMesh. */
+const _jaggedGeos = [];
+const JAGGED_VARIANTS = 6;
+function _jaggedBoxGeometry(variant) {
+  variant = ((variant | 0) % JAGGED_VARIANTS + JAGGED_VARIANTS) % JAGGED_VARIANTS;
+  if (_jaggedGeos[variant]) return _jaggedGeos[variant];
+  const g = new THREE.BoxGeometry(1, 1, 1);
+  const rng = makeRng(0x9e37 + variant * 2654435761);
+  // смещения для 8 углов (по знаку позиции вершины)
+  const off = [];
+  for (let c = 0; c < 8; c++) off.push([(rng() - .5) * .30, (rng() - .5) * .30, (rng() - .5) * .30]);
+  const pos = g.attributes.position;
+  for (let i = 0; i < pos.count; i++) {
+    const px = pos.getX(i), py = pos.getY(i), pz = pos.getZ(i);
+    const ci = (px > 0 ? 1 : 0) | (py > 0 ? 2 : 0) | (pz > 0 ? 4 : 0);
+    pos.setXYZ(i, px + off[ci][0], py + off[ci][1], pz + off[ci][2]);
+  }
+  pos.needsUpdate = true;
+  g.computeVertexNormals();
+  _jaggedGeos[variant] = g;
+  return g;
 }
 
 /* добавить чанк в общий InstancedMesh (создаётся лениво при первом чанке).
@@ -3428,10 +3452,12 @@ function _addChunkInstance(parent, world, cx, cy, cz, cw, ch, cd, mat, tag, noCo
 
   if (!invisible) {
     if (!MAP._chunkGroups) MAP._chunkGroups = {};
-    const key = _chunkInstanceKey(mat || MAT.concrete);
+    // вариант выбираем детерминированно по координатам — соседние куски разные
+    const variant = Math.abs(Math.floor(cx * 131 + cy * 977 + cz * 31)) % JAGGED_VARIANTS;
+    const key = _chunkInstanceKey(mat || MAT.concrete, variant);
     let grp = MAP._chunkGroups[key];
     if (!grp) {
-      grp = { mat: mat || MAT.concrete, items: [], mesh: null, noShadow: !!noShadow, parent: parent };
+      grp = { mat: mat || MAT.concrete, variant: variant, items: [], mesh: null, noShadow: !!noShadow, parent: parent };
       MAP._chunkGroups[key] = grp;
     }
     aabb._chunkGroup = grp;
@@ -3461,7 +3487,7 @@ function _buildChunkInstances() {
   for (const key in MAP._chunkGroups) {
     const grp = MAP._chunkGroups[key];
     if (grp.mesh) continue;
-    const geo = new THREE.BoxGeometry(1, 1, 1);
+    const geo = _jaggedBoxGeometry(grp.variant || 0);
     const im = new THREE.InstancedMesh(geo, grp.mat, Math.max(1, grp.items.length));
     im.castShadow = !grp.noShadow;
     im.receiveShadow = true;
@@ -3566,43 +3592,66 @@ function restoreMap() {
 }
 
 /* add a solid box: bottom-center anchored at (x,y,z). `parent` is MAP.group.
-   Большие детали автоматически дробятся на ЧАНКИ (≈2.6м), чтобы разрушение
+   Большие детали автоматически дробятся на ЧАНКИ (≈1.3м), чтобы разрушение
    убирало ровно ту часть, в которую попали (взрыв/зомби), а не всю стену.
-   Пол, границы, рампы, платформы и крыши НЕ разрушаются. */
-const MAP_CHUNK = 2.6;
+   Пол и границы карты НЕ разрушаются. */
+const MAP_CHUNK = 1.3;
 /* НЕЛЬЗЯ разрушить только ПОЛ и ГРАНИЦЫ карты (они держат мир). Всё
    остальное — укрытия, стены, колонны, а также РАМПЫ, ПЛАТФОРМЫ, НАСТИЛЫ и
    КРЫШИ — ломается взрывом (мгновенно) или пулями/ближним боем. */
 const MAP_INDESTRUCTIBLE = { ground: 1, boundary: 1 };
 function _destructibleTag(tag) { return !MAP_INDESTRUCTIBLE[tag]; }
+
+/* НЕРАВНОМЕРНЫЕ ЛИНИИ РАЗРЕЗА: делим длину на случайные куски примерно по
+   targetChunk, чтобы деталь распадалась на хаотичные (не одинаковые) части —
+   так повреждения выглядят реалистично, как битый кирпич. */
+function _irregularSplits(len, target, rng) {
+  const n = Math.max(1, Math.round(len / target));
+  if (n <= 1) return [0, len];
+  const minSeg = len / n * 0.45, maxSeg = len / n * 1.55;
+  const pts = [0];
+  let x = 0;
+  while (len - x > maxSeg) {
+    let seg = minSeg + rng() * (maxSeg - minSeg);
+    if (len - (x + seg) < minSeg) seg = len - x;       // последний кусок не мельчить
+    x += seg;
+    pts.push(x);
+  }
+  pts.push(len);
+  return pts;
+}
+
 function solid(parent, world, x, y, z, w, h, d, mat, opts) {
   opts = opts || {};
   const tag = opts.tag || 'solid';
-  /* дробим на чанки укрытия и стены (внутренние). Платформы/рампы/крыши/пол
-     остаются целыми, чтобы не ломать навигацию и прорезание дверей. */
   const canChunk = opts.destructible !== false && !opts.rotY && _destructibleTag(tag);
   if (canChunk) {
-    /* адаптивный размер чанка: если при 2.6 м кусков получается слишком много,
-       увеличиваем шаг, чтобы число чанков осталось разумным (производительность). */
-    let chunk = MAP_CHUNK;
-    let nX, nZ, nY, total;
-    for (let attempt = 0; attempt < 6; attempt++) {
-      nX = Math.max(1, Math.round(w / chunk));
-      nZ = Math.max(1, Math.round(d / chunk));
-      nY = Math.max(1, Math.round(h / chunk));
-      total = nX * nZ * nY;
-      if (total <= 80) break;
-      chunk *= 1.6;
+    /* делим на хаотичные куски; если их выходит слишком много, укрупняем шаг,
+       чтобы сохранить производительность. */
+    let target = MAP_CHUNK;
+    let xs, ys, zs, total;
+    for (let attempt = 0; attempt < 7; attempt++) {
+      const rng = makeRng((x * 73856093) ^ (z * 19349663) ^ (y * 83492791) ^ (attempt * 2654435761));
+      xs = _irregularSplits(w, target, rng);
+      ys = _irregularSplits(h, target, rng);
+      zs = _irregularSplits(d, target, rng);
+      total = (xs.length - 1) * (ys.length - 1) * (zs.length - 1);
+      if (total <= 260) break;
+      target *= 1.5;
     }
     if (total > 1) {
       const gid = (MAP._chunkGid = (MAP._chunkGid || 0) + 1);
-      const cw = w / nX, cd = d / nZ, ch = h / nY;
-      for (let iy = 0; iy < nY; iy++) {
-        for (let iz = 0; iz < nZ; iz++) {
-          for (let ix = 0; ix < nX; ix++) {
-            const cx = x - w / 2 + cw * (ix + .5);
-            const cz = z - d / 2 + cd * (iz + .5);
-            const cy = y + ch * iy;
+      for (let iy = 0; iy < ys.length - 1; iy++) {
+        const cy0 = ys[iy], cy1 = ys[iy + 1];
+        for (let iz = 0; iz < zs.length - 1; iz++) {
+          const cz0 = zs[iz], cz1 = zs[iz + 1];
+          for (let ix = 0; ix < xs.length - 1; ix++) {
+            const cx0 = xs[ix], cx1 = xs[ix + 1];
+            const cw = cx1 - cx0, ch = cy1 - cy0, cd = cz1 - cz0;
+            if (cw < .05 || ch < .05 || cd < .05) continue;
+            const cx = x - w / 2 + (cx0 + cx1) / 2;
+            const cz = z - d / 2 + (cz0 + cz1) / 2;
+            const cy = y + cy0;
             const aabb = _addChunkInstance(parent, world, cx, cy, cz, cw, ch, cd, mat || MAT.concrete, tag, opts.noCollide, opts.noShadow, opts.invisible);
             aabb.building = gid;
           }

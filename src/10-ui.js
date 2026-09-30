@@ -21,7 +21,7 @@ const UI = {
       'btnCopy', 'dmgDirs', 'android', 'ios', 'credits', 'crPlayer', 'crStats',
       'matchEnd', 'meTitle', 'meWinner', 'meScore', 'meDetail', 'btnMatchAgain', 'btnMatchMenu',
       'mapChips', 'playerChips', 'hpChips', 'hordeChips', 'lobbyMaps', 'lobbyPlayers', 'lobbyHp', 'lobbyFree', 'lobbyRounds',
-      'todChips', 'weatherChips', 'envAutoChips', 'sEnvSpeed', 'oEnvSpeed', 'lobbyTod', 'lobbyWeather', 'lobbyMode',
+      'todChips', 'weatherChips', 'envAutoChips', 'menuBgChips', 'sEnvSpeed', 'oEnvSpeed', 'lobbyTod', 'lobbyWeather', 'lobbyMode',
       'offCountChips', 'offHpChips', 'offFreeChips', 'offMapFreqChips', 'offModeChips', 'offCustomBox', 'offHordeBox', 'offSpecialBox', 'offCpBox', 'offCpInfo', 'offCpMode', 'offCpList', 'offCountExact', 'offCountFixed', 'btnOffContinue', 'custom', 'lobbyShop', 'lobbyShopItems',
       'modScreen', 'modGrid', 'modActive',
       'extras', 'achGrid', 'recTable', 'btnExtrasBack', 'weaponWheel', 'wwInner',
@@ -309,6 +309,13 @@ const UI = {
     fill(this.el.todChips, TOD_ORDER.map(k => ({ v: k, b: todName(k) })), 'tod', pickTod);
     fill(this.el.weatherChips, WEATHER_ORDER.map(k => ({ v: k, b: weatherName(k) })), 'wx', pickWx);
     fill(this.el.envAutoChips, [{ v: 0, b: 'ВЫКЛ' }, { v: 1, b: 'ВКЛ' }], 'auto', pickAuto);
+    /* фон меню: облёт разных карт или обычная статичная выбранная карта */
+    const pickMenu = v => {
+      S.menuTour = v; Store.save(); this.refreshChips();
+      // сразу перестроим фон, не дожидаясь следующего кадра
+      if (Game && Game.mode === CS.MODE.MENU) { try { Game.renderMenu(); } catch (e) { } }
+    };
+    fill(this.el.menuBgChips, [{ v: 1, b: 'ОБЛЁТ КАРТ' }, { v: 0, b: 'ОБЫЧНЫЙ' }], 'mbg', pickMenu);
     /* режим онлайн-матча: PvP-дуэль или кооп по волнам / орде / босс-рашу */
     const pickMode = v => {
       Store.data.onlineMode = v; Store.save(); this.refreshChips(); this.broadcastEnv();
@@ -363,6 +370,9 @@ const UI = {
       mark(this.el.lobbyWeather, 'wx', '__off__');
     }
     mark(this.el.envAutoChips, 'auto', S.envAuto ? 1 : 0);
+    if (this.el.menuBgChips) {
+      Array.from(this.el.menuBgChips.children).forEach(b => b.classList.toggle('on', +b.dataset.mbg === (S.menuTour === undefined ? 1 : (S.menuTour ? 1 : 0))));
+    }
     if (this.el.offMapFreqChips) {
       Array.from(this.el.offMapFreqChips.children).forEach(b => b.classList.toggle('on', +b.dataset.v === (S.offMapFreq || 0)));
     }

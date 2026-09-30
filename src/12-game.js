@@ -9105,9 +9105,38 @@ const Game = {
     if (Audio3D_SFX.ctx && !Audio3D_SFX.musicOff && (!Audio3D_SFX._music || Audio3D_SFX._music.name !== 'menu')) {
       this.refreshMusic();
     }
-    // idle menu backdrop: slow orbit around the arena
-    const t = U.now() * .00006;
-    this.camera.position.set(Math.cos(t) * 62, 26, Math.sin(t) * 62);
+    /* ОБЛЁТ ФОНА МЕНЮ: камера плавно кружит над ареной, а сама арена
+       периодически СМЕНЯЕТСЯ на другую карту (если включено в настройках).
+       Store.data.map при этом не трогается — выбранная игроком карта остаётся. */
+    const tt = U.now() * .001;
+    const tour = Store.data.menuTour === undefined ? 1 : Store.data.menuTour;
+    let mapId = MAP.id;
+    if (tour) {
+      // каждые ~20 секунд показываем следующую карту
+      if (!this._tourLast) this._tourLast = U.now();
+      if (U.now() - this._tourLast > 20000 && MAPS && MAPS.length) {
+        this._tourLast = U.now();
+        const ids = MAPS.map(m => m.id);
+        let i = ids.indexOf(MAP.id);
+        i = (i + 1) % ids.length;
+        mapId = ids[i];
+        buildMap(this.scene, Store.data.quality, mapId);
+        this.world = MAP.world;
+        this.applyQuality();
+      }
+    } else {
+      // обычный фон: спокойный облёт ВЫБРАННОЙ карты
+      const want = Store.data.map && mapById(Store.data.map).id;
+      if (want && MAP.id !== want) {
+        buildMap(this.scene, Store.data.quality, want);
+        this.world = MAP.world;
+        this.applyQuality();
+      }
+    }
+    const ang = tt * .045;
+    const R = 60 + Math.sin(tt * .13) * 12;
+    const y = 24 + Math.sin(tt * .07) * 9;
+    this.camera.position.set(Math.cos(ang) * R, y, Math.sin(ang) * R);
     this.camera.lookAt(0, 3, 0);
     this.camera.rotation.z = 0;
     this.renderer.clear();

@@ -1031,7 +1031,7 @@ const Store = {
           map: 'arena', players: 2, maxHP: 100, aimAssist: 1, horde: 0, clears: 0, freeplay: 0, rounds: 3, playTime: 0,
           offCount: 1, offHp: 1, offFree: 0, offMode: 'normal', offMods: {}, offModsRun: 0, offModPick: 0, checkpoint: null, shopAllow: {}, shopItems: {}, music: 1, sfxVol: 100, musicVol: 70,
           grenade: 'frag', buildable: 'turret', weather: 'day', trapsEnabled: 1, offCountExact: 10, offCountFixed: 0,
-          timeOfDay: 'day', skyWeather: 'clear', envAuto: 0, envOff: 0, envAutoSpeed: 1,
+          timeOfDay: 'day', skyWeather: 'clear', envAuto: 0, envOff: 0, envAutoSpeed: 1, menuTour: 1,
           ach: {}, runs: [], skinOn: {}, skinChar: '',
           /* галактический скин персонажа открыт вместе с платиновым достижением */
           /* one saved run per offline mode: { normal|horde|freehorde|custom|bossrush|daily|endless: checkpoint } */

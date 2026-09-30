@@ -1039,6 +1039,9 @@ html.touch .fld input{padding:10px;font-size:15px}
     <div class="fld">Авто-смена
       <div class="chips" id="envAutoChips"></div>
     </div>
+    <div class="fld">Фон меню
+      <div class="chips" id="menuBgChips"></div>
+    </div>
     <label class="slider">Скорость авто-смены <output id="oEnvSpeed">1.0</output>
       <input type="range" id="sEnvSpeed" min="0.25" max="4" step="0.25" value="1"></label>
     <div class="hintbox">«ВЫКЛ» полностью отключает время суток и погоду (всегда ясный день).</div>
@@ -2573,7 +2576,7 @@ const Store = {
           map: 'arena', players: 2, maxHP: 100, aimAssist: 1, horde: 0, clears: 0, freeplay: 0, rounds: 3, playTime: 0,
           offCount: 1, offHp: 1, offFree: 0, offMode: 'normal', offMods: {}, offModsRun: 0, offModPick: 0, checkpoint: null, shopAllow: {}, shopItems: {}, music: 1, sfxVol: 100, musicVol: 70,
           grenade: 'frag', buildable: 'turret', weather: 'day', trapsEnabled: 1, offCountExact: 10, offCountFixed: 0,
-          timeOfDay: 'day', skyWeather: 'clear', envAuto: 0, envOff: 0, envAutoSpeed: 1,
+          timeOfDay: 'day', skyWeather: 'clear', envAuto: 0, envOff: 0, envAutoSpeed: 1, menuTour: 1,
           ach: {}, runs: [], skinOn: {}, skinChar: '',
           /* галактический скин персонажа открыт вместе с платиновым достижением */
           /* one saved run per offline mode: { normal|horde|freehorde|custom|bossrush|daily|endless: checkpoint } */
@@ -12686,7 +12689,7 @@ const UI = {
       'btnCopy', 'dmgDirs', 'android', 'ios', 'credits', 'crPlayer', 'crStats',
       'matchEnd', 'meTitle', 'meWinner', 'meScore', 'meDetail', 'btnMatchAgain', 'btnMatchMenu',
       'mapChips', 'playerChips', 'hpChips', 'hordeChips', 'lobbyMaps', 'lobbyPlayers', 'lobbyHp', 'lobbyFree', 'lobbyRounds',
-      'todChips', 'weatherChips', 'envAutoChips', 'sEnvSpeed', 'oEnvSpeed', 'lobbyTod', 'lobbyWeather', 'lobbyMode',
+      'todChips', 'weatherChips', 'envAutoChips', 'menuBgChips', 'sEnvSpeed', 'oEnvSpeed', 'lobbyTod', 'lobbyWeather', 'lobbyMode',
       'offCountChips', 'offHpChips', 'offFreeChips', 'offMapFreqChips', 'offModeChips', 'offCustomBox', 'offHordeBox', 'offSpecialBox', 'offCpBox', 'offCpInfo', 'offCpMode', 'offCpList', 'offCountExact', 'offCountFixed', 'btnOffContinue', 'custom', 'lobbyShop', 'lobbyShopItems',
       'modScreen', 'modGrid', 'modActive',
       'extras', 'achGrid', 'recTable', 'btnExtrasBack', 'weaponWheel', 'wwInner',
@@ -12974,6 +12977,13 @@ const UI = {
     fill(this.el.todChips, TOD_ORDER.map(k => ({ v: k, b: todName(k) })), 'tod', pickTod);
     fill(this.el.weatherChips, WEATHER_ORDER.map(k => ({ v: k, b: weatherName(k) })), 'wx', pickWx);
     fill(this.el.envAutoChips, [{ v: 0, b: 'ВЫКЛ' }, { v: 1, b: 'ВКЛ' }], 'auto', pickAuto);
+    /* фон меню: облёт разных карт или обычная статичная выбранная карта */
+    const pickMenu = v => {
+      S.menuTour = v; Store.save(); this.refreshChips();
+      // сразу перестроим фон, не дожидаясь следующего кадра
+      if (Game && Game.mode === CS.MODE.MENU) { try { Game.renderMenu(); } catch (e) { } }
+    };
+    fill(this.el.menuBgChips, [{ v: 1, b: 'ОБЛЁТ КАРТ' }, { v: 0, b: 'ОБЫЧНЫЙ' }], 'mbg', pickMenu);
     /* режим онлайн-матча: PvP-дуэль или кооп по волнам / орде / босс-рашу */
     const pickMode = v => {
       Store.data.onlineMode = v; Store.save(); this.refreshChips(); this.broadcastEnv();
@@ -13028,6 +13038,9 @@ const UI = {
       mark(this.el.lobbyWeather, 'wx', '__off__');
     }
     mark(this.el.envAutoChips, 'auto', S.envAuto ? 1 : 0);
+    if (this.el.menuBgChips) {
+      Array.from(this.el.menuBgChips.children).forEach(b => b.classList.toggle('on', +b.dataset.mbg === (S.menuTour === undefined ? 1 : (S.menuTour ? 1 : 0))));
+    }
     if (this.el.offMapFreqChips) {
       Array.from(this.el.offMapFreqChips.children).forEach(b => b.classList.toggle('on', +b.dataset.v === (S.offMapFreq || 0)));
     }
@@ -23760,9 +23773,38 @@ const Game = {
     if (Audio3D_SFX.ctx && !Audio3D_SFX.musicOff && (!Audio3D_SFX._music || Audio3D_SFX._music.name !== 'menu')) {
       this.refreshMusic();
     }
-    // idle menu backdrop: slow orbit around the arena
-    const t = U.now() * .00006;
-    this.camera.position.set(Math.cos(t) * 62, 26, Math.sin(t) * 62);
+    /* ОБЛЁТ ФОНА МЕНЮ: камера плавно кружит над ареной, а сама арена
+       периодически СМЕНЯЕТСЯ на другую карту (если включено в настройках).
+       Store.data.map при этом не трогается — выбранная игроком карта остаётся. */
+    const tt = U.now() * .001;
+    const tour = Store.data.menuTour === undefined ? 1 : Store.data.menuTour;
+    let mapId = MAP.id;
+    if (tour) {
+      // каждые ~20 секунд показываем следующую карту
+      if (!this._tourLast) this._tourLast = U.now();
+      if (U.now() - this._tourLast > 20000 && MAPS && MAPS.length) {
+        this._tourLast = U.now();
+        const ids = MAPS.map(m => m.id);
+        let i = ids.indexOf(MAP.id);
+        i = (i + 1) % ids.length;
+        mapId = ids[i];
+        buildMap(this.scene, Store.data.quality, mapId);
+        this.world = MAP.world;
+        this.applyQuality();
+      }
+    } else {
+      // обычный фон: спокойный облёт ВЫБРАННОЙ карты
+      const want = Store.data.map && mapById(Store.data.map).id;
+      if (want && MAP.id !== want) {
+        buildMap(this.scene, Store.data.quality, want);
+        this.world = MAP.world;
+        this.applyQuality();
+      }
+    }
+    const ang = tt * .045;
+    const R = 60 + Math.sin(tt * .13) * 12;
+    const y = 24 + Math.sin(tt * .07) * 9;
+    this.camera.position.set(Math.cos(ang) * R, y, Math.sin(ang) * R);
     this.camera.lookAt(0, 3, 0);
     this.camera.rotation.z = 0;
     this.renderer.clear();

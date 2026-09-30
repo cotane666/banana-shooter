@@ -106,12 +106,48 @@ class Effects {
   }
 
   /* УЛЬТА МЕЧА РОКОЧУЩЕГО РЫЦАРЯ: объёмный БЕЛЫЙ разрез вдоль полосы (в мире).
-     Длинная светящаяся плоскость, проносящаяся вперёд, + белые искры и вспышка. */
-  knightSlashFx(origin, fx, fz, reach, R) {
+     `mini` — короткая ДУГА-ПОЛУМЕСЯЦ (след меча) для обычного удара ЛКМ. */
+  knightSlashFx(origin, fx, fz, reach, R, mini) {
     const yaw = Math.atan2(fx, fz);
+    const life = mini ? .18 : .5;
     const g = new THREE.Group();
     g.position.set(origin.x, origin.y, origin.z);
     g.rotation.y = yaw;
+
+    if (mini) {
+      /* ДУГА-СЛЕД: серп-полумесяц в вертикальной плоскости, смотрит вдоль удара */
+      const rad = reach * .5;
+      const arcMat = new THREE.MeshBasicMaterial({
+        color: 0xffffff, transparent: true, opacity: 0,
+        blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide
+      });
+      const arc = new THREE.Mesh(new THREE.TorusGeometry(rad, rad * .12, 6, 20, Math.PI * 1.15), arcMat);
+      arc.position.set(0, rad * .15, reach * .35);
+      arc.rotation.y = Math.PI / 2;                 // плоскость дуги — поперёк удара
+      arc.rotation.z = -Math.PI * .12;
+      g.add(arc);
+      const coreMat = new THREE.MeshBasicMaterial({
+        color: 0xffffff, transparent: true, opacity: 0,
+        blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide
+      });
+      const core = new THREE.Mesh(new THREE.TorusGeometry(rad, rad * .035, 6, 20, Math.PI * 1.15), coreMat);
+      core.position.copy(arc.position); core.rotation.copy(arc.rotation);
+      g.add(core);
+      const light = new THREE.PointLight(0xffffff, 0, R * 3, 2);
+      light.position.set(0, .4, reach * .35); g.add(light);
+      this.scene.add(g);
+      this.knightSlashes = this.knightSlashes || [];
+      this.knightSlashes.push({ grp: g, mats: [arcMat, coreMat], light: light, life: life, max: life });
+      for (let i = 0; i < 9; i++) {
+        const t = U.rand(0, reach);
+        const sx = origin.x + fx * t + (-fz) * U.rand(-R * .4, R * .4);
+        const sz = origin.z + fz * t + (fx) * U.rand(-R * .4, R * .4);
+        this.particle(sx, origin.y - .4 + U.rand(0, 1.2), sz, U.rand(-3, 3), U.rand(2, 7), U.rand(-3, 3),
+          U.rand(.08, .20), 'spark', U.rand(.25, .55));
+      }
+      return;
+    }
+
     const mat = new THREE.MeshBasicMaterial({
       color: 0xffffff, transparent: true, opacity: 0,
       blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide
@@ -127,7 +163,7 @@ class Effects {
     light.position.set(0, 2, reach * .4); g.add(light);
     this.scene.add(g);
     this.knightSlashes = this.knightSlashes || [];
-    this.knightSlashes.push({ grp: g, mats: [mat, coreMat], light: light, life: .5, max: .5 });
+    this.knightSlashes.push({ grp: g, mats: [mat, coreMat], light: light, life: life, max: life });
     for (let i = 0; i < 30; i++) {
       const t = U.rand(0, reach);
       const sx = origin.x + fx * t + (-fz) * U.rand(-R * .5, R * .5);

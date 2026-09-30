@@ -7697,6 +7697,13 @@ const Game = {
         this.effects.slashTrail(origin.x + dir.x * .7, origin.y + dir.y * .7 - .15, origin.z + dir.z * .7,
           dir.x, dir.y, dir.z, def.range + .7, p.swingSide || 1, col);
       }
+      /* МЕЧ РОКОЧУЩЕГО РЫЦАРЯ: на КАЖДЫЙ удар — МИНИ-СЛЕШ. Только объёмный
+         (3D) белый разрез в мире — без экранного оверлея и чёрного экрана. */
+      if (def.melee === 'knightsword') {
+        const flat = Math.hypot(dir.x, dir.z) || 1;
+        const fx = dir.x / flat, fz = dir.z / flat;
+        if (this.effects && this.effects.knightSlashFx) this.effects.knightSlashFx(origin, fx, fz, 6.5, 3.2, true);
+      }
       if (this.mode === CS.MODE.ONLINE) this.traceRemotePlayer(origin, dir, Math.min(def.range, maxDist), def, dir);
       return;
     }

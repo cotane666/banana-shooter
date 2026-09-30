@@ -7779,6 +7779,8 @@ const Game = {
         // попадание в голову, если прицел выше груди
         const headY = zb.pos.y + 1.45 * zb.scale;
         const part = (origin.y > headY - .25 && h.dist < reach * .9) ? 'head' : 'body';
+        /* если это меч рыцаря — пометим: при гибели покажем «DOWN» */
+        if (def.melee && def.melee.indexOf('knightsword') === 0) zb._knightDown = true;
         zb.takeDamage(def.dmg, part, dir);
         if (def.knockback && zb.alive) { zb.vel.x += dir.x * def.knockback; zb.vel.z += dir.z * def.knockback; }
         const pt = { x: zb.pos.x, y: zb.pos.y + (part === 'head' ? 1.45 : .9) * zb.scale, z: zb.pos.z };
@@ -8470,10 +8472,11 @@ const Game = {
       if (z.isBoss) { this._bossKills = (this._bossKills || 0) + 1; }
       if (z.isMiniBoss) { this._miniBossKills = (this._miniBossKills || 0) + 1; }
     }
-    /* SWOON: если врага убила ПКМ-ульта меча рыцаря — над ним всплывает
-       красная пиксельная надпись «SWOON» (как в Deltarune). */
-    if (z._knightUltHit && z.pos && this.effects && this.effects.swoon) {
-      this.effects.swoon(z.pos.x, z.pos.y + 2.1 * (z.scale || 1) + .5, z.pos.z);
+    /* SWOON/DOWN: если врага убила ПКМ-ульта — «SWOON»; если обычный удар ЛКМ
+       этим же мечом рыцаря — «DOWN». Красная пиксельная надпись над телом. */
+    if (z.pos && this.effects && this.effects.swoon) {
+      if (z._knightUltHit) this.effects.swoon(z.pos.x, z.pos.y + 2.1 * (z.scale || 1) + .5, z.pos.z, 'SWOON');
+      else if (z._knightDown) this.effects.swoon(z.pos.x, z.pos.y + 2.1 * (z.scale || 1) + .5, z.pos.z, 'DOWN');
     }
     this.checkAchievements();
     UI.feed('<b>' + U.esc(p.name) + '</b> <span class="z">✖ ' + def.name + (headshot ? ' (в голову)' : '') + '</span> +$' + def.money);

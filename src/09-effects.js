@@ -117,16 +117,19 @@ class Effects {
      всплывающая над врагом, убитым ПКМ-ультой. Рисуется пиксель-за-пикселем
      на canvas (крупные квадраты), с чёрной обводкой — аутентичный вид.
      ============================================================ */
-  swoonTexture() {
-    if (this._swoonTex) return this._swoonTex;
-    // 5×7 пиксельные глифы для S W O O N
+  swoonTexture(word) {
+    word = word || 'SWOON';
+    this._swoonTex = this._swoonTex || {};
+    if (this._swoonTex[word]) return this._swoonTex[word];
+    // 5×7 пиксельные глифы
     const G = {
       S: ['01111', '10000', '10000', '01110', '00001', '00001', '11110'],
       W: ['10001', '10001', '10001', '10101', '10101', '11011', '10001'],
       O: ['01110', '10001', '10001', '10001', '10001', '10001', '01110'],
-      N: ['10001', '11001', '11001', '10101', '10011', '10011', '10001']
+      N: ['10001', '11001', '11001', '10101', '10011', '10011', '10001'],
+      D: ['11110', '10001', '10001', '10001', '10001', '10001', '11110'],
+      U: ['10001', '10001', '10001', '10001', '10001', '10001', '01110']
     };
-    const word = 'SWOON';
     const PX = 14;                                  // размер пикселя
     const gw = 5, gh = 7, gap = 1;
     const W = (gw * word.length + gap * (word.length - 1)) * PX;
@@ -140,6 +143,7 @@ class Effects {
       let cx = ox;
       for (const ch of word) {
         const rows = G[ch];
+        if (!rows) { cx += (gw + gap) * PX; continue; }
         for (let r = 0; r < gh; r++) for (let cc = 0; cc < gw; cc++) {
           if (rows[r][cc] === '1') x.fillRect(cx + cc * PX, oy + r * PX, PX, PX);
         }
@@ -155,19 +159,21 @@ class Effects {
     t.colorSpace = THREE.SRGBColorSpace;
     t.magFilter = THREE.NearestFilter;
     t.minFilter = THREE.NearestFilter;
-    this._swoonTex = t;
+    this._swoonTex[word] = t;
     return t;
   }
-  swoon(x, y, z) {
-    const tex = this.swoonTexture();
+  swoon(x, y, z, word) {
+    word = word || 'SWOON';
+    const tex = this.swoonTexture(word);
     const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false, depthWrite: false });
     const sp = new THREE.Sprite(mat);
     sp.position.set(x, y, z);
-    sp.scale.set(3.0, .86, 1);
+    const wRatio = word.length / 5;
+    sp.scale.set(3.0 * wRatio, .86, 1);
     sp.renderOrder = 12;
     this.scene.add(sp);
     this.swoons = this.swoons || [];
-    this.swoons.push({ mesh: sp, mat: mat, life: 1.6, max: 1.6, y0: y });
+    this.swoons.push({ mesh: sp, mat: mat, life: 1.6, max: 1.6, y0: y, w: 3.0 * wRatio });
   }
   knightSlashFx(origin, fx, fz, reach, R, mini) {    const yaw = Math.atan2(fx, fz);
     const life = mini ? .34 : .5;
@@ -1377,7 +1383,7 @@ class Effects {
         const rise = (1 - k) * .9;                     // поднимается вверх
         s.mesh.position.y = s.y0 + rise;
         const pop = k > .8 ? (1 - k) / .2 : 1;         // короткий «выход» в начале
-        s.mesh.scale.set(3.0 * (.5 + pop * .5), .86 * (.5 + pop * .5), 1);
+        s.mesh.scale.set((s.w || 3.0) * (.5 + pop * .5), .86 * (.5 + pop * .5), 1);
         s.mat.opacity = k < .25 ? k / .25 : 1;         // гаснет только в конце
         if (s.life <= 0) {
           if (s.mesh.parent) s.mesh.parent.remove(s.mesh);

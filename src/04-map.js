@@ -478,10 +478,16 @@ function solid(parent, world, x, y, z, w, h, d, mat, opts) {
   if (opts.destructible !== false && _destructibleTag(tag)) {
     aabb.destructible = true;
     aabb.hp = aabb.maxHp = Math.max(30, w * h * d * 26);
+    aabb._mat = mat || MAT.concrete;   // материал для осколков того же цвета
     MAP.destructibles.push(aabb);
   }
   if (opts.invisible) return aabb;
-  const mesh = makeBoxMesh(w, h, d, mat || MAT.concrete);
+  /* Для одиночных укрытий визуальный бокс чуть ужимаем (коллайдер — нет):
+     так грани стоящих вплотную предметов не совпадают в одной плоскости и не
+     мерцают. У чанков (цельные объекты) ужимать нельзя — появятся щели. */
+  let vw = w, vh = h, vd = d;
+  if (tag === 'cover') { vw = Math.max(.05, w - .03); vh = Math.max(.05, h - .03); vd = Math.max(.05, d - .03); }
+  const mesh = makeBoxMesh(vw, vh, vd, mat || MAT.concrete);
   mesh.position.set(x, y + h / 2, z);
   if (opts.rotY) mesh.rotation.y = opts.rotY;
   if (opts.noShadow) { mesh.castShadow = false; }
@@ -597,10 +603,12 @@ function mapGround(parent, world, opts) {
 function mapPerimeter(parent, world, mat) {
   const S = MAP.size, H = MAP.wallH, t = 2.5, half = S / 2;
   mat = mat || MAT.concrete;
-  solid(parent, world, 0, 0, -half, S + t, H, t, mat, { tag: 'boundary' });
-  solid(parent, world, 0, 0, half, S + t, H, t, mat, { tag: 'boundary' });
+  /* Углы: боковые (X) стены идут на полную длину и закрывают углы, а торцевые
+     (Z) — короче, чтобы НЕ накладываться на боковые (иначе мерцание в углах). */
   solid(parent, world, -half, 0, 0, t, H, S + t, mat, { tag: 'boundary' });
   solid(parent, world, half, 0, 0, t, H, S + t, mat, { tag: 'boundary' });
+  solid(parent, world, 0, 0, -half, S - t, H, t, mat, { tag: 'boundary' });
+  solid(parent, world, 0, 0, half, S - t, H, t, mat, { tag: 'boundary' });
 }
 
 /* Cut a doorway through a wall by splitting it into two segments + lintel.
@@ -681,7 +689,7 @@ function buildBuilding(parent, world, cx, cz, w, d, h, site) {
   const wall = .55;
   const door = 3.4;
   const hw = w / 2, hd = d / 2;
-  const mat = site ? MAT.brick : MAT.concrete;
+  const mat = MAT.brick;   // здания — кирпичные (как и просили)
 
   solid(parent, world, cx - (door / 2 + (w - door) / 4), 0, cz - hd, (w - door) / 2, h, wall, mat, { tag: 'wall' });
   solid(parent, world, cx + (door / 2 + (w - door) / 4), 0, cz - hd, (w - door) / 2, h, wall, mat, { tag: 'wall' });
@@ -776,7 +784,7 @@ function sandbag(parent, world, x, z, len, rot) {
    ============================================================ */
 function buildMapArena(parent, world) {
   mapGround(parent, world);
-  mapPerimeter(parent, world);
+  mapPerimeter(parent, world, MAT.brick);
 
   const PH = 2.6, PS = 20;
   solid(parent, world, 0, 0, 0, PS, PH, PS, MAT.concrete, { tag: 'plat' });
@@ -853,7 +861,7 @@ function buildMapArena(parent, world) {
    ============================================================ */
 function buildMapWarehouse(parent, world) {
   mapGround(parent, world, { tint: 0xc9ccc4 });
-  mapPerimeter(parent, world, MAT.concrete);
+  mapPerimeter(parent, world, MAT.brick);
 
   // loading dock along the north wall, reachable by two ramps
   solid(parent, world, 0, 0, -36, 60, 1.7, 14, MAT.concrete, { tag: 'plat' });
@@ -913,7 +921,7 @@ function buildMapWarehouse(parent, world) {
    ============================================================ */
 function buildMapTowers(parent, world) {
   mapGround(parent, world);
-  mapPerimeter(parent, world);
+  mapPerimeter(parent, world, MAT.brick);
 
   // four corner towers with decks at ~6 m
   const T = [[-34, -34], [34, -34], [-34, 34], [34, 34]];
@@ -1081,7 +1089,7 @@ function siteMesh(parent, mat, x, z, s) {
    ============================================================ */
 function buildMapCity(parent, world) {
   mapGround(parent, world, { tint: 0x9aa0a6 });
-  mapPerimeter(parent, world, MAT.concrete);
+  mapPerimeter(parent, world, MAT.brick);
 
   // a grid of city blocks with a cross-shaped avenue between them
   const B = 15;
@@ -1189,7 +1197,7 @@ function buildMapBunker(parent, world) {
    ============================================================ */
 function buildMapRooftops(parent, world) {
   mapGround(parent, world, { tint: 0x6f7780 });
-  mapPerimeter(parent, world, MAT.concrete);
+  mapPerimeter(parent, world, MAT.brick);
 
   // a grid of rooftop "islands" at varying heights, linked by planks/ramps.
   const rng = makeRng(13579);
@@ -1504,13 +1512,11 @@ function buildAimRoom(parent, world) {
   gp.receiveShadow = true;
   parent.add(gp);
 
-  /* Стены комнаты пристрелки — ЦЕЛЬНЫЕ (не дробим на чанки): иначе в углах
-     чанки соседних стен накладываются копланарно и мерцают. Тег boundary —
-     они и не должны разрушаться (это каркас тира). */
+  /* Углы: боковые (X) стены на всю длину, торцевые (Z) короче — без наложения. */
   solid(parent, world, minX - T / 2, 0, cz, T, H, halfD * 2 + T * 2, MAT.concrete, { tag: 'boundary' });
   solid(parent, world, maxX + T / 2, 0, cz, T, H, halfD * 2 + T * 2, MAT.concrete, { tag: 'boundary' });
-  solid(parent, world, cx, 0, minZ - T / 2, halfW * 2 + T * 2, H, T, MAT.concrete, { tag: 'boundary' });
-  solid(parent, world, cx, 0, maxZ + T / 2, halfW * 2 + T * 2, H, T, MAT.concrete, { tag: 'boundary' });
+  solid(parent, world, cx, 0, minZ - T / 2, halfW * 2, H, T, MAT.concrete, { tag: 'boundary' });
+  solid(parent, world, cx, 0, maxZ + T / 2, halfW * 2, H, T, MAT.concrete, { tag: 'boundary' });
 
   const roof = new THREE.Mesh(
     new THREE.BoxGeometry(halfW * 2 + T * 2, .5, halfD * 2 + T * 2),

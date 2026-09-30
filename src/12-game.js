@@ -5841,7 +5841,17 @@ const Game = {
          выглядит как плавление, а не мгновенное исчезновение. */
       const wb = wallHits[0].box;
       if (wb && wb.destructible && !wb.removed && typeof damageMapBox === 'function') {
-        damageMapBox(wb, Math.max(6, wb.maxHp * 4 * dt));
+        const hm = wallHits[0].point, hn = wallHits[0].normal || { x: -dir.x, y: -dir.y, z: -dir.z };
+        const broke = damageMapBox(wb, Math.max(6, wb.maxHp * 4 * dt));
+        if (this.effects) {
+          // искры/раскалённые точки на каждом попадании, осколки — при проломе
+          for (let i = 0; i < (broke ? 5 : 2); i++) {
+            this.effects.particle(hm.x, hm.y, hm.z,
+              hn.x * U.rand(2, 7) + U.rand(-2, 2), U.rand(1, 4), hn.z * U.rand(2, 7) + U.rand(-2, 2),
+              U.rand(.05, .12), 'spark', U.rand(.2, .5));
+          }
+          if (broke) this.effects.debrisBurst(hm.x, hm.y, hm.z, 0xb8b2a6, 1.0, wb._mat, 6);
+        }
       }
       /* Leave a fire trail where the beam hits. The strip is oriented ALONG THE
          PATH the impact point traces on the surface (not along the beam), and is
@@ -7512,10 +7522,19 @@ const Game = {
       if (wallHits.length) {
         beamEnd = wallHits[0].point;
         this.effects.impact(wallHits[0].point, wallHits[0].normal, 'metal');
-        /* ЛАЗЕРНАЯ ПУШКА ЛОМАЕТ КАРТУ: попадание луча разрушает деталь */
+        /* ЛАЗЕРНАЯ ПУШКА ЛОМАЕТ КАРТУ: попадание луча разрушает деталь + искры/осколки */
         const wb = wallHits[0].box;
         if (wb && wb.destructible && !wb.removed && typeof damageMapBox === 'function') {
-          damageMapBox(wb, Math.max(12, wb.maxHp / 2));
+          const broke = damageMapBox(wb, Math.max(12, wb.maxHp / 2));
+          const hp = wallHits[0].point, hn = wallHits[0].normal || { x: -dir.x, y: -dir.y, z: -dir.z };
+          if (this.effects) {
+            for (let i = 0; i < (broke ? 6 : 3); i++) {
+              this.effects.particle(hp.x, hp.y, hp.z,
+                hn.x * U.rand(2, 8) + U.rand(-2, 2), U.rand(1, 5), hn.z * U.rand(2, 8) + U.rand(-2, 2),
+                U.rand(.05, .13), 'spark', U.rand(.2, .55));
+            }
+            if (broke) this.effects.debrisBurst(hp.x, hp.y, hp.z, 0xb8b2a6, 1.0, wb._mat, 6);
+          }
         }
       }
       p.bulletsHit++;

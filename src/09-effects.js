@@ -83,26 +83,37 @@ class Effects {
     this.slashes.push({ mesh: g, mats: [mat, coreMat], life: .22, max: .22 });
   }
 
-  /* ПЫЛЬ И ОСКОЛКИ при разрушении объекта карты: облако пыли + летящие куски */
-  debrisBurst(x, y, z, color, size) {
+  /* ПЫЛЬ И ОСКОЛКИ при разрушении объекта карты.
+     Осколки — РВАНОЙ формы (как в Human Fall Flat: бетонные обломки), с
+     текстурой материала, разлетаются и падают под гравитацией. */
+  debrisBurst(x, y, z, color, size, mat, count) {
     const c = color === undefined ? 0xb8b2a6 : color;
-    const n = (this.quality === 0 || ((CFG && CFG.particleMul) < .6)) ? 8 : 16;
+    const lowGfx = (this.quality === 0 || ((CFG && CFG.particleMul) < .6));
+    const nChunks = count !== undefined ? count : (lowGfx ? 4 : 8);
+    const nDust = lowGfx ? 5 : 9;
     // пыль (серые клубы, всплывают медленно)
-    for (let i = 0; i < n; i++) {
-      this.particle(x + U.rand(-.5, .5), y + U.rand(-.4, .6), z + U.rand(-.5, .5),
-        U.rand(-3, 3), U.rand(.5, 3.2), U.rand(-3, 3), U.rand(.10, .26), 'smoke', U.rand(.5, 1.1));
+    for (let i = 0; i < nDust; i++) {
+      this.particle(x + U.rand(-.6, .6), y + U.rand(-.4, .7), z + U.rand(-.6, .6),
+        U.rand(-3, 3), U.rand(.5, 3.2), U.rand(-3, 3), U.rand(.12, .32), 'smoke', U.rand(.5, 1.2));
     }
-    // осколки (мелкие кубики цвета материала)
-    for (let i = 0; i < n; i++) {
-      const m = new THREE.Mesh(this.particleGeo, new THREE.MeshLambertMaterial({ color: c }));
+    // осколки РВАНОЙ формы
+    const scale = size || 1;
+    for (let i = 0; i < nChunks; i++) {
+      const geo = _jaggedBoxGeometry((Math.random() * JAGGED_VARIANTS) | 0);
+      const m = new THREE.Mesh(geo, mat || new THREE.MeshLambertMaterial({ color: c }));
       m.position.set(x + U.rand(-.4, .4), y + U.rand(-.2, .8), z + U.rand(-.4, .4));
-      m.scale.setScalar(U.rand(.03, .09) * (size || 1));
+      // продолговатые обломки (плиты), а не кубики
+      const s = U.rand(.12, .34) * scale;
+      m.scale.set(s * U.rand(.7, 1.6), s * U.rand(.3, .7), s * U.rand(.7, 1.6));
+      m.rotation.set(U.rand(0, 6.28), U.rand(0, 6.28), U.rand(0, 6.28));
       m.visible = true;
+      m.castShadow = !lowGfx;
       this.scene.add(m);
       this.particles.push({
-        mesh: m, vx: U.rand(-5, 5), vy: U.rand(1, 6), vz: U.rand(-5, 5),
-        life: U.rand(.5, 1.1), max: 1.1, grav: 16, type: 'debris',
-        spin: { x: U.rand(-8, 8), y: U.rand(-8, 8), z: U.rand(-8, 8) }
+        mesh: m, vx: U.rand(-6, 6), vy: U.rand(1.5, 7), vz: U.rand(-6, 6),
+        life: U.rand(.8, 1.6), max: 1.6, grav: 20, type: 'debris',
+        spin: { x: U.rand(-9, 9), y: U.rand(-9, 9), z: U.rand(-9, 9) },
+        sharedMat: !!mat
       });
     }
   }
@@ -1227,9 +1238,9 @@ class Effects {
           if (p.mesh.parent) p.mesh.parent.remove(p.mesh);
           p.mesh.traverse && p.mesh.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material) o.material.dispose(); });
         } else if (p.type === 'debris') {
-          // у осколков свой материал — убираем полностью, в пул не кладём
+          // у осколков может быть свой материал — убираем, но не трогаем общий
           if (p.mesh.parent) p.mesh.parent.remove(p.mesh);
-          if (p.mesh.material) p.mesh.material.dispose();
+          if (!p.sharedMat && p.mesh.material) p.mesh.material.dispose();
         } else {
           p.mesh.visible = false;
           if (p.mesh.parent) p.mesh.parent.remove(p.mesh);

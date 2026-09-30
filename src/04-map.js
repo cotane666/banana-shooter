@@ -125,15 +125,16 @@ function makeBoxMesh(w, h, d, mat, faceTopMat) {
    сотни кусков карты дают несколько draw call вместо сотен, что критично для
    телефона.
    ============================================================ */
-/* ключ инстанс-группы: материал + цвет + ВАРИАНТ рваной геометрии. */
-function _chunkInstanceKey(mat, variant) {
+/* ключ инстанс-группы: материал + цвет. Размер задаётся масштабом матрицы,
+   поэтому куски любых размеров делят одну InstancedMesh (единый РОВНЫЙ куб). */
+function _chunkInstanceKey(mat) {
   const tex = (mat && mat.userData && mat.userData.tex) || 'flat';
-  return tex + '|' + (mat && mat.color ? mat.color.getHexString() : 'ffffff') + '|' + (variant | 0);
+  return tex + '|' + (mat && mat.color ? mat.color.getHexString() : 'ffffff');
 }
 
-/* РВАНЫЕ КУСКИ (как в Human Fall Flat): несколько вариантов геометрии, где
-   углы единичного куба смещены случайно — грани получаются неправильными,
-   а не ровными квадратиками. Варианты переиспользуются через InstancedMesh. */
+/* РВАНЫЕ ОСКОЛКИ (как в Human Fall Flat) — используются ТОЛЬКО для эффекта
+   разрушения (летящие куски), а НЕ для базовой геометрии карты. Базовая карта
+   остаётся ровной, чтобы не выглядеть сломанной. */
 const _jaggedGeos = [];
 const JAGGED_VARIANTS = 6;
 function _jaggedBoxGeometry(variant) {
@@ -141,9 +142,8 @@ function _jaggedBoxGeometry(variant) {
   if (_jaggedGeos[variant]) return _jaggedGeos[variant];
   const g = new THREE.BoxGeometry(1, 1, 1);
   const rng = makeRng(0x9e37 + variant * 2654435761);
-  // смещения для 8 углов (по знаку позиции вершины)
   const off = [];
-  for (let c = 0; c < 8; c++) off.push([(rng() - .5) * .30, (rng() - .5) * .30, (rng() - .5) * .30]);
+  for (let c = 0; c < 8; c++) off.push([(rng() - .5) * .34, (rng() - .5) * .34, (rng() - .5) * .34]);
   const pos = g.attributes.position;
   for (let i = 0; i < pos.count; i++) {
     const px = pos.getX(i), py = pos.getY(i), pz = pos.getZ(i);
@@ -157,23 +157,22 @@ function _jaggedBoxGeometry(variant) {
 }
 
 /* добавить чанк в общий InstancedMesh (создаётся лениво при первом чанке).
-   Базовый куб единичный; масштаб = реальный размер куска. */
+   Базовый куб РОВНЫЙ единичный; масштаб = реальный размер куска. */
 function _addChunkInstance(parent, world, cx, cy, cz, cw, ch, cd, mat, tag, noCollide, noShadow, invisible) {
   const aabb = aabbFromBase(cx, cy, cz, cw, ch, cd, tag);
   aabb.destructible = true;
   aabb.hp = aabb.maxHp = Math.max(30, cw * ch * cd * 26);
   aabb._iw = cw; aabb._ih = ch; aabb._id = cd;   // размеры для матрицы инстанса
+  aabb._mat = mat || MAT.concrete;
   if (!noCollide) world.addBox(aabb);
   aabb._invisible = !!invisible;
 
   if (!invisible) {
     if (!MAP._chunkGroups) MAP._chunkGroups = {};
-    // вариант выбираем детерминированно по координатам — соседние куски разные
-    const variant = Math.abs(Math.floor(cx * 131 + cy * 977 + cz * 31)) % JAGGED_VARIANTS;
-    const key = _chunkInstanceKey(mat || MAT.concrete, variant);
+    const key = _chunkInstanceKey(mat || MAT.concrete);
     let grp = MAP._chunkGroups[key];
     if (!grp) {
-      grp = { mat: mat || MAT.concrete, variant: variant, items: [], mesh: null, noShadow: !!noShadow, parent: parent };
+      grp = { mat: mat || MAT.concrete, items: [], mesh: null, noShadow: !!noShadow, parent: parent };
       MAP._chunkGroups[key] = grp;
     }
     aabb._chunkGroup = grp;
@@ -203,7 +202,7 @@ function _buildChunkInstances() {
   for (const key in MAP._chunkGroups) {
     const grp = MAP._chunkGroups[key];
     if (grp.mesh) continue;
-    const geo = _jaggedBoxGeometry(grp.variant || 0);
+    const geo = new THREE.BoxGeometry(1, 1, 1);   // базовая геометрия — РОВНАЯ
     const im = new THREE.InstancedMesh(geo, grp.mat, Math.max(1, grp.items.length));
     im.castShadow = !grp.noShadow;
     im.receiveShadow = true;
@@ -251,7 +250,7 @@ function damageMapAt(x, y, z, radius, dmg) {
     b.hp -= dmg * (0.4 + k * 0.6);
     if (b.hp <= 0) {
       // запоминаем центр куска для пыли
-      MAP._lastBreak = { x: (b.minX + b.maxX) / 2, y: (b.minY + b.maxY) / 2, z: (b.minZ + b.maxZ) / 2 };
+      MAP._lastBreak = { x: (b.minX + b.maxX) / 2, y: (b.minY + b.maxY) / 2, z: (b.minZ + b.maxZ) / 2, mat: b._mat || null };
       removeMapChunk(b); destroyed++;
     }
   }

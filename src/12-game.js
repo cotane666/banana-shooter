@@ -7411,7 +7411,7 @@ const Game = {
       /* БЛИЖНИЙ БОЙ ЛОМАЕТ КАРТУ: 6-8 ударов разрушают блок (урон = прочность/7). */
       if (wallHit && wallHit.box && wallHit.box.destructible && !wallHit.box.removed && typeof damageMapBox === 'function') {
         const broke = damageMapBox(wallHit.box, Math.max(6, wallHit.box.maxHp / 7));
-        if (this.effects) this.effects.debrisBurst(wallHit.point.x, wallHit.point.y, wallHit.point.z, 0xb8b2a6, broke ? 1.1 : .5);
+        if (this.effects) this.effects.debrisBurst(wallHit.point.x, wallHit.point.y, wallHit.point.z, 0xb8b2a6, broke ? 1.1 : .5, wallHit.box._mat);
         if (broke) any = true;
       }
       for (const h of hitList) {
@@ -7510,8 +7510,8 @@ const Game = {
         const perHit = (h.box.maxHp / 12) * U.clamp((def.dmg || 30) / 35, .5, 1.6);
         const broke = damageMapBox(h.box, perHit);
         if (this.effects) {
-          if (broke) this.effects.debrisBurst(h.point.x, h.point.y, h.point.z, 0xb8b2a6, 1.1);
-          else if (Math.random() < .22) this.effects.debrisBurst(h.point.x, h.point.y, h.point.z, 0xb8b2a6, .55);
+          if (broke) this.effects.debrisBurst(h.point.x, h.point.y, h.point.z, 0xb8b2a6, 1.1, h.box._mat);
+          else if (Math.random() < .22) this.effects.debrisBurst(h.point.x, h.point.y, h.point.z, 0xb8b2a6, .55, h.box._mat);
         }
       }
       if (penetrable) { dmgMul *= CFG.wallbangLoss; continue; }
@@ -7611,9 +7611,10 @@ const Game = {
     const destroyed = damageMapAt(x, y, z, radius, Infinity);
     if (destroyed && this.effects) {
       const b = MAP._lastBreak || { x: x, y: y, z: z };
-      this.effects.debrisBurst(b.x, b.y, b.z, 0xb8b2a6, 1.4);
-      for (let i = 0; i < Math.min(6, destroyed); i++) {
-        this.effects.debrisBurst(x + U.rand(-radius * .5, radius * .5), y + U.rand(0, 1.4), z + U.rand(-radius * .5, radius * .5), 0xb8b2a6, .9);
+      this.effects.debrisBurst(b.x, b.y, b.z, 0xb8b2a6, 1.3, b.mat, 10);
+      // немного пыли по площади, но без лишних кусков
+      for (let i = 0; i < Math.min(4, destroyed); i++) {
+        this.effects.debrisBurst(x + U.rand(-radius * .5, radius * .5), y + U.rand(0, 1.4), z + U.rand(-radius * .5, radius * .5), 0xb8b2a6, .8, b.mat, 3);
       }
     }
     return destroyed;

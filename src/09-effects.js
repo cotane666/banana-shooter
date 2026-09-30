@@ -119,28 +119,30 @@ class Effects {
     g.rotation.y = yaw;
 
     if (mini) {
-      /* ДУГА-СЛЕД: серп-полумесяц, каждый удар — ПОД РАЗНЫМ УГЛОМ (случайный
-         наклон/поворот), чтобы взмахи не выглядели одинаково. */
+      /* ДУГА-СЛЕД: серп-полумесяц ПЛОСКОСТЬЮ К ИГРОКУ (виден как разрез), а не
+         на ребро. Каждый удар — ПОД РАЗНЫМ УГЛОМ: дуга крутится в плоскости
+         экрана (rotation.z) на случайный угол + лёгкий 3D-наклон. */
       const rad = reach * .5;
-      const tilt = U.rand(-1.1, 1.1);                // случайный наклон дуги
-      const twist = U.rand(-.55, .55);               // случайный поворот плоскости
+      const spin = U.rand(0, Math.PI * 2);           // основной угол разреза
+      const tiltX = U.rand(-.45, .45);               // лёгкий наклон к/от камеры
+      const tiltY = U.rand(-.45, .45);
       const arcMat = new THREE.MeshBasicMaterial({
         color: 0xffffff, transparent: true, opacity: 0,
         blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide
       });
-      const arc = new THREE.Mesh(new THREE.TorusGeometry(rad, rad * .12, 6, 20, Math.PI * 1.15), arcMat);
-      arc.position.set(0, rad * .15, reach * .35);
-      arc.rotation.set(twist, Math.PI / 2, -Math.PI * .12 + tilt);
+      const arc = new THREE.Mesh(new THREE.TorusGeometry(rad, rad * .13, 6, 22, Math.PI * 1.12), arcMat);
+      arc.position.set(0, 0, reach * .40);
+      arc.rotation.set(tiltX, tiltY, spin);          // в плоскости экрана, разный угол
       g.add(arc);
       const coreMat = new THREE.MeshBasicMaterial({
         color: 0xffffff, transparent: true, opacity: 0,
         blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide
       });
-      const core = new THREE.Mesh(new THREE.TorusGeometry(rad, rad * .035, 6, 20, Math.PI * 1.15), coreMat);
+      const core = new THREE.Mesh(new THREE.TorusGeometry(rad, rad * .04, 6, 22, Math.PI * 1.12), coreMat);
       core.position.copy(arc.position); core.rotation.copy(arc.rotation);
       g.add(core);
       const light = new THREE.PointLight(0xffffff, 0, R * 3, 2);
-      light.position.set(0, .4, reach * .35); g.add(light);
+      light.position.set(0, .4, reach * .40); g.add(light);
       this.scene.add(g);
       this.knightSlashes = this.knightSlashes || [];
       this.knightSlashes.push({ grp: g, mats: [arcMat, coreMat], light: light, life: life, max: life });

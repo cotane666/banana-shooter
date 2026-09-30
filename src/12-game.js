@@ -3142,21 +3142,48 @@ const Game = {
       return;
     }
     if (kind === 'devour') {
-      // ПОЖИРАТЕЛЬ ПЛОТИ: высасывает жизнь из ближайших зомби и лечится
+      /* ПОЖИРАТЕЛЬ ПЛОТИ: высасывает жизнь из ВСЕГО рядом — и зомби, и игрока —
+         и лечится. Раньше работало только при куче зомби вокруг, поэтому в бою
+         1-на-1 «ничего не делало». Теперь всегда даёт эффект: тянет игрока к
+         себе, наносит урон и лечится, даже если рядом никого нет. */
+      const R = 9;
       let drained = 0;
+      // вытягиваем жизнь из соседних зомби
       for (const o of this.horde.list) {
         if (o === z || o.dying || !o.alive || o.isBoss || o.isMiniBoss) continue;
         const d = Math.hypot(o.pos.x - z.pos.x, o.pos.z - z.pos.z);
-        if (d > 8) continue;
+        if (d > R) continue;
         const bite = Math.min(o.health, o.maxHealth * .5);
         o.takeDamage(bite, 'body', { x: 0, y: 0, z: 0 });
         drained += bite;
         this.effects.particle(o.pos.x, o.pos.y + 1.2 * o.scale, o.pos.z, 0, 1.4, 0, .5, 'spark', .4);
       }
-      if (drained > 0) {
-        z.health = Math.min(z.maxHealth, z.health + drained * .35);
-        UI.toast('ПОЖИРАТЕЛЬ насытился', '#ff2a3a');
+      // высасываем жизнь из ИГРОКА, если он в радиусе
+      if (p && p.alive) {
+        const dp = Math.hypot(p.pos.x - z.pos.x, p.pos.z - z.pos.z);
+        if (dp <= R) {
+          const k = 1 - dp / R;
+          if (!this.playerShieldUp()) {
+            const bite = Math.max(10, (z.dmg || 50) * .85 * k);
+            this.applyDamageToSelf(bite, { x: z.pos.x, y: z.pos.y, z: z.pos.z });
+            drained += bite;
+            // подтягиваем игрока к пожирателю
+            const ax = z.pos.x - p.pos.x, az = z.pos.z - p.pos.z;
+            const l = Math.max(.001, Math.hypot(ax, az));
+            p.vel.x += (ax / l) * 13 * k; p.vel.z += (az / l) * 13 * k;
+          } else this.reflectAtDummy({ x: z.pos.x, y: z.pos.y, z: z.pos.z }, (z.dmg || 50), false);
+        }
       }
+      // всегда лечится от пожирания (даже без добычи)
+      z.health = Math.min(z.maxHealth, z.health + Math.max(drained * .35, z.maxHealth * .04));
+      // видимый эффект: кровавый вихрь у пожирателя + тёмный след на земле
+      for (let i = 0; i < 10; i++) {
+        const a = (i / 10) * Math.PI * 2;
+        this.effects.particle(z.pos.x, z.pos.y + 1.2, z.pos.z,
+          Math.cos(a) * 3.2, U.rand(1, 3.4), Math.sin(a) * 3.2, U.rand(.16, .30), 'blood', U.rand(.4, .8));
+      }
+      this.effects.decal(z.pos.x, .02, z.pos.z, 0, 1, 0, R * .7, 'blood');
+      UI.toast('ПОЖИРАТЕЛЬ насытился', '#ff2a3a');
       Audio3D_SFX.growl(z.pos.x, z.pos.y, z.pos.z, 'brute');
       this.bossTell(z, 'ПОЖИРАНИЕ', '#ff2a3a');
       return;

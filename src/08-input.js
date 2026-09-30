@@ -501,8 +501,8 @@ const TouchUI = {
     }
     dim(E.climb, this._canClimb);
 
-    // --- mech-only abilities ---
-    dim(E.dash, inMech);
+    // --- mech-only abilities + РЫВОК-перк (доступен и без меха) ---
+    dim(E.dash, inMech || (!!(p && p.perkDash) && !inMech));
     dim(E.missiles, inMech);
     if (inMech) E.missiles.style.opacity = (blocked || !!(Game && Game._mechMissileAt && U.now() - Game._mechMissileAt < CFG.mechMissileCd * 1000)) ? '.35' : '1';
     dim(E.mech, inMech || (!!(p && p.mechOwned) && (Game.parkedMechDist ? Game.parkedMechDist() <= 6 : false)));

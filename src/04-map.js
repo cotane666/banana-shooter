@@ -167,7 +167,7 @@ function _addChunkInstance(parent, world, cx, cy, cz, cw, ch, cd, mat, tag, noCo
   if (!noCollide) world.addBox(aabb);
   aabb._invisible = !!invisible;
 
-  if (!invisible) {
+    if (!invisible) {
     if (!MAP._chunkGroups) MAP._chunkGroups = {};
     const key = _chunkInstanceKey(mat || MAT.concrete);
     let grp = MAP._chunkGroups[key];
@@ -208,16 +208,47 @@ function _buildChunkInstances() {
     im.receiveShadow = true;
     im.frustumCulled = false;             // чанки размазаны по арене
     im.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+
+    /* МАСШТАБ ТЕКСТУРЫ ПОД РАЗМЕР КУСКА: у всех инстансов единичный куб, поэтому
+       без этого текстура растягивается на длинных деталях. Передаём размер
+       куска отдельным instanced-атрибутом и домножаем на него UV в шейдере. */
+    const texScale = grp.mat.userData && grp.mat.userData.scale ? grp.mat.userData.scale : 3;
+    const aUvScale = new THREE.InstancedBufferAttribute(new Float32Array(grp.items.length * 3), 3);
+    aUvScale.setUsage(THREE.DynamicDrawUsage);
+    geo.setAttribute('aUvScale', aUvScale);
+
     for (let i = 0; i < grp.items.length; i++) {
       const it = grp.items[i];
       // «мёртвые» (прорезанные двери) остаются с нулевым масштабом — невидимы
       if (it.dead) { it.mtx.makeScale(0, 0, 0); }
       else { it.mtx.makeScale(it.w, it.h, it.d).setPosition(it.x, it.y, it.z); }
       im.setMatrixAt(i, it.mtx);
+      it.uvScale = [it.w, it.h, it.d];
+      aUvScale.setXYZ(i, it.w, it.h, it.d);
     }
+    aUvScale.needsUpdate = true;
     im.instanceMatrix.needsUpdate = true;
-    im.userData.group = grp;
+
+    /* домножаем UV по грани: определяем грань по нормали (в локальных осях). */
+    im.onBeforeCompile = (shader) => {
+      shader.uniforms.uTexScale = { value: texScale };
+      shader.vertexShader = 'attribute vec3 aUvScale;\nuniform float uTexScale;\n' + shader.vertexShader;
+      shader.vertexShader = shader.vertexShader.replace(
+        '#include <uv_vertex>',
+        `#include <uv_vertex>
+         {
+           vec3 an = abs(normal);
+           vec2 faceSize;
+           if (an.x > 0.5) faceSize = vec2(aUvScale.z, aUvScale.y);       // ±X: d x h
+           else if (an.y > 0.5) faceSize = vec2(aUvScale.x, aUvScale.z);  // ±Y: w x d
+           else faceSize = vec2(aUvScale.x, aUvScale.y);                  // ±Z: w x h
+           vUv *= max(vec2(1.0), floor(faceSize / uTexScale + 0.5));
+         }`
+      );
+    };
+
     grp.mesh = im;
+    grp.aUvScale = aUvScale;
     grp.parent.add(im);
   }
 }

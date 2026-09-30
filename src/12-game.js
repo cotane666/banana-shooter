@@ -7410,7 +7410,7 @@ const Game = {
       let any = false;
       /* БЛИЖНИЙ БОЙ ЛОМАЕТ КАРТУ: 6-8 ударов разрушают блок (урон = прочность/7). */
       if (wallHit && wallHit.box && wallHit.box.destructible && !wallHit.box.removed && typeof damageMapBox === 'function') {
-        const broke = damageMapBox(wallHit.box, Math.max(6, wallHit.box.maxHp / 7));
+        const broke = damageMapBox(wallHit.box, Math.max(6, wallHit.box.maxHp / 2));
         if (this.effects) this.effects.debrisBurst(wallHit.point.x, wallHit.point.y, wallHit.point.z, 0xb8b2a6, broke ? 1.1 : .5, wallHit.box._mat);
         if (broke) any = true;
       }
@@ -7504,10 +7504,8 @@ const Game = {
       /* ПУЛИ РАЗРУШАЮТ карту: попадание наносит урон блоку — 10-15 пуль ломают
          деталь. Считаем урон пропорционально урону оружия. */
       if (h.box && h.box.destructible && !h.box.removed && typeof damageMapBox === 'function') {
-        /* 10-15 попаданий ломают блок: урон пропорционален прочности блока и
-           силе оружия (35 = типовой урон), поэтому и пистолет, и винтовка
-           разрушают за примерно одинаковое число выстрелов. */
-        const perHit = (h.box.maxHp / 12) * U.clamp((def.dmg || 30) / 35, .5, 1.6);
+        /* 2 попадания ломают блок. */
+        const perHit = Math.max(6, h.box.maxHp / 2) * U.clamp((def.dmg || 30) / 35, .6, 1.4);
         const broke = damageMapBox(h.box, perHit);
         if (this.effects) {
           if (broke) this.effects.debrisBurst(h.point.x, h.point.y, h.point.z, 0xb8b2a6, 1.1, h.box._mat);

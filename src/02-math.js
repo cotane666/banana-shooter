@@ -39,30 +39,28 @@ class CollisionWorld {
   constructor() {
     this.boxes = [];         // static AABBs
     this.tops = [];          // walkable tops for AI: {aabb, top}
-    this.cell = 8;           // spatial grid cell size
+    this.cell = 4;           // spatial grid cell size (мелкие куски → плотнее сетка)
     this.grid = new Map();
     this.bounds = { minX: -200, maxX: 200, minZ: -200, maxZ: 200 };
   }
 
   addBox(aabb) {
     const id = this.boxes.length;
+    aabb._wid = id;
     this.boxes.push(aabb);
     this._insert(aabb, id);
     return aabb;
   }
 
-  /* ---- РАЗРУШАЕМОСТЬ: мягко «убрать» бокс (removed) и вернуть его ---- */
+  /* ---- РАЗРУШАЕМОСТЬ: мягко «убрать» бокс (removed) и вернуть его.
+     O(1) через сохранённый id — раньше indexOf по тысячам боксов тормозил. ---- */
   removeBox(aabb) {
-    if (!aabb) return false;
-    const i = this.boxes.indexOf(aabb);
-    if (i < 0) return false;
+    if (!aabb || aabb._wid === undefined) return false;
     aabb.removed = true;
     return true;
   }
   restoreBox(aabb) {
-    if (!aabb) return false;
-    const i = this.boxes.indexOf(aabb);
-    if (i < 0) return false;
+    if (!aabb || aabb._wid === undefined) return false;
     aabb.removed = false;
     return true;
   }
@@ -83,10 +81,13 @@ class CollisionWorld {
     }
   }
 
-  /* query boxes potentially overlapping an AABB */
+  /* query boxes potentially overlapping an AABB.
+     Дедупликация — через МЕТКУ ПОКОЛЕНИЯ на боксе (O(1)), а не indexOf (O(n)):
+     при тысячах разрушаемых частей именно indexOf был главным тормозом. */
   query(aabb, out) {
     out = out || [];
     out.length = 0;
+    const gen = (this._qgen = ((this._qgen || 0) + 1) >>> 0);
     const c = this.cell;
     const x0 = Math.floor((aabb.minX - 0.01) / c), x1 = Math.floor((aabb.maxX + 0.01) / c);
     const z0 = Math.floor((aabb.minZ - 0.01) / c), z1 = Math.floor((aabb.maxZ + 0.01) / c);
@@ -96,8 +97,9 @@ class CollisionWorld {
         if (!arr) continue;
         for (let i = 0; i < arr.length; i++) {
           const b = this.boxes[arr[i]];
-          if (b.removed) continue;
-          if (out.indexOf(b) < 0) out.push(b);
+          if (b.removed || b._qgen === gen) continue;
+          b._qgen = gen;
+          out.push(b);
         }
       }
     }
@@ -156,8 +158,9 @@ class CollisionWorld {
   _rayCandidates(origin, dir, maxDist) {
     const c = this.cell;
     const cands = [];
-    const seen = new Set();
-    const steps = Math.min(220, Math.ceil(maxDist / (c * 0.5)) + 2);
+    /* дедупликация через поколение на боксе — без аллокации Set на каждый луч */
+    const gen = (this._rgen = ((this._rgen || 0) + 1) >>> 0);
+    const steps = Math.min(260, Math.ceil(maxDist / (c * 0.8)) + 2);
     for (let s = 0; s <= steps; s++) {
       const t = (s / steps) * maxDist;
       const px = origin.x + dir.x * t, pz = origin.z + dir.z * t;
@@ -167,12 +170,11 @@ class CollisionWorld {
           const arr = this.grid.get(this._key(ix + ax, iz + az));
           if (!arr) continue;
           for (let i = 0; i < arr.length; i++) {
-            const id = arr[i];
-            if (seen.has(id)) continue;
-            seen.add(id);
-            const b = this.boxes[id];
-            if (b.removed) continue;
-            cands.push(b);
+            const b = this.boxes[arr[i]];
+            if (b.removed || b._rgen === gen) continue;
+            b._rgen = gen;
+            /* грубое отсечение: бокс должен пересечь луч по осям X/Z */
+            if (rayBox(origin, dir, b, maxDist)) cands.push(b);
           }
         }
       }

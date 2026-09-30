@@ -125,11 +125,12 @@ function makeBoxMesh(w, h, d, mat, faceTopMat) {
    сотни кусков карты дают несколько draw call вместо сотен, что критично для
    телефона.
    ============================================================ */
-/* ключ инстанс-группы: материал + цвет. Размер задаётся масштабом матрицы,
-   поэтому куски любых размеров делят одну InstancedMesh (единый РОВНЫЙ куб). */
+/* ключ инстанс-группы: ТЕКСТУРА (цвет куски получают через instanceColor, а
+   размер — через масштаб матрицы). Так все куски одного материала делят ОДНУ
+   InstancedMesh — минимум draw call'ов даже при тысячах разрушаемых частей. */
 function _chunkInstanceKey(mat) {
   const tex = (mat && mat.userData && mat.userData.tex) || 'flat';
-  return tex + '|' + (mat && mat.color ? mat.color.getHexString() : 'ffffff');
+  return tex;
 }
 
 /* РВАНЫЕ ОСКОЛКИ (как в Human Fall Flat) — используются ТОЛЬКО для эффекта
@@ -167,7 +168,7 @@ function _addChunkInstance(parent, world, cx, cy, cz, cw, ch, cd, mat, tag, noCo
   if (!noCollide) world.addBox(aabb);
   aabb._invisible = !!invisible;
 
-    if (!invisible) {
+  if (!invisible) {
     if (!MAP._chunkGroups) MAP._chunkGroups = {};
     const key = _chunkInstanceKey(mat || MAT.concrete);
     let grp = MAP._chunkGroups[key];
@@ -178,7 +179,8 @@ function _addChunkInstance(parent, world, cx, cy, cz, cw, ch, cd, mat, tag, noCo
     aabb._chunkGroup = grp;
     aabb._chunkIndex = grp.items.length;
     const zero = new THREE.Matrix4().makeScale(0, 0, 0);
-    grp.items.push({ aabb: aabb, mtx: zero, x: cx, y: cy + ch / 2, z: cz, w: cw, h: ch, d: cd, visible: true });
+    grp.items.push({ aabb: aabb, mtx: zero, x: cx, y: cy + ch / 2, z: cz, w: cw, h: ch, d: cd,
+      color: (mat && mat.color) ? mat.color.getHex() : 0xffffff, visible: true });
   }
   MAP.destructibles.push(aabb);
   return aabb;
@@ -203,7 +205,11 @@ function _buildChunkInstances() {
     const grp = MAP._chunkGroups[key];
     if (grp.mesh) continue;
     const geo = new THREE.BoxGeometry(1, 1, 1);   // базовая геометрия — РОВНАЯ
-    const im = new THREE.InstancedMesh(geo, grp.mat, Math.max(1, grp.items.length));
+    /* БЕЛЫЙ материал на группу: цвет куска приходит через instanceColor. */
+    const srcMat = grp.mat;
+    const imMat = srcMat.clone();
+    imMat.color = new THREE.Color(0xffffff);
+    const im = new THREE.InstancedMesh(geo, imMat, Math.max(1, grp.items.length));
     im.castShadow = !grp.noShadow;
     im.receiveShadow = true;
     im.frustumCulled = false;             // чанки размазаны по арене
@@ -212,11 +218,12 @@ function _buildChunkInstances() {
     /* МАСШТАБ ТЕКСТУРЫ ПОД РАЗМЕР КУСКА: у всех инстансов единичный куб, поэтому
        без этого текстура растягивается на длинных деталях. Передаём размер
        куска отдельным instanced-атрибутом и домножаем на него UV в шейдере. */
-    const texScale = grp.mat.userData && grp.mat.userData.scale ? grp.mat.userData.scale : 3;
+    const texScale = srcMat.userData && srcMat.userData.scale ? srcMat.userData.scale : 3;
     const aUvScale = new THREE.InstancedBufferAttribute(new Float32Array(grp.items.length * 3), 3);
     aUvScale.setUsage(THREE.DynamicDrawUsage);
     geo.setAttribute('aUvScale', aUvScale);
 
+    let anyColor = false;
     for (let i = 0; i < grp.items.length; i++) {
       const it = grp.items[i];
       // «мёртвые» (прорезанные двери) остаются с нулевым масштабом — невидимы
@@ -225,11 +232,22 @@ function _buildChunkInstances() {
       im.setMatrixAt(i, it.mtx);
       it.uvScale = [it.w, it.h, it.d];
       aUvScale.setXYZ(i, it.w, it.h, it.d);
+      if (it.color !== null && it.color !== undefined) { anyColor = true; }
+    }
+    /* instanceColor появляется ТОЛЬКО если у группы есть цветные куски; иначе
+       материал рисуется белым (как раньше), а шейдер не умножает на цвет. */
+    if (anyColor) {
+      for (let i = 0; i < grp.items.length; i++) {
+        const it = grp.items[i];
+        const c = (it.color === null || it.color === undefined) ? 0xffffff : it.color;
+        im.setColorAt(i, _tmpColor.setHex(c));
+      }
+      if (im.instanceColor) im.instanceColor.needsUpdate = true;
     }
     aUvScale.needsUpdate = true;
     im.instanceMatrix.needsUpdate = true;
 
-    /* домножаем UV по грани: определяем грань по нормали (в локальных осях). */
+    /* домножаем UV по грани + применяем цвет куска (только если есть instanceColor). */
     im.onBeforeCompile = (shader) => {
       shader.uniforms.uTexScale = { value: texScale };
       shader.vertexShader = 'attribute vec3 aUvScale;\nuniform float uTexScale;\n' + shader.vertexShader;
@@ -245,13 +263,23 @@ function _buildChunkInstances() {
            vUv *= max(vec2(1.0), floor(faceSize / uTexScale + 0.5));
          }`
       );
+      if (anyColor && shader.fragmentShader.indexOf('#include <color_fragment>') >= 0) {
+        // цвет куска приходит через instanceColor; у текстурных материалов он
+        // белый (цвет несёт сама текстура), поэтому вид остаётся прежним
+        shader.fragmentShader = shader.fragmentShader.replace(
+          '#include <color_fragment>',
+          '#include <color_fragment>'
+        );
+      }
     };
 
     grp.mesh = im;
+    grp.anyColor = anyColor;
     grp.aUvScale = aUvScale;
     grp.parent.add(im);
   }
 }
+const _tmpColor = new THREE.Color();
 
 function damageMapAt(x, y, z, radius, dmg) {
   if (!MAP.destructibles || !MAP.destructibles.length) return 0;
@@ -259,30 +287,54 @@ function damageMapAt(x, y, z, radius, dmg) {
   const r2 = radius * radius;
   /* ОПТИМИЗАЦИЯ: вместо перебора ВСЕХ разрушаемых частей (тысячи) берём
      кандидатов из пространственного грида по AABB взрыва — это в разы
-     меньше работы. Грид общий с коллизиями, поэтому части уже в нём. */
-  let list;
+     меньше работы. Грид общий с коллизиями, поэтому части уже в нём.
+     Дедупликация — меткой поколения (без массива и indexOf). */
+  const c = MAP.world && MAP.world.cell ? MAP.world.cell : 8;
+  const x0 = Math.floor((x - radius) / c), x1 = Math.floor((x + radius) / c);
+  const z0 = Math.floor((z - radius) / c), z1 = Math.floor((z + radius) / c);
   if (MAP.world && MAP.world.query) {
-    const bb = AABB(x - radius, y - radius, z - radius, x + radius, y + radius, z + radius);
-    list = MAP.world.query(bb, []);
+    const gen = (MAP.world._qgen = ((MAP.world._qgen || 0) + 1) >>> 0);
+    for (let ix = x0; ix <= x1; ix++) {
+      for (let iz = z0; iz <= z1; iz++) {
+        const arr = MAP.world.grid.get(ix + ',' + iz);
+        if (!arr) continue;
+        for (let i = 0; i < arr.length; i++) {
+          const b = MAP.world.boxes[arr[i]];
+          if (b.removed || !b.destructible || b._qgen === gen) continue;
+          b._qgen = gen;
+          // ближайшая точка бокса к центру взрыва
+          const cx = U.clamp(x, b.minX, b.maxX);
+          const cy = U.clamp(y, b.minY, b.maxY);
+          const cz = U.clamp(z, b.minZ, b.maxZ);
+          const dx = x - cx, dy = y - cy, dz = z - cz;
+          const d2 = dx * dx + dy * dy + dz * dz;
+          if (d2 > r2) continue;
+          const k = 1 - Math.sqrt(d2) / radius;
+          b.hp -= dmg * (0.4 + k * 0.6);
+          if (b.hp <= 0) {
+            MAP._lastBreak = { x: (b.minX + b.maxX) / 2, y: (b.minY + b.maxY) / 2, z: (b.minZ + b.maxZ) / 2, mat: b._mat || null };
+            removeMapChunk(b); destroyed++;
+          }
+        }
+      }
+    }
   } else {
-    list = MAP.destructibles;
-  }
-  for (let i = 0; i < list.length; i++) {
-    const b = list[i];
-    if (b.removed || !b.destructible) continue;
-    // ближайшая точка бокса к центру взрыва
-    const cx = U.clamp(x, b.minX, b.maxX);
-    const cy = U.clamp(y, b.minY, b.maxY);
-    const cz = U.clamp(z, b.minZ, b.maxZ);
-    const dx = x - cx, dy = y - cy, dz = z - cz;
-    const d2 = dx * dx + dy * dy + dz * dz;
-    if (d2 > r2) continue;
-    const k = 1 - Math.sqrt(d2) / radius;
-    b.hp -= dmg * (0.4 + k * 0.6);
-    if (b.hp <= 0) {
-      // запоминаем центр куска для пыли
-      MAP._lastBreak = { x: (b.minX + b.maxX) / 2, y: (b.minY + b.maxY) / 2, z: (b.minZ + b.maxZ) / 2, mat: b._mat || null };
-      removeMapChunk(b); destroyed++;
+    const list = MAP.destructibles;
+    for (let i = 0; i < list.length; i++) {
+      const b = list[i];
+      if (b.removed || !b.destructible) continue;
+      const cx = U.clamp(x, b.minX, b.maxX);
+      const cy = U.clamp(y, b.minY, b.maxY);
+      const cz = U.clamp(z, b.minZ, b.maxZ);
+      const dx = x - cx, dy = y - cy, dz = z - cz;
+      const d2 = dx * dx + dy * dy + dz * dz;
+      if (d2 > r2) continue;
+      const k = 1 - Math.sqrt(d2) / radius;
+      b.hp -= dmg * (0.4 + k * 0.6);
+      if (b.hp <= 0) {
+        MAP._lastBreak = { x: (b.minX + b.maxX) / 2, y: (b.minY + b.maxY) / 2, z: (b.minZ + b.maxZ) / 2, mat: b._mat || null };
+        removeMapChunk(b); destroyed++;
+      }
     }
   }
   if (destroyed) _flushChunkInstances();
@@ -353,7 +405,7 @@ function restoreMap() {
    Большие детали автоматически дробятся на ЧАНКИ (≈1.3м), чтобы разрушение
    убирало ровно ту часть, в которую попали (взрыв/зомби), а не всю стену.
    Пол и границы карты НЕ разрушаются. */
-const MAP_CHUNK = 1.7;
+const MAP_CHUNK = 1.3;
 /* НЕЛЬЗЯ разрушить только ПОЛ и ГРАНИЦЫ карты (они держат мир). Всё
    остальное — укрытия, стены, колонны, а также РАМПЫ, ПЛАТФОРМЫ, НАСТИЛЫ и
    КРЫШИ — ломается взрывом (мгновенно) или пулями/ближним боем. */
@@ -394,8 +446,8 @@ function solid(parent, world, x, y, z, w, h, d, mat, opts) {
       ys = _irregularSplits(h, target, rng);
       zs = _irregularSplits(d, target, rng);
       total = (xs.length - 1) * (ys.length - 1) * (zs.length - 1);
-      if (total <= 260) break;
-      target *= 1.5;
+      if (total <= 700) break;
+      target *= 1.35;
     }
     if (total > 1) {
       const gid = (MAP._chunkGid = (MAP._chunkGid || 0) + 1);
@@ -1294,6 +1346,8 @@ function disposeGroupDeep(g) {
   if (!g) return;
   g.traverse(o => {
     if (o.geometry) o.geometry.dispose();
+    /* у InstancedMesh материал — наша копия (клон), её тоже освобождаем */
+    if (o.isInstancedMesh && o.material && o.material.dispose) o.material.dispose();
   });
 }
 

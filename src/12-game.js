@@ -5955,7 +5955,13 @@ const Game = {
     for (let i = 0; i < pellets; i++) {
       const dir = this.spreadDirection(baseDir, spread, pellets > 1);
       pelletDirs.push(dir);
-      this.traceShot(origin, dir, def, isMelee, muzzleWorld);
+      /* МЕГА-МОЛОТ: урон и ударную волну откладываем до низшей точки замаха,
+         чтобы они совпали с анимацией удара сверху вниз. */
+      if (isMelee && def.groundSlam) {
+        this._slamPending = { origin: origin, dir: dir, def: def, muzzleWorld: muzzleWorld, t: .34 };
+      } else {
+        this.traceShot(origin, dir, def, isMelee, muzzleWorld);
+      }
     }
 
     // ---- recoil / view punch ----
@@ -7439,6 +7445,17 @@ const Game = {
        • наносит огромный урон по площади всем зомби/соперникам (slamDmg)
        • отбрасывает и сбивает с ног
      ============================================================ */
+  /* Отложенный удар мега-молота: ждём низшей точки замаха и только тогда бьём —
+     так урон/волна совпадают с анимацией (а не срабатывают в момент нажатия). */
+  updateSlamPending(dt) {
+    const s = this._slamPending;
+    if (!s) return;
+    s.t -= dt;
+    if (s.t > 0) return;
+    this._slamPending = null;
+    if (this.player && this.player.alive) this.meleeGroundSlam(s.origin, s.dir, s.def, s.muzzleWorld);
+  },
+
   meleeGroundSlam(origin, dir, def, muzzleWorld) {
     const p = this.player;
     const R = def.slamR || 9;
@@ -9186,6 +9203,9 @@ const Game = {
       this.updateTurretDrone(dt);    // companion turret auto-fire
     }
     this.updateMechBody(dt);
+    /* отложенный удар мега-молота: срабатывает в НИЗШЕЙ точке замаха,
+       поэтому урон совпадает с анимацией, а не бьёт в момент нажатия */
+    this.updateSlamPending(dt);
     /* время в мехакостюме (цель «МЕХ-МАРАФОН») и проверка мех-достижений */
     if (this.isMechActive() && this.roundState === 'live') {
       this._mechTime = (this._mechTime || 0) + dt;

@@ -380,42 +380,65 @@ const WEAPONS = {
 
 /* ============================================================
    МИНИ-ИЗОБРАЖЕНИЯ ОРУЖИЯ ДЛЯ МАГАЗИНА
-   Один offscreen-рендерер рисует каждую модель в PNG (вид «боком»), чтобы в
-   магазине было видно, что покупаешь. Результаты кэшируются по id.
+   Один offscreen-рендерер рисует каждую модель в PNG ЧИСТЫМ ВИДОМ СБОКУ
+   (ортографическая проекция, как в каталоге оружия), с автоподгонкой кадра
+   и мягким трёхточечным светом. Результаты кэшируются по id.
    ============================================================ */
 let _shopIconRenderer = null;
 const _shopIconCache = {};
+
 function shopWeaponIcon(id) {
   if (_shopIconCache[id] !== undefined) return _shopIconCache[id];
   let url = '';
   try {
+    const W = 320, H = 150;
     if (!_shopIconRenderer) {
       const cnv = document.createElement('canvas');
-      cnv.width = 160; cnv.height = 110;
+      cnv.width = W; cnv.height = H;
       const r = new THREE.WebGLRenderer({ canvas: cnv, antialias: true, alpha: true, preserveDrawingBuffer: true, powerPreference: 'low-power' });
       r.setPixelRatio(1);
-      r.setSize(160, 110, false);
+      r.setSize(W, H, false);
       r.outputColorSpace = THREE.SRGBColorSpace;
-      r._scene = new THREE.Scene();
-      r._scene.add(new THREE.HemisphereLight(0xffffff, 0x44505f, 1.6));
-      const d1 = new THREE.DirectionalLight(0xffffff, 2.3); d1.position.set(1.3, 1.7, 1.1); r._scene.add(d1);
-      const d2 = new THREE.DirectionalLight(0x9fc2ff, 1.0); d2.position.set(-1.5, .7, -.9); r._scene.add(d2);
-      r._cam = new THREE.PerspectiveCamera(32, 160 / 110, 0.01, 60);
+      const sc = new THREE.Scene();
+      /* трёхточечный свет как у каталожной съёмки: ключевой, заполняющий, контровой */
+      sc.add(new THREE.HemisphereLight(0xffffff, 0x39424d, 1.5));
+      const key = new THREE.DirectionalLight(0xffffff, 2.6); key.position.set(-1.2, 1.6, 2.4); sc.add(key);
+      const fill = new THREE.DirectionalLight(0x9fc2ff, 1.0); fill.position.set(1.6, .4, 1.2); sc.add(fill);
+      const rim = new THREE.DirectionalLight(0xffe6b0, .9); rim.position.set(.6, 1.2, -2.2); sc.add(rim);
+      r._scene = sc;
+      r._cam = new THREE.OrthographicCamera(-1, 1, 1, -1, -50, 200);
       _shopIconRenderer = r;
     }
     const r = _shopIconRenderer;
     const model = buildWeaponModel(id);
     r._scene.add(model);
+    /* автоцентр */
     const box = new THREE.Box3().setFromObject(model);
     const size = new THREE.Vector3(), ctr = new THREE.Vector3();
     box.getSize(size); box.getCenter(ctr);
     model.position.sub(ctr);
-    // вид «боком»: смотрим чуть сверху-сбоку, ствол уходит вбок — силуэт читается
-    const maxD = Math.max(size.x, size.y, size.z) || 1;
-    r._cam.position.set(maxD * .12, maxD * .75, maxD * 1.55);
-    r._cam.lookAt(0, 0, 0);
-    r._cam.updateProjectionMatrix();
-    r.render(r._scene, r._cam);
+    /* лёгкий поворот: почти профиль, самую малость — чтобы читался объём */
+    model.rotation.y = -0.06;
+
+    /* ---- кадр: вид строго сбоку через ортокамеру ----
+       смотрим с -X, поэтому ствол (модель вдоль -Z) уходит ВЛЕВО, как на фото.
+       ширина кадра = размер по Z, высота = по Y; подгоняем под пропорции PNG. */
+    const pad = 1.16;
+    const A = W / H;
+    const cw = Math.max(size.z, .2), chh = Math.max(size.y, .2);
+    let halfW, halfH;
+    if (cw / chh > A) { halfW = (cw / 2) * pad; halfH = halfW / A; }
+    else { halfH = (chh / 2) * pad; halfW = halfH * A; }
+    const cam = r._cam;
+    cam.left = -halfW; cam.right = halfW; cam.top = halfH; cam.bottom = -halfH;
+    const dist = Math.max(size.x, 1) + 20;
+    cam.position.set(-dist, 0, 0);
+    cam.up.set(0, 1, 0);
+    cam.lookAt(0, 0, 0);
+    cam.near = 0.1; cam.far = dist * 2 + 40;
+    cam.updateProjectionMatrix();
+
+    r.render(r._scene, cam);
     url = r.domElement.toDataURL('image/png');
     r._scene.remove(model);
     if (typeof disposeGroup === 'function') disposeGroup(model);

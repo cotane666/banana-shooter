@@ -410,12 +410,12 @@ html.touch #bossBar .boss-name{font-size:11px;letter-spacing:2px}
 .bcard .num{position:absolute;right:9px;top:7px;font-size:10px;color:#4d565f;background:#0c0f12;
   border:1px solid var(--line);border-radius:2px;padding:1px 5px}
 .bcard .wn{font-size:16px;font-weight:800;letter-spacing:1.2px;color:#fff}
-.bcard .wico{position:absolute;right:8px;top:22px;width:86px;height:58px;pointer-events:none;
+.bcard .wico{position:absolute;right:8px;top:26px;width:112px;height:52px;pointer-events:none;
   filter:drop-shadow(0 2px 4px rgba(0,0,0,.6))}
 .bcard .wico img{width:100%;height:100%;object-fit:contain}
-.bcard:has(.wico){padding-right:104px;min-height:74px}
-html.touch .bcard .wico{width:70px;height:46px;top:20px}
-html.touch .bcard:has(.wico){padding-right:80px;min-height:64px}
+.bcard:has(.wico){padding-right:126px;min-height:78px}
+html.touch .bcard .wico{width:88px;height:42px;top:22px}
+html.touch .bcard:has(.wico){padding-right:98px;min-height:66px}
 .bcard .wd{font-size:10.5px;color:var(--dim);letter-spacing:1.4px;margin:2px 0 9px}
 .bcard .wst{display:flex;gap:11px;font-size:11px;color:#77838f}
 .bcard .wst i{font-style:normal;color:#c3ccd4;font-weight:600}

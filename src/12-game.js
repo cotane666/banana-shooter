@@ -4461,6 +4461,8 @@ const Game = {
   explodeDrone(center) {
     const R = CFG.droneBlast, dmg = CFG.droneDmg;
     if (this.effects) this.effects.explosion(center.x, center.y, center.z, R);
+    /* взрыв дрона РАЗРУШАЕТ карту в радиусе */
+    this.breakMapAt(center.x, center.y, center.z, R * 1.05, dmg * .5);
     Audio3D_SFX.explosionAt(center.x, center.y, center.z);
     if (this.horde) {
       for (const z of this.horde.list) {
@@ -4538,7 +4540,17 @@ const Game = {
     if (hitP && hitP.t <= segLen + .5) dr.hp -= 999;
     if (dr.hp <= 0) { this.detonateDrone(true); return; }
 
-    if (wallHits.length && wallHits[0].t <= segLen + .12) { this.detonateDrone(false); return; }
+    if (wallHits.length && wallHits[0].t <= segLen + .12) {
+      /* дрон не просто разбивается о угол: он сносит разрушаемую часть, в
+         которую влетел, и подрывается. Если это неразрушимый бокс (граница) —
+         как раньше, просто детонирует. */
+      const hb = wallHits[0].box;
+      if (hb && hb.destructible && !hb.removed && typeof damageMapBox === 'function') {
+        damageMapBox(hb, hb.maxHp + 1);
+        this.breakMapAt(hb.minX + (hb.maxX - hb.minX) / 2, hb.minY + (hb.maxY - hb.minY) / 2, hb.minZ + (hb.maxZ - hb.minZ) / 2, CFG.droneBlast + .6, 1e6);
+      }
+      this.detonateDrone(false); return;
+    }
     if (ny < -2) { this.detonateDrone(false); return; }
 
     dr.pos.x = nx; dr.pos.y = ny; dr.pos.z = nz;
@@ -6455,6 +6467,8 @@ const Game = {
         }
         Audio3D_SFX.explosionAt(c.x, c.y, c.z);
         UI.center('СКАЧОК НАПРЯЖЕНИЯ', 'Ударная волна · ' + Math.round(R) + 'м', 1.6);
+        /* ударная волна РАЗРУШАЕТ карту в радиусе (мгновенно) */
+        this.breakMapAt(c.x, c.y, c.z, R * 1.02, dmg);
         /* ударная волна: отбрасываем и бьём всех зомби в радиусе */
         if (this.horde) for (const z of this.horde.list) {
           if (!z.alive || z.dying) continue;

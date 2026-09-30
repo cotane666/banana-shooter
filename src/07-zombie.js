@@ -1018,6 +1018,53 @@ class Zombie {
     this.applyVisual(dt, Math.hypot(moveX, moveZ));
   }
 
+  /* КЛИЕНТ в коопе: зомби двигает хост (позиция приходит снапшотами), но
+     локально нужно проигрывать анимацию, обрабатывать смерть и АТАКУ по
+     местному игроку — иначе зомби «замирают» и не наносят урон. */
+  remoteVisualTick(dt, player) {
+    if (this.dying) {
+      this.deadT += dt;
+      const k = U.clamp(this.deadT * this.fallSpeed, 0, 1);
+      const fall = Math.sin(k * Math.PI * .5);
+      this.group.rotation.x = -fall * Math.PI * .5 * (this.fallDir >= 0 ? 1 : -1);
+      this.group.rotation.z = fall * .35 * this.fallDir;
+      const fade = U.clamp(1 - (this.deadT - 3.2) / 1.0, 0, 1);
+      if (this.deadT > 3.0) this.group.scale.setScalar(this.scale * U.clamp(fade, .01, 1));
+      return;
+    }
+    if (!this.alive) return;
+    this.attackCd = Math.max(0, this.attackCd - dt);
+    this.staggerT = Math.max(0, this.staggerT - dt);
+    this.hitFlash = Math.max(0, this.hitFlash - dt);
+    // смотрим на игрока (визуально)
+    const toP = { x: player.pos.x - this.pos.x, y: player.pos.y - this.pos.y, z: player.pos.z - this.pos.z };
+    const distXZ = Math.hypot(toP.x, toP.z);
+    // анимация ходьбы всегда — зомби «дышат» и машут руками
+    const moveSpeed = this._netMoved ? Math.min(6, this._netMoved / Math.max(dt, .001)) : 1.2;
+    this.applyVisual(dt, moveSpeed);
+    // локальная АТАКА по местному игроку
+    const reach = this.atkRange + this.radius;
+    if (distXZ <= reach && this.attackCd <= 0 && Math.abs(toP.y) < 2.4) {
+      this.attackCd = 1.15;
+      this.attackT = .38;
+      this.pendingHit = true;
+    }
+    if (this.attackT > 0) {
+      this.attackT -= dt;
+      if (this.pendingHit && this.attackT <= .2) {
+        this.pendingHit = false;
+        const still = Math.hypot(player.pos.x - this.pos.x, player.pos.z - this.pos.z);
+        if (still <= reach + .55 && Math.abs(player.pos.y - this.pos.y) < 2.6) {
+          Bus.emit('zombieAttack', this, this.dmg);
+        }
+      }
+    }
+    if (this.growlCd !== undefined) {
+      this.growlCd -= dt;
+      if (this.growlCd <= 0) { this.growlCd = U.rand(4, 13); if (distXZ < 30) Bus.emit('zombieGrowl', this); }
+    }
+  }
+
   applyVisual(dt, moveSpeed) {
     const p = this.parts;
     const bob = moveSpeed > .1 ? moveSpeed / Math.max(this.speed, .01) : 0;
@@ -1305,7 +1352,13 @@ class Horde {
     if (farTick) this._lodAcc = 0;
     for (let i = 0; i < this.list.length; i++) {
       const z = this.list[i];
-      if (z.remoteDriven) continue;            // клиент: позиция приходит от хоста
+      if (z.remoteDriven) {
+        /* КЛИЕНТ в коопе: позицию задаёт хост (интерполяция), но анимацию,
+           обработку смерти и АТАКИ по игроку считаем локально — иначе зомби
+           «стоят без анимации» и не могут убить клиента. */
+        z.remoteVisualTick(dt, player);
+        continue;
+      }
       const dx = z.pos.x - p.x, dz = z.pos.z - p.z;
       const d2 = dx * dx + dz * dz;
       const visible = d2 <= cullD2 || z.isTarget || (z.isBoss || z.isMiniBoss);

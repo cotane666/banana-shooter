@@ -5267,9 +5267,11 @@ const Game = {
         z._netTo = { x: s.x, y: s.y, z: s.z, yw: s.yw || 0 };
         z._netT = now;
       }
-      /* ПЛАВНАЯ ИНТЕРПОЛЯЦИЯ: запоминаем предыдущую и новую позицию, клиент
-         сам «догоняет» между снапшотами — зомби больше не дёргаются. */
-      z._netFrom = { x: z.pos.x, y: z.pos.y, z: z.pos.z, yw: z.yaw };
+      /* ПЛАВНАЯ ИНТЕРПОЛЯЦИЯ: from = ПОСЛЕДНЯЯ СЕТЕВАЯ позиция (не текущая
+         интерполированная!), to = новая. Иначе зомби «еле двигаются». */
+      z._netFrom = z._netTo
+        ? { x: z._netTo.x, y: z._netTo.y, z: z._netTo.z, yw: z._netTo.yw }
+        : { x: s.x, y: s.y, z: s.z, yw: s.yw || 0 };
       z._netTo = { x: s.x, y: s.y, z: s.z, yw: s.yw || 0 };
       z._netT = now;
       /* health/maxHealth НЕ затираем напрямую: у клиента свои попадания уже
@@ -5292,16 +5294,20 @@ const Game = {
   interpRemoteZombies(dt) {
     if (!this.horde) return;
     const now = U.now();
+    const period = 1000 / (CFG.netTickHz || 22);          // интервал снапшотов (~45мс)
     for (const z of this.horde.list) {
-      if (!z.remoteDriven || !z._netTo) continue;
-      const lag = Math.min(1, (now - z._netT) / 90);      // ~90 мс межснапшотный интервал
-      const k = 1 - Math.pow(1 - lag, 2);
+      if (!z.remoteDriven || !z._netTo || !z._netFrom) continue;
+      /* догоняем ровно за интервал снапшота: from → to плавно */
+      const lag = U.clamp((now - z._netT) / period, 0, 1);
+      const k = lag * lag * (3 - 2 * lag);                 // smoothstep
+      const prevX = z.pos.x, prevZ = z.pos.z;
       z.pos.x = U.lerp(z._netFrom.x, z._netTo.x, k);
       z.pos.y = U.lerp(z._netFrom.y, z._netTo.y, k);
       z.pos.z = U.lerp(z._netFrom.z, z._netTo.z, k);
       z.yaw = U.angleLerp(z._netFrom.yw, z._netTo.yw, k);
       z.group.position.set(z.pos.x, z.pos.y, z.pos.z);
       z.group.rotation.y = z.yaw;
+      z._netMoved = Math.hypot(z.pos.x - prevX, z.pos.z - prevZ) / Math.max(dt, .001);
     }
   },
 
@@ -5520,8 +5526,14 @@ const Game = {
     const dir = this.cameraDir();
     const T = 60;
     let hit = null;
-    if (this.mode === CS.MODE.OFFLINE && this.horde) hit = this.horde.raycast(o, dir, T);
-    else if (this.mode === CS.MODE.ONLINE) hit = this.rayRemoteAny(o, dir, T);
+    /* В КООПЕ цель — ЗОМБИ, а не второй игрок: раньше автоприцел и наведение
+       в онлайне целились только по игроку, поэтому телефон стрелял в напарника
+       вместо зомби. */
+    if (this.mode === CS.MODE.OFFLINE || (this.mode === CS.MODE.ONLINE && this.isCoop)) {
+      if (this.horde) hit = this.horde.raycast(o, dir, T);
+    } else if (this.mode === CS.MODE.ONLINE) {
+      hit = this.rayRemoteAny(o, dir, T);
+    }
     let tp = null;
     if (hit && hit.point) tp = hit.point;
     else if (hit) tp = { x: o.x + dir.x * hit.t, y: o.y + dir.y * hit.t, z: o.z + dir.z * hit.t };
@@ -9284,8 +9296,8 @@ const Game = {
       this._enemyCheck = .06;
       const o = { x: p.pos.x, y: p.pos.y + eyeH, z: p.pos.z };
       const d = this.cameraDir();
-      if (this.mode === CS.MODE.OFFLINE && this.horde) {
-        const h = this.horde.raycast(o, d, 90);
+      if (this.mode === CS.MODE.OFFLINE || (this.mode === CS.MODE.ONLINE && this.isCoop)) {
+        const h = this.horde ? this.horde.raycast(o, d, 90) : null;
         this._enemyFound = !!h;
       } else if (this.mode === CS.MODE.ONLINE) {
         const h = this.rayRemoteAny(o, d, 90);

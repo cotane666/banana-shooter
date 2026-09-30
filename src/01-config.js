@@ -304,17 +304,18 @@ const WEAPONS = {
            beam: true, beamMax: 10, beamVent: 3.5, beamDps: 320, beamColor: 0xff6a2a },
 
   /* ---------------- heavy: atomic "freedom" RPG ---------------- */
-  atomicRpg: { name: 'АТОМНОЕ РПГ СВОБОДЫ', cat: 'heavy', slot: 2, price: 60000, dmg: 1300, rpm: 34, mag: 1, reserve: 20,
+  atomicRpg: { name: 'АТОМНОЕ РПГ СВОБОДЫ', cat: 'heavy', slot: 2, price: 66666, dmg: 1300, rpm: 34, mag: 1, reserve: 20,
          auto: false, spread: .006, moveSpread: .070, recoil: 7.3, falloff: .99, range: 260, headMul: 1.2,
          sound: 'awp', projectile: 'rocket', projSpeed: 52, projGravity: 3,
          splash: 14.0, splashDmg: 1200, explosionColor: [0x39ff5a, 0x0a1a0a], noSelfDamage: true, nuke: true },
 
   /* ---------------- Y.H.S: absurdly strong, absurdly fast MG ----------------
-     ВЗРЫВНЫЕ ПУЛИ: каждая пуля детонирует при попадании (AoE, радиус как у
-     снаряда РПГ). dmg — прямой урон пули, splash/splashDmg — взрыв. */
+     ВЗРЫВНЫЕ ПУЛИ: каждая пуля детонирует при попадании (AoE, радиус меньше,
+     чем у снаряда РПГ). dmg — прямой урон пули, splash/splashDmg — взрыв.
+     Взрыв НЕ наносит урон самому стрелку. */
   yhs: { name: 'Y.H.S', cat: 'heavy', slot: 2, price: 80000, dmg: 180, rpm: 5750, mag: 2000, reserve: 0,
          auto: true, spread: .030, moveSpread: .020, recoil: .35, falloff: .85, range: 140, headMul: 2.3,
-         sound: 'rifle', spinUp: .35, bulletSplash: 7.0, bulletSplashDmg: 210, bulletExplosionColor: [0xffa22a, 0x1a0d05] },
+         sound: 'rifle', spinUp: .35, bulletSplash: 4.2, bulletSplashDmg: 190, bulletExplosionColor: [0xffa22a, 0x1a0d05] },
 
   /* ---------------- guided missile launcher (player steers the rocket) ---------------- */
   rocketgun: { name: 'РАКЕТНИЦА', cat: 'heavy', slot: 2, price: 14000, dmg: 220, rpm: 30, mag: 1, reserve: 8,

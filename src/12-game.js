@@ -5836,6 +5836,13 @@ const Game = {
     beamEnd.x += dir.x * maxD; beamEnd.y += dir.y * maxD; beamEnd.z += dir.z * maxD;
     if (wallHits.length) {
       beamEnd = wallHits[0].point;
+      /* ЛАЗЕРНАЯ ПУШКА ЛОМАЕТ КАРТУ: непрерывный луч ПРОЖИГАЕТ то, во что бьёт —
+         урон зависит от времени (примерно 0.25с на обычную часть), поэтому
+         выглядит как плавление, а не мгновенное исчезновение. */
+      const wb = wallHits[0].box;
+      if (wb && wb.destructible && !wb.removed && typeof damageMapBox === 'function') {
+        damageMapBox(wb, Math.max(6, wb.maxHp * 4 * dt));
+      }
       /* Leave a fire trail where the beam hits. The strip is oriented ALONG THE
          PATH the impact point traces on the surface (not along the beam), and is
          made long enough to bridge the gap since the previous mark — so any
@@ -7505,6 +7512,11 @@ const Game = {
       if (wallHits.length) {
         beamEnd = wallHits[0].point;
         this.effects.impact(wallHits[0].point, wallHits[0].normal, 'metal');
+        /* ЛАЗЕРНАЯ ПУШКА ЛОМАЕТ КАРТУ: попадание луча разрушает деталь */
+        const wb = wallHits[0].box;
+        if (wb && wb.destructible && !wb.removed && typeof damageMapBox === 'function') {
+          damageMapBox(wb, Math.max(12, wb.maxHp / 2));
+        }
       }
       p.bulletsHit++;
       // a proper laser beam (bright green core + glow) from muzzle to impact
@@ -7692,10 +7704,8 @@ const Game = {
     if (this.mode === CS.MODE.ONLINE && Net.connected) {
       Net.send({ t: 'boom', from: Net.selfId(), x: +center.x.toFixed(2), y: +center.y.toFixed(2), z: +center.z.toFixed(2), r: R, c: col });
     }
-    // лёгкая отдача по себе, если стрелял в упор (не в ноль, чтобы не мешало)
-    const p = this.player;
-    const ds = Math.hypot(p.pos.x - center.x, (p.pos.y + 1) - center.y, p.pos.z - center.z);
-    if (ds <= R * .55) this.applyDamageToSelf(dmg * (1 - ds / (R * .55)) * .12, center);
+    /* Взрыв НЕ наносит урон стрелку — как и просили. (Раньше тут была лёгкая
+       отдача по себе в упор.) */
   },
 
   /* Разрушение карты взрывом + ПЫЛЬ/ЧАСТИЦЫ. ЛЮБОЙ взрыв ломает блоки

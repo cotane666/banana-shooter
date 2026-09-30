@@ -360,6 +360,8 @@ function removeMapChunk(b) {
     it.mtx.copy(ZERO_M4);
     b._chunkGroup.dirty = true;             // обновляем ТОЛЬКО затронутую группу
   } else if (b.mesh) b.mesh.visible = false;
+  /* привязанные меши (бочка поверх кирпичной «сердцевины») тоже прячем */
+  if (b.link) for (let i = 0; i < b.link.length; i++) if (b.link[i]) b.link[i].visible = false;
   if (MAP.world) MAP.world.removeBox(b);
 }
 
@@ -394,6 +396,7 @@ function restoreMap() {
       it.mtx.makeScale(it.w, it.h, it.d).setPosition(it.x, it.y, it.z);
       b._chunkGroup.dirty = true;
     } else if (b.mesh) b.mesh.visible = true;
+    if (b.link) for (let i = 0; i < b.link.length; i++) if (b.link[i]) b.link[i].visible = true;
     if (MAP.world) MAP.world.restoreBox(b);
     n++;
   }
@@ -603,7 +606,7 @@ function mapPerimeter(parent, world, mat) {
 /* Cut a doorway through a wall by splitting it into two segments + lintel.
    Работает и когда стена уже раздроблена на чанки: удаляем все боксы, чьи
    центры попадают в прямоугольник стены, затем строим сегменты двери. */
-function doorwayCut(parent, world, x, z, axis, len, h, thick) {
+function doorwayCut(parent, world, x, z, axis, len, h, thick, mat) {
   const halfLen = len / 2 + 0.01, halfThick = thick / 2 + 0.01;
   /* Берём ТОЛЬКО стены (tag 'wall') внутри прямоугольника проёма и не выше
      самой стены. Раньше проверка высоты пропускала бокс ПОЛА (он ниже нуля),
@@ -613,16 +616,25 @@ function doorwayCut(parent, world, x, z, axis, len, h, thick) {
   const inRect = (b) => {
     if (b.tag !== 'wall') return false;
     const bcx = (b.minX + b.maxX) / 2, bcz = (b.minZ + b.maxZ) / 2;
-    if (Math.abs(bcx - x) > halfLen) return false;
-    if (Math.abs(bcz - z) > halfThick) return false;
+    const dx = Math.abs(bcx - x), dz = Math.abs(bcz - z);
+    /* ОСЬ ВАЖНА: у стены, идущей ВДОЛЬ Z (axis 'z'), длина меряется по Z, а
+       толщина — по X. Раньше длина/толщина применялись к фиксированным осям,
+       из-за чего удалялся лишь кусок у центра, а остальная стена оставалась —
+       дверные сегменты ложились поверх неё (двойная геометрия → мерцание). */
+    if (axis === 'z') { if (dz > halfLen || dx > halfThick) return false; }
+    else { if (dx > halfLen || dz > halfThick) return false; }
     if (b.minY < -0.1 || b.maxY > h + 0.1) return false;   // только тело стены
     return true;
   };
   let removedAny = false;
+  let detectedMat = null;
   for (let i = world.boxes.length - 1; i >= 0; i--) {
     const b = world.boxes[i];
     if (!inRect(b)) continue;
     removedAny = true;
+    /* материал стены берём У НЕЁ САМОЙ, чтобы дверные сегменты не «перекрашивали»
+       металлическую/бетонную стену в кирпич (это давало наложение и мерцание). */
+    if (!detectedMat) detectedMat = (b._mat || (b.mesh && b.mesh.material)) || null;
     if (b.mesh) { parent.remove(b.mesh); if (b.mesh.geometry) b.mesh.geometry.dispose(); }
     _killChunkInstance(b);                 // невидимым — иначе дверь «зарастает»
     world.boxes.splice(i, 1);
@@ -635,7 +647,7 @@ function doorwayCut(parent, world, x, z, axis, len, h, thick) {
   const gap = 4.2;
   const seg = (len - gap) / 2;
   const y = 0;
-  const wallMat = MAT.brick;
+  const wallMat = mat || detectedMat || MAT.brick;
   if (axis === 'z') {
     solid(parent, world, x, y, z - (gap / 2 + seg / 2), thick, h, seg, wallMat, { tag: 'wall' });
     solid(parent, world, x, y, z + (gap / 2 + seg / 2), thick, h, seg, wallMat, { tag: 'wall' });
@@ -722,8 +734,13 @@ function buildTower(parent, world, x, z) {
   makeRamp(parent, world, x, z + legOff + 2.2, 3, legH + .7, 'north');
 }
 
-/* ---------------- barrel mesh ---------------- */
+/* ---------------- barrel mesh ----------------
+   Бочка — разрушаемая деталь. Коллайдер идёт через solid() (с кирпичной
+   текстурой), а сверху накладывается металлическая «бочка». Чтобы разрушение
+   ВИДНО было и по бочке, её меши привязываются к коллайдеру (b.link): при
+   поломке прячется и он. */
 function barrelMesh(parent, world, x, z) {
+  const box = solid(parent, world, x, 0, z, .96, 1.15, .96, MAT.brick, { tag: 'cover', noShadow: true });
   const g = new THREE.CylinderGeometry(.48, .48, 1.15, 12);
   const m = new THREE.Mesh(g, MAT.metal);
   m.position.set(x, .575, z);
@@ -732,7 +749,7 @@ function barrelMesh(parent, world, x, z) {
   const ring = new THREE.Mesh(new THREE.CylinderGeometry(.51, .51, .12, 12), MAT.dark);
   ring.position.set(x, .82, z); parent.add(ring);
   const ring2 = ring.clone(); ring2.position.y = .32; parent.add(ring2);
-  world.addBox(AABB(x - .48, 0, z - .48, x + .48, 1.15, z + .48, 'cover'));
+  if (box) box.link = [m, ring, ring2];
   return m;
 }
 
@@ -1075,8 +1092,9 @@ function buildMapCity(parent, world) {
       const w = B - 5 + Math.abs(gx), d = B - 5 + Math.abs(gz);
       const h = 6 + ((gx + gz + 4) % 3) * 2.4;
       buildBuilding(parent, world, cx, cz, w, d, h, (gx === 1 && gz === 1) ? 'A' : (gx === -1 && gz === -1) ? 'B' : null);
-      // rooftop parapet bits to break silhouettes
-      solid(parent, world, cx, h, cz, w + 1, .5, .6, MAT.dark, { tag: 'cover' });
+      // rooftop parapet bits to break silhouettes (СВЕРХУ крыши, чтобы не
+      // совпадать с ней в одной плоскости — иначе мерцание при повороте)
+      solid(parent, world, cx, h + .5, cz, w + 1, .5, .6, MAT.dark, { tag: 'cover' });
     }
   }
   // avenue cover: cars (low metal boxes), planters and a bus wreck

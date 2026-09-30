@@ -8740,6 +8740,8 @@ class Player {
     this.lastStep = 0;
     this.bobPhase = 0;
     this.landImpact = 0;
+    /* маховая анимация ближнего боя (обновляется в Game.cameraUpdate) */
+    this.swingT = 0; this.swingMax = .28; this.swingKind = 'knife'; this.swingSide = 1; this._swingFlip = false;
 
     // ---- input (local only) ----
     this.in = { f: 0, r: 0, jump: false, run: false, crouch: false, wantJump: false };
@@ -20624,6 +20626,16 @@ const Game = {
       }
     } else {
       Audio3D_SFX.shot('knife');
+      /* МАХОВАЯ АНИМАЦИЯ: у ближнего боя запускаем замах — viewmodel делает
+         широкую дугу (как мечом), а не просто «тык» вперёд. Длительность
+         зависит от оружия: тяжёлое машет медленнее и шире. */
+      const def2 = p.def || {};
+      const w2 = (def2.melee || 'knife');
+      p.swingT = (w2 === 'katana') ? .26 : (w2 === 'fists') ? .20 : (w2 === 'hammer' || w2 === 'axe') ? .40
+        : (w2 === 'chainsaw') ? .16 : (w2 === 'machete') ? .32 : .28;
+      p.swingMax = p.swingT;
+      p.swingKind = w2;
+      p.swingSide = (p._swingFlip = !p._swingFlip) ? 1 : -1;   // чередуем сторону удара
     }
     return true;                     // a shot was actually fired
   },
@@ -23821,6 +23833,7 @@ const Game = {
     const bobY = Math.abs(Math.sin(p.bobPhase * Math.PI * 2)) * -.030 * spd;
     const land = p.landImpact;
     p.landImpact = U.lerp(p.landImpact, 0, 1 - Math.pow(0.00001, dt));
+    if (p.swingT > 0) p.swingT = Math.max(0, p.swingT - dt);
 
     const fov = this.baseFov / (1 + (p.zoom || 0) * (p.def.zoom ? (p.def.zoom - 1) : 0));
     if (Math.abs(this.camera.fov - fov) > .01) { this.camera.fov = fov; this.camera.updateProjectionMatrix(); }
@@ -23866,6 +23879,34 @@ const Game = {
         -recoilYaw * 4.5 - runK * .3,
         -reloadK * .55 + runK * .18
       );
+      /* ---- МАХ БЛИЖНЕГО БОЯ ----
+         Пока идёт замах, viewmodel проигрывает широкую дугу: заносится вбок и
+         вверх, затем резко проносится через центр и «доводится» вниз. Это и
+         даёт ощущение взмаха мечом вместо прямого тычка. */
+      if (p.swingT > 0) {
+        const k = 1 - p.swingT / (p.swingMax || .28);        // 0 → 1 за замах
+        const side = p.swingSide || 1;
+        const kind = p.swingKind || 'knife';
+        // кривая: быстро вверх-назад (0..0.35), резкий пронос (0.35..0.75), возврат
+        const windUp = U.clamp(k / .35, 0, 1);
+        const slash = U.clamp((k - .35) / .40, 0, 1);
+        const follow = U.clamp((k - .75) / .25, 0, 1);
+        const wind = Math.sin(windUp * Math.PI * .5);         // 0→1 плавно
+        const slashE = 1 - Math.pow(1 - slash, 3);            // ease-out проноса
+        // боковой замах: уводим вправо/влево и назад
+        const wide = (kind === 'hammer' || kind === 'axe') ? .9 : kind === 'katana' ? .8 : kind === 'fists' ? .5 : .7;
+        vm.rotation.y += -side * wide * (wind * .9 - slashE * 1.5 + follow * .3);
+        vm.rotation.z += side * wide * (wind * .55 - slashE * 1.1 + follow * .2);
+        vm.rotation.x += (wind * .5 - slashE * 1.15 + follow * .25);
+        // и заносим вбок/вниз по позиции — замах «от плеча»
+        vm.position.x += side * wide * .10 * (wind * .6 - slashE * 1.0);
+        vm.position.y += (wind * .08 - slashE * .16 + follow * .04);
+        vm.position.z += (wind * .05 - slashE * .12);
+        // тяжёлое оружие покачивает камеру на проносе
+        if ((kind === 'hammer' || kind === 'axe') && slash > 0 && slash < 1) {
+          this.camera.rotation.z += side * .05 * Math.sin(slash * Math.PI);
+        }
+      }
       if (p.flashT <= 0 && p.flashMesh) p.flashMesh.material.opacity = 0;
       if (p.flashT <= 0 && p.flashLight) p.flashLight.intensity = 0;
     }

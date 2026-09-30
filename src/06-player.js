@@ -3144,6 +3144,8 @@ class Player {
     this.lastStep = 0;
     this.bobPhase = 0;
     this.landImpact = 0;
+    /* маховая анимация ближнего боя (обновляется в Game.cameraUpdate) */
+    this.swingT = 0; this.swingMax = .28; this.swingKind = 'knife'; this.swingSide = 1; this._swingFlip = false;
 
     // ---- input (local only) ----
     this.in = { f: 0, r: 0, jump: false, run: false, crouch: false, wantJump: false };

@@ -770,14 +770,18 @@ html.touch #centerMsg{font-size:clamp(17px,5vw,28px);letter-spacing:3px}
 html.touch #centerMsg small{font-size:11px;letter-spacing:2px}
 html.touch #fps{font-size:9px;right:4px;bottom:2px}
 
-/* panels need to be usable with a thumb */
-html.touch .panel{padding:15px 14px;width:min(96vw,620px);border-top-width:2px}
 /* На телефоне прокручивается ВСЯ площадь экрана, а не только сама панель,
    поэтому свайп работает и по тёмным полям по краям (раньше там была
-   «мёртвая зона» и приходилось попадать пальцем точно в панель). */
-html.touch .screen{display:block;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;
-  padding:calc(12px + env(safe-area-inset-top,0px)) 0 calc(22px + env(safe-area-inset-bottom,0px))}
-html.touch .screen>.panel{margin:0 auto;max-height:none;overflow:visible}
+   «мёртвая зона» и приходилось попадать пальцем точно в панель).
+   Ставим это БЕЗ html.touch: даже если определение тач-устройства ошиблось,
+   прокрутка всё равно должна работать. Тёмные зоны появляются только когда
+   панель реально не влезает в экран, поэтому на ПК правило безвредно. */
+.screen{display:block;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;touch-action:pan-y;
+  padding:calc(12px + env(safe-area-inset-top,0px)) 10px calc(22px + env(safe-area-inset-bottom,0px))}
+.screen>.panel{margin:0 auto;max-height:none;overflow:visible}
+/* магазин использует свою обёртку вместо .panel — тоже центрируем */
+#buy>.buy-wrap{margin:0 auto}
+html.touch .panel{padding:15px 14px;width:min(96vw,620px);border-top-width:2px}
 html.touch .panel h2{font-size:15px;letter-spacing:2px;margin-bottom:11px}
 html.touch .mbtn{padding:11px 13px;margin-bottom:8px}
 html.touch .mbtn b{font-size:14px}
@@ -1641,7 +1645,7 @@ const CFG = {
   medkitFieldInterval: 20,  // seconds between field medkit drops (offline)
   medkitFieldMax: 2,        // at most this many field medkits on the map
   medkitFieldLife: 90,      // a field medkit vanishes after this long
-  moneyCap: 100000,     // most money a player can hold (prices go up to 80000)
+  moneyCap: 150000,     // most money a player can hold (мехакостюм стоит 120 000)
   droneSpeed: 15,       // m/s cruise for the guided drone
   droneBoost: 1.7,      // speed multiplier while boosting (Shift)
   droneLife: 26,        // seconds before the drone runs out of fuel
@@ -1987,7 +1991,7 @@ const GEAR = {
   medkitBox:    { name: 'ЯЩИК АПТЕЧЕК',   price: 10000, medkitBox: true, desc: 'Навсегда снимает лимит на аптечки' },
   drone:        { name: 'ДРОН-КАМИКАДЗЕ', price: 10000, drone: true, desc: 'Управляемый · F — запуск, враг может сбить' },
   turretGear:   { name: 'ДРОН-ТУРЕЛЬ',    price: 12000, turretGear: true, desc: 'V — вылетает и стреляет сам' },
-  mechSuit:     { name: 'МЕХАКОСТЮМ',      price: 30000, mechSuit: true, desc: 'Мех-миниган (6 стволов) + гипер-лазер · 1/2 — переключить' },
+  mechSuit:     { name: 'МЕХАКОСТЮМ',      price: 120000, mechSuit: true, desc: 'Мех-миниган (6 стволов) + гипер-лазер · 1/2 — переключить' },
   frag:         { name: 'ГРАНАТА',         price: 100,  grenade: 'frag',   desc: 'Осколочная · G — бросок' },
   freezeNade:   { name: 'КРИО-ГРАНАТА',    price: 120,  grenade: 'freeze', desc: 'Замораживает зомби в области' },
   napalmNade:   { name: 'НАПАЛМ',          price: 150,  grenade: 'napalm', desc: 'Оставляет горящую лужу' },
@@ -24108,12 +24112,14 @@ const ACCOUNT = {
     else h['Authorization'] = 'Bearer ' + this.cfg.anonKey;
     return h;
   },
-  async _req(method, path, body, authToken) {
+  async _req(method, path, body, authToken, extraHeaders) {
     if (!this.configured()) throw new Error('Облако не настроено');
     const url = this.cfg.url.replace(/\/+$/, '') + path;
+    const headers = this.headers(authToken);
+    if (extraHeaders) Object.assign(headers, extraHeaders);
     const res = await fetch(url, {
       method,
-      headers: this.headers(authToken),
+      headers: headers,
       body: body ? JSON.stringify(body) : undefined
     });
     let data = null;
@@ -24199,7 +24205,15 @@ const ACCOUNT = {
     if (!this.session || !this.user) return false;
     await this.ensureFresh();
     const row = { user_id: this.user.id, data: this.progressSubset(), updated_at: new Date().toISOString() };
-    await this._req('POST', '/rest/v1/player_saves', row, this.session.access_token);
+    // UPSERT: строка на пользователя одна, при повторной записи она обновляется.
+    // Без этого второй push падал с duplicate key (user_id — первичный ключ).
+    await this._req(
+      'POST',
+      '/rest/v1/player_saves?on_conflict=user_id',
+      row,
+      this.session.access_token,
+      { 'Prefer': 'resolution=merge-duplicates,return=minimal' }
+    );
     return true;
   },
   async pull() {

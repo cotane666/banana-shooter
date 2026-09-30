@@ -755,14 +755,18 @@ html.touch #centerMsg{font-size:clamp(17px,5vw,28px);letter-spacing:3px}
 html.touch #centerMsg small{font-size:11px;letter-spacing:2px}
 html.touch #fps{font-size:9px;right:4px;bottom:2px}
 
-/* panels need to be usable with a thumb */
-html.touch .panel{padding:15px 14px;width:min(96vw,620px);border-top-width:2px}
 /* На телефоне прокручивается ВСЯ площадь экрана, а не только сама панель,
    поэтому свайп работает и по тёмным полям по краям (раньше там была
-   «мёртвая зона» и приходилось попадать пальцем точно в панель). */
-html.touch .screen{display:block;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;
-  padding:calc(12px + env(safe-area-inset-top,0px)) 0 calc(22px + env(safe-area-inset-bottom,0px))}
-html.touch .screen>.panel{margin:0 auto;max-height:none;overflow:visible}
+   «мёртвая зона» и приходилось попадать пальцем точно в панель).
+   Ставим это БЕЗ html.touch: даже если определение тач-устройства ошиблось,
+   прокрутка всё равно должна работать. Тёмные зоны появляются только когда
+   панель реально не влезает в экран, поэтому на ПК правило безвредно. */
+.screen{display:block;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;touch-action:pan-y;
+  padding:calc(12px + env(safe-area-inset-top,0px)) 10px calc(22px + env(safe-area-inset-bottom,0px))}
+.screen>.panel{margin:0 auto;max-height:none;overflow:visible}
+/* магазин использует свою обёртку вместо .panel — тоже центрируем */
+#buy>.buy-wrap{margin:0 auto}
+html.touch .panel{padding:15px 14px;width:min(96vw,620px);border-top-width:2px}
 html.touch .panel h2{font-size:15px;letter-spacing:2px;margin-bottom:11px}
 html.touch .mbtn{padding:11px 13px;margin-bottom:8px}
 html.touch .mbtn b{font-size:14px}

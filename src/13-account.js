@@ -78,12 +78,14 @@ const ACCOUNT = {
     else h['Authorization'] = 'Bearer ' + this.cfg.anonKey;
     return h;
   },
-  async _req(method, path, body, authToken) {
+  async _req(method, path, body, authToken, extraHeaders) {
     if (!this.configured()) throw new Error('Облако не настроено');
     const url = this.cfg.url.replace(/\/+$/, '') + path;
+    const headers = this.headers(authToken);
+    if (extraHeaders) Object.assign(headers, extraHeaders);
     const res = await fetch(url, {
       method,
-      headers: this.headers(authToken),
+      headers: headers,
       body: body ? JSON.stringify(body) : undefined
     });
     let data = null;
@@ -169,7 +171,15 @@ const ACCOUNT = {
     if (!this.session || !this.user) return false;
     await this.ensureFresh();
     const row = { user_id: this.user.id, data: this.progressSubset(), updated_at: new Date().toISOString() };
-    await this._req('POST', '/rest/v1/player_saves', row, this.session.access_token);
+    // UPSERT: строка на пользователя одна, при повторной записи она обновляется.
+    // Без этого второй push падал с duplicate key (user_id — первичный ключ).
+    await this._req(
+      'POST',
+      '/rest/v1/player_saves?on_conflict=user_id',
+      row,
+      this.session.access_token,
+      { 'Prefer': 'resolution=merge-duplicates,return=minimal' }
+    );
     return true;
   },
   async pull() {

@@ -228,7 +228,7 @@ const WEAPONS = {
   knightsword: { name: 'МЕЧ РОКОЧУЩЕГО РЫЦАРЯ', cat: 'melee', slot: 3, price: 30000, dmg: 260, rpm: 96, mag: Infinity, reserve: 0,
            auto: true, spread: 0, moveSpread: 0, recoil: 2.2, falloff: 1, range: 3.4, headMul: 2.2, sound: 'knife',
            melee: 'knightsword', knockback: 10,
-           ult: true, ultCd: 9, ultR: 12, ultDmg: 4200, ultBreakR: 11 },
+           ult: true, ultCd: 9, ultR: 12, ultDmg: 4200, ultBreakR: 11, ultBreakDelay: 2.4 },
 
   /* ---------------- МЕГА-МОЛОТ (уникальное оружие ближнего боя) ----------------
      Огромный молот бьёт СВЕРХУ ВНИЗ: в точке удара поднимается ударная волна,

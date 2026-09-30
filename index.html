@@ -1802,7 +1802,7 @@ const WEAPONS = {
   knightsword: { name: 'МЕЧ РОКОЧУЩЕГО РЫЦАРЯ', cat: 'melee', slot: 3, price: 30000, dmg: 260, rpm: 96, mag: Infinity, reserve: 0,
            auto: true, spread: 0, moveSpread: 0, recoil: 2.2, falloff: 1, range: 3.4, headMul: 2.2, sound: 'knife',
            melee: 'knightsword', knockback: 10,
-           ult: true, ultCd: 9, ultR: 12, ultDmg: 4200, ultBreakR: 11 },
+           ult: true, ultCd: 9, ultR: 12, ultDmg: 4200, ultBreakR: 11, ultBreakDelay: 2.4 },
 
   /* ---------------- МЕГА-МОЛОТ (уникальное оружие ближнего боя) ----------------
      Огромный молот бьёт СВЕРХУ ВНИЗ: в точке удара поднимается ударная волна,
@@ -23227,11 +23227,29 @@ const Game = {
      так урон/волна совпадают с анимацией (а не срабатывают в момент нажатия). */
   updateSlamPending(dt) {
     const s = this._slamPending;
-    if (!s) return;
-    s.t -= dt;
-    if (s.t > 0) return;
-    this._slamPending = null;
-    if (this.player && this.player.alive) this.meleeGroundSlam(s.origin, s.dir, s.def, s.muzzleWorld);
+    if (s) {
+      s.t -= dt;
+      if (s.t <= 0) {
+        this._slamPending = null;
+        if (this.player && this.player.alive) this.meleeGroundSlam(s.origin, s.dir, s.def, s.muzzleWorld);
+      }
+    }
+    /* ОТЛОЖЕННОЕ РАЗРУШЕНИЕ ульты рыцаря: карта ломается ровно в момент, когда
+       начинается вторая (стеклянная) часть рёва рыцаря. */
+    const b = this._knightUltBreak;
+    if (b) {
+      b.t -= dt;
+      if (b.t <= 0) {
+        this._knightUltBreak = null;
+        for (let i = 0; i < b.fxs.length; i++) {
+          const f = b.fxs[i];
+          this.breakMapAt(f.x, f.y, f.z, f.r, b.dmg * 3);
+        }
+        // белая вспышка-разрез ещё раз, синхронно с «кристаллами»
+        if (this.effects && this.effects.knightSlashFx) this.effects.knightSlashFx(b.origin, b.fx, b.fz, b.reach, b.breakR * 1.1);
+        if (typeof UI !== 'undefined' && UI.knightUltStart) UI.knightUltStart((Math.random() * 9999) | 0);
+      }
+    }
   },
 
   /* ============================================================
@@ -23275,14 +23293,19 @@ const Game = {
     const reach = (def.range || 3) + R * 2.2;
     const halfW = R * .9;                            // полудлина луча разреза
 
-    // разрушаем карту вдоль полосы (несколько точек) + большой разрез у игрока
-    this.breakMapAt(origin.x + fx * reach * .5, origin.y, origin.z + fz * reach * .5, breakR, dmg * 2);
+    /* РАЗРУШЕНИЕ БЛОКОВ — ОТЛОЖЕННО: только когда начнётся вторая (стеклянно-
+       кристальная) часть рёва рыцаря, т.е. через `ultBreakDelay` секунд. */
+    const breakDelay = def.ultBreakDelay !== undefined ? def.ultBreakDelay : 2.4;
+    this._knightUltBreak = {
+      t: breakDelay, fxs: [], dmg: dmg, breakR: breakR, origin: origin, fx: fx, fz: fz, reach: reach
+    };
+    // точки полосы, где ломать карту в момент удара
     for (let s = 0; s < 6; s++) {
       const t = (s / 5) * reach;
-      this.breakMapAt(origin.x + fx * t, origin.y, origin.z + fz * t, breakR * .7, dmg);
+      this._knightUltBreak.fxs.push({ x: origin.x + fx * t, y: origin.y, z: origin.z + fz * t, r: s === 2 ? breakR : breakR * .7 });
     }
 
-    // урон по зомби: все, кто попал в полосу разреза
+    // урон по зомби: все, кто попал в полосу разреза (наносится СРАЗУ)
     let hits = 0;
     if (this.horde) {
       for (const z of this.horde.list) {

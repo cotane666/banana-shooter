@@ -159,10 +159,21 @@ function _addChunkInstance(parent, world, cx, cy, cz, cw, ch, cd, mat, tag, noCo
   return aabb;
 }
 
+/* пометить инстанс чанка «мёртвым»: масштаб 0, чтобы он не рисовался.
+   Нужно для doorwayCut — прорезанные двери не должны «зарастать» кирпичом. */
+function _killChunkInstance(b) {
+  if (!b || !b._chunkGroup) return;
+  const it = b._chunkGroup.items[b._chunkIndex];
+  if (!it) return;
+  it.dead = true; it.visible = false;
+  it.mtx.makeScale(0, 0, 0);
+  const im = b._chunkGroup.mesh;
+  if (im) { im.setMatrixAt(b._chunkIndex, it.mtx); im.instanceMatrix.needsUpdate = true; }
+}
+
 /* собрать все инстанс-группы в реальные InstancedMesh (один раз после постройки) */
 function _buildChunkInstances() {
   if (!MAP._chunkGroups) return;
-  const tmp = new THREE.Matrix4();
   for (const key in MAP._chunkGroups) {
     const grp = MAP._chunkGroups[key];
     if (grp.mesh) continue;
@@ -174,7 +185,9 @@ function _buildChunkInstances() {
     im.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     for (let i = 0; i < grp.items.length; i++) {
       const it = grp.items[i];
-      it.mtx.makeScale(it.w, it.h, it.d).setPosition(it.x, it.y, it.z);
+      // «мёртвые» (прорезанные двери) остаются с нулевым масштабом — невидимы
+      if (it.dead) { it.mtx.makeScale(0, 0, 0); }
+      else { it.mtx.makeScale(it.w, it.h, it.d).setPosition(it.x, it.y, it.z); }
       im.setMatrixAt(i, it.mtx);
     }
     im.instanceMatrix.needsUpdate = true;
@@ -436,6 +449,7 @@ function doorwayCut(parent, world, x, z, axis, len, h, thick) {
     if (!inRect(b)) continue;
     removedAny = true;
     if (b.mesh) { parent.remove(b.mesh); if (b.mesh.geometry) b.mesh.geometry.dispose(); }
+    _killChunkInstance(b);                 // невидимым — иначе дверь «зарастает»
     world.boxes.splice(i, 1);
     const di = MAP.destructibles.indexOf(b); if (di >= 0) MAP.destructibles.splice(di, 1);
   }

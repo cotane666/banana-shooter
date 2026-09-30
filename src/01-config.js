@@ -485,13 +485,15 @@ function weatherName(k) {
 function offlineModeKey(modeId, horde, free, custom) {
   if (custom) return 'custom';
   if (modeId === 'bossrush' || modeId === 'daily' || modeId === 'endless') return modeId;
+  if (modeId === 'coop') return 'coop';
   if (free) return 'freehorde';
   if (horde) return 'horde';
   return 'normal';
 }
 function offlineModeLabel(key) {
   return ({ normal: 'ОБЫЧНЫЙ', horde: 'ОРДА ×10', freehorde: 'БЕСПЛАТНАЯ ОРДА',
-    custom: 'СВОЙ', bossrush: 'БОСС-РАШ', daily: 'ИСПЫТАНИЕ ДНЯ', endless: 'БЕСКОНЕЧНЫЙ' })[key] || key;
+    custom: 'СВОЙ', bossrush: 'БОСС-РАШ', daily: 'ИСПЫТАНИЕ ДНЯ', endless: 'БЕСКОНЕЧНЫЙ',
+    coop: 'КООП' })[key] || key;
 }
 
 const BUY_CATS = [

@@ -9010,6 +9010,9 @@ const Game = {
      ============================================================ */
   /* which slot the current run belongs to (falls back to the menu selection) */
   checkpointKey() {
+    /* ОНЛАЙН-КООП пишется в СВОЙ слот ('coop'), чтобы не путать прогресс с
+       оффлайн-забегами. */
+    if (this.mode === CS.MODE.ONLINE && this.isCoop) return 'coop';
     if (this.mode === CS.MODE.OFFLINE || this.customOffline || this.hordeMode || this.isBossRush || this.isEndless || this.isDaily) {
       return offlineModeKey(this.specialMode, this.hordeMode, this.freePlay, this.customOffline);
     }

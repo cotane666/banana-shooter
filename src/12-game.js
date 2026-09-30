@@ -2926,7 +2926,8 @@ const Game = {
     const d = dirTo(from, aim);
     const speed = def.shootSpeed || 24;
     const plasma = def.shoot === 'plasma';
-    const mesh = plasma ? buildPlasmaBolt() : buildAcidBlob();
+    const isFrost = def.shoot === 'frost';
+    const mesh = plasma ? buildPlasmaBolt() : isFrost ? buildFrostBolt() : buildAcidBlob();
     mesh.position.set(from.x, from.y, from.z);
     this.scene.add(mesh);
     this.enemyShots.push({
@@ -2938,6 +2939,7 @@ const Game = {
       headMul: def.headMul || 1.6
     });
     if (plasma) Audio3D_SFX.shot('laser', from.x, from.y, from.z);
+    else if (isFrost) Audio3D_SFX.shot('smg', from.x, from.y, from.z);
     else Audio3D_SFX.shot('banana', from.x, from.y, from.z);
     this.effects.muzzleSmoke(from.x, from.y, from.z, d.dir);
     if (this.enemyShots.length > 40) {
@@ -2981,6 +2983,7 @@ const Game = {
         : (wall ? wall.point : null);
       if (impact) {
         if (pr.kind === 'plasma') this.effects.laser(pr.pos, impact);
+        else if (pr.kind === 'frost') { this.effects.frostBurst(impact.x, impact.y, impact.z, 1.6); }
         else { this.effects.bananaSplat(impact.x, impact.y, impact.z); }
         if (hitP && p.alive) this.damageFromDummy(pr.dmg, impact, null);
         this.removeEnemyShot(i);

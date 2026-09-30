@@ -2326,6 +2326,33 @@ function buildPlasmaBolt() {
   return g;
 }
 
+/* КРИОМАНТ: ледяной снаряд — белое ядро в голубом ореоле со снежной крошкой.
+   Чистые белый + голубой, как снег со льдом. */
+function buildFrostBolt() {
+  const g = new THREE.Group();
+  // белое ядро-лёд (слегка светится)
+  const core = new THREE.Mesh(new THREE.OctahedronGeometry(.12, 0),
+    new THREE.MeshBasicMaterial({ color: 0xffffff }));
+  g.add(core);
+  // голубой ореол
+  const halo = new THREE.Mesh(new THREE.SphereGeometry(.20, 10, 8),
+    new THREE.MeshBasicMaterial({ color: 0x9fe8ff, transparent: true, opacity: .5, blending: THREE.AdditiveBlending, depthWrite: false }));
+  g.add(halo);
+  // голубой хвост-шлейф
+  const tail = new THREE.Mesh(new THREE.ConeGeometry(.075, .34, 8),
+    new THREE.MeshBasicMaterial({ color: 0x8fdcff, transparent: true, opacity: .42, blending: THREE.AdditiveBlending, depthWrite: false }));
+  tail.rotation.x = Math.PI / 2; tail.position.z = .24; g.add(tail);
+  // снежная крошка: несколько мелких белых искр вокруг
+  for (let i = 0; i < 5; i++) {
+    const a = (i / 5) * Math.PI * 2;
+    const bit = new THREE.Mesh(new THREE.SphereGeometry(.035, 6, 5),
+      new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: .8 }));
+    bit.position.set(Math.cos(a) * .16, Math.sin(a) * .16, -.02);
+    g.add(bit);
+  }
+  return g;
+}
+
 /* A mech chassis shell the player sits inside (visible around the camera).
    Blue armoured dreadnought body: shoulder blocks, cockpit hatch, arms with the
    minigun and the laser pod, and two heavy legs. Built around the origin with

@@ -7937,26 +7937,65 @@ function buildWeaponModel(id) {
       add(B(.034, .014, .10, 0x2b2f34, 0, .01, .06));                 // tape grip
       break;
     }
-    /* ---------------- МЕГА-МОЛОТ: огромный молот, бьёт сверху вниз ---------------- */
+    /* ---------------- МЕГА-МОЛОТ: как на образце — тёмная рукоять с обмоткой,
+       круглый герб по центру и два раскалённых красных лезвия по бокам ---- */
     case 'megahammer': {
-      const wood = 0x4a3018, steelC = 0x6a7076, darkC = 0x2b2f34, goldC = 0xc8942a;
-      add(CYL(.030, .80, wood, 0, .02, -.34, 10));                    // длинная рукоять
-      add(CYL(.020, .10, darkC, 0, .02, .02, 8));                     // пятка рукояти
-      add(B(.050, .050, .10, goldC, 0, .02, -.70));                    // золотая обмотка
-      // ОГРОМНАЯ стальная голова
-      add(B(.34, .34, .40, steelC, 0, .02, -.86));                    // тело головы
-      add(B(.38, .10, .44, darkC, 0, .02, -.86));                      // обруч по центру
-      add(B(.30, .30, .06, 0x8b939d, 0, .02, -1.06));                  // ударная грань (перед)
-      add(B(.30, .30, .06, 0x8b939d, 0, .02, -.66));                   // обух
-      // острые шипы на голове
-      for (let i = 0; i < 4; i++) {
-        const a = i / 4 * Math.PI * 2;
-        add(B(.06, .20, .06, steelC, Math.cos(a) * .20, Math.sin(a) * .20, -.86, 0, 0, a));
+      const dark = 0x2a2d33, steel = 0x54595f, brass = 0x8a6a2a, glowRed = 0xff2b2b, hot = 0xff6a4a;
+      // --- длинная рукоять вдоль Z с ромбической обмоткой ---
+      add(CYL(.030, .88, dark, 0, .02, -.40, 12));
+      add(CYL(.036, .06, steel, 0, .02, -.40, 12));                    // среднее кольцо
+      for (let i = 0; i < 14; i++) {                                   // ромбическая обмотка
+        const z = -.06 - i * .052;
+        add(B(.070, .012, .012, steel, 0, .02, z, 0, 0, .5));
+        add(B(.070, .012, .012, steel, 0, .02, z, 0, 0, -.5));
       }
-      add(CYL(.05, .12, goldC, 0, .02, -.44, 10));                    // золотое кольцо у головы
-      add(B(.034, .014, .12, darkC, 0, .02, .10));                     // обмотка на рукояти
+      // --- воротник-переход к голове ---
+      add(CYL(.055, .10, steel, 0, .02, -.84, 12));
+      add(CYL(.062, .03, brass, 0, .02, -.88, 12));
+      // --- центральный блок головы ---
+      add(B(.26, .30, .30, dark, 0, .02, -.99));                       // корпус головы
+      add(B(.30, .34, .10, steel, 0, .02, -.99));                      // боковые рамки
+      add(B(.22, .26, .02, 0x181a1e, 0, .02, -1.15));                  // тёмная лицевая вставка
+      // круглый герб по центру лицевой стороны
+      add(CYL(.095, .03, brass, 0, .02, -1.17, 20));
+      add(CYL(.075, .02, 0x181a1e, 0, .02, -1.185, 20));
+      // «трезубец» герба: вертикаль + две дуги
+      add(B(.018, .10, .02, brass, 0, .02, -1.20));
+      add(B(.06, .018, .02, brass, 0, .07, -1.20));
+      [-1, 1].forEach(s => add(B(.014, .05, .02, brass, s * .045, .045, -1.20, 0, 0, s * -.5)));
+      // --- два раскалённых красных лезвия (уголки) по бокам ---
+      const mkBlade = (s) => {
+        const bl = new THREE.Group();
+        // основной клин, сужается к внешнему краю
+        const a = new THREE.Mesh(new THREE.BoxGeometry(.20, .26, .13), gunMat(glowRed));
+        a.material.emissive = new THREE.Color(0x8a0a0a);
+        a.position.set(0, 0, 0); bl.add(a);
+        const b2 = new THREE.Mesh(new THREE.BoxGeometry(.16, .15, .11), gunMat(glowRed));
+        b2.material.emissive = new THREE.Color(0x8a0a0a);
+        b2.position.set(.17, 0, 0); bl.add(b2);
+        // раскалённая кромка
+        const edge = new THREE.Mesh(new THREE.BoxGeometry(.34, .04, .14), gunMat(hot));
+        edge.material.emissive = new THREE.Color(0xff5030);
+        edge.position.set(.07, .12, 0); bl.add(edge);
+        // тёмная арматура у основания
+        const cap = new THREE.Mesh(new THREE.BoxGeometry(.08, .22, .17), gunMat(0x1c1e22));
+        cap.position.set(-.10, 0, 0); bl.add(cap);
+        bl.position.set(s * .21, .02, -.99);
+        bl.rotation.z = s * -.06;
+        return bl;
+      };
+      add(mkBlade(1), mkBlade(-1));
+      // --- красные электрические искры-трещины на голове ---
+      const sparks = new THREE.MeshBasicMaterial({ color: hot });
+      for (let i = 0; i < 5; i++) {
+        const sp = new THREE.Mesh(new THREE.BoxGeometry(.012, .09, .012), sparks);
+        sp.position.set(U.rand(-.16, .16), .02 + U.rand(-.14, .14), -1.19);
+        sp.rotation.z = U.rand(-1, 1); g.add(sp);
+      }
       break;
     }
+
+    /* ---------------- Fists: bare hands (short-range) ---------------- */
 
     /* ---------------- Fists: bare hands (short-range) ---------------- */
     case 'fists': {

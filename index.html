@@ -1377,6 +1377,10 @@ html.touch .fld input{padding:10px;font-size:15px}
 
     <div class="acc-cloud">
       <button class="mbtn small" id="btnAccCloud">НАСТРОЙКА ОБЛАКА <span id="accCloudTag">Облако не настроено</span></button>
+      <div class="hintbox hidden" id="accCloudHint" style="margin-top:8px">
+        Облако уже подключено — регистрация и вход работают сразу. Форма ниже
+        нужна только если вы хотите подключать <b>свой</b> проект Supabase.
+      </div>
       <div id="accCloudForm" class="hidden">
         <label class="fld">Supabase URL
           <input id="accUrl" placeholder="https://xxxx.supabase.co" autocomplete="off">
@@ -24000,6 +24004,13 @@ async function _sha256Hex(str) {
 }
 
 const ACCOUNT = {
+  /* Встроенные значения проекта Supabase — чтобы игрокам ничего не настраивать.
+     anon-ключ ПУБЛИЧНЫЙ по замыслу, доступ к данным ограничен RLS-политиками.
+     При необходимости можно переопределить в «Настройке облака» в игре. */
+  DEFAULTS: {
+    url: 'https://uwoidtyrntpfrdhbqicj.supabase.co',
+    anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV3b2lkdHlybnRwZnJkaGJxaWNqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTA3MzA2OTMsImV4cCI6MjEwNjMwNjY5M30.RwMK_k0vuljXLxzGEoo8EKYgZ9T9jdHbKtoUZt8KN6A'
+  },
   cfg: { url: '', anonKey: '', enabled: false },
   session: null,          // { access_token, refresh_token, user:{id,email} }
   user: null,
@@ -24010,12 +24021,21 @@ const ACCOUNT = {
 
   /* ---------- конфигурация облака ---------- */
   loadCfg() {
+    // сначала встроенные значения, затем возможные переопределения
+    this.cfg.url = this.DEFAULTS.url || '';
+    this.cfg.anonKey = this.DEFAULTS.anonKey || '';
     try {
       const raw = localStorage.getItem('cs3d.cloud.v1');
-      if (raw) Object.assign(this.cfg, JSON.parse(raw));
+      if (raw) {
+        const saved = JSON.parse(raw);
+        // не затираем встроенный проект пустыми значениями из старого localStorage
+        if (saved && saved.url) this.cfg.url = saved.url;
+        if (saved && saved.anonKey) this.cfg.anonKey = saved.anonKey;
+      }
       const s = localStorage.getItem('cs3d.session.v1');
       if (s) this.session = JSON.parse(s);
     } catch (e) { }
+    this.cfg.enabled = this.configured();
     return this.cfg;
   },
   saveCfg() {
@@ -24056,7 +24076,11 @@ const ACCOUNT = {
 
   /* ---------- авторизация ---------- */
   async signUp(email, password, nick) {
-    const data = await this._req('POST', '/auth/v1/signup', {
+    // ссылка из письма должна возвращать в игру, а не на localhost
+    let redirect = '';
+    try { redirect = location.origin + location.pathname; } catch (e) { }
+    const q = redirect ? ('?redirect_to=' + encodeURIComponent(redirect)) : '';
+    const data = await this._req('POST', '/auth/v1/signup' + q, {
       email: email, password: password, data: { nick: nick || '' }
     });
     // при включённом подтверждении email сессии не будет — сообщаем об этом
@@ -24226,10 +24250,21 @@ const ACCOUNT = {
     this._render();
     // токен истекает через час — тихо обновляем при старте
     if (this.session) this.ensureFresh().then(() => this._render()).catch(() => { });
-    // обработка возврата после подтверждения email (ссылка ведёт с ?code=…)
+    // обработка возврата по ссылке из письма (если подтверждение почты включено)
     try {
       const q = new URLSearchParams(location.search);
-      if (q.get('code') && this.configured()) {
+      const hash = (location.hash || '').replace(/^#/, '');
+      const hp = new URLSearchParams(hash);
+      if (hp.get('access_token')) {
+        // implicit-поток: токены прямо в хеше
+        this._setSession({
+          access_token: hp.get('access_token'),
+          refresh_token: hp.get('refresh_token'),
+          expires_in: parseInt(hp.get('expires_in') || '3600', 10)
+        });
+        if (UI.toast) UI.toast('Вход подтверждён', '#57d16a');
+        this.pull().then(r => this.mergeRemote(r)).catch(() => { });
+      } else if (q.get('code') && this.configured()) {
         this._req('POST', '/auth/v1/token?grant_type=pkce', { auth_code: q.get('code') })
           .then(d => { this._setSession(d); this._render(); if (UI.toast) UI.toast('Почта подтверждена', '#57d16a'); })
           .catch(() => { });
@@ -24352,6 +24387,9 @@ const ACCOUNT = {
       cloudTag.textContent = this.configured() ? 'Облако подключено' : 'Облако не настроено';
       cloudTag.style.color = this.configured() ? '#57d16a' : '#e33a2e';
     }
+    // встроенный проект уже настроен — форму показываем только по кнопке
+    const cloudHint = document.getElementById('accCloudHint');
+    if (cloudHint) cloudHint.classList.toggle('hidden', !this.configured());
     const who = document.getElementById('accWho');
     if (who) {
       const email = loggedIn ? (this.user.email || 'аккаунт') : '';

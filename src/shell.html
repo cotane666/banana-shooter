@@ -530,6 +530,10 @@
 
     <div class="acc-cloud">
       <button class="mbtn small" id="btnAccCloud">НАСТРОЙКА ОБЛАКА <span id="accCloudTag">Облако не настроено</span></button>
+      <div class="hintbox hidden" id="accCloudHint" style="margin-top:8px">
+        Облако уже подключено — регистрация и вход работают сразу. Форма ниже
+        нужна только если вы хотите подключать <b>свой</b> проект Supabase.
+      </div>
       <div id="accCloudForm" class="hidden">
         <label class="fld">Supabase URL
           <input id="accUrl" placeholder="https://xxxx.supabase.co" autocomplete="off">

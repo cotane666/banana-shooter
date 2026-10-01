@@ -166,6 +166,48 @@ class Effects {
     this.flowerBits.push({ light: light, life: .5, max: .5 });
   }
 
+  /* ГОСПОДИН ЦВЕТОВ: аура вокруг игрока во время таранного рывка (вихрь
+     лепестков, следующий за ним). Включается/выключается флагом `on`. */
+  flowerAura(x, y, z, on) {
+    if (!on) {
+      if (this._flowerAura) {
+        if (this._flowerAura.parent) this._flowerAura.parent.remove(this._flowerAura);
+        this._flowerAura.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material) o.material.dispose(); });
+        this._flowerAura = null;
+      }
+      return;
+    }
+    /* ПЛОСКОЕ КОЛЬЦО из лепестков У НОГ (а не вокруг головы): в виде от первого
+       лица не заслоняет прицел, но читается как вихрь цветов под игроком. */
+    this._flowerAura = new THREE.Group();
+    const mats = FLOWER_NOVA_COLORS.map(c => new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: .85, depthWrite: false }));
+    for (let i = 0; i < 16; i++) {
+      const a = i / 16 * Math.PI * 2;
+      const pet = new THREE.Mesh(new THREE.SphereGeometry(.16, 6, 5), mats[i % mats.length]);
+      pet.scale.set(1.8, .35, .9);
+      pet.position.set(Math.cos(a) * 1.7, U.rand(-.06, .06), Math.sin(a) * 1.7);
+      pet.rotation.set(Math.PI / 2, 0, a);
+      this._flowerAura.add(pet);
+    }
+    this._flowerAura.userData.mats = mats;
+    this._flowerAura.position.set(x, y, z);
+    this.scene.add(this._flowerAura);
+  }
+
+  /* ГОСПОДИН ЦВЕТОВ: белая вспышка-«замах» перед рывком Jarona. */
+  flowerFlash(x, y, z, yaw, k) {
+    const mat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: .9 * k,
+      blending: THREE.AdditiveBlending, depthWrite: false });
+    const m = new THREE.Mesh(new THREE.SphereGeometry(1.6, 12, 10), mat);
+    m.position.set(x, y, z);
+    this.scene.add(m);
+    this.flowerBits = this.flowerBits || [];
+    this.flowerBits.push({ mesh: m, life: .14, max: .14, vx: 0, vy: 0, vz: 0, spin: 0, isFlash: true });
+    const light = new THREE.PointLight(0xffffff, 120, 10, 2);
+    light.position.set(x, y, z); this.scene.add(light);
+    this.flowerBits.push({ light: light, life: .16, max: .16 });
+  }
+
   /* УЛЬТА МЕЧА РОКОЧУЩЕГО РЫЦАРЯ: объёмный БЕЛЫЙ разрез вдоль полосы (в мире).
      `mini` — короткая ДУГА-ПОЛУМЕСЯЦ (след меча) для обычного удара ЛКМ. */
   _whiteSparkMat() {
@@ -1461,14 +1503,17 @@ class Effects {
         const k = Math.max(0, b.life / b.max);
         if (b.light) { b.light.intensity = 90 * k * k; }
         else if (b.mesh) {
-          b.vy -= 14 * dt;
-          b.mesh.position.x += b.vx * dt;
-          b.mesh.position.y += b.vy * dt;
-          b.mesh.position.z += b.vz * dt;
-          b.mesh.rotation.z += (b.spin || 0) * dt;
-          b.mesh.material.opacity = Math.min(1, k * 1.6);
-          const s = .7 + k * .5;
-          b.mesh.scale.set(1.7 * s, .45 * s, s);
+          if (b.isFlash) { b.mesh.material.opacity = .9 * k; }
+          else {
+            b.vy -= 14 * dt;
+            b.mesh.position.x += b.vx * dt;
+            b.mesh.position.y += b.vy * dt;
+            b.mesh.position.z += b.vz * dt;
+            b.mesh.rotation.z += (b.spin || 0) * dt;
+            b.mesh.material.opacity = Math.min(1, k * 1.6);
+            const s = .7 + k * .5;
+            b.mesh.scale.set(1.7 * s, .45 * s, s);
+          }
         }
         if (b.life <= 0) {
           if (b.light) { if (b.light.parent) b.light.parent.remove(b.light); }

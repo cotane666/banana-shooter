@@ -408,15 +408,15 @@ const WEAPONS = {
           splash: 8.5, splashDmg: 900, explosionColor: [0x9a5aff, 0x08040f], noSelfDamage: true },
 
   /* ---------- ГОСПОДИН ЦВЕТОВ (LORD OF FLOWERS) ----------------
-     Оружие-босс: ЛКМ — очередью летят разноцветные ЦВЕТОЧНЫЕ СНАРЯДЫ
-     (у каждого свой цвет, при попадании разлетаются лепестки). ПКМ — УЛЬТА:
-     Флауэр выпускает пять цветных «душ», играет музыка атаки и звучит его
-     реплика; по площади наносится огромный урон и крушатся стены. */
-  lordOfFlowers: { name: 'ГОСПОДИН ЦВЕТОВ', cat: 'exp', slot: 2, price: 123456, dmg: 260, rpm: 320, mag: 40, reserve: 240,
-          auto: true, spread: .012, moveSpread: .030, recoil: 1.6, falloff: .95, range: 150, headMul: 2.0,
-          sound: 'shotgun', projectile: 'flower', projSpeed: 46, projGravity: 2,
-          flowerSplash: 3.2, flowerSplashDmg: 130, noSelfDamage: true,
-          ult: true, ultCd: 14, ultR: 13, ultDmg: 5200, ultBreakR: 12, ultBreakDelay: 1.4,
+     Оружие БЛИЖНЕГО БОЯ без модели в руках. ЛКМ — быстрые размахи лепестковым
+     хлыстом. ПКМ (УЛЬТА) — ТАРАННЫЙ РЫВОК «СОВОКУПНАЯ СИЛА»: игрок летит
+     вперёд, зацепляет врагов, таранит, разворачивается, взлетает вверх и в
+     конце наносит красивый удар, отбрасывая врагов вперёд. Во время рывка
+     игрок НЕ получает урона. */
+  lordOfFlowers: { name: 'ГОСПОДИН ЦВЕТОВ', cat: 'melee', slot: 3, price: 123456, dmg: 320, rpm: 150, mag: Infinity, reserve: 0,
+          auto: false, spread: 0, moveSpread: 0, recoil: 2.6, falloff: 1, range: 4.6, headMul: 2.4, sound: 'knife',
+          melee: 'lordOfFlowers', knockback: 16, flowerMelee: true,
+          ult: true, ultCd: 14, ultR: 13, ultDmg: 5200, ultBreakR: 12, ultBreakDelay: 0,
           flowerUlt: true }
 };
 /* ============================================================

@@ -7726,6 +7726,7 @@ const Game = {
     if (!p || !p.alive) return false;
     const def = p.def || {};
     if (!def.flowerUlt) return false;
+    if (this._flowerRush) return false;
     if (this.roundState !== 'live' || this.mode === CS.MODE.MENU) return false;
     const now = U.now();
     const cd = (def.ultCd || 14) * 1000;
@@ -7736,105 +7737,175 @@ const Game = {
     }
     this._flowerUltAt = now;
 
-    const R = def.ultR || 13;
-    const dmg = def.ultDmg || 5200;
-    const breakR = def.ultBreakR || 12;
     const dir = this.cameraDir();
-    const origin = { x: p.pos.x, y: p.pos.y + 1.2, z: p.pos.z };
     const flat = Math.hypot(dir.x, dir.z) || 1;
     const fx = dir.x / flat, fz = dir.z / flat;
-    const cx = origin.x + fx * (R * .55), cz = origin.z + fz * (R * .55);
 
-    /* ГОЛОС + МУЗЫКА: реплика Флауэра и боевой фрагмент */
-    if (Audio3D_SFX.flowerVoice) Audio3D_SFX.flowerVoice(FLOWER_VOICE_POWERS, 1.0);
+    /* ЗВУК: боевой фрагмент + реплика Флауэра. Его фирменная атака — «JARONA»:
+       он вспыхивает белым, становится радужным (Omega Flowery) и делает рывок. */
+    if (Audio3D_SFX.flowerVoice) Audio3D_SFX.flowerVoice(FLOWER_VOICE_LIST[(Math.random() * FLOWER_VOICE_LIST.length) | 0], 1.0);
     if (Audio3D_SFX.flowerMusic) Audio3D_SFX.flowerMusic();
-    p.recoil = (p.recoil || 0) + .26;
-    p.viewPunchP = (p.viewPunchP || 0) + .18;
-    p.viewPunchY += U.rand(-.08, .08);
+    p.recoil = (p.recoil || 0) + .3;
+    p.viewPunchP = (p.viewPunchP || 0) + .2;
 
-    /* ПЯТЬ ЦВЕТНЫХ «ДУШ»: снаряды разлетаются веером вперёд и детонируют */
-    this._flowerUltProj = this._flowerUltProj || [];
-    const n = 5;
-    for (let i = 0; i < n; i++) {
-      const spread = (i - (n - 1) / 2) * .22;             // веер по горизонтали
-      const dx = fx * Math.cos(spread) - fz * Math.sin(spread);
-      const dz = fx * Math.sin(spread) + fz * Math.cos(spread);
-      const col = FLOWER_PROJ_COLORS[i % FLOWER_PROJ_COLORS.length];
-      const mesh = buildFlowerProjectile();
-      mesh.traverse(o => {
-        if (o.isMesh && o.material && o.material.color) o.material.color.setHex(col);
-        if (o.isMesh && o.material && o.material.emissive) o.material.emissive.setHex(col).multiplyScalar(.4);
-      });
-      mesh.scale.setScalar(2.1);
-      mesh.position.set(origin.x + dx * 1.2, origin.y, origin.z + dz * 1.2);
-      this.scene.add(mesh);
-      this._flowerUltProj.push({ mesh: mesh, vel: { x: dx * 30, y: 1.5, z: dz * 30 }, life: .7, col: col, dmg: dmg * .3 });
-    }
-
-    /* МГНОВЕННЫЙ УРОН И РАЗРУШЕНИЕ по широкому кругу перед игроком */
-    if (this.effects) {
-      this.effects.flowerNova(cx, origin.y + .3, cz, R);
-      this.effects.explosion(cx, origin.y, cz, R * 1.2, [0xffd0f0, 0x2a0a20]);
-      this.effects.groundWave(cx, p.pos.y + .05, cz, R);
-    }
-    Audio3D_SFX.explosionAt(cx, origin.y, cz);
-    this.breakMapAt(cx, origin.y, cz, breakR, dmg);
-    if (this.horde) {
-      for (const z of this.horde.list) {
+    /* ЗАХВАТ: враги в конусе перед игроком «прилипают» и летят вместе с ним */
+    const R0 = 5.6;
+    const grabbed = [];
+    const grabList = (list, isRemote) => {
+      if (!list) return;
+      for (const z of list) {
         if (!z.alive || z.dying) continue;
-        const dx = z.pos.x - cx, dz = z.pos.z - cz, dy = (z.pos.y + 1) - origin.y;
-        const d = Math.hypot(dx, dy, dz);
-        if (d > R) continue;
-        const k = 1 - d / R;
-        const dealt = dmg * (.45 + k * .55);
-        z.takeDamage(dealt, 'body', { x: dx, y: dy, z: dz });
-        this.player.damageDealt += dealt;
-        if (z.alive && !z.dying) {
-          const l = Math.max(Math.hypot(dx, dz), .01);
-          z.vel.x += (dx / l) * 26 * k; z.vel.z += (dz / l) * 26 * k;
-          if (typeof z.stagger === 'function') z.stagger(1.0);
-        }
+        const dx = z.pos.x - p.pos.x, dz = z.pos.z - p.pos.z;
+        const d = Math.hypot(dx, dz);
+        if (d > R0 + 1) continue;
+        if (dx * fx + dz * fz < d * .1) continue;         // только впереди
+        grabbed.push({ z: z, remote: !!isRemote, ox: dx, oy: (z.pos.y + .8) - p.pos.y, oz: dz });
+        z._flowerGrabbed = true;
       }
-    }
-    if (this.mode === CS.MODE.ONLINE) {
-      for (const rp of this.remotePlayers) {
-        if (!rp.alive) continue;
-        const d = Math.hypot(rp.pos.x - cx, rp.pos.z - cz);
-        if (d < R) this.sendPvpHit(dmg * (1 - d / R * .5), 'body', false, rp, 'flower');
-      }
-    }
+    };
+    grabList(this.horde && this.horde.list, false);
+    if (this.mode === CS.MODE.ONLINE) grabList(this.remotePlayers, true);
+
+    this._flowerRush = {
+      t: 0, dur: 1.85, finished: false,
+      fx: fx, fz: fz, grabbed: grabbed, maxGrab: grabbed.length,
+      hitCd: 0, R: def.ultR || 13, dmg: def.ultDmg || 5200, breakR: def.ultBreakR || 12
+    };
+    if (this.effects && this.effects.flowerAura) this.effects.flowerAura(p.pos.x, p.pos.y + 1, p.pos.z, true);
     if (typeof UI !== 'undefined' && UI.flowerUltBanner) UI.flowerUltBanner();
     p.bulletsFired += 1;
     return true;
   },
 
-  /* Обновление летящих «душ» ульты: долетели/истекли — расцветают и бьют. */
-  updateFlowerUlt(dt) {
-    const list = this._flowerUltProj;
-    if (!list || !list.length) return;
-    for (let i = list.length - 1; i >= 0; i--) {
-      const f = list[i];
-      f.life -= dt;
-      f.mesh.position.x += f.vel.x * dt;
-      f.mesh.position.z += f.vel.z * dt;
-      f.mesh.position.y += f.vel.y * dt;
-      f.mesh.rotation.z += dt * 10;
-      let boom = f.life <= 0;
-      // столкновение со стеной/землёй
-      const bx = f.mesh.position.x, by = f.mesh.position.y, bz = f.mesh.position.z;
-      if (this.world.overlaps(bx, by, bz, .3, .5)) boom = true;
-      if (boom) {
-        if (this.effects && this.effects.flowerBurst) this.effects.flowerBurst(bx, by, bz, 4.2, f.col);
-        this.breakMapAt(bx, by, bz, 3.6, f.dmg);
-        if (this.horde) for (const z of this.horde.list) {
-          if (!z.alive || z.dying) continue;
-          const d = Math.hypot(z.pos.x - bx, z.pos.z - bz);
-          if (d < 4.2) { z.takeDamage(f.dmg * (1 - d / 4.2 * .5), 'body', { x: 0, y: 0, z: 0 }); this.player.damageDealt += f.dmg * .5; }
-        }
-        if (f.mesh.parent) f.mesh.parent.remove(f.mesh);
-        list.splice(i, 1);
-      }
+  /* ============================================================
+     ТАРАННЫЙ РЫВОК «СОВОКУПНАЯ СИЛА» — по мотивам атаки из видео:
+       фаза 1 (0.00–0.35): игрок ЛЕТИТ ВПЕРЁД, зацепляя врагов;
+       фаза 2 (0.35–0.80): ТАРАНИТ их, РАЗВОРАЧИВАЕТСЯ (поворот камеры) и
+                            ПОДНИМАЕТСЯ ВВЕРХ, таща добычу с собой;
+       фаза 3 (0.80–1.00): КРАСИВЫЙ ФИНАЛЬНЫЙ УДАР — врагов отбрасывает
+                            далеко вперёд с радужной вспышкой и разрушением.
+     Во время всего рывка игрок НЕ получает урона.
+     ============================================================ */
+  updateFlowerRush(dt) {
+    const st = this._flowerRush;
+    if (!st) return;
+    const p = this.player;
+    if (!p || !p.alive) { this.endFlowerRush(false); return; }
+    st.t += dt;
+    const k = U.clamp(st.t / st.dur, 0, 1);
+    /* аура лепестков следует за игроком */
+    if (this.effects && this.effects._flowerAura) {
+      const au = this.effects._flowerAura;
+      au.position.set(p.pos.x, p.pos.y + .15, p.pos.z);
+      au.rotation.y += dt * 8;
     }
+    /* «вспышка белым перед рывком» — как замах Jarona у Флауэра */
+    if (this.effects && this.effects.flowerFlash && k < .18) {
+      this.effects.flowerFlash(p.pos.x, p.pos.y + 1, p.pos.z, (p.yaw), 1 - k / .18);
+    }
+
+    /* ---- ФАЗА 1-2: ЛЕТИМ ВПЕРЁД, ЗАТЕМ ТАРАНИМ С ПОВОРОТОМ И ВЗЛЁТОМ ---- */
+    if (k < .80) {
+      // движение вперёд: разгон в начале, таран в середине, взлёт к концу
+      let speed;
+      if (k < .35) speed = 16 + (k / .35) * 16;               // 16 → 32 м/с разгон
+      else if (k < .55) speed = 32;                            // таран на полной
+      else speed = Math.max(6, 32 * (1 - (k - .55) / .25));    // замедление при подъёме
+      // поворот: игрок разворачивается дугой (как «спираль» в видео)
+      const turn = (k < .35 ? 0 : (k - .35) / .45);            // 0→1
+      const yaw = Math.atan2(-st.fx, -st.fz) + turn * Math.PI * .85;
+      st.fx = -Math.sin(yaw); st.fz = -Math.cos(yaw);
+      p.pos.x += st.fx * speed * dt;
+      p.pos.z += st.fz * speed * dt;
+      if (k > .50) {
+        // РАЗВОРАЧИВАЕМСЯ И ПОДНИМАЕМСЯ ВВЕРХ (мощный вертикальный подъём)
+        const lift = U.clamp((k - .50) / .30, 0, 1);
+        p.pos.y += lift * 16 * dt;
+        p.onGround = false;
+      }
+      // держим врагов зацепленными: они летят в связке перед/за игроком
+      for (const g of st.grabbed) {
+        const z = g.z;
+        if (!z.alive || z.dying) continue;
+        // цель — точка рядом с игроком (сзади-сбоку, как «хвост»), с задержкой
+        g.ox = U.lerp(g.ox, -st.fx * 1.2 + (-st.fz) * 1.0, 1 - Math.pow(.02, dt));
+        g.oz = U.lerp(g.oz, -st.fz * 1.2 + (st.fx) * 1.0, 1 - Math.pow(.02, dt));
+        const tx = p.pos.x + g.ox, tz = p.pos.z + g.oz, ty = Math.max(p.pos.y, 0) + .4;
+        z.pos.x = U.lerp(z.pos.x, tx, 1 - Math.pow(.0001, dt));
+        z.pos.z = U.lerp(z.pos.z, tz, 1 - Math.pow(.0001, dt));
+        z.pos.y = U.lerp(z.pos.y, ty, 1 - Math.pow(.0001, dt));
+        z.vel.x = z.vel.y = z.vel.z = 0;
+        if (typeof z.stagger === 'function') z.stagger(.8);
+        // периодический урон за таран
+        st.hitCd -= dt;
+        if (st.hitCd <= 0) {
+          const d = (st.dmg / 12) * (st.maxGrab > 1 ? 1 + st.maxGrab * .12 : 1);
+          this._flowerRushDmg = true;
+          if (g.remote) { /* PvP: урон в конце */ }
+          else { z.takeDamage(d, 'body', { x: st.fx, y: 0, z: st.fz }); this.player.damageDealt += d; }
+          this._flowerRushDmg = false;
+        }
+      }
+      if (st.hitCd <= 0) st.hitCd = .12;
+      // цветочный след за игроком
+      if (this.effects && this.effects.flowerBurst && Math.random() < .5) {
+        this.effects.flowerBurst(p.pos.x - st.fx * 1.5, p.pos.y + .8, p.pos.z - st.fz * 1.5, 1.6,
+          FLOWER_PROJ_COLORS[(Math.random() * FLOWER_PROJ_COLORS.length) | 0]);
+      }
+    } else {
+      /* ---- ФАЗА 3: КРАСИВЫЙ ФИНАЛЬНЫЙ УДАР ---- */
+      if (!st.finished) {
+        st.finished = true;
+        const R = st.R, dmg = st.dmg, breakR = st.breakR;
+        const cx = p.pos.x, cy = p.pos.y + .6, cz = p.pos.z;
+        // эффекты: радужная нова + вспышка + ударная волна
+        if (this.effects) {
+          this.effects.flowerNova(cx, cy, cz, R * 1.3);
+          this.effects.explosion(cx, cy, cz, R * 1.5, [0xffd0f0, 0x2a0a20]);
+          this.effects.groundWave(cx, p.pos.y + .05, cz, R);
+        }
+        Audio3D_SFX.explosionAt(cx, cy, cz);
+        this.breakMapAt(cx, cy, cz, breakR, dmg);
+        // огромный урон всем вокруг + ОТБРОС ВПЕРЁД
+        const push = (list, isRemote) => {
+          if (!list) return;
+          for (const z of list) {
+            if (!z.alive || z.dying) continue;
+            const dx = z.pos.x - cx, dz = z.pos.z - cz, dy = (z.pos.y + 1) - cy;
+            const d = Math.hypot(dx, dy, dz);
+            if (d > R * 1.3) continue;
+            const kk = 1 - d / (R * 1.3);
+            this._flowerRushDmg = true;
+            if (isRemote) this.sendPvpHit(dmg * (1 - d / R * .5), 'body', false, z, 'flower');
+            else { z.takeDamage(dmg * (.5 + kk * .5), 'body', { x: st.fx, y: .3, z: st.fz }); this.player.damageDealt += dmg * .5; }
+            this._flowerRushDmg = false;
+            if (z.alive && !z.dying) {
+              // ВРАГОВ КИДАЕТ ДАЛЕКО ВПЕРЁД (по направлению удара)
+              z.vel.x = st.fx * 42 * (0.6 + kk); z.vel.z = st.fz * 42 * (0.6 + kk);
+              z.vel.y = 9 * (0.5 + kk);
+              if (typeof z.stagger === 'function') z.stagger(1.2);
+            }
+            z._flowerGrabbed = false;
+          }
+        };
+        push(this.horde && this.horde.list, false);
+        if (this.mode === CS.MODE.ONLINE) push(this.remotePlayers, true);
+        p.recoil = (p.recoil || 0) + .2; p.viewPunchP = (p.viewPunchP || 0) + .16;
+      }
+      // после удара — плавно возвращаемся на землю
+      if (!this.world.overlaps(p.pos.x, p.pos.y - .1, p.pos.z, p.radius, .2)) p.vel.y -= 30 * dt;
+      if (k >= 1) this.endFlowerRush(true);
+    }
+  },
+
+  endFlowerRush(done) {
+    const st = this._flowerRush;
+    if (st) {
+      for (const g of st.grabbed) { if (g.z) g.z._flowerGrabbed = false; }
+      this._flowerRush = null;
+    }
+    if (this.effects && this.effects.flowerAura) this.effects.flowerAura(0, 0, 0, false);
+    if (done && this.player) { this.player.vel.x *= .3; this.player.vel.z *= .3; }
   },
 
   meleeGroundSlam(origin, dir, def, muzzleWorld) {
@@ -7982,6 +8053,19 @@ const Game = {
         if (typeof damageMapAt === 'function') {
           const scx = origin.x + fx * 2.7, scy = origin.y + .1, scz = origin.z + fz * 2.7;
           damageMapAt(scx, scy, scz, 3.4, 60);
+        }
+      }
+      /* ГОСПОДИН ЦВЕТОВ: ЛКМ — ЛЕПЕСТКОВЫЙ ХЛЫСТ. Радужный след удара, сноп
+         лепестков в точке и разрушение блоков по площади взмаха. */
+      if (def.flowerMelee) {
+        const flat = Math.hypot(dir.x, dir.z) || 1;
+        const fx = dir.x / flat, fz = dir.z / flat;
+        if (this.effects && this.effects.flowerBurst) {
+          const col = FLOWER_PROJ_COLORS[(p.swingSide || 1) > 0 ? 0 : 3];
+          this.effects.flowerBurst(origin.x + fx * 2.6, origin.y - .2, origin.z + fz * 2.6, 2.6, col);
+        }
+        if (typeof damageMapAt === 'function') {
+          damageMapAt(origin.x + fx * 2.4, origin.y - .3, origin.z + fz * 2.4, 2.6, 90);
         }
       }
       if (this.mode === CS.MODE.ONLINE) this.traceRemotePlayer(origin, dir, Math.min(def.range, maxDist), def, dir);
@@ -8500,6 +8584,9 @@ const Game = {
   applyDamageToSelf(dmg, fromPos) {
     const p = this.player;
     if (!p.alive) return;
+    /* НЕУЯЗВИМОСТЬ ВО ВРЕМЯ ТАРАННОГО РЫВКА «Господина цветов»: пока игрок
+       летит вперёд, он не получает урона (кроме собственного урона захвата). */
+    if (this._flowerRush && !this._flowerRushDmg) return;
     let actual = dmg;
     // the mech chassis soaks HALF of every hit before armour
     if (this.isMechActive()) actual *= .5;
@@ -9591,6 +9678,7 @@ const Game = {
 
     // ---- physics ----
     p.update(dt, this.world, pin);
+    this.updateFlowerRush(dt);
     this.updateMechDash(dt);
     p.tickWeapon(dt, this);
     this.updateShield(dt);
@@ -9650,7 +9738,6 @@ const Game = {
     // ---- flying bananas ----
     this.updateProjectiles(dt);
     this.updateSlashProjectiles(dt);
-    this.updateFlowerUlt(dt);
     if (this.mode === CS.MODE.RANGE) this.updateDummyProjectiles(dt);
     if (this.mode === CS.MODE.OFFLINE || this.mode === CS.MODE.RANGE) this.updateEnemyShots(dt);
     if (this.mode === CS.MODE.ONLINE) { this.updateRemoteProjectiles(dt); this.updateRemoteMechMissiles(dt); }

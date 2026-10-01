@@ -2165,44 +2165,10 @@ function buildWeaponModel(id) {
       break;
     }
 
-    /* ---------------- ГОСПОДИН ЦВЕТОВ: стебель-пушка с цветком на дуле ------ */
+    /* ---------------- ГОСПОДИН ЦВЕТОВ: модель в руках ОТСУТСТВУЕТ ----------------
+       Это ближний бой «силой цветов»: игрок бьёт лепестковым хлыстом, а ПКМ —
+       таранный рывок. В руках ничего не держит, поэтому группа пустая. */
     case 'lordOfFlowers': {
-      const stem = 0x3f7a35, leaf = 0x54a344, pot = 0x7a5230, gold = 0xf2c74a;
-      // «горшок»-приклад у руки
-      add(B(.10, .11, .16, pot, 0, -.005, .10));
-      add(B(.11, .03, .17, 0x5a3a20, 0, .05, .10));                    // обод горшка
-      // стебель-ствол вдоль -Z
-      add(CYL(.030, .80, stem, 0, -.005, -.34, 10));
-      add(CYL(.034, .06, 0x2f5f28, 0, -.005, .02, 10));                // узел у приклада
-      // два листа по бокам стебля
-      [-1, 1].forEach(s => {
-        const lf = new THREE.Mesh(new THREE.SphereGeometry(.075, 8, 6), gunMat(leaf));
-        lf.scale.set(1.6, .35, .8); lf.position.set(s * .075, -.02, -.18); lf.rotation.z = s * .5;
-        g.add(lf);
-      });
-      // цветок на дуле: шесть лепестков + сердцевина
-      const head = new THREE.Group();
-      for (let i = 0; i < 6; i++) {
-        const a = i / 6 * Math.PI * 2;
-        const pet = new THREE.Mesh(new THREE.SphereGeometry(.055, 8, 6), gunMat(i % 2 ? 0xff6fae : 0xffd0e6));
-        pet.scale.set(1.7, .5, 1.0);
-        pet.position.set(Math.cos(a) * .075, Math.sin(a) * .075, 0);
-        pet.rotation.z = a;
-        head.add(pet);
-      }
-      const core = new THREE.Mesh(new THREE.SphereGeometry(.05, 10, 8), gunMat(gold));
-      core.material.emissive = new THREE.Color(0x6a4a10);
-      head.add(core);
-      head.position.set(0, .01, -.76);
-      g.add(head);
-      // светящаяся пыльца-точки на лепестках
-      for (let i = 0; i < 5; i++) {
-        const sp = new THREE.Mesh(new THREE.SphereGeometry(.012, 6, 5), new THREE.MeshBasicMaterial({ color: 0xfff2a0 }));
-        sp.position.set(U.rand(-.1, .1), .01 + U.rand(-.1, .1), -.78 + U.rand(-.05, .05));
-        g.add(sp);
-      }
-      g.userData.flowerGun = true;
-      g.scale.setScalar(.58);
       break;
     }
   }

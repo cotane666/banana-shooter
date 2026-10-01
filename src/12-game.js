@@ -148,6 +148,9 @@ function buildSoldierWeapon(id, skinId) {
    from the shoulder pivot, so a POSITIVE rotation.x raises them forward.
    `reachL` brings the left hand down onto the handguard; `wpos`/`wrot` seat the
    gun at the right hand and angle it a little across the chest. */
+/* Цвета цветочных снарядов «Господина цветов» (радужный град). */
+const FLOWER_PROJ_COLORS = [0xff5d8f, 0xffd23f, 0x5dd6ff, 0x9b6bff, 0x66e06a, 0xff9d3f];
+
 function weaponHoldPose(id) {
   const w = WEAPONS[id] || {};
   const cat = w.cat || 'rifle';
@@ -175,6 +178,11 @@ function weaponHoldPose(id) {
     pose.reachR = 1.30; pose.reachL = 1.70; pose.yawL = 0.5;
     pose.elbowR = 0.45; pose.elbowL = 0.8;
     pose.wpos = { x: .05, y: -.56, z: -.14 };
+  } else if (cat === 'exp') {
+    // experimental launchers are braced like the heavy guns
+    pose.reachR = 1.30; pose.reachL = 1.66; pose.yawL = 0.48;
+    pose.elbowR = 0.5; pose.elbowL = 0.85;
+    pose.wpos = { x: .04, y: -.55, z: -.13 };
   } else if (cat === 'sniper' || cat === 'lmg') {
     pose.reachR = 1.34; pose.reachL = 1.66; pose.yawL = 0.46;
     pose.elbowR = 0.5; pose.elbowL = 0.85;
@@ -6114,12 +6122,22 @@ const Game = {
     const builder = {
       guided: buildGuidedMissile, rocket: buildRocketProjectile, acid: buildAcidProjectile,
       hive: buildHivePod, disc: buildDiscProjectile, freeze: buildFreezeOrb,
-      blackhole: buildBlackHoleShell, chrono: buildChronoOrb
+      blackhole: buildBlackHoleShell, chrono: buildChronoOrb, flower: buildFlowerProjectile
     }[kind];
     const mesh = builder ? builder() : buildBananaProjectile();
     // an epic/legendary skin tints the projectile and its trail
     const shotCol = p && p.skinShot ? p.skinShot : null;
     if (shotCol) { const c = new THREE.Color(shotCol); mesh.traverse(o => { if (o.isMesh && o.material && o.material.color) o.material.color.lerp(c, .6); }); }
+    /* ГОСПОДИН ЦВЕТОВ: у каждого снаряда СВОЙ цвет — радужный град лепестков */
+    let flowerCol = null;
+    if (kind === 'flower') {
+      flowerCol = FLOWER_PROJ_COLORS[(this._flowerColI = ((this._flowerColI || 0) + 1)) % FLOWER_PROJ_COLORS.length];
+      const c = new THREE.Color(flowerCol);
+      mesh.traverse(o => {
+        if (o.isMesh && o.material && o.material.color) o.material.color.setHex(flowerCol);
+        if (o.isMesh && o.material && o.material.emissive) o.material.emissive.setHex(flowerCol).multiplyScalar(0.35);
+      });
+    }
     mesh.position.set(origin.x, origin.y, origin.z);
     if (!isRocket && !isGuided) mesh.rotation.x = Math.PI / 2;   // bananas lie along the flight path
     this.scene.add(mesh);
@@ -6151,6 +6169,7 @@ const Game = {
     if (kind === 'blackhole') { pr.wellR = def.wellR; pr.wellLife = def.wellLife; pr.wellDps = def.wellDps; pr.wellPull = def.wellPull; pr.wellArmed = true; }
     if (kind === 'chrono') { pr.chronoR = def.chronoR; pr.chronoLife = def.chronoLife; pr.chronoSlow = def.chronoSlow; }
     if (kind === 'disc') { pr.bounces = def.bounces; pr.discReturn = def.discReturn; pr.returnT = def.discReturn; pr.bounced = 0; }
+    if (kind === 'flower') { pr.flowerCol = flowerCol; pr.splash = def.flowerSplash || 3.0; pr.splashDmg = def.flowerSplashDmg || 120; }
     if (kind === 'freeze') pr.life = 7;
     this.projectiles.push(pr);
     // while a guided missile is in the air the player steers it, like the drone
@@ -6226,6 +6245,7 @@ const Game = {
         }
       }
       if (pr.kind === 'chrono' && pr.mesh.userData.ring) pr.mesh.userData.ring.rotation.z += dt * 2.5;
+      if (pr.kind === 'flower') { pr.mesh.rotation.z += dt * 9; pr.mesh.rotation.y += dt * 4; }
       if (pr.kind === 'disc') { pr.mesh.rotation.z += dt * 22; pr.returnT -= dt; }
       const nx = pr.pos.x + pr.vel.x * dt, ny = pr.pos.y + pr.vel.y * dt, nz = pr.pos.z + pr.vel.z * dt;
 
@@ -6319,6 +6339,26 @@ const Game = {
         if (pr.kind === 'chrono') {
           this.effects.chronoField(impactPoint.x, impactPoint.y, impactPoint.z, pr.chronoR || 8, pr.chronoLife || 7);
           this.openChrono(impactPoint, pr.chronoR || 8, pr.chronoLife || 7, pr.chronoSlow || .16);
+          this.removeProjectile(i);
+          continue;
+        }
+        if (pr.kind === 'flower') {
+          /* ЦВЕТОЧНЫЙ СНАРЯД: при попадании разлетается снопом лепестков и
+             бьёт по площади небольшим уроном. */
+          const R = pr.splash || 3.0, sdmg = pr.splashDmg || 120;
+          if (this.effects && this.effects.flowerBurst) this.effects.flowerBurst(impactPoint.x, impactPoint.y, impactPoint.z, R, pr.flowerCol);
+          if (this.horde) for (const z of this.horde.list) {
+            if (!z.alive || z.dying) continue;
+            const d = Math.hypot(z.pos.x - impactPoint.x, z.pos.z - impactPoint.z);
+            if (d < R) { const dd = sdmg * (1 - d / R * .6); z.takeDamage(dd, 'body', dir); this.player.damageDealt += dd; }
+          }
+          if (this.mode === CS.MODE.ONLINE) {
+            for (const rp of this.remotePlayers) {
+              if (!rp.alive) continue;
+              const d = Math.hypot(rp.pos.x - impactPoint.x, rp.pos.z - impactPoint.z);
+              if (d < R) this.sendPvpHit(sdmg * (1 - d / R), 'body', false, rp, 'flower');
+            }
+          }
           this.removeProjectile(i);
           continue;
         }
@@ -7673,6 +7713,128 @@ const Game = {
     if (hits) UI.hitmark(true);
     p.bulletsFired += 1;
     return true;
+  },
+
+  /* ============================================================
+     ГОСПОДИН ЦВЕТОВ — УЛЬТА (ПКМ): «СОВОКУПНАЯ СИЛА».
+     Флауэр выпускает пять разноцветных «душ»-снарядов по кругу, звучит его
+     реплика и фрагмент боевой музыки; по широкой площади наносится огромный
+     урон и разрушаются стены.
+     ============================================================ */
+  flowerUlt() {
+    const p = this.player;
+    if (!p || !p.alive) return false;
+    const def = p.def || {};
+    if (!def.flowerUlt) return false;
+    if (this.roundState !== 'live' || this.mode === CS.MODE.MENU) return false;
+    const now = U.now();
+    const cd = (def.ultCd || 14) * 1000;
+    if (this._flowerUltAt && now - this._flowerUltAt < cd) {
+      const left = Math.ceil((cd - (now - this._flowerUltAt)) / 1000);
+      UI.toast('СОВОКУПНАЯ СИЛА через ' + left + 'с', '#ff8ad0'); Audio3D_SFX.deny && Audio3D_SFX.deny();
+      return false;
+    }
+    this._flowerUltAt = now;
+
+    const R = def.ultR || 13;
+    const dmg = def.ultDmg || 5200;
+    const breakR = def.ultBreakR || 12;
+    const dir = this.cameraDir();
+    const origin = { x: p.pos.x, y: p.pos.y + 1.2, z: p.pos.z };
+    const flat = Math.hypot(dir.x, dir.z) || 1;
+    const fx = dir.x / flat, fz = dir.z / flat;
+    const cx = origin.x + fx * (R * .55), cz = origin.z + fz * (R * .55);
+
+    /* ГОЛОС + МУЗЫКА: реплика Флауэра и боевой фрагмент */
+    if (Audio3D_SFX.flowerVoice) Audio3D_SFX.flowerVoice(FLOWER_VOICE_POWERS, 1.0);
+    if (Audio3D_SFX.flowerMusic) Audio3D_SFX.flowerMusic();
+    p.recoil = (p.recoil || 0) + .26;
+    p.viewPunchP = (p.viewPunchP || 0) + .18;
+    p.viewPunchY += U.rand(-.08, .08);
+
+    /* ПЯТЬ ЦВЕТНЫХ «ДУШ»: снаряды разлетаются веером вперёд и детонируют */
+    this._flowerUltProj = this._flowerUltProj || [];
+    const n = 5;
+    for (let i = 0; i < n; i++) {
+      const spread = (i - (n - 1) / 2) * .22;             // веер по горизонтали
+      const dx = fx * Math.cos(spread) - fz * Math.sin(spread);
+      const dz = fx * Math.sin(spread) + fz * Math.cos(spread);
+      const col = FLOWER_PROJ_COLORS[i % FLOWER_PROJ_COLORS.length];
+      const mesh = buildFlowerProjectile();
+      mesh.traverse(o => {
+        if (o.isMesh && o.material && o.material.color) o.material.color.setHex(col);
+        if (o.isMesh && o.material && o.material.emissive) o.material.emissive.setHex(col).multiplyScalar(.4);
+      });
+      mesh.scale.setScalar(2.1);
+      mesh.position.set(origin.x + dx * 1.2, origin.y, origin.z + dz * 1.2);
+      this.scene.add(mesh);
+      this._flowerUltProj.push({ mesh: mesh, vel: { x: dx * 30, y: 1.5, z: dz * 30 }, life: .7, col: col, dmg: dmg * .3 });
+    }
+
+    /* МГНОВЕННЫЙ УРОН И РАЗРУШЕНИЕ по широкому кругу перед игроком */
+    if (this.effects) {
+      this.effects.flowerNova(cx, origin.y + .3, cz, R);
+      this.effects.explosion(cx, origin.y, cz, R * 1.2, [0xffd0f0, 0x2a0a20]);
+      this.effects.groundWave(cx, p.pos.y + .05, cz, R);
+    }
+    Audio3D_SFX.explosionAt(cx, origin.y, cz);
+    this.breakMapAt(cx, origin.y, cz, breakR, dmg);
+    if (this.horde) {
+      for (const z of this.horde.list) {
+        if (!z.alive || z.dying) continue;
+        const dx = z.pos.x - cx, dz = z.pos.z - cz, dy = (z.pos.y + 1) - origin.y;
+        const d = Math.hypot(dx, dy, dz);
+        if (d > R) continue;
+        const k = 1 - d / R;
+        const dealt = dmg * (.45 + k * .55);
+        z.takeDamage(dealt, 'body', { x: dx, y: dy, z: dz });
+        this.player.damageDealt += dealt;
+        if (z.alive && !z.dying) {
+          const l = Math.max(Math.hypot(dx, dz), .01);
+          z.vel.x += (dx / l) * 26 * k; z.vel.z += (dz / l) * 26 * k;
+          if (typeof z.stagger === 'function') z.stagger(1.0);
+        }
+      }
+    }
+    if (this.mode === CS.MODE.ONLINE) {
+      for (const rp of this.remotePlayers) {
+        if (!rp.alive) continue;
+        const d = Math.hypot(rp.pos.x - cx, rp.pos.z - cz);
+        if (d < R) this.sendPvpHit(dmg * (1 - d / R * .5), 'body', false, rp, 'flower');
+      }
+    }
+    if (typeof UI !== 'undefined' && UI.flowerUltBanner) UI.flowerUltBanner();
+    p.bulletsFired += 1;
+    return true;
+  },
+
+  /* Обновление летящих «душ» ульты: долетели/истекли — расцветают и бьют. */
+  updateFlowerUlt(dt) {
+    const list = this._flowerUltProj;
+    if (!list || !list.length) return;
+    for (let i = list.length - 1; i >= 0; i--) {
+      const f = list[i];
+      f.life -= dt;
+      f.mesh.position.x += f.vel.x * dt;
+      f.mesh.position.z += f.vel.z * dt;
+      f.mesh.position.y += f.vel.y * dt;
+      f.mesh.rotation.z += dt * 10;
+      let boom = f.life <= 0;
+      // столкновение со стеной/землёй
+      const bx = f.mesh.position.x, by = f.mesh.position.y, bz = f.mesh.position.z;
+      if (this.world.overlaps(bx, by, bz, .3, .5)) boom = true;
+      if (boom) {
+        if (this.effects && this.effects.flowerBurst) this.effects.flowerBurst(bx, by, bz, 4.2, f.col);
+        this.breakMapAt(bx, by, bz, 3.6, f.dmg);
+        if (this.horde) for (const z of this.horde.list) {
+          if (!z.alive || z.dying) continue;
+          const d = Math.hypot(z.pos.x - bx, z.pos.z - bz);
+          if (d < 4.2) { z.takeDamage(f.dmg * (1 - d / 4.2 * .5), 'body', { x: 0, y: 0, z: 0 }); this.player.damageDealt += f.dmg * .5; }
+        }
+        if (f.mesh.parent) f.mesh.parent.remove(f.mesh);
+        list.splice(i, 1);
+      }
+    }
   },
 
   meleeGroundSlam(origin, dir, def, muzzleWorld) {
@@ -9392,10 +9554,10 @@ const Game = {
         // held fire: a cone of flame that burns everything in front
         this.updateFlamer(dt);
       } else if (def.ult && Input.aimDown() && canLook && !this._ultAimLatch) {
-        /* ПКМ (на телефоне — кнопка ПРИЦЕЛ) — УЛЬТА МЕЧА РОКОЧУЩЕГО РЫЦАРЯ.
-           По ФРОНТУ нажатия, чтобы не срабатывала без конца (ПРИЦЕЛ — тумблер). */
+        /* ПКМ (на телефоне — кнопка ПРИЦЕЛ) — УЛЬТА.
+           Меч рыцаря = SANGUINE SLASH, Господин цветов = СОВОКУПНАЯ СИЛА. */
         this._ultAimLatch = true;
-        this.knightUlt();
+        if (def.flowerUlt) this.flowerUlt(); else this.knightUlt();
       } else if (def.beam && p.triggerDown && beamReady) {
         // held fire: a continuous piercing beam instead of bullets
         this.updateBeam(dt);
@@ -9488,6 +9650,7 @@ const Game = {
     // ---- flying bananas ----
     this.updateProjectiles(dt);
     this.updateSlashProjectiles(dt);
+    this.updateFlowerUlt(dt);
     if (this.mode === CS.MODE.RANGE) this.updateDummyProjectiles(dt);
     if (this.mode === CS.MODE.OFFLINE || this.mode === CS.MODE.RANGE) this.updateEnemyShots(dt);
     if (this.mode === CS.MODE.ONLINE) { this.updateRemoteProjectiles(dt); this.updateRemoteMechMissiles(dt); }

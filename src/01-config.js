@@ -405,9 +405,20 @@ const WEAPONS = {
           auto: false, spread: .004, moveSpread: .050, recoil: 5.0, falloff: .99, range: 240, headMul: 1.2,
           sound: 'awp', projectile: 'blackhole', projSpeed: 32, projGravity: 3,
           wellR: 9.5, wellLife: 4.2, wellDps: 45, wellPull: 11,
-          splash: 8.5, splashDmg: 900, explosionColor: [0x9a5aff, 0x08040f], noSelfDamage: true }
-};
+          splash: 8.5, splashDmg: 900, explosionColor: [0x9a5aff, 0x08040f], noSelfDamage: true },
 
+  /* ---------- ГОСПОДИН ЦВЕТОВ (LORD OF FLOWERS) ----------------
+     Оружие-босс: ЛКМ — очередью летят разноцветные ЦВЕТОЧНЫЕ СНАРЯДЫ
+     (у каждого свой цвет, при попадании разлетаются лепестки). ПКМ — УЛЬТА:
+     Флауэр выпускает пять цветных «душ», играет музыка атаки и звучит его
+     реплика; по площади наносится огромный урон и крушатся стены. */
+  lordOfFlowers: { name: 'ГОСПОДИН ЦВЕТОВ', cat: 'exp', slot: 2, price: 123456, dmg: 260, rpm: 320, mag: 40, reserve: 240,
+          auto: true, spread: .012, moveSpread: .030, recoil: 1.6, falloff: .95, range: 150, headMul: 2.0,
+          sound: 'shotgun', projectile: 'flower', projSpeed: 46, projGravity: 2,
+          flowerSplash: 3.2, flowerSplashDmg: 130, noSelfDamage: true,
+          ult: true, ultCd: 14, ultR: 13, ultDmg: 5200, ultBreakR: 12, ultBreakDelay: 1.4,
+          flowerUlt: true }
+};
 /* ============================================================
    МИНИ-ИЗОБРАЖЕНИЯ ОРУЖИЯ ДЛЯ МАГАЗИНА
    Один offscreen-рендерер рисует каждую модель в PNG ЧИСТЫМ ВИДОМ СБОКУ

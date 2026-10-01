@@ -2,6 +2,9 @@
    09 — EFFECTS: tracers, decals, particles, blood, impact sparks
    ============================================================ */
 
+/* Цвета радужного «нового» кольца ульты «Господина цветов». */
+const FLOWER_NOVA_COLORS = [0xff5d8f, 0xffd23f, 0x5dd6ff, 0x9b6bff, 0x66e06a];
+
 /* Instanced-friendly particle pool using points+sprites is overkill;
    we use small meshes pooled per type (cheap at our scale). */
 class Effects {
@@ -103,6 +106,64 @@ class Effects {
         Math.cos(a) * U.rand(6, 16), U.rand(.5, 2.5), Math.sin(a) * U.rand(6, 16),
         U.rand(.12, .28), 'smoke', U.rand(.5, 1.1));
     }
+  }
+
+  /* ГОСПОДИН ЦВЕТОВ: сноп лепестков при попадании цветочного снаряда. */
+  flowerBurst(x, y, z, radius, color) {
+    color = color || 0xff7fb0;
+    const col = new THREE.Color(color);
+    const n = (this.quality === 0) ? 8 : 18;
+    this.flowerBits = this.flowerBits || [];
+    for (let i = 0; i < n; i++) {
+      const pet = new THREE.Mesh(new THREE.SphereGeometry(.10, 6, 5),
+        new THREE.MeshBasicMaterial({ color: color, transparent: true, opacity: .95, depthWrite: false }));
+      pet.scale.set(1.6, .4, 1.0);
+      pet.position.set(x + U.rand(-.3, .3), y + U.rand(-.3, .3), z + U.rand(-.3, .3));
+      const a = U.rand(0, Math.PI * 2), sp = U.rand(3, 9);
+      this.scene.add(pet);
+      this.flowerBits.push({
+        mesh: pet, life: U.rand(.5, .9), max: .9,
+        vx: Math.cos(a) * sp, vy: U.rand(2, 7), vz: Math.sin(a) * sp, spin: U.rand(-6, 6)
+      });
+    }
+    const light = new THREE.PointLight(color, 60, radius * 2.2, 2);
+    light.position.set(x, y + .4, z); this.scene.add(light);
+    this.flowerBits.push({ light: light, life: .3, max: .3 });
+    for (let i = 0; i < n; i++) {
+      const a = U.rand(0, Math.PI * 2);
+      this.particle(x, y + .2, z, Math.cos(a) * U.rand(4, 12), U.rand(2, 6), Math.sin(a) * U.rand(4, 12),
+        U.rand(.1, .22), 'smoke', U.rand(.5, 1.1));
+    }
+  }
+
+  /* УЛЬТА ГОСПОДИНА ЦВЕТОВ: радужное «новое» кольцо из цветов расходится от центра. */
+  flowerNova(x, y, z, R) {
+    this.flowerNovas = this.flowerNovas || [];
+    for (let ring = 0; ring < 3; ring++) {
+      const color = FLOWER_NOVA_COLORS[ring % FLOWER_NOVA_COLORS.length];
+      const mat = new THREE.MeshBasicMaterial({ color: color, transparent: true, opacity: .9,
+        blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
+      const m = new THREE.Mesh(new THREE.RingGeometry(.7, 1.0, 48), mat);
+      m.rotation.x = -Math.PI / 2;
+      m.position.set(x, y + .05 + ring * .12, z);
+      this.scene.add(m);
+      this.flowerNovas.push({ mesh: m, mat: mat, life: .8 + ring * .12, max: .8 + ring * .12, r: R * (1 - ring * .12) });
+    }
+    // лепестки, разлетающиеся вокруг
+    for (let i = 0; i < 40; i++) {
+      const a = i / 40 * Math.PI * 2;
+      const color = FLOWER_NOVA_COLORS[i % FLOWER_NOVA_COLORS.length];
+      const pet = new THREE.Mesh(new THREE.SphereGeometry(.14, 6, 5),
+        new THREE.MeshBasicMaterial({ color: color, transparent: true, opacity: .95, depthWrite: false }));
+      pet.scale.set(1.7, .45, 1.0); pet.rotation.z = a;
+      pet.position.set(x + Math.cos(a) * .6, y + .3, z + Math.sin(a) * .6);
+      this.scene.add(pet);
+      this.flowerBits.push({ mesh: pet, life: 1.1, max: 1.1,
+        vx: Math.cos(a) * U.rand(9, 16), vy: U.rand(3, 8), vz: Math.sin(a) * U.rand(9, 16), spin: U.rand(-8, 8) });
+    }
+    const light = new THREE.PointLight(0xff9ad6, 220, R * 3, 2);
+    light.position.set(x, y + 1.2, z); this.scene.add(light);
+    this.flowerBits.push({ light: light, life: .5, max: .5 });
   }
 
   /* УЛЬТА МЕЧА РОКОЧУЩЕГО РЫЦАРЯ: объёмный БЕЛЫЙ разрез вдоль полосы (в мире).
@@ -1389,6 +1450,47 @@ class Effects {
           if (s.mesh.parent) s.mesh.parent.remove(s.mesh);
           s.mat.dispose();
           this.swoons.splice(i, 1);
+        }
+      }
+    }
+    // ГОСПОДИН ЦВЕТОВ: лепестки (burst/nova) — гравитация, вращение, угасание
+    if (this.flowerBits) {
+      for (let i = this.flowerBits.length - 1; i >= 0; i--) {
+        const b = this.flowerBits[i];
+        b.life -= dt;
+        const k = Math.max(0, b.life / b.max);
+        if (b.light) { b.light.intensity = 90 * k * k; }
+        else if (b.mesh) {
+          b.vy -= 14 * dt;
+          b.mesh.position.x += b.vx * dt;
+          b.mesh.position.y += b.vy * dt;
+          b.mesh.position.z += b.vz * dt;
+          b.mesh.rotation.z += (b.spin || 0) * dt;
+          b.mesh.material.opacity = Math.min(1, k * 1.6);
+          const s = .7 + k * .5;
+          b.mesh.scale.set(1.7 * s, .45 * s, s);
+        }
+        if (b.life <= 0) {
+          if (b.light) { if (b.light.parent) b.light.parent.remove(b.light); }
+          else { if (b.mesh.parent) b.mesh.parent.remove(b.mesh); if (b.mesh.geometry) b.mesh.geometry.dispose(); if (b.mesh.material) b.mesh.material.dispose(); }
+          this.flowerBits.splice(i, 1);
+        }
+      }
+    }
+    // ГОСПОДИН ЦВЕТОВ: радужные кольца ульты расходятся и гаснут
+    if (this.flowerNovas) {
+      for (let i = this.flowerNovas.length - 1; i >= 0; i--) {
+        const n = this.flowerNovas[i];
+        n.life -= dt;
+        const k = Math.max(0, n.life / n.max);
+        const e = 1 - Math.pow(1 - (1 - k), 3);
+        n.mesh.scale.setScalar(.4 + e * (n.r || 12));
+        n.mat.opacity = k * .8;
+        if (n.life <= 0) {
+          if (n.mesh.parent) n.mesh.parent.remove(n.mesh);
+          if (n.mesh.geometry) n.mesh.geometry.dispose();
+          n.mat.dispose();
+          this.flowerNovas.splice(i, 1);
         }
       }
     }

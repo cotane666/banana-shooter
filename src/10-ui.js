@@ -456,6 +456,12 @@ const UI = {
     e.classList.add('on');
     this._centerT = (dur || 2.0);
   },
+  /* ГОСПОДИН ЦВЕТОВ: кинематографичный баннер ульты + реплика. */
+  flowerUltBanner() {
+    this.center('LORD OF FLOWERS', '· СОВОКУПНАЯ СИЛА ·', 2.6);
+    const e = this.el.centerMsg;
+    if (e) { e.classList.add('flowerult'); setTimeout(() => e.classList.remove('flowerult'), 2600); }
+  },
   feed(html) {
     const d = document.createElement('div');
     d.innerHTML = html;

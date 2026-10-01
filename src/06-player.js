@@ -2164,6 +2164,47 @@ function buildWeaponModel(id) {
       add(B(.050, .050, .07, 0xd8a878, 0, .0, -.02));                 // wrist
       break;
     }
+
+    /* ---------------- ГОСПОДИН ЦВЕТОВ: стебель-пушка с цветком на дуле ------ */
+    case 'lordOfFlowers': {
+      const stem = 0x3f7a35, leaf = 0x54a344, pot = 0x7a5230, gold = 0xf2c74a;
+      // «горшок»-приклад у руки
+      add(B(.10, .11, .16, pot, 0, -.005, .10));
+      add(B(.11, .03, .17, 0x5a3a20, 0, .05, .10));                    // обод горшка
+      // стебель-ствол вдоль -Z
+      add(CYL(.030, .80, stem, 0, -.005, -.34, 10));
+      add(CYL(.034, .06, 0x2f5f28, 0, -.005, .02, 10));                // узел у приклада
+      // два листа по бокам стебля
+      [-1, 1].forEach(s => {
+        const lf = new THREE.Mesh(new THREE.SphereGeometry(.075, 8, 6), gunMat(leaf));
+        lf.scale.set(1.6, .35, .8); lf.position.set(s * .075, -.02, -.18); lf.rotation.z = s * .5;
+        g.add(lf);
+      });
+      // цветок на дуле: шесть лепестков + сердцевина
+      const head = new THREE.Group();
+      for (let i = 0; i < 6; i++) {
+        const a = i / 6 * Math.PI * 2;
+        const pet = new THREE.Mesh(new THREE.SphereGeometry(.055, 8, 6), gunMat(i % 2 ? 0xff6fae : 0xffd0e6));
+        pet.scale.set(1.7, .5, 1.0);
+        pet.position.set(Math.cos(a) * .075, Math.sin(a) * .075, 0);
+        pet.rotation.z = a;
+        head.add(pet);
+      }
+      const core = new THREE.Mesh(new THREE.SphereGeometry(.05, 10, 8), gunMat(gold));
+      core.material.emissive = new THREE.Color(0x6a4a10);
+      head.add(core);
+      head.position.set(0, .01, -.76);
+      g.add(head);
+      // светящаяся пыльца-точки на лепестках
+      for (let i = 0; i < 5; i++) {
+        const sp = new THREE.Mesh(new THREE.SphereGeometry(.012, 6, 5), new THREE.MeshBasicMaterial({ color: 0xfff2a0 }));
+        sp.position.set(U.rand(-.1, .1), .01 + U.rand(-.1, .1), -.78 + U.rand(-.05, .05));
+        g.add(sp);
+      }
+      g.userData.flowerGun = true;
+      g.scale.setScalar(.58);
+      break;
+    }
   }
 
   /* every model gets a muzzle marker at the barrel tip so flashes and
@@ -2188,6 +2229,7 @@ const MUZZLE_Z = {
   laserCannon: -1.20,
   rocketgun: -0.94, shield: -0.30,
   banana: -0.92,
+  lordOfFlowers: -0.96,
   acid: -0.76, hive: -0.26, disc: -0.32, freeze: -0.76, tesla: -0.72,
   portal: -0.48, blackhole: -0.54, turretDrone: -0.28, chrono: -0.48,
   tesla: -0.50,
@@ -2278,6 +2320,25 @@ function buildBananaProjectile() {
 }
 
 /* ---- experimental weapon projectiles ---- */
+/* ГОСПОДИН ЦВЕТОВ: светящийся бутон с лепестками; цвет задаётся при выстреле */
+function buildFlowerProjectile() {
+  const g = new THREE.Group();
+  const body = new THREE.Mesh(new THREE.SphereGeometry(.16, 10, 8),
+    new THREE.MeshLambertMaterial({ color: 0xffffff, emissive: 0x552244 }));
+  g.add(body);
+  const petals = new THREE.MeshLambertMaterial({ color: 0xffffff, emissive: 0x663355, transparent: true, opacity: .9 });
+  for (let i = 0; i < 5; i++) {
+    const a = i / 5 * Math.PI * 2;
+    const pet = new THREE.Mesh(new THREE.SphereGeometry(.11, 8, 6), petals);
+    pet.scale.set(1.5, .5, .9);
+    pet.position.set(Math.cos(a) * .13, Math.sin(a) * .13, 0);
+    pet.rotation.z = a;
+    g.add(pet);
+  }
+  addGlowSphere(g, .26, 0xffffff, .45);
+  g.userData.flowerPetals = petals;
+  return g;
+}
 /* ДИСКОБОЛ: a flat spinning plasma disc */
 function buildDiscProjectile() {
   const g = new THREE.Group();

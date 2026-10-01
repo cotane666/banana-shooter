@@ -3512,25 +3512,41 @@ class Player {
   /* Probe the space directly in front of the player for a climbable surface.
      The movement collision only reports a wall while we are actually pushing
      into it, but the dedicated climb action must also work from a standstill,
-     so it looks ahead by a hand's reach instead. Returns {top, low} or null. */
+     so it sweeps forward down the whole climb reach and takes the FIRST
+     obstacle it meets — the one the player is actually facing. Stopping at the
+     nearest contact matters: stacked crates and adjacent walls sit inside the
+     reach, and simply taking the tallest box picked a neighbour, so the vault
+     either refused or dropped the player past the near object.
+     IMPORTANT: the sweep column is TALL (not just the player's height). Walls
+     are chopped into vertical chunks, so a short column only met the bottom
+     chunks and reported a ~2.6 m top for a 5 m wall — the vault then refused or
+     stopped half-way. We also require the column to be GROUNDED (some box rises
+     from around our feet) so an overhead roof does not read as a climbable top. */
   probeWall(world) {
     const cy = Math.cos(this.yaw), sy = Math.sin(this.yaw);
     const fx = -sy, fz = -cy;                        // forward
-    const reach = this.radius + 0.5;
-    const px = this.pos.x + fx * reach, pz = this.pos.z + fz * reach;
-    const r = this.radius * 0.9;
-    const cyl = { x: px, y: this.pos.y, z: pz, radius: r, height: this.height };
-    const bb = AABB(px - r, this.pos.y, pz - r, px + r, this.pos.y + this.height, pz + r);
-    const list = world.query(bb, []);
-    let top = -Infinity, low = Infinity;
-    for (let i = 0; i < list.length; i++) {
-      const b = list[i];
-      if (b.tag === 'ground') continue;
-      if (!cylinderOverlapsAABB(cyl, b)) continue;
-      if (b.maxY > top) top = b.maxY;
-      if (b.minY < low) low = b.minY;
+    const r = this.radius * 0.92;
+    const maxReach = (CFG.climbReach || 2.4) + this.radius;
+    const tall = 24;                                 // covers perimeter (9) and towers too
+    for (let d = r; d <= maxReach; d += 0.12) {
+      const px = this.pos.x + fx * d, pz = this.pos.z + fz * d;
+      const cyl = { x: px, y: this.pos.y, z: pz, radius: r, height: tall };
+      const bb = AABB(px - r, this.pos.y, pz - r, px + r, this.pos.y + tall, pz + r);
+      const list = world.query(bb, []);
+      let top = -Infinity, low = Infinity, grounded = false, any = false;
+      for (let i = 0; i < list.length; i++) {
+        const b = list[i];
+        if (b.tag === 'ground' || b.removed) continue;
+        if (!cylinderOverlapsAABB(cyl, b)) continue;
+        any = true;
+        if (b.minY <= this.pos.y + CFG.stepUp + 0.05) grounded = true;
+        if (b.maxY > top) top = b.maxY;
+        if (b.minY < low) low = b.minY;
+      }
+      if (any && grounded) return { top, low, contact: d };
+      if (any && !grounded) return null;             // only overhead stuff → nothing to climb
     }
-    return top === -Infinity ? null : { top, low };
+    return null;
   }
 
   /* ---------- climb mechanic ----------
@@ -3582,10 +3598,19 @@ class Player {
     const fx = -sy, fz = -cy;                     // forward
     let tx = this.pos.x, tz = this.pos.z, landY = top;
     let found = false;
-    for (const step of [this.radius + 0.25, this.radius + 0.55, this.radius + 0.95]) {
+    /* Шаг отсчитываем ОТ ПЕРЕДНЕЙ ГРАНИ препятствия (probe.contact — расстояние
+       от игрока), иначе при подходе с 1.8–2.4 м фиксированные радиусы не
+       докидывали до крышки и игрок оказывался в воздухе над объектом или
+       проваливался в пустоту за ним. Садимся только там, где под точкой есть
+       опора на высоте крышки (gy >= top-0.35) — так нельзя «перепрыгнуть»
+       тонкую стену и повиснуть над полом за ней. */
+    const base = probe ? probe.contact : this.radius + 0.3;
+    for (const off of [0.45, 0.85, 1.3]) {
+      const step = base + off;
       const px = this.pos.x + fx * step, pz = this.pos.z + fz * step;
       const gy = world.groundAt(px, pz, top + 1.2);
-      const y = (gy === null || gy === undefined || gy < top - 0.4) ? top : gy;
+      if (gy === null || gy === undefined || gy < top - 0.35) continue;   // под точкой нет опоры
+      const y = Math.min(gy, top);
       if (!world.overlaps(px, y + 0.05, pz, this.radius * 0.95, this.height)) {
         tx = px; tz = pz; landY = y; found = true; break;
       }

@@ -5925,6 +5925,9 @@ const Game = {
     }
     const def = p.def;
     if (def.shield) { this.activateShield(); return false; }   // shield raises, never fires
+    /* ГОСПОДИН ЦВЕТОВ: ЛКМ — прямой таранный рывок без разворотов. Если рывок
+       на перезарядке — просто ничего (это умение, а не обычный мах). */
+    if (def.flowerDash) { this.flowerDash(); return false; }
     /* experimental weapons with bespoke behaviour (tesla / portal / turret …) */
     if (def.special) { this.fireSpecial(def, w); return true; }
     if (w.mag !== Infinity) w.mag--;
@@ -7737,54 +7740,91 @@ const Game = {
     }
     this._flowerUltAt = now;
 
-    const dir = this.cameraDir();
-    const flat = Math.hypot(dir.x, dir.z) || 1;
-    const fx = dir.x / flat, fz = dir.z / flat;
-
-    /* ЗВУК: боевой фрагмент + реплика Флауэра. Его фирменная атака — «JARONA»:
-       он вспыхивает белым, становится радужным (Omega Flowery) и делает рывок. */
-    if (Audio3D_SFX.flowerVoice) Audio3D_SFX.flowerVoice(FLOWER_VOICE_LIST[(Math.random() * FLOWER_VOICE_LIST.length) | 0], 1.0);
-    if (Audio3D_SFX.flowerMusic) Audio3D_SFX.flowerMusic();
-    p.recoil = (p.recoil || 0) + .3;
-    p.viewPunchP = (p.viewPunchP || 0) + .2;
-
-    /* ЗАХВАТ: враги в конусе перед игроком «прилипают» и летят вместе с ним */
-    const R0 = 5.6;
-    const grabbed = [];
-    const grabList = (list, isRemote) => {
-      if (!list) return;
-      for (const z of list) {
-        if (!z.alive || z.dying) continue;
-        const dx = z.pos.x - p.pos.x, dz = z.pos.z - p.pos.z;
-        const d = Math.hypot(dx, dz);
-        if (d > R0 + 1) continue;
-        if (dx * fx + dz * fz < d * .1) continue;         // только впереди
-        grabbed.push({ z: z, remote: !!isRemote, ox: dx, oy: (z.pos.y + .8) - p.pos.y, oz: dz });
-        z._flowerGrabbed = true;
-      }
-    };
-    grabList(this.horde && this.horde.list, false);
-    if (this.mode === CS.MODE.ONLINE) grabList(this.remotePlayers, true);
-
-    this._flowerRush = {
-      t: 0, dur: 1.85, finished: false,
-      fx: fx, fz: fz, grabbed: grabbed, maxGrab: grabbed.length,
-      hitCd: 0, R: def.ultR || 13, dmg: def.ultDmg || 5200, breakR: def.ultBreakR || 12
-    };
-    if (this.effects && this.effects.flowerAura) this.effects.flowerAura(p.pos.x, p.pos.y + 1, p.pos.z, true);
-    if (typeof UI !== 'undefined' && UI.flowerUltBanner) UI.flowerUltBanner();
-    p.bulletsFired += 1;
+    this._startFlowerRush('ult');
     return true;
   },
 
   /* ============================================================
-     ТАРАННЫЙ РЫВОК «СОВОКУПНАЯ СИЛА» — по мотивам атаки из видео:
-       фаза 1 (0.00–0.35): игрок ЛЕТИТ ВПЕРЁД, зацепляя врагов;
-       фаза 2 (0.35–0.80): ТАРАНИТ их, РАЗВОРАЧИВАЕТСЯ (поворот камеры) и
-                            ПОДНИМАЕТСЯ ВВЕРХ, таща добычу с собой;
-       фаза 3 (0.80–1.00): КРАСИВЫЙ ФИНАЛЬНЫЙ УДАР — врагов отбрасывает
-                            далеко вперёд с радужной вспышкой и разрушением.
-     Во время всего рывка игрок НЕ получает урона.
+     ЛКМ «ГОСПОДИНА ЦВЕТОВ» — ПРЯМОЙ ТАРАННЫЙ РЫВОК (без разворотов).
+     Игрок стремительно летит вперёд, зацепляет врагов по пути, таранит их
+     и в конце отбрасывает. Неуязвим на всё время рывка.
+     ============================================================ */
+  flowerDash() {
+    const p = this.player;
+    if (!p || !p.alive) return false;
+    const def = p.def || {};
+    if (!def.flowerDash) return false;
+    if (this._flowerRush) return false;
+    if (this.roundState !== 'live' || this.mode === CS.MODE.MENU) return false;
+    const now = U.now();
+    const cd = (def.dashCd || 2.2) * 1000;
+    if (this._flowerDashAt && now - this._flowerDashAt < cd) return false;
+    this._flowerDashAt = now;
+    this._startFlowerRush('dash');
+    return true;
+  },
+
+  /* ---- ОБЩИЙ ЗАПУСК РЫВКА ----
+     kind: 'dash' — прямой рывок (ЛКМ); 'ult' — полёт по петляющей траектории
+     (ПКМ), из трёх проходов с мёртвыми петлями и финального пикирования. */
+  _startFlowerRush(kind) {
+    const p = this.player;
+    const def = p.def || {};
+    const dir = this.cameraDir();
+    const flat = Math.hypot(dir.x, dir.z) || 1;
+    const fx = dir.x / flat, fz = dir.z / flat;
+    const rx = -fz, rz = fx;                        // правый перпендикуляр
+    const ult = kind === 'ult';
+
+    /* ЗВУК: реплика Флауэра; боевой фрагмент музыки — только у ульты (иначе
+       музыка перезапускалась бы на каждом ЛКМ). */
+    if (Audio3D_SFX.flowerVoice) Audio3D_SFX.flowerVoice(
+      ult ? FLOWER_VOICE_LIST[(Math.random() * FLOWER_VOICE_LIST.length) | 0] : FLOWER_VOICE_HEH, 1.0);
+    if (ult && Audio3D_SFX.flowerMusic) Audio3D_SFX.flowerMusic();
+    p.recoil = (p.recoil || 0) + .3;
+    p.viewPunchP = (p.viewPunchP || 0) + .2;
+
+    this._flowerRush = {
+      kind: kind, t: 0,
+      dur: ult ? 3.4 : (def.dashDur || .5),
+      ox: p.pos.x, oy: p.pos.y, oz: p.pos.z,
+      fx: fx, fz: fz, rx: rx, rz: rz,
+      tfx: fx, tfz: fz, trx: rx, trz: rz,          // текущее направление движения
+      grabbed: [], grabR: ult ? (def.ultR || 13) * .42 : (def.dashGrabR || 3.0),
+      dps: ult ? (def.ultDmg || 5200) / 16 : (def.dashDmg || 220) * 4,
+      finished: false, dist: (def.dashSpeed || 32) * (def.dashDur || .5),
+      R: def.ultR || 13, dmg: def.ultDmg || 5200, breakR: def.ultBreakR || 12,
+      amp: (def.ultR || 13) * .78, rad: (def.ultR || 13) * 3.6, high: (def.ultR || 13) * .95
+    };
+    if (this.effects && this.effects.flowerAura) this.effects.flowerAura(p.pos.x, p.pos.y + .15, p.pos.z, true);
+    if (ult && typeof UI !== 'undefined' && UI.flowerUltBanner) UI.flowerUltBanner();
+    p.bulletsFired += 1;
+  },
+
+  /* Точка на петляющей траектории ульты. u: 0→1. Боковая волна 0→1→0→1 даёт
+     три прохода с разворотами на краях («мёртвые петли»), а большой колокол
+     высоты — взлёт по дуге и пикирование к финалу. */
+  _flowerPath(u, st) {
+    const L = st.rad, A = st.amp, H = st.high;
+    const s = .5 - .5 * Math.cos(u * Math.PI * 3);
+    const sgn = (Math.floor(u * 3) % 2 === 0) ? 1 : -1;
+    const lat = s * sgn * A;
+    const x = st.ox + st.fx * u * L + st.rx * lat;
+    const z = st.oz + st.fz * u * L + st.rz * lat;
+    let y = 1.15 + H * Math.pow(Math.sin(u * Math.PI), 1.35) + .55;
+    const lift = U.clamp(u / .06, 0, 1);
+    y = st.oy + (y - st.oy) * lift;
+    return { x: x, y: y, z: z };
+  },
+
+  /* ============================================================
+     ОБНОВЛЕНИЕ РЫВКА «ГОСПОДИНА ЦВЕТОВ».
+       kind='dash' (ЛКМ): ПРЯМОЙ таран вперёд без разворотов.
+       kind='ult'  (ПКМ): полёт по петляющей траектории — три прохода с
+         мёртвыми петлями, взлёт по большой дуге и пикирование, затем в конце
+         цветочный взрыв и ударные волны; врагов таранит по пути.
+     Камера ВСЕГДА смотрит по направлению движения. Враг словит урон при
+     касании траектории, а зацепленные летят вместе с игроком.
      ============================================================ */
   updateFlowerRush(dt) {
     const st = this._flowerRush;
@@ -7792,120 +7832,214 @@ const Game = {
     const p = this.player;
     if (!p || !p.alive) { this.endFlowerRush(false); return; }
     st.t += dt;
-    const k = U.clamp(st.t / st.dur, 0, 1);
-    /* аура лепестков следует за игроком */
+    const ult = st.kind === 'ult';
+
+    /* аура лепестков у ног следует за игроком */
     if (this.effects && this.effects._flowerAura) {
       const au = this.effects._flowerAura;
       au.position.set(p.pos.x, p.pos.y + .15, p.pos.z);
-      au.rotation.y += dt * 8;
+      au.rotation.y += dt * (ult ? 11 : 8);
     }
-    /* «вспышка белым перед рывком» — как замах Jarona у Флауэра */
-    if (this.effects && this.effects.flowerFlash && k < .18) {
-      this.effects.flowerFlash(p.pos.x, p.pos.y + 1, p.pos.z, (p.yaw), 1 - k / .18);
+    /* белая вспышка-замах Jarona в самом начале */
+    if (this.effects && this.effects.flowerFlash && st.t < .16) {
+      this.effects.flowerFlash(p.pos.x, p.pos.y + 1, p.pos.z, p.yaw, 1 - st.t / .16);
     }
 
-    /* ---- ФАЗА 1-2: ЛЕТИМ ВПЕРЁД, ЗАТЕМ ТАРАНИМ С ПОВОРОТОМ И ВЗЛЁТОМ ---- */
-    if (k < .80) {
-      // движение вперёд: разгон в начале, таран в середине, взлёт к концу
-      let speed;
-      if (k < .35) speed = 16 + (k / .35) * 16;               // 16 → 32 м/с разгон
-      else if (k < .55) speed = 32;                            // таран на полной
-      else speed = Math.max(6, 32 * (1 - (k - .55) / .25));    // замедление при подъёме
-      // поворот: игрок разворачивается дугой (как «спираль» в видео)
-      const turn = (k < .35 ? 0 : (k - .35) / .45);            // 0→1
-      const yaw = Math.atan2(-st.fx, -st.fz) + turn * Math.PI * .85;
-      st.fx = -Math.sin(yaw); st.fz = -Math.cos(yaw);
-      p.pos.x += st.fx * speed * dt;
-      p.pos.z += st.fz * speed * dt;
-      if (k > .50) {
-        // РАЗВОРАЧИВАЕМСЯ И ПОДНИМАЕМСЯ ВВЕРХ (мощный вертикальный подъём)
-        const lift = U.clamp((k - .50) / .30, 0, 1);
-        p.pos.y += lift * 16 * dt;
-        p.onGround = false;
+    if (ult) {
+      /* ---- ПКМ: ПОЛЁТ ПО ПЕТЛЯЮЩЕЙ ТРАЕКТОРИИ ---- */
+      const u0 = U.clamp(st.t / st.dur, 0, 1);
+      const a = this._flowerPath(u0, st);
+      const u1 = U.clamp(Math.min(u0 + .02, 1), 0, 1);
+      const b = this._flowerPath(u1, st);
+      let dx = b.x - a.x, dy = b.y - a.y, dz = b.z - a.z;
+      const dl = Math.hypot(dx, dy, dz);
+      if (dl > 1e-4) { dx /= dl; dy /= dl; dz /= dl; } else { dx = st.tfx; dy = 0; dz = st.tfz; }
+      st.tfx = dx; st.tfz = dz;
+      /* не проваливаемся под пол/крышу: если точка ниже поверхности — поднять */
+      const gy = this.world.groundAt(a.x, a.z, a.y + 1) || 0;
+      if (a.y < gy + .25) a.y = gy + .25;
+      p.pos.x = a.x; p.pos.y = a.y; p.pos.z = a.z;
+      /* если точка внутри препятствия — поднять над ним (иначе камера внутри
+         блока даёт чёрный экран), так что игрок «перелетает» крыши */
+      let guard = 0;
+      while (this.world.overlaps(p.pos.x, p.pos.y, p.pos.z, p.radius, p.height) && guard++ < 30) p.pos.y += .3;
+      p.vel.x = p.vel.y = p.vel.z = 0;
+      p.onGround = false;
+      this._flowerTrack(p, dx, dy, dz, dt, st, true);
+      /* МНОГО ВОЙСКЛИПОВ (как в видео): реплики Флауэра звучат всю атаку */
+      st.voiceT = (st.voiceT || 0) - dt;
+      if (st.voiceT <= 0) {
+        st.voiceT = U.rand(.24, .46);
+        if (Audio3D_SFX.flowerVoice) Audio3D_SFX.flowerVoice(FLOWER_VOICE_LIST[(Math.random() * FLOWER_VOICE_LIST.length) | 0], 1.0);
       }
-      // держим врагов зацепленными: они летят в связке перед/за игроком
-      for (const g of st.grabbed) {
-        const z = g.z;
-        if (!z.alive || z.dying) continue;
-        // цель — точка рядом с игроком (сзади-сбоку, как «хвост»), с задержкой
-        g.ox = U.lerp(g.ox, -st.fx * 1.2 + (-st.fz) * 1.0, 1 - Math.pow(.02, dt));
-        g.oz = U.lerp(g.oz, -st.fz * 1.2 + (st.fx) * 1.0, 1 - Math.pow(.02, dt));
-        const tx = p.pos.x + g.ox, tz = p.pos.z + g.oz, ty = Math.max(p.pos.y, 0) + .4;
-        z.pos.x = U.lerp(z.pos.x, tx, 1 - Math.pow(.0001, dt));
-        z.pos.z = U.lerp(z.pos.z, tz, 1 - Math.pow(.0001, dt));
-        z.pos.y = U.lerp(z.pos.y, ty, 1 - Math.pow(.0001, dt));
-        z.vel.x = z.vel.y = z.vel.z = 0;
-        if (typeof z.stagger === 'function') z.stagger(.8);
-        // периодический урон за таран
-        st.hitCd -= dt;
-        if (st.hitCd <= 0) {
-          const d = (st.dmg / 12) * (st.maxGrab > 1 ? 1 + st.maxGrab * .12 : 1);
-          this._flowerRushDmg = true;
-          if (g.remote) { /* PvP: урон в конце */ }
-          else { z.takeDamage(d, 'body', { x: st.fx, y: 0, z: st.fz }); this.player.damageDealt += d; }
-          this._flowerRushDmg = false;
-        }
-      }
-      if (st.hitCd <= 0) st.hitCd = .12;
-      // цветочный след за игроком
-      if (this.effects && this.effects.flowerBurst && Math.random() < .5) {
-        this.effects.flowerBurst(p.pos.x - st.fx * 1.5, p.pos.y + .8, p.pos.z - st.fz * 1.5, 1.6,
+      // цветочный след при быстром полёте
+      if (this.effects && this.effects.flowerBurst && Math.random() < .6) {
+        this.effects.flowerBurst(p.pos.x - st.tfx * 1.6, p.pos.y, p.pos.z - st.tfz * 1.6, 2.0,
           FLOWER_PROJ_COLORS[(Math.random() * FLOWER_PROJ_COLORS.length) | 0]);
       }
+      if (u0 >= 1) this._flowerFinale(p, st);
     } else {
-      /* ---- ФАЗА 3: КРАСИВЫЙ ФИНАЛЬНЫЙ УДАР ---- */
-      if (!st.finished) {
-        st.finished = true;
-        const R = st.R, dmg = st.dmg, breakR = st.breakR;
-        const cx = p.pos.x, cy = p.pos.y + .6, cz = p.pos.z;
-        // эффекты: радужная нова + вспышка + ударная волна
-        if (this.effects) {
-          this.effects.flowerNova(cx, cy, cz, R * 1.3);
-          this.effects.explosion(cx, cy, cz, R * 1.5, [0xffd0f0, 0x2a0a20]);
-          this.effects.groundWave(cx, p.pos.y + .05, cz, R);
-        }
-        Audio3D_SFX.explosionAt(cx, cy, cz);
-        this.breakMapAt(cx, cy, cz, breakR, dmg);
-        // огромный урон всем вокруг + ОТБРОС ВПЕРЁД
-        const push = (list, isRemote) => {
-          if (!list) return;
-          for (const z of list) {
-            if (!z.alive || z.dying) continue;
-            const dx = z.pos.x - cx, dz = z.pos.z - cz, dy = (z.pos.y + 1) - cy;
-            const d = Math.hypot(dx, dy, dz);
-            if (d > R * 1.3) continue;
-            const kk = 1 - d / (R * 1.3);
-            this._flowerRushDmg = true;
-            if (isRemote) this.sendPvpHit(dmg * (1 - d / R * .5), 'body', false, z, 'flower');
-            else { z.takeDamage(dmg * (.5 + kk * .5), 'body', { x: st.fx, y: .3, z: st.fz }); this.player.damageDealt += dmg * .5; }
-            this._flowerRushDmg = false;
-            if (z.alive && !z.dying) {
-              // ВРАГОВ КИДАЕТ ДАЛЕКО ВПЕРЁД (по направлению удара)
-              z.vel.x = st.fx * 42 * (0.6 + kk); z.vel.z = st.fz * 42 * (0.6 + kk);
-              z.vel.y = 9 * (0.5 + kk);
-              if (typeof z.stagger === 'function') z.stagger(1.2);
-            }
-            z._flowerGrabbed = false;
-          }
-        };
-        push(this.horde && this.horde.list, false);
-        if (this.mode === CS.MODE.ONLINE) push(this.remotePlayers, true);
-        p.recoil = (p.recoil || 0) + .2; p.viewPunchP = (p.viewPunchP || 0) + .16;
+      /* ---- ЛКМ: ПРЯМОЙ ТАРАН ВПЕРЁД (БЕЗ РАЗВОРОТОВ) ---- */
+      const u = U.clamp(st.t / st.dur, 0, 1);
+      const ease = u < .5 ? (u * u * 2) : (1 - Math.pow(1 - u, 2) * 2);   // разгон → торможение
+      const along = st.dist * ease;
+      p.pos.x = st.ox + st.fx * along;
+      p.pos.z = st.oz + st.fz * along;
+      p.pos.y += (0.9 - Math.min(u * 3, .9)) * dt;   // чуть приподняться над полом
+      p.vel.x = p.vel.y = p.vel.z = 0;
+      p.onGround = false;
+      st.tfx = st.fx; st.tfz = st.fz;
+      this._flowerTrack(p, st.fx, 0, st.fz, dt, st, false);
+      if (this.effects && this.effects.flowerBurst && Math.random() < .35) {
+        this.effects.flowerBurst(p.pos.x - st.fx * 1.4, p.pos.y + .6, p.pos.z - st.fz * 1.4, 1.5,
+          FLOWER_PROJ_COLORS[(Math.random() * FLOWER_PROJ_COLORS.length) | 0]);
       }
-      // после удара — плавно возвращаемся на землю
-      if (!this.world.overlaps(p.pos.x, p.pos.y - .1, p.pos.z, p.radius, .2)) p.vel.y -= 30 * dt;
-      if (k >= 1) this.endFlowerRush(true);
+      if (u >= 1) {
+        // финал прямого рывка: короткий залп-удар, отбрасывающий зацепленных
+        this._flowerThrow(p, st, false);
+        this.endFlowerRush(true);
+      }
     }
+  },
+
+  /* Прицел-камера во время рывка: направление взгляда = направление движения. */
+  _flowerTrack(p, dx, dy, dz, dt, st, ult) {
+    const wantYaw = Math.atan2(-dx, -dz);
+    const wantPitch = Math.asin(U.clamp(dy, -.98, .98));
+    const f = 1 - Math.pow(0.0001, dt);
+    p.yaw = U.angleLerp(p.yaw, wantYaw, f);
+    p.pitch = U.lerp(p.pitch, U.clamp(wantPitch, -1.2, 1.2), f);
+    /* ЗАХВАТ И ТАРАН: враги, попавшие близко к траектории, «прилипают» */
+    st._tick = (st._tick || 0) + dt;
+    const ticked = st._tick >= .1;
+    if (ticked) st._tick = 0;
+    const canGrab = st.grabbed.length < 8;
+    const touch = (list, isRemote) => {
+      if (!list) return;
+      for (const z of list) {
+        if (!z.alive || z.dying) continue;
+        const ddx = z.pos.x - p.pos.x, ddz = z.pos.z - p.pos.z, ddy = (z.pos.y + .8) - p.pos.y;
+        const d = Math.hypot(ddx, ddy, ddz);
+        if (d > st.grabR) continue;
+        /* таран: враг на пути получает урон — периодически, не каждый кадр */
+        if (ticked) {
+          this._flowerRushDmg = true;
+          if (isRemote) this.sendPvpHit(st.dps * .1, 'body', false, z, 'flower');
+          else { z.takeDamage(st.dps * .1, 'body', { x: dx, y: 0, z: dz }); p.damageDealt += st.dps * .1; }
+          this._flowerRushDmg = false;
+        }
+        if (z.alive && !z.dying && canGrab && !isRemote) {
+          z._flowerGrabbed = true;
+          st.grabbed.push(z);
+        }
+      }
+    };
+    if (ticked || !st._touched) {
+      st._touched = true;
+      if (this.horde) touch(this.horde.list, false);
+      if (this.mode === CS.MODE.ONLINE) touch(this.remotePlayers, true);
+    }
+    /* несём зацепленных */
+    if (ult) {
+      for (const z of st.grabbed) {
+        if (!z.alive || z.dying) continue;
+        const ang = st.t * 9;
+        const tx = p.pos.x - st.tfx * 1.6 + Math.cos(ang) * .8;
+        const tz = p.pos.z - st.tfz * 1.6 + Math.sin(ang) * .8;
+        const ty = p.pos.y - 1.1;
+        z.pos.x = U.lerp(z.pos.x, tx, 1 - Math.pow(.002, dt));
+        z.pos.z = U.lerp(z.pos.z, tz, 1 - Math.pow(.002, dt));
+        z.pos.y = U.lerp(z.pos.y, ty, 1 - Math.pow(.002, dt));
+        z.vel.x = z.vel.y = z.vel.z = 0;
+        if (typeof z.stagger === 'function') z.stagger(.9);
+      }
+    } else {
+      for (const z of st.grabbed) {
+        if (!z.alive || z.dying) continue;
+        const tx = p.pos.x - st.fx * 1.5, tz = p.pos.z - st.fz * 1.5, ty = p.pos.y;
+        z.pos.x = U.lerp(z.pos.x, tx, 1 - Math.pow(.02, dt));
+        z.pos.z = U.lerp(z.pos.z, tz, 1 - Math.pow(.02, dt));
+        z.pos.y = U.lerp(z.pos.y, ty, 1 - Math.pow(.02, dt));
+        z.vel.x = z.vel.y = z.vel.z = 0;
+        if (typeof z.stagger === 'function') z.stagger(.8);
+      }
+    }
+  },
+
+  /* ФИНАЛ УЛЬТЫ: красивый удар — цветочный взрыв + ударные волны, огромный
+     урон по площади и отбрасывание врагов. Взрыв прижат к земле, чтобы
+     ударные волны шли по полу (как в видео). */
+  _flowerFinale(p, st) {
+    if (st.finished) return;
+    st.finished = true;
+    const R = st.R, dmg = st.dmg, breakR = st.breakR;
+    const cx = p.pos.x, cz = p.pos.z;
+    const gy = this.world.groundAt(cx, cz, p.pos.y + 3);
+    const cy = (gy === null || gy === undefined) ? Math.max(0, p.pos.y) : gy + 1.0;
+    if (this.effects) {
+      this.effects.flowerNova(cx, cy, cz, R * 1.3);
+      this.effects.explosion(cx, cy, cz, R * 1.5, [0xffd0f0, 0x2a0a20]);
+      this.effects.groundWave(cx, cy - 1.0, cz, R);
+      this.effects.groundWave(cx, cy - .5, cz, R * 2.1);
+    }
+    Audio3D_SFX.explosionAt(cx, cy, cz);
+    this.breakMapAt(cx, cy, cz, breakR, dmg);
+    this._flowerThrow(p, st, true, cy);
+    p.recoil = (p.recoil || 0) + .2; p.viewPunchP = (p.viewPunchP || 0) + .16;
+    this.endFlowerRush(true);
+  },
+
+  /* ОТБРОС: все враги вокруг получают урон и разлетаются; зацепленные —
+     бросаются вперёд по направлению движения. */
+  _flowerThrow(p, st, area, cyOverride) {
+    const R = st.R, dmg = st.dmg;
+    const cx = p.pos.x, cz = p.pos.z;
+    const cy = (cyOverride !== undefined) ? cyOverride : p.pos.y;
+    const fx = st.tfx, fz = st.tfz;
+    const push = (list, isRemote) => {
+      if (!list) return;
+      for (const z of list) {
+        if (!z.alive || z.dying) continue;
+        const dx = z.pos.x - cx, dz = z.pos.z - cz, dy = (z.pos.y + 1) - cy;
+        const d = Math.hypot(dx, dy, dz);
+        const grabbed = z._flowerGrabbed;
+        if (area) { if (d > R * 1.3 && !grabbed) continue; }
+        else if (!grabbed && d > 3.2) continue;      // прямой рывок бьёт лишь зацепленных/вплотную
+        const kk = area ? U.clamp(1 - d / (R * 1.3), .2, 1) : 1;
+        this._flowerRushDmg = true;
+        if (isRemote) this.sendPvpHit(dmg * (area ? (1 - d / R * .5) : .7), 'body', false, z, 'flower');
+        else { z.takeDamage(dmg * (area ? (.5 + kk * .5) : .6), 'body', { x: fx, y: .3, z: fz }); p.damageDealt += dmg * .4; }
+        this._flowerRushDmg = false;
+        if (z.alive && !z.dying) {
+          z.vel.x = fx * 44 * (0.7 + kk); z.vel.z = fz * 44 * (0.7 + kk);
+          z.vel.y = 9 * (0.5 + kk);
+          if (typeof z.stagger === 'function') z.stagger(1.2);
+        }
+        z._flowerGrabbed = false;
+      }
+    };
+    push(this.horde && this.horde.list, false);
+    if (this.mode === CS.MODE.ONLINE) push(this.remotePlayers, true);
+    st.grabbed.length = 0;
   },
 
   endFlowerRush(done) {
     const st = this._flowerRush;
     if (st) {
-      for (const g of st.grabbed) { if (g.z) g.z._flowerGrabbed = false; }
+      for (const z of st.grabbed) { if (z) z._flowerGrabbed = false; }
       this._flowerRush = null;
     }
     if (this.effects && this.effects.flowerAura) this.effects.flowerAura(0, 0, 0, false);
-    if (done && this.player) { this.player.vel.x *= .3; this.player.vel.z *= .3; }
+    const p = this.player;
+    if (p) {
+      /* СТРАХОВКА: если рывок закончился внутри геометрии — поднять наверх,
+         иначе камера окажется внутри блока (чёрный экран). */
+      let guard = 0;
+      while (this.world.overlaps(p.pos.x, p.pos.y, p.pos.z, p.radius, p.height) && guard++ < 40) {
+        p.pos.y += .35;
+      }
+      if (done) { p.vel.x *= .3; p.vel.z *= .3; }
+    }
   },
 
   meleeGroundSlam(origin, dir, def, muzzleWorld) {

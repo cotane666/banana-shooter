@@ -419,6 +419,7 @@ const WEAPONS = {
           auto: false, spread: 0, moveSpread: 0, recoil: 2.6, falloff: 1, range: 4.6, headMul: 2.4, sound: 'knife',
           melee: 'lordOfFlowers', knockback: 16, flowerMelee: true,
           flowerDash: true, dashCd: 1.4, dashSpeed: 40, dashDur: .5, dashDmg: 240, dashGrabR: 3.0,
+          omegaDashCd: .5, omegaDist: 40,
           ult: true, ultCd: 16, ultR: 13, ultDmg: 5200, ultBreakR: 12, ultBreakDelay: 0, ultDist: 52,
           flowerUlt: true }
 };

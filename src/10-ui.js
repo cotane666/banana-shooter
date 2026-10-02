@@ -462,6 +462,12 @@ const UI = {
     const e = this.el.centerMsg;
     if (e) { e.classList.add('flowerult'); setTimeout(() => e.classList.remove('flowerult'), 2600); }
   },
+  /* ГОСПОДИН ЦВЕТОВ: баннер превращения в форму «ОМЕГА ФЛАВЕРИ». */
+  omegaBanner() {
+    this.center('OMEGA FLOWERY', '· ВЫСШАЯ ФОРМА ·', 3.0);
+    const e = this.el.centerMsg;
+    if (e) { e.classList.add('flowerult'); setTimeout(() => e.classList.remove('flowerult'), 3000); }
+  },
   feed(html) {
     const d = document.createElement('div');
     d.innerHTML = html;

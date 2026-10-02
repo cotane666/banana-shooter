@@ -7727,10 +7727,11 @@ const Game = {
   },
 
   /* ============================================================
-     ГОСПОДИН ЦВЕТОВ — УЛЬТА (ПКМ): «СОВОКУПНАЯ СИЛА».
-     Флауэр выпускает пять разноцветных «душ»-снарядов по кругу, звучит его
-     реплика и фрагмент боевой музыки; по широкой площади наносится огромный
-     урон и разрушаются стены.
+     ГОСПОДИН ЦВЕТОВ — ПКМ: ЗАРЯД ФОРМЫ «ОМЕГА ФЛАВЕРИ».
+     Игрок НЕ взлетает: он загорается белым, вокруг вьются лепестки, звучит
+     реплика «omega flowery» и боевая музыка. Форма держится ВСЁ время, пока
+     играет музыка; в ней ЛКМ-рывок перезаряжается 0.5с и заканчивается
+     цветочными взрывами.
      ============================================================ */
   flowerUlt() {
     const p = this.player;
@@ -7739,23 +7740,84 @@ const Game = {
     if (!def.flowerUlt) return false;
     if (this._flowerRush) return false;
     if (this.roundState !== 'live' || this.mode === CS.MODE.MENU) return false;
+    if (this._omega) return false;
     const now = U.now();
     const cd = (def.ultCd || 14) * 1000;
     if (this._flowerUltAt && now - this._flowerUltAt < cd) {
       const left = Math.ceil((cd - (now - this._flowerUltAt)) / 1000);
-      UI.toast('СОВОКУПНАЯ СИЛА через ' + left + 'с', '#ff8ad0'); Audio3D_SFX.deny && Audio3D_SFX.deny();
+      UI.toast('ОМЕГА ФЛАВЕРИ через ' + left + 'с', '#ff8ad0'); Audio3D_SFX.deny && Audio3D_SFX.deny();
       return false;
     }
     this._flowerUltAt = now;
 
-    this._startFlowerRush('ult');
+    /* МУЗЫКА: запускаем трек; форма длится ровно столько, сколько он играет */
+    let dur = 12.0;
+    if (Audio3D_SFX.flowerMusic) {
+      const info = Audio3D_SFX.flowerMusic();
+      const rem = (Audio3D_SFX.flowerMusicRemaining ? Audio3D_SFX.flowerMusicRemaining() : null);
+      if (rem) dur = U.clamp(rem, 4, 40);
+      else if (info && info.dur) dur = U.clamp(info.dur - (info.startAt || 0), 4, 40);
+    }
+    /* реплика превращения в Омега Флавери + баннер */
+    if (Audio3D_SFX.flowerVoice && FLOWER_VOICE_OMEGA) Audio3D_SFX.flowerVoice(FLOWER_VOICE_OMEGA, 1.0);
+    if (typeof UI !== 'undefined' && UI.omegaBanner) UI.omegaBanner();
+    else if (typeof UI !== 'undefined' && UI.flowerUltBanner) UI.flowerUltBanner();
+
+    this._omega = { t: 0, dur: dur, flashT: 0, petalT: 0 };
+    if (this.effects && this.effects.flowerAura) this.effects.flowerAura(p.pos.x, p.pos.y + .15, p.pos.z, true);
+    /* «загорается белым» на превращении */
+    if (this.effects && this.effects.flowerFlash) this.effects.flowerFlash(p.pos.x, p.pos.y + 1, p.pos.z, p.yaw, 1.2);
+    p.bulletsFired += 1;
     return true;
+  },
+
+  /* Форма «ОМЕГА ФЛАВЕРИ»: держится, пока играет музыка. Аура, белое свечение
+     и лепестки вокруг игрока (он может свободно двигаться). */
+  updateOmega(dt) {
+    const o = this._omega;
+    if (!o) return;
+    const p = this.player;
+    if (!p || !p.alive || this.roundState !== 'live') { this.endOmega(); return; }
+    o.t += dt;
+    /* аура следует за игроком */
+    if (this.effects && this.effects._flowerAura) {
+      const au = this.effects._flowerAura;
+      au.position.set(p.pos.x, p.pos.y + .15, p.pos.z);
+      au.rotation.y += dt * 13;
+    }
+    /* белое свечение (реже, чтобы не перегружать) */
+    o.flashT -= dt;
+    if (o.flashT <= 0 && this.effects && this.effects.flowerFlash) {
+      o.flashT = .28 + Math.random() * .2;
+      this.effects.flowerFlash(p.pos.x, p.pos.y + .9, p.pos.z, p.yaw, .35 + Math.random() * .3);
+    }
+    /* лепестки вьются вокруг игрока (умеренно) */
+    o.petalT -= dt;
+    if (o.petalT <= 0 && this.effects && this.effects.flowerPetals) {
+      o.petalT = .10;
+      const ang = o.t * 6;
+      const rr = 1.7;
+      this.effects.flowerPetals(p.pos.x + Math.cos(ang) * rr, p.pos.y + .6 + Math.sin(ang * 1.7) * .6, p.pos.z + Math.sin(ang) * rr,
+        FLOWER_PROJ_COLORS[(Math.random() * FLOWER_PROJ_COLORS.length) | 0], 3);
+      this.effects.flowerPetals(p.pos.x + Math.cos(ang + 3.1) * rr, p.pos.y + .6, p.pos.z + Math.sin(ang + 3.1) * rr,
+        FLOWER_PROJ_COLORS[(Math.random() * FLOWER_PROJ_COLORS.length) | 0], 3);
+    }
+    /* конец формы — вместе с концом музыки */
+    if (o.t >= o.dur) this.endOmega();
+  },
+
+  endOmega() {
+    if (!this._omega) return;
+    this._omega = null;
+    if (this.effects && this.effects.flowerAura) this.effects.flowerAura(0, 0, 0, false);
   },
 
   /* ============================================================
      ЛКМ «ГОСПОДИНА ЦВЕТОВ» — БЫСТРЫЙ ПРЯМОЙ ПРОБИВАЮЩИЙ ТАРАН.
      Игрок стремительно летит вперёд, ЛОМАЯ блоки на своём пути, круша врагов
      и отбрасывая их. Неуязвим на всё время рывка.
+     В ФОРМЕ ОМЕГА ФЛАВЕРИ: кулдаун 0.5с и вдоль всего рывка происходят
+     цветочные взрывы, а в конце — большой финальный взрыв.
      ============================================================ */
   flowerDash() {
     const p = this.player;
@@ -7764,19 +7826,19 @@ const Game = {
     if (!def.flowerDash) return false;
     if (this._flowerRush) return false;
     if (this.roundState !== 'live' || this.mode === CS.MODE.MENU) return false;
+    const omega = !!this._omega;
     const now = U.now();
-    const cd = (def.dashCd || 1.4) * 1000;
-    if (this._flowerDashAt && now - this._flowerDashAt < cd) return false;
+    const cdMs = (omega ? (def.omegaDashCd || .5) : (def.dashCd || 1.4)) * 1000;
+    if (this._flowerDashAt && now - this._flowerDashAt < cdMs) return false;
     this._flowerDashAt = now;
-    this._startFlowerRush('dash');
+    this._startFlowerRush(omega ? 'omegaDash' : 'dash');
     return true;
   },
 
   /* ---- ОБЩИЙ ЗАПУСК РЫВКА ----
      kind='dash' (ЛКМ): прямая стремительная атака с пробоем стены.
-     kind='ult'  (ПКМ): постановочная атака под музыку — заряд на пару метров
-       вверх под тихую часть трека, затем полёт по петляющей траектории, когда
-       начинается громкая часть, и удар об землю. */
+     kind='omegaDash' (ЛКМ в форме Омега Флавери): то же, но вдоль всего рывка
+       происходят цветочные взрывы, в конце — большой взрыв; кулдаун 0.5с. */
   _startFlowerRush(kind) {
     const p = this.player;
     const def = p.def || {};
@@ -7784,48 +7846,27 @@ const Game = {
     const flat = Math.hypot(dir.x, dir.z) || 1;
     const fx = dir.x / flat, fz = dir.z / flat;
     const rx = -fz, rz = fx;                        // правый перпендикуляр
-    const ult = kind === 'ult';
+    const omega = kind === 'omegaDash';
 
-    let music = null, charge = (Audio3D_SFX.FLOWER_CHARGE || 4.0);
-    if (ult) {
-      /* МУЗЫКА: старт с тихой части, чтобы громкая наступила к моменту полёта */
-      music = (Audio3D_SFX.flowerMusic ? Audio3D_SFX.flowerMusic() : null);
-      if (music && !music.pending && music.loudAt != null) {
-        const startAt = music.startAt || 0;
-        charge = U.clamp(music.loudAt - startAt, 1.2, 8.5);
-      }
-      /* войсклипы (канон): «with your powers combined» — заряд; «omega flowery»
-         звучит в момент превращения (когда начинается полёт). */
-      if (Audio3D_SFX.flowerVoice && FLOWER_VOICE_POWERS) Audio3D_SFX.flowerVoice(FLOWER_VOICE_POWERS, 1.0);
-    } else {
-      if (Audio3D_SFX.flowerVoice) Audio3D_SFX.flowerVoice(pickFlowerVoice(FLOWER_VOICE_DASH_ALL), 1.0);
-    }
+    /* реплика-рывок */
+    if (Audio3D_SFX.flowerVoice) Audio3D_SFX.flowerVoice(pickFlowerVoice(FLOWER_VOICE_DASH_ALL), 1.0);
     p.recoil = (p.recoil || 0) + .3;
     p.viewPunchP = (p.viewPunchP || 0) + .2;
 
-    /* длительность полёта: рывок заканчивается вместе с музыкой */
-    let flight = 5.0;
-    if (ult) {
-      const rem = (Audio3D_SFX.flowerMusicRemaining ? Audio3D_SFX.flowerMusicRemaining() : null);
-      flight = U.clamp(rem ? (rem - 0.8) : 5.0, 3.0, 8.5);
-    }
     this._flowerRush = {
       kind: kind, t: 0,
-      dur: ult ? (charge + flight) : (def.dashDur || .5),
-      charge: charge, rise: 0, flightDur: flight,
+      dur: omega ? (def.dashDur || .55) : (def.dashDur || .5),
       ox: p.pos.x, oy: p.pos.y, oz: p.pos.z,
-      baseY: p.pos.y,                            // к этой высоте возвращаемся ударом
+      baseY: p.pos.y,
       fx: fx, fz: fz, rx: rx, rz: rz,
-      tfx: fx, tfz: fz, trx: rx, trz: rz,         // текущее направление движения
-      grabbed: [], grabR: ult ? (def.ultR || 13) * .42 : (def.dashGrabR || 3.0),
-      dps: ult ? (def.ultDmg || 5200) / 16 : (def.dashDmg || 220) * 4,
-      finished: false,
-      dist: ult ? (def.ultDist || 52) : (def.dashSpeed || 40) * (def.dashDur || .5),
-      R: def.ultR || 13, dmg: def.ultDmg || 5200, breakR: def.ultBreakR || 12,
-      amp: (def.ultR || 13) * .55, rad: (def.ultR || 13) * 2.4, high: (def.ultR || 13) * .85
+      tfx: fx, tfz: fz,
+      grabbed: [], grabR: (def.dashGrabR || 3.0) * (omega ? 1.5 : 1),
+      dps: (def.dashDmg || 220) * (omega ? 5 : 4),
+      finished: false, omega: omega,
+      dist: omega ? (def.omegaDist || 40) : (def.dashSpeed || 40) * (def.dashDur || .5),
+      R: def.ultR || 13, dmg: def.ultDmg || 5200, breakR: def.ultBreakR || 12
     };
     if (this.effects && this.effects.flowerAura) this.effects.flowerAura(p.pos.x, p.pos.y + .15, p.pos.z, true);
-    if (ult && typeof UI !== 'undefined' && UI.flowerUltBanner) UI.flowerUltBanner();
     p.bulletsFired += 1;
   },
 
@@ -7851,15 +7892,10 @@ const Game = {
 
   /* ============================================================
      ОБНОВЛЕНИЕ РЫВКА «ГОСПОДИНА ЦВЕТОВ».
-       kind='dash' (ЛКМ): ПРЯМОЙ быстрый таран — пробой стены на пути, урон,
-         отброс; без разворотов.
-       kind='ult'  (ПКМ, под музыку):
-         1) ЗАРЯД (тихая часть трека) — медленно поднимается на пару метров,
-            вокруг кружат лепестки, ускоряясь (загорается белым);
-         2) ПОЛЁТ (громкая часть) — стремительная петляющая траектория с
-            резкими маневрами и разворотами, тараня врагов;
-         3) УДАР ОБ ЗЕМЛЮ почти в точке взлёта — цветочный взрыв и волны.
-     Камера ВСЕГДА смотрит по направлению движения.
+       kind='dash'      (ЛКМ): прямой быстрый таран — пробой стены, урон, отброс.
+       kind='omegaDash' (ЛКМ в форме ОМЕГА ФЛАВЕРИ): то же, но ВДОЛЬ всего
+         рывка постоянно происходят цветочные взрывы, а в конце — большой
+         финальный взрыв с ударными волнами.
      ============================================================ */
   updateFlowerRush(dt) {
     const st = this._flowerRush;
@@ -7867,106 +7903,106 @@ const Game = {
     const p = this.player;
     if (!p || !p.alive) { this.endFlowerRush(false); return; }
     st.t += dt;
-    const ult = st.kind === 'ult';
-    const flightStart = st.charge;
-    const flightDur = Math.max(.1, st.dur - flightStart);
+    const omega = !!st.omega;
 
     /* аура лепестков у ног следует за игроком */
     if (this.effects && this.effects._flowerAura) {
       const au = this.effects._flowerAura;
       au.position.set(p.pos.x, p.pos.y + .15, p.pos.z);
-      au.rotation.y += dt * (ult ? (st.t < flightStart ? 5 + st.t * 1.6 : 16) : 11);
-    }
-    /* белая вспышка-замах Jarona в самом начале */
-    if (this.effects && this.effects.flowerFlash && st.t < .16) {
-      this.effects.flowerFlash(p.pos.x, p.pos.y + 1, p.pos.z, p.yaw, 1 - st.t / .16);
+      au.rotation.y += dt * (omega ? 15 : 11);
     }
 
-    if (ult && st.t < st.charge) {
-      /* ---- ФАЗА 1: ЗАРЯД (вся тихая часть трека) — медленный подъём на пару
-         метров, лепестки кружат всё быстрее, игрок всё ярче светится белым ---- */
-      const r = U.clamp(st.t / Math.max(.01, st.charge), 0, 1);
-      p.pos.x = st.ox; p.pos.z = st.oz;
-      p.pos.y = st.baseY + r * 2.1;
-      p.vel.x = p.vel.y = p.vel.z = 0;
-      p.onGround = false;
-      st.tfx = st.fx; st.tfz = st.fz;
-      /* «загорается белым»: свечение усиливается к концу заряда */
-      if (this.effects && this.effects.flowerFlash && Math.random() < .3 + r * .6) {
-        this.effects.flowerFlash(p.pos.x, p.pos.y + .8, p.pos.z, p.yaw, .2 + r * .9);
-      }
-      /* лепестки летают вокруг: сначала медленно, потом всё быстрее.
-         Спавним РЕДКО и на заметном радиусе, чтобы не заслонять обзор. */
-      st._petalT = (st._petalT || 0) + dt;
-      if (st._petalT > (0.16 - r * 0.10)) {
-        st._petalT = 0;
+    /* ---- ПРЯМОЙ ПРОБИВАЮЩИЙ ТАРАН ---- */
+    const u = U.clamp(st.t / st.dur, 0, 1);
+    const along = st.dist * u;
+    const nx = st.ox + st.fx * along, nz = st.oz + st.fz * along;
+    /* ПРОБОЙ СТЕНЫ: всё разрушаемое на пути крушится мгновенно */
+    const gy = this.world.groundAt(nx, nz, st.baseY + 2);
+    const ny = Math.max(st.baseY, gy || 0) + .1;
+    this._flowerSweep(st, nx, ny, nz, dt);
+    p.pos.x = nx; p.pos.z = nz;
+    p.pos.y = U.lerp(p.pos.y, ny + .5, 1 - Math.pow(.02, dt));
+    p.vel.x = p.vel.y = p.vel.z = 0;
+    p.onGround = false;
+    st.tfx = st.fx; st.tfz = st.fz;
+    this._flowerTrack(p, st.fx, 0, st.fz, dt, st, false);
+
+    if (omega) {
+      /* В ФОРМЕ ОМЕГА ФЛАВЕРИ: ПОСТОЯННЫЕ цветочные взрывы вдоль рывка */
+      st._boomT = (st._boomT || 0) - dt;
+      if (st._boomT <= 0) {
+        st._boomT = .16;
+        const bx = p.pos.x + U.rand(-1.2, 1.2), bz = p.pos.z + U.rand(-1.2, 1.2);
+        const bg = this.world.groundAt(bx, bz, p.pos.y + 3);
+        const by = Math.max((bg || 0) + .8, p.pos.y - .3);
+        if (this.effects) {
+          this.effects.flowerNova(bx, by, bz, st.R * 1.3);
+          this.effects.explosion(bx, by, bz, st.R * 1.2, [0xffd0f0, 0x2a0a20]);
+          this.effects.groundWave(bx, by - .8, bz, st.R * .9);
+        }
+        Audio3D_SFX.explosionAt(bx, by, bz);
+        this.breakMapAt(bx, by, bz, st.breakR * .7, st.dmg * .35);
+        const R = st.R * 1.3;
+        for (const z of (this.horde ? this.horde.list : [])) {
+          if (!z.alive || z.dying) continue;
+          const d = Math.hypot(z.pos.x - bx, z.pos.z - bz);
+          if (d < R) { z.takeDamage(st.dmg * .3 * (1 - d / R * .5), 'body', { x: st.fx, y: .3, z: st.fz }); p.damageDealt += st.dmg * .3; }
+        }
         if (this.effects && this.effects.flowerPetals) {
-          const ang = st.t * (2 + r * 9);
-          const rr = 1.8 + r * 1.6;
-          this.effects.flowerPetals(p.pos.x + Math.cos(ang) * rr, p.pos.y + U.rand(.3, 2.2), p.pos.z + Math.sin(ang) * rr,
-            FLOWER_PROJ_COLORS[(Math.random() * FLOWER_PROJ_COLORS.length) | 0], 4);
+          this.effects.flowerPetals(bx, by, bz, FLOWER_PROJ_COLORS[(Math.random() * FLOWER_PROJ_COLORS.length) | 0], 4);
         }
       }
-    } else if (ult) {
-      /* ---- ФАЗА 2: БОЛЬШОЙ ПРЯМОЙ РЫВОК ВПЕРЁД (громкая музыка) ---- */
-      /* ПРЕВРАЩЕНИЕ: «omega flowery» звучит в момент старта полёта */
-      if (!st.omegaVoiced) {
-        st.omegaVoiced = true;
-        if (Audio3D_SFX.flowerVoice && FLOWER_VOICE_OMEGA) Audio3D_SFX.flowerVoice(FLOWER_VOICE_OMEGA, 1.0);
-      }
-      const pfl = U.clamp((st.t - flightStart) / flightDur, 0, 1);
-      const a = this._flowerUltPath(pfl, st);
-      const b = this._flowerUltPath(U.clamp(pfl + .015, 0, 1), st);
-      let dx = b.x - a.x, dy = b.y - a.y, dz = b.z - a.z;
-      const dl = Math.hypot(dx, dy, dz);
-      if (dl > 1e-4) { dx /= dl; dy /= dl; dz /= dl; } else { dx = st.tfx; dy = 0; dz = st.tfz; }
-      st.tfx = dx; st.tfz = dz;
-      const gy = this.world.groundAt(a.x, a.z, a.y + 1) || 0;
-      if (a.y < gy + .25) a.y = gy + .25;
-      p.pos.x = a.x; p.pos.y = a.y; p.pos.z = a.z;
-      let guard = 0;
-      while (this.world.overlaps(p.pos.x, p.pos.y, p.pos.z, p.radius, p.height) && guard++ < 30) p.pos.y += .3;
-      p.vel.x = p.vel.y = p.vel.z = 0;
-      p.onGround = false;
-      this._flowerTrack(p, dx, dy, dz, dt, st, true);
-      /* АУРА КАК В ВИДЕО: лепестки, вьющиеся ВОКРУГ игрока (лёгкий спавнер) */
-      st._petalT = (st._petalT || 0) + dt;
-      if (st._petalT > .07) {
-        st._petalT = 0;
-        if (this.effects && this.effects.flowerPetals) {
-          const ang = st.t * 7;
-          const rr = 1.5;
-          this.effects.flowerPetals(p.pos.x + Math.cos(ang) * rr, p.pos.y + .7 + Math.sin(ang * 1.7) * .6, p.pos.z + Math.sin(ang) * rr,
-            FLOWER_PROJ_COLORS[(Math.random() * FLOWER_PROJ_COLORS.length) | 0], 3);
-          this.effects.flowerPetals(p.pos.x - st.tfx * 2.2, p.pos.y + .3, p.pos.z - st.tfz * 2.2,
-            FLOWER_PROJ_COLORS[(Math.random() * FLOWER_PROJ_COLORS.length) | 0], 3);
-        }
-      }
-      if (pfl >= 1) this._flowerFinale(p, st);
-    } else {
-      /* ---- ЛКМ: БЫСТРЫЙ ПРЯМОЙ ПРОБИВАЮЩИЙ ТАРАН ---- */
-      const u = U.clamp(st.t / st.dur, 0, 1);
-      const along = st.dist * u;
-      const nx = st.ox + st.fx * along, nz = st.oz + st.fz * along;
-      /* ПРОБОЙ СТЕНЫ: всё разрушаемое на пути крушится мгновенно */
-      const gy = this.world.groundAt(nx, nz, st.baseY + 2);
-      const ny = Math.max(st.baseY, gy || 0) + .1;
-      this._flowerSweep(st, nx, ny, nz, dt);
-      p.pos.x = nx; p.pos.z = nz;
-      p.pos.y = U.lerp(p.pos.y, ny + .5, 1 - Math.pow(.02, dt));
-      p.vel.x = p.vel.y = p.vel.z = 0;
-      p.onGround = false;
-      st.tfx = st.fx; st.tfz = st.fz;
-      this._flowerTrack(p, st.fx, 0, st.fz, dt, st, false);
-      if (this.effects && this.effects.flowerBurst && Math.random() < .4) {
+      /* лепестковый след */
+      if (this.effects && this.effects.flowerPetals && Math.random() < .6) {
         this.effects.flowerPetals(p.pos.x - st.fx * 1.4, p.pos.y + .6, p.pos.z - st.fz * 1.4,
           FLOWER_PROJ_COLORS[(Math.random() * FLOWER_PROJ_COLORS.length) | 0], 4);
       }
-      if (u >= 1) {
-        this._flowerThrow(p, st, false);
-        this.endFlowerRush(true);
-      }
     }
+
+    if (u >= 1) {
+      this._flowerThrow(p, st, false);
+      if (omega) this._omegaBoom(p, st);        // большой финальный взрыв
+      this.endFlowerRush(true);
+    }
+  },
+
+  /* Большой финальный взрыв Омега Флавери: цветочная нова, вспышка, ударные
+     волны и огромный урон по площади. */
+  _omegaBoom(p, st) {
+    const R = st.R, dmg = st.dmg, breakR = st.breakR;
+    const cx = p.pos.x, cz = p.pos.z;
+    const gy = this.world.groundAt(cx, cz, p.pos.y + 3);
+    const cy = ((gy === null || gy === undefined) ? st.baseY : gy) + 1.0;
+    if (Audio3D_SFX.flowerVoice && FLOWER_VOICE_SLAM) Audio3D_SFX.flowerVoice(FLOWER_VOICE_SLAM, 1.0);
+    if (this.effects) {
+      this.effects.flowerNova(cx, cy, cz, R * 1.8);
+      this.effects.explosion(cx, cy, cz, R * 2.0, [0xffd0f0, 0x2a0a20]);
+      this.effects.groundWave(cx, cy - 1.0, cz, R * 1.6);
+      this.effects.groundWave(cx, cy - .5, cz, R * 2.8);
+    }
+    Audio3D_SFX.explosionAt(cx, cy, cz);
+    this.breakMapAt(cx, cy, cz, breakR * 1.3, dmg * 1.5);
+    const push = (list, isRemote) => {
+      if (!list) return;
+      for (const z of list) {
+        if (!z.alive || z.dying) continue;
+        const dx = z.pos.x - cx, dz = z.pos.z - cz, dy = (z.pos.y + 1) - cy;
+        const d = Math.hypot(dx, dy, dz);
+        if (d > R * 1.6) continue;
+        const kk = U.clamp(1 - d / (R * 1.6), .2, 1);
+        this._flowerRushDmg = true;
+        if (isRemote) this.sendPvpHit(dmg, 'body', false, z, 'flower');
+        else { z.takeDamage(dmg * (.6 + kk * .6), 'body', { x: st.fx, y: .3, z: st.fz }); p.damageDealt += dmg; }
+        this._flowerRushDmg = false;
+        if (z.alive && !z.dying) {
+          z.vel.x = st.fx * 46 * (0.7 + kk); z.vel.z = st.fz * 46 * (0.7 + kk); z.vel.y = 10 * (0.5 + kk);
+          if (typeof z.stagger === 'function') z.stagger(1.2);
+        }
+      }
+    };
+    push(this.horde && this.horde.list, false);
+    if (this.mode === CS.MODE.ONLINE) push(this.remotePlayers, true);
+    p.recoil = (p.recoil || 0) + .35; p.viewPunchP = (p.viewPunchP || 0) + .25;
   },
 
   /* ПРОБОЙ: крушит разрушаемые блоки в узкой полосе вокруг текущей точки пути
@@ -8130,7 +8166,7 @@ const Game = {
       for (const z of st.grabbed) { if (z) z._flowerGrabbed = false; }
       this._flowerRush = null;
     }
-    if (this.effects && this.effects.flowerAura) this.effects.flowerAura(0, 0, 0, false);
+    if (this.effects && this.effects.flowerAura && !this._omega) this.effects.flowerAura(0, 0, 0, false);
     const p = this.player;
     if (p) {
       /* СТРАХОВКА: если рывок закончился внутри геометрии — поднять наверх,
@@ -8866,6 +8902,7 @@ const Game = {
     if (p.def && p.def.flowerUlt && Audio3D_SFX.flowerVoice && FLOWER_VOICE_FALLING) {
       Audio3D_SFX.flowerVoice(FLOWER_VOICE_FALLING, 1.0);
     }
+    if (this._omega) this.endOmega();
     // a drone still in the air is lost with its pilot
     if (this.drone) this.detonateDrone(false);
     if (this.mode === CS.MODE.OFFLINE) {
@@ -9918,6 +9955,7 @@ const Game = {
     // ---- physics ----
     p.update(dt, this.world, pin);
     this.updateFlowerRush(dt);
+    this.updateOmega(dt);
     this.updateMechDash(dt);
     p.tickWeapon(dt, this);
     this.updateShield(dt);

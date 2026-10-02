@@ -176,27 +176,43 @@ Audio3D_SFX.flowerMusicStop = function () {
 };
 
 /* ГОЛОС: реплика Флауэра (непозиционная — кинематографично, у экрана).
-   Возвращает длительность проигранной реплики в секундах (0 — если данных нет). */
-Audio3D_SFX.flowerVoice = function (which, gain) {
+   ВАЖНО: реплики НЕ накладываются друг на друга. Пока одна звучит, следующая
+   пропускается — если только она не «важная» (force=true: omega flowery,
+   last jarona, I'm falling), тогда она перебивает текущую.
+   Возвращает длительность проигранной реплики в секундах (0 — если пропущено). */
+Audio3D_SFX._flowerVoiceBusyUntil = 0;
+Audio3D_SFX.flowerVoice = function (which, gain, force) {
   if (!this.ctx || this.muted) return 0;
   if (!which) return 0;                      // пустая заглушка — тишина
+  const now = this.ctx.currentTime;
+  const busy = now < (this._flowerVoiceBusyUntil || 0);
+  if (busy && !force) return 0;              // не перебиваем — ждём окончания
+
   const dataUrl = which;
   const key = 'v' + dataUrl.length;
   const self = this;
   const fire = () => {
     const buf = self.flowerBuffer(key, dataUrl, null);
     if (!buf) return false;
+    /* останавливаем предыдущую, если перебиваем */
+    if (self._flowerVoiceSrc) { try { self._flowerVoiceSrc.stop(); } catch (e) { } self._flowerVoiceSrc = null; }
     const src = self.ctx.createBufferSource();
     src.buffer = buf;
     const g = self.ctx.createGain();
     g.gain.value = gain === undefined ? 0.95 : gain;
     src.connect(g); g.connect(self.sfx);
     src.start();
+    self._flowerVoiceSrc = src;
+    self._flowerVoiceBusyUntil = self.ctx.currentTime + buf.duration + .05;
+    src.onended = () => { if (self._flowerVoiceSrc === src) { self._flowerVoiceSrc = null; self._flowerVoiceBusyUntil = 0; } };
     return true;
   };
   if (!fire()) {
-    const iv = setInterval(() => { if (fire()) clearInterval(iv); }, 40);
-    setTimeout(() => clearInterval(iv), 4000);
+    /* ещё декодируется: защёлкиваем слот, чтобы другие реплики не наложились,
+       и пробуем запустить, когда буфер будет готов */
+    this._flowerVoiceBusyUntil = now + 3.0;
+    let tries = 0;
+    const iv = setInterval(() => { if (fire() || ++tries > 100) { clearInterval(iv); if (tries > 100) self._flowerVoiceBusyUntil = 0; } }, 40);
   }
   const buf = this._flowerBufs[key];
   return buf ? buf.duration : 3.0;

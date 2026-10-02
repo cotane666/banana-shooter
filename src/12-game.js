@@ -7758,8 +7758,8 @@ const Game = {
       if (rem) dur = U.clamp(rem, 4, 40);
       else if (info && info.dur) dur = U.clamp(info.dur - (info.startAt || 0), 4, 40);
     }
-    /* реплика превращения в Омега Флавери + баннер */
-    if (Audio3D_SFX.flowerVoice && FLOWER_VOICE_OMEGA) Audio3D_SFX.flowerVoice(FLOWER_VOICE_OMEGA, 1.0);
+    /* реплика превращения в Омега Флавери + баннер (ключевая — перебивает) */
+    if (Audio3D_SFX.flowerVoice && FLOWER_VOICE_OMEGA) Audio3D_SFX.flowerVoice(FLOWER_VOICE_OMEGA, 1.0, true);
     if (typeof UI !== 'undefined' && UI.omegaBanner) UI.omegaBanner();
     else if (typeof UI !== 'undefined' && UI.flowerUltBanner) UI.flowerUltBanner();
 
@@ -7973,7 +7973,7 @@ const Game = {
     const cx = p.pos.x, cz = p.pos.z;
     const gy = this.world.groundAt(cx, cz, p.pos.y + 3);
     const cy = ((gy === null || gy === undefined) ? st.baseY : gy) + 1.0;
-    if (Audio3D_SFX.flowerVoice && FLOWER_VOICE_SLAM) Audio3D_SFX.flowerVoice(FLOWER_VOICE_SLAM, 1.0);
+    if (Audio3D_SFX.flowerVoice && FLOWER_VOICE_SLAM) Audio3D_SFX.flowerVoice(FLOWER_VOICE_SLAM, 1.0, true);
     if (this.effects) {
       this.effects.flowerNova(cx, cy, cz, R * 1.8);
       this.effects.explosion(cx, cy, cz, R * 2.0, [0xffd0f0, 0x2a0a20]);
@@ -8111,8 +8111,8 @@ const Game = {
     const gy = this.world.groundAt(cx, cz, p.pos.y + 3);
     const cy = ((gy === null || gy === undefined) ? st.baseY : gy) + 1.0;
     p.pos.y = cy;                       // удар об землю
-    /* ОСОБЫЙ ВОЙСКЛИП: «last jarona» — на финальном ударе об землю */
-    if (Audio3D_SFX.flowerVoice && FLOWER_VOICE_SLAM) Audio3D_SFX.flowerVoice(FLOWER_VOICE_SLAM, 1.0);
+    /* ОСОБЫЙ ВОЙСКЛИП: «last jarona» — на финальном ударе об землю (перебивает) */
+    if (Audio3D_SFX.flowerVoice && FLOWER_VOICE_SLAM) Audio3D_SFX.flowerVoice(FLOWER_VOICE_SLAM, 1.0, true);
     if (this.effects) {
       this.effects.flowerNova(cx, cy, cz, R * 1.6);
       this.effects.explosion(cx, cy, cz, R * 1.8, [0xffd0f0, 0x2a0a20]);
@@ -8898,9 +8898,9 @@ const Game = {
     p.deaths++;
     this._runDeaths = (this._runDeaths || 0) + 1;
     Audio3D_SFX.roundEnd(false);
-    /* СМЕРТЬ С «ГОСПОДИНОМ ЦВЕТОВ»: реплика Флауэра «I'm falling». */
+    /* СМЕРТЬ С «ГОСПОДИНОМ ЦВЕТОВ»: реплика Флауэра «I'm falling» (перебивает). */
     if (p.def && p.def.flowerUlt && Audio3D_SFX.flowerVoice && FLOWER_VOICE_FALLING) {
-      Audio3D_SFX.flowerVoice(FLOWER_VOICE_FALLING, 1.0);
+      Audio3D_SFX.flowerVoice(FLOWER_VOICE_FALLING, 1.0, true);
     }
     if (this._omega) this.endOmega();
     // a drone still in the air is lost with its pilot

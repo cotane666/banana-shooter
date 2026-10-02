@@ -108,6 +108,26 @@ class Effects {
     }
   }
 
+  /* ГОСПОДИН ЦВЕТОВ: ЛЁГКИЙ сноп лепестков (без света и дыма) — для ауры,
+     лепестков вокруг игрока и следа. Экономит производительность. */
+  flowerPetals(x, y, z, color, count) {
+    color = color || 0xff7fb0;
+    const n = count || 4;
+    this.flowerBits = this.flowerBits || [];
+    for (let i = 0; i < n; i++) {
+      const pet = new THREE.Mesh(new THREE.SphereGeometry(.09, 5, 4),
+        new THREE.MeshBasicMaterial({ color: color, transparent: true, opacity: .95, depthWrite: false }));
+      pet.scale.set(1.5, .38, .95);
+      pet.position.set(x + U.rand(-.35, .35), y + U.rand(-.35, .35), z + U.rand(-.35, .35));
+      const a = U.rand(0, Math.PI * 2), sp = U.rand(2, 6);
+      this.scene.add(pet);
+      this.flowerBits.push({
+        mesh: pet, life: U.rand(.5, .9), max: .9,
+        vx: Math.cos(a) * sp, vy: U.rand(1, 5), vz: Math.sin(a) * sp, spin: U.rand(-6, 6)
+      });
+    }
+  }
+
   /* ГОСПОДИН ЦВЕТОВ: сноп лепестков при попадании цветочного снаряда. */
   flowerBurst(x, y, z, radius, color) {
     color = color || 0xff7fb0;

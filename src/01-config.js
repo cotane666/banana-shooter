@@ -418,8 +418,8 @@ const WEAPONS = {
   lordOfFlowers: { name: 'ГОСПОДИН ЦВЕТОВ', cat: 'melee', slot: 3, price: 123456, dmg: 320, rpm: 150, mag: Infinity, reserve: 0,
           auto: false, spread: 0, moveSpread: 0, recoil: 2.6, falloff: 1, range: 4.6, headMul: 2.4, sound: 'knife',
           melee: 'lordOfFlowers', knockback: 16, flowerMelee: true,
-          flowerDash: true, dashCd: 2.2, dashSpeed: 32, dashDur: .5, dashDmg: 220, dashGrabR: 3.0,
-          ult: true, ultCd: 16, ultR: 13, ultDmg: 5200, ultBreakR: 12, ultBreakDelay: 0,
+          flowerDash: true, dashCd: 1.4, dashSpeed: 40, dashDur: .5, dashDmg: 240, dashGrabR: 3.0,
+          ult: true, ultCd: 16, ultR: 13, ultDmg: 5200, ultBreakR: 12, ultBreakDelay: 0, ultDist: 52,
           flowerUlt: true }
 };
 /* ============================================================

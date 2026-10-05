@@ -392,6 +392,17 @@ const WEAPONS = {
           sound: 'shotgun', flame: true, flameDps: 900, flameRange: 21, flameCone: 1.0, flameRadius: 1.6, burnT: 4.5, burnDps: 160,
           flamePvpDps: 150 },
 
+  /* ---------- СПАМТОН NEO: рука-пушка [BIG SHOT] ----------
+     Стреляет случайными ПИПИСАМИ (яйца-«спамтонята»): взрывными, шипованными
+     и прыгучими. У каждого свой вид и поведение. Звук и тема — «BIG SHOT». */
+  spamtonGun: { name: '[BIG SHOT]', cat: 'exp', slot: 2, price: 39000, dmg: 60, rpm: 150, mag: 12, reserve: 60,
+          auto: false, spread: .020, moveSpread: .030, recoil: 3.2, falloff: .85, range: 150, headMul: 1.6,
+          sound: 'spamton', projectile: 'pipis', projSpeed: 34, projGravity: 11,
+          pipisDmg: 90, spamton: true,
+          /* ПКМ — ЗАРЯД: держи, чтобы раскрутить «BIG SHOT», отпусти — ГИПЕР-ПИПИС */
+          spamtonCharge: true, chargeTime: 1.6, hyperDmg: 1400, hyperSplash: 13, hyperSplashDmg: 1200,
+          hyperProjSpeed: 26, hyperBreakR: 11 },
+
   /* ---------- МЕХАКОСТЮМ: giant 6-barrel minigun (primary) + hyper laser (secondary) ---------- */
   mechMinigun: { name: 'МЕХА-МИНИГАН', cat: 'exp', slot: 2, price: 0, dmg: 55, rpm: 1600, mag: 9999, reserve: 0,
           auto: true, spread: .030, moveSpread: .020, recoil: .55, falloff: .70, range: 130, headMul: 2.0,

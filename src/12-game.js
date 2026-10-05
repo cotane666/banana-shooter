@@ -6047,6 +6047,8 @@ const Game = {
       p.flashT = .06;
       if (def.projectile === 'rocket') {
         Audio3D_SFX.rocketShot(muzzleWorld.x, muzzleWorld.y, muzzleWorld.z);
+      } else if (def.projectile === 'pipis' && Audio3D_SFX.spamtonShot) {
+        Audio3D_SFX.spamtonShot(muzzleWorld.x, muzzleWorld.y, muzzleWorld.z);
       } else {
         Audio3D_SFX.bananaShot(muzzleWorld.x, muzzleWorld.y, muzzleWorld.z);
       }
@@ -6214,10 +6216,15 @@ const Game = {
     const kind = def.projectile;
     const isRocket = kind === 'rocket';
     const isGuided = kind === 'guided';
+    /* СПАМТОН: каждый выстрел — случайный пипис (взрывной/шипованный/прыгучий) */
+    const pipisKind = kind === 'pipis' ? ['explosive', 'spiky', 'bouncy'][(Math.random() * 3) | 0] : null;
     const builder = {
       guided: buildGuidedMissile, rocket: buildRocketProjectile, acid: buildAcidProjectile,
       hive: buildHivePod, disc: buildDiscProjectile, freeze: buildFreezeOrb,
-      blackhole: buildBlackHoleShell, chrono: buildChronoOrb, flower: buildFlowerProjectile
+      blackhole: buildBlackHoleShell, chrono: buildChronoOrb, flower: buildFlowerProjectile,
+      pipis: (pipisKind === 'explosive' ? () => buildPipisProjectile('explosive')
+        : pipisKind === 'spiky' ? () => buildPipisProjectile('spiky')
+        : () => buildPipisProjectile('bouncy'))
     }[kind];
     const mesh = builder ? builder() : buildBananaProjectile();
     // an epic/legendary skin tints the projectile and its trail
@@ -6265,6 +6272,15 @@ const Game = {
     if (kind === 'chrono') { pr.chronoR = def.chronoR; pr.chronoLife = def.chronoLife; pr.chronoSlow = def.chronoSlow; }
     if (kind === 'disc') { pr.bounces = def.bounces; pr.discReturn = def.discReturn; pr.returnT = def.discReturn; pr.bounced = 0; }
     if (kind === 'flower') { pr.flowerCol = flowerCol; pr.splash = def.flowerSplash || 3.0; pr.splashDmg = def.flowerSplashDmg || 120; }
+    /* СПАМТОН-ПИПИСЫ: у каждого вида своё поведение */
+    if (kind === 'pipis') {
+      pr.pipis = pipisKind;
+      pr.spamton = true;
+      pr.bounces = 0;
+      if (pipisKind === 'explosive') { pr.splash = 4.0; pr.splashDmg = def.pipisDmg || 90; pr.explosionColor = [0xff7a1e, 0x1a0d05]; }
+      else if (pipisKind === 'spiky') { pr.pierce = true; pr.spiky = true; }
+      else { pr.bouncy = true; pr.life = 9; }
+    }
     if (kind === 'freeze') pr.life = 7;
     this.projectiles.push(pr);
     // while a guided missile is in the air the player steers it, like the drone
@@ -6341,6 +6357,14 @@ const Game = {
       }
       if (pr.kind === 'chrono' && pr.mesh.userData.ring) pr.mesh.userData.ring.rotation.z += dt * 2.5;
       if (pr.kind === 'flower') { pr.mesh.rotation.z += dt * 9; pr.mesh.rotation.y += dt * 4; }
+      if (pr.kind === 'pipis') { pr.mesh.rotation.z += dt * 10; pr.mesh.rotation.x += dt * 5; }
+      if (pr.kind === 'hyperpipis') {
+        /* ГИПЕР-ПИПИС: тяжёлый, вращается медленно, пульсирует свет и оставляет
+           вмятины-кратеры при контакте/полёте над землёй */
+        pr.mesh.rotation.z += dt * 2.5; pr.mesh.rotation.x += dt * 1.5;
+        const pulse = 1 + Math.sin(U.now() * .01) * .05;
+        pr.mesh.scale.setScalar((.8 + (pr.chargeK || 0) * .6) * pulse);
+      }
       if (pr.kind === 'disc') { pr.mesh.rotation.z += dt * 22; pr.returnT -= dt; }
       const nx = pr.pos.x + pr.vel.x * dt, ny = pr.pos.y + pr.vel.y * dt, nz = pr.pos.z + pr.vel.z * dt;
 
@@ -6389,6 +6413,12 @@ const Game = {
       }
 
       if (impactPoint) {
+        /* ---- ГИПЕР-ПИПИС: тяжеленный удар — кратер, ударная волна, тряска ---- */
+        if (pr.kind === 'hyperpipis') {
+          this.hyperPipisImpact(pr, impactPoint, impactNormal);
+          this.removeProjectile(i);
+          continue;
+        }
         /* ---- experimental projectiles: on-hit behaviour ---- */
         if (pr.kind === 'freeze') {
           // shatter burst: chill everything close and leave a frost patch
@@ -6456,6 +6486,58 @@ const Game = {
           }
           this.removeProjectile(i);
           continue;
+        }
+        if (pr.kind === 'pipis') {
+          Audio3D_SFX.spamtonBoom && Audio3D_SFX.spamtonBoom(impactPoint.x, impactPoint.y, impactPoint.z);
+          if (pr.pipis === 'explosive') {
+            /* ВЗРЫВНОЙ: детонирует по площади, ломает карту */
+            if (this.effects) { this.effects.explosion(impactPoint.x, impactPoint.y, impactPoint.z, 4.2, [0xff7a1e, 0x1a0d05]); this.effects.fireBurst && this.effects.fireBurst(impactPoint.x, impactPoint.y, impactPoint.z, 4); }
+            this.breakMapAt(impactPoint.x, impactPoint.y, impactPoint.z, 3.4, 300);
+            if (this.horde) for (const z of this.horde.list) {
+              if (!z.alive || z.dying) continue;
+              const d = Math.hypot(z.pos.x - impactPoint.x, z.pos.z - impactPoint.z);
+              if (d < 4.5) { z.takeDamage(pr.dmg + 60 * (1 - d / 4.5), 'body', dir); this.player.damageDealt += pr.dmg; }
+            }
+            if (this.mode === CS.MODE.ONLINE) for (const rp of this.remotePlayers) {
+              if (!rp.alive) continue;
+              if (Math.hypot(rp.pos.x - impactPoint.x, rp.pos.z - impactPoint.z) < 4.5) this.sendPvpHit(pr.dmg, 'body', true, rp, 'pipis');
+            }
+            this.removeProjectile(i);
+            continue;
+          } else if (pr.pipis === 'spiky') {
+            /* ШИПОВАННЫЙ: прошивает врагов насквозь (до 4), но вязнет в стене */
+            if (!impactNormal) {
+              pr.pierces = (pr.pierces || 0) + 1;
+              if (this.effects) this.effects.bloodBurst(impactPoint, dir, 6);
+              UI.hitmark(true); this._hitmarkT = U.now();
+              if (pr.pierces < 4) continue;          // летит дальше
+              this.removeProjectile(i);
+              continue;
+            }
+            /* стена: застревает с искрами */
+            if (this.effects) this.effects.impact(impactPoint, impactNormal, 'metal');
+            this.removeProjectile(i);
+            continue;
+          } else {
+            /* ПРЫГУЧИЙ: отскакивает от стен/пола и врагов, пока не выдохнется */
+            pr.bounces = (pr.bounces || 0) + 1;
+            if (pr.bounces > 6) { this.removeProjectile(i); continue; }
+            let n = impactNormal;
+            if (!n) {
+              /* попал во врага — отскакивает назад */
+              n = { x: -dir.x, y: -dir.y, z: -dir.z };
+            }
+            const vn = pr.vel.x * n.x + pr.vel.y * n.y + pr.vel.z * n.z;
+            pr.vel.x -= 2 * vn * n.x; pr.vel.y -= 2 * vn * n.y; pr.vel.z -= 2 * vn * n.z;
+            /* пружинка подкидывает вверх */
+            pr.vel.y = Math.max(pr.vel.y, 6);
+            pr.pos.x = impactPoint.x + n.x * .1;
+            pr.pos.y = impactPoint.y + n.y * .1;
+            pr.pos.z = impactPoint.z + n.z * .1;
+            Audio3D_SFX.spamtonBounce && Audio3D_SFX.spamtonBounce(impactPoint.x, impactPoint.y, impactPoint.z);
+            if (this.effects) this.effects.spark(impactPoint, n);
+            continue;
+          }
         }
         if (pr.kind === 'disc') {
           // a disc bounces off a wall a few times before it fades
@@ -8336,6 +8418,130 @@ const Game = {
     if (this.mode === CS.MODE.ONLINE) this.traceRemotePlayer(origin, dir, def.range, def, dir);
   },
 
+  /* ============================================================
+     [BIG SHOT] — ЗАРЯД ГИПЕР-ПИПИСА.
+     Игрок держит ПКМ: пушка раскручивается, звучит нарастающий заряд (как при
+     атаке BIG SHOT в бою со Спамтоном), вокруг собираются пиписы-спутники.
+     Отпустил — вылетает ГИПЕР-ПИПИС: огромный, с мощным взрывом, мясом и огнём.
+     Заряд короткий усиливает выстрел, полный — максимальный.
+     ============================================================ */
+  updateSpamtonCharge(dt, holding) {
+    const p = this.player;
+    const def = p.def || {};
+    if (!p._spamtonChargeT) p._spamtonChargeT = 0;
+    p._spamtonCharging = true;
+    p._spamtonChargeT = Math.min((def.chargeTime || 1.6), p._spamtonChargeT + dt);
+    const k = U.clamp(p._spamtonChargeT / (def.chargeTime || 1.6), 0, 1);
+    /* звук заряда: короткий «тик», ускоряющийся и повышающийся — как BIG SHOT */
+    p._spamtonTick = (p._spamtonTick || 0) - dt;
+    if (p._spamtonTick <= 0) {
+      p._spamtonTick = .16 * (1 - k * .7) + .03;
+      if (Audio3D_SFX.spamtonChargeTick) Audio3D_SFX.spamtonChargeTick(k);
+    }
+    /* при полном заряде — гулкий «готов» */
+    if (k >= 1 && !p._spamtonReady) { p._spamtonReady = true; if (Audio3D_SFX.spamtonChargeReady) Audio3D_SFX.spamtonChargeReady(); }
+    /* визуал: пушка дёргается и светится, вокруг летают пиписы */
+    p.recoil = (p.recoil || 0) * .9;
+    p.spamtonChargeK = k;
+    if (this.effects && Math.random() < .4 + k * .5) {
+      const eye = this.eyePos(), dir = this.cameraDir();
+      const mx = eye.x + dir.x * 1.2, my = eye.y - .2, mz = eye.z + dir.z * 1.2;
+      this.effects.particle(mx, my, mz, U.rand(-2, 2), U.rand(0, 2), U.rand(-2, 2), U.rand(.05, .12), 'vspark', U.rand(.2, .5));
+    }
+  },
+
+  releaseHyperPipis() {
+    const p = this.player;
+    p._spamtonCharging = false;
+    const k = U.clamp((p._spamtonChargeT || 0) / ((p.def && p.def.chargeTime) || 1.6), 0, 1);
+    p._spamtonChargeT = 0; p._spamtonReady = false;
+    if (k < .12) return;                       // слишком слабый заряд — впустую
+    const def = p.def;
+    const origin = this.eyePos();
+    const dir = this.cameraDir();
+    const flat = Math.hypot(dir.x, dir.z) || 1;
+    const fx = dir.x / flat, fz = dir.z / flat;
+    /* ГИПЕР-ПИПИС: огромное яйцо с лицом Спамтона, летит вперёд по дуге */
+    const mesh = buildHyperPipis();
+    mesh.position.set(origin.x + fx * 1.2, origin.y - .1, origin.z + fz * 1.2);
+    mesh.scale.setScalar(.8 + k * .6);
+    this.scene.add(mesh);
+    const speed = (def.hyperProjSpeed || 26) * (.7 + k * .5);
+    this.projectiles.push({
+      mesh: mesh, kind: 'hyperpipis', pid: 'hp' + (this._projSeq = (this._projSeq || 0) + 1),
+      alive: true, life: 7, prev: { x: origin.x, y: origin.y, z: origin.z },
+      pos: { x: origin.x + fx * 1.2, y: origin.y - .1, z: origin.z + fz * 1.2 },
+      vel: { x: fx * speed, y: dir.y * speed + 3, z: fz * speed },
+      grav: 9, dmg: (def.hyperDmg || 1400) * (.5 + k * .5), headMul: 1.2,
+      splash: (def.hyperSplash || 13) * (.7 + k * .5), splashDmg: (def.hyperSplashDmg || 1200) * (.5 + k * .5),
+      explosionColor: [0xff5d8f, 0x1a0d12], noSelfDamage: true, chargeK: k, hyper: true
+    });
+    Audio3D_SFX.spamtonHyperShot && Audio3D_SFX.spamtonHyperShot(origin.x, origin.y, origin.z);
+    p.recoil = (p.recoil || 0) + 6.5; p.viewPunchP = (p.viewPunchP || 0) + 4.5;
+    UI.center('BIG SHOT!', '· ГИПЕР-ПИПИС ·', 1.2);
+    if (this.effects) {
+      this.effects.explosion(origin.x + fx * 1.4, origin.y, origin.z + fz * 1.4, 4, [0xff5d8f, 0x1a0d12]);
+    }
+  },
+
+  /* ТЯЖЁЛОЕ ПРИЗЕМЛЕНИЕ ГИПЕР-ПИПИСА: огромный взрыв, вмятина-кратер в земле,
+     ударная волна, разрушение карты, отброс и тряска камеры. */
+  hyperPipisImpact(pr, point, normal) {
+    const R = pr.splash || 13, dmg = pr.splashDmg || 1200;
+    const p = this.player;
+    const onGround = !normal || normal.y > .5 || point.y < .35;
+    /* грибовидный взрыв + огонь + мясо */
+    if (this.effects) {
+      this.effects.explosion(point.x, point.y + .5, point.z, R, [0xff5d8f, 0x1a0d12], true);
+      if (this.effects.fireBurst) this.effects.fireBurst(point.x, point.y + .4, point.z, R * .7);
+      if (this.effects.goreBurst) this.effects.goreBurst(point.x, point.y + .6, point.z, R * .6);
+      this.effects.groundWave(point.x, .05, point.z, R * 1.4);
+      this.effects.groundWave(point.x, .05, point.z, R * 2.2);
+      /* ВМЯТИНА: тёмный кратер-декаль на земле + кольцо пыли */
+      this.effects.decal(point.x, .04, point.z, 0, 1, 0, R * 1.1, 'scorch');
+      this.effects.decal(point.x, .03, point.z, 0, 1, 0, R * .7, 'blood');
+      for (let i = 0; i < 22; i++) {
+        const a = U.rand(0, 6.28);
+        this.effects.particle(point.x, .3, point.z, Math.cos(a) * U.rand(4, 14), U.rand(2, 7), Math.sin(a) * U.rand(4, 14),
+          U.rand(.15, .4), 'smoke', U.rand(.7, 1.5));
+      }
+      /* «вмятины» по земле вокруг: несколько малых кратеров */
+      for (let i = 0; i < 5; i++) {
+        const a = U.rand(0, 6.28), rr = U.rand(R * .5, R);
+        this.effects.decal(point.x + Math.cos(a) * rr, .03, point.z + Math.sin(a) * rr, 0, 1, 0, U.rand(1.2, 2.6), 'scorch');
+      }
+    }
+    Audio3D_SFX.explosionAt(point.x, point.y, point.z);
+    Audio3D_SFX.spamtonBoom && Audio3D_SFX.spamtonBoom(point.x, point.y, point.z);
+    /* карта крошится по большой площади */
+    this.breakMapAt(point.x, point.y + .4, point.z, R * .9, dmg * 2);
+    /* урон и мощный отброс всем вокруг */
+    const push = (list, isRemote) => {
+      if (!list) return;
+      for (const z of list) {
+        if (!z.alive || z.dying) continue;
+        const dx = z.pos.x - point.x, dz = z.pos.z - point.z, dy = (z.pos.y + 1) - point.y;
+        const d = Math.hypot(dx, dy, dz);
+        if (d > R * 1.4) continue;
+        const kk = U.clamp(1 - d / (R * 1.4), .15, 1);
+        if (isRemote) this.sendPvpHit(dmg * kk, 'body', d < 3, z, 'spamton');
+        else { z.takeDamage(dmg * (.5 + kk * .5), 'body', { x: dx, y: dy, z: dz }); p.damageDealt += dmg * .5; }
+        if (z.alive && !z.dying) {
+          const l = Math.hypot(dx, dz) || 1;
+          z.vel.x += (dx / l) * 48 * kk; z.vel.z += (dz / l) * 48 * kk; z.vel.y = 12 * kk;
+          if (typeof z.stagger === 'function') z.stagger(1.3);
+        }
+      }
+    };
+    push(this.horde && this.horde.list, false);
+    if (this.mode === CS.MODE.ONLINE) push(this.remotePlayers, true);
+    /* ТРЯСКА КАМЕРЫ — тяжёлый удар */
+    p.recoil = (p.recoil || 0) + 14; p.viewPunchP = (p.viewPunchP || 0) + 10;
+    p.viewPunchY = (p.viewPunchY || 0) + U.rand(-.5, .5);
+    if (this._camShake !== undefined) this._camShake = 1.2;
+    UI.toast('BIG SHOT!', '#ff5d8f');
+  },
+
   traceShot(origin, dir, def, isMelee, muzzleWorld) {
     const p = this.player;
     const maxDist = def.range || 100;
@@ -10039,6 +10245,12 @@ const Game = {
       } else if (flameFiring) {
         // held fire: a cone of flame that burns everything in front
         this.updateFlamer(dt);
+      } else if (def.spamtonCharge && (Input.aimDown() || (IS_TOUCH && TouchUI.aimPressed)) && canLook) {
+        /* [BIG SHOT]: ПКМ — ЗАРЯД. Держи, чтобы раскрутить пушку, отпусти —
+           ГИПЕР-ПИПИС. Пока заряжаем, обычная стрельба ЛКМ тоже блокируется. */
+        this.updateSpamtonCharge(dt, true);
+      } else if (def.spamtonCharge && p._spamtonCharging) {
+        this.releaseHyperPipis();
       } else if (def.ult && Input.aimDown() && canLook && !this._ultAimLatch) {
         /* ПКМ (на телефоне — кнопка ПРИЦЕЛ) — УЛЬТА.
            Меч рыцаря = SANGUINE SLASH, Господин цветов = СОВОКУПНАЯ СИЛА. */

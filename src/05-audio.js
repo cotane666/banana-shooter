@@ -64,6 +64,7 @@ const Audio3D_SFX = {
       deagle: { dur: .22, f: 900,  q: .9,  g: .50, thump: 95,  td: .15 },
       awp:    { dur: .38, f: 620,  q: .75, g: .56, thump: 68,  td: .26 },
       knife:  { dur: .07, f: 4200, q: 3.0, g: .18, thump: 300, td: .04 },
+      spamton:{ dur: .16, f: 1700, q: 2.4, g: .38, thump: 140, td: .10 },
       banana: { dur: .20, f: 900,  q: .7,  g: .30, thump: 110, td: .18 }
     }[type] || { dur: .15, f: 1400, q: 1, g: .4, thump: 120, td: .1 };
 

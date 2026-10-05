@@ -5,7 +5,7 @@
 
 const CS = window.CS = {
   version: '1.0',
-  MODE: { MENU: 'menu', OFFLINE: 'offline', ONLINE: 'online', RANGE: 'range' },
+  MODE: { MENU: 'menu', OFFLINE: 'offline', ONLINE: 'online', RANGE: 'range', EDITOR: 'editor' },
   NETROLE: { NONE: 0, HOST: 1, CLIENT: 2 }
 };
 
@@ -1181,6 +1181,8 @@ const Store = {
           grenade: 'frag', buildable: 'turret', weather: 'day', trapsEnabled: 1, offCountExact: 10, offCountFixed: 0,
           timeOfDay: 'day', skyWeather: 'clear', envAuto: 0, envOff: 0, envAutoSpeed: 1, menuTour: 1,
           ach: {}, runs: [], skinOn: {}, skinChar: '', mechSkin: '',
+          /* КАСТОМНЫЕ КАРТЫ из редактора: [{ id, name, blocks:[...], spawn:{x,z} }] */
+          customMaps: [],
           /* галактический скин персонажа открыт вместе с платиновым достижением */
           /* one saved run per offline mode: { normal|horde|freehorde|custom|bossrush|daily|endless: checkpoint } */
           checkpoints: {} },

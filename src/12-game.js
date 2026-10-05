@@ -1136,6 +1136,8 @@ const Game = {
   },
 
   finishInit() {
+    /* подключаем пользовательские карты из редактора в реестр */
+    if (typeof registerCustomMapsIntoRegistry === 'function') registerCustomMapsIntoRegistry();
     buildMap(this.scene, Store.data.quality, Store.data.map);
     this.world = MAP.world;
     UI.loading(62, 'Компилируем шейдеры…');
@@ -1375,6 +1377,9 @@ const Game = {
       });
     }
     bindClick('btnOnline', () => { UI.show('lobby'); this.resetLobby(); Net.warmup(); });
+    /* РЕДАКТОР КАРТ: новая карта / продолжить последнюю */
+    bindClick('btnEditor', () => { if (typeof registerCustomMapsIntoRegistry === 'function') registerCustomMapsIntoRegistry(); this.startEditor(null); });
+    bindClick('edSaveBtn', () => { if (typeof MapEditor !== 'undefined') MapEditor.save(); });
     bindClick('btnControls', () => { this._prevScreen = 'menu'; UI.show('controls'); });
     bindClick('btnControlsBack', () => UI.show(this._prevScreen || 'menu'));
     bindClick('btnLobbyBack', () => { Net.close(false); UI.show('menu'); });
@@ -1573,6 +1578,13 @@ const Game = {
       return;
     }
     if (this.mode === CS.MODE.MENU) return;
+    /* РЕДАКТОР КАРТ: F — сохранить, Esc — выход, остальное — горячие клавиши */
+    if (this.mode === CS.MODE.EDITOR) {
+      if (code === 'KeyF') { MapEditor.save(); return; }
+      if (code === 'Escape') { this.stopToMenu(); UI.show('menu'); return; }
+      MapEditor.hotkey(code);
+      return;
+    }
     // While the buy menu is open it owns the keyboard (B / Enter / Esc close it,
     // 1-9 buy the numbered item, Tab is a no-op).
     if (this.buyOpen) {
@@ -2282,6 +2294,13 @@ const Game = {
 
   onMouseDown(btn, e) {
     if (this.mode === CS.MODE.MENU) return;
+    /* РЕДАКТОР КАРТ: ЛКМ ставит блок, ПКМ убирает */
+    if (this.mode === CS.MODE.EDITOR) {
+      if (!Input.locked) { Input.requestLock(); return; }
+      if (btn === 0) MapEditor.place();
+      else if (btn === 2) MapEditor.removeAt();
+      return;
+    }
     if (this.buyOpen || this.paused || UI.overlayOpen()) return;
     if (!Input.locked) { Input.requestLock(); return; }
     if (btn === 0) {
@@ -2520,6 +2539,19 @@ const Game = {
     UI.refreshChips();
   },
 
+  /* КАСТОМНАЯ КАРТА ПО СЕТИ: хост прислал определение — сохраняем локально и
+     регистрируем в реестре, чтобы ensureMap построил её одинаково у всех. */
+  adoptCustomMap(def) {
+    if (!def || !def.id) return;
+    const list = (Store.data.customMaps && Array.isArray(Store.data.customMaps)) ? Store.data.customMaps : (Store.data.customMaps = []);
+    const existing = list.find(m => m.id === def.id);
+    if (existing) { existing.name = def.name; existing.blocks = def.blocks || []; existing.spawn = def.spawn || null; }
+    else list.push({ id: def.id, name: def.name || 'КАРТА ХОСТА', blocks: def.blocks || [], spawn: def.spawn || null });
+    Store.save();
+    if (typeof registerCustomMapsIntoRegistry === 'function') registerCustomMapsIntoRegistry();
+    if (typeof uiRefreshCustomMaps === 'function') uiRefreshCustomMaps();
+  },
+
   attachViewModel() {
     this.player.buildViewModel();
     if (this.player.vmGroup.parent) this.player.vmGroup.parent.remove(this.player.vmGroup);
@@ -2562,6 +2594,47 @@ const Game = {
     this.enterGame();
     this.updateRangePanel();
     UI.toast('Полигон: всё бесплатно · ' + (IS_TOUCH ? 'кнопка МАГАЗИН' : 'B — магазин'), '#ff9d21');
+  },
+
+  /* ============================================================
+     РЕДАКТОР КАРТ: свободная площадка, игрок ходит от первого лица и
+     расставляет блоки. Сохранённые карты доступны в оффлайне и онлайне.
+     ============================================================ */
+  startEditor(mapId) {
+    this.stopToMenu(true);
+    this.mode = CS.MODE.EDITOR;
+    this.freePlay = true;
+    this.offline = null;
+    this.online = null;
+    this.remotePlayers = []; this.remote = null;
+
+    this.player = new Player({ id: 'p1', name: 'Вы', isLocal: true, team: 'ct' });
+    this.player.money = 999999;
+    this.player.give('knife');
+    this.player.slot = 3;
+    this.player.maxHealth = 100000;
+    this.player.health = 100000;
+    this.attachViewModel();
+
+    this.horde = new Horde(this.scene, this.world, this);
+    this.dummies = []; this.targets = [];
+    this.effects = new Effects(this.scene, Store.data.quality);
+    this.effects.clear();
+
+    MapEditor.start(mapId);
+    /* стартовая позиция — в центре площадки */
+    this.player.resetSpawn(0, (this.world.groundAt(0, 0, 4) || 0) + .05, 0, 0);
+    this.camera.position.set(0, (this.world.groundAt(0, 0, 4) || 0) + CFG.eyeHeight, 0);
+    this.roundState = 'live';
+    this.buyTimer = 0; this.roundT = 0;
+    this.enterGame();
+    this.editorUI(true);
+  },
+
+  editorUI(on) {
+    const e = UI.el;
+    if (e.edPanel) e.edPanel.classList.toggle('hidden', !on);
+    if (on) MapEditor.updatePanel();
   },
 
   spawnDummies() {
@@ -3743,6 +3816,8 @@ const Game = {
       this.enemySpawnOpen = false;
       if (this.player && this.player.vmGroup && this.player.vmGroup.parent) this.player.vmGroup.parent.remove(this.player.vmGroup);
       if (this.effects) { this.effects.clear(); }
+      if (typeof MapEditor !== 'undefined' && MapEditor.active) MapEditor.stop();
+      if (typeof this.editorUI === 'function') this.editorUI(false);
     };
     if (!keepRunning) {
       this.running = false;
@@ -3815,7 +3890,7 @@ const Game = {
     }
     const s = spawns[idx] || { x: 0, z: 42 };
     const y = this.world.groundAt(s.x, s.z, 3);
-    const yaw = Math.atan2(-(0 - s.x), -(0 - s.z)); // face the arena centre
+    const yaw = (s.yaw !== undefined) ? s.yaw : Math.atan2(-(0 - s.x), -(0 - s.z)); // face the arena centre
     this.player.resetSpawn(s.x, y + .05, s.z, yaw);
     this.camera.position.set(s.x, y + CFG.eyeHeight, s.z);
   },
@@ -9621,6 +9696,7 @@ const Game = {
     if (r.st === 'settings') {
       // the host may retune the room between rounds; clients just follow along
       if (r.hp) { this.matchHP = r.hp; this.player.maxHealth = r.hp; }
+      if (r.mapDef) this.adoptCustomMap(r.mapDef);
       if (r.map && r.map !== MAP.id && (this.roundState === 'buy' || this.roundState === 'idle')) this.ensureMap(r.map);
       if (r.players) { this.online.players = r.players; this.refreshSkipUI(); }
       if (r.free !== undefined) this.freePlay = !!r.free;
@@ -9905,7 +9981,7 @@ const Game = {
     // and not while the buy menu is open.
     const beamReady = p.def && p.def.beam && p.spinT > .85 && p.beamVent <= 0;
     const flameFiring = p.def && p.def.flame && p.triggerDown && p.weapon.mag > 0 && p.fireCd <= 0;
-    if (p.alive && !this.buyOpen && this.roundState === 'live') {
+    if (p.alive && !this.buyOpen && this.roundState === 'live' && this.mode !== CS.MODE.EDITOR) {
       const def = p.def;
       /* ---- МЕХАКОСТЮМ: ЛКМ — гигантский миниган, ПКМ — гипер-лазер ---- */
       if (this.isMechActive()) {
@@ -9969,11 +10045,13 @@ const Game = {
     this.updateGrenades(dt);
 
     // ---- AI ----
-    if (this.horde) this.horde.update(dt, p, (this.mode === CS.MODE.ONLINE && this.isCoop) ? this.remotePlayers : null);
+    if (this.horde && this.mode !== CS.MODE.EDITOR) this.horde.update(dt, p, (this.mode === CS.MODE.ONLINE && this.isCoop) ? this.remotePlayers : null);
     if (this.mode === CS.MODE.OFFLINE || this.mode === CS.MODE.RANGE || (this.mode === CS.MODE.ONLINE && this.isCoop)) { this.updateBosses(dt); this.updateBossCharges(dt); }
 
     // ---- effects ----
     if (this.effects) this.effects.update(dt);
+    /* РЕДАКТОР КАРТ: обновляем курсор и подсветку */
+    if (this.mode === CS.MODE.EDITOR && typeof MapEditor !== 'undefined') MapEditor.update(dt);
     /* экранный эффект ульты рыцаря (чёрный экран + белый слеш) */
     if (typeof UI !== 'undefined' && UI.knightUltTick) UI.knightUltTick(dt);
     if (this.mode === CS.MODE.OFFLINE || this.mode === CS.MODE.RANGE) {

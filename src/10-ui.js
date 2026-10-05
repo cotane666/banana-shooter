@@ -32,7 +32,8 @@ const UI = {
       'account', 'accAuthBox', 'accInBox', 'accWho', 'accStatus', 'accNick', 'accEmail', 'accPass',
       'accCloudTag', 'accCloudHint', 'accCloudForm', 'accUrl', 'accKey', 'accHash',
       'btnAccount', 'btnAccountBack', 'btnAccLogin', 'btnAccRegister', 'btnAccSync', 'btnAccOut',
-      'btnAccCloud', 'btnAccCloudSave', 'btnAccCopyHash'];
+      'btnAccCloud', 'btnAccCloudSave', 'btnAccCopyHash',
+      'btnEditor', 'edPanel', 'edMat', 'edSize', 'edMode', 'edCount', 'edSpawn', 'edName', 'edSaveBtn', 'myMaps', 'lobbyMyMaps'];
     ids.forEach(i => this.el[i] = $(i));
     this.buildBuyCats();
     this.buildChips();
@@ -49,7 +50,7 @@ const UI = {
     this.current = name;
   },
   hideOverlays() {
-    ['buy', 'scoreboard', 'pause', 'controls', 'lobby', 'menu', 'connect', 'android', 'ios', 'credits', 'matchEnd', 'custom', 'sdScreen', 'esScreen', 'modScreen', 'extras', 'skins', 'account'].forEach(s => {
+    ['buy', 'scoreboard', 'pause', 'controls', 'lobby', 'menu', 'connect', 'android', 'ios', 'credits', 'matchEnd', 'custom', 'sdScreen', 'esScreen', 'modScreen', 'extras', 'skins', 'account', 'edPanel'].forEach(s => {
       if (this.el[s]) this.el[s].classList.add('hidden');
     });
   },
@@ -283,7 +284,60 @@ const UI = {
     fillRounds(this.el.lobbyRounds);
     fillShop(this.el.lobbyShop);
     this.buildEnvChips();
+    this.buildMyMaps();
     this.refreshChips();
+  },
+
+  /* ---- МОИ КАРТЫ (из редактора): выбор + редактировать + удалить ---- */
+  buildMyMaps() {
+    const fill = (wrap) => {
+      if (!wrap) return;
+      wrap.innerHTML = '';
+      const list = (Store.data.customMaps && Array.isArray(Store.data.customMaps)) ? Store.data.customMaps : [];
+      if (!list.length) {
+        const d = document.createElement('div');
+        d.className = 'hintbox'; d.style.marginTop = '0';
+        d.textContent = 'Пока нет своих карт. Откройте «РЕДАКТОР КАРТ» в главном меню.';
+        wrap.appendChild(d);
+        return;
+      }
+      list.forEach(m => {
+        const row = document.createElement('span');
+        row.className = 'mapedit';
+        const b = document.createElement('button');
+        b.dataset.map = m.id;
+        b.innerHTML = '<b>' + U.esc(m.name) + '</b><i>' + ((m.blocks && m.blocks.length) || 0) + ' блоков</i>';
+        b.addEventListener('click', () => {
+          Store.data.map = m.id; Store.save(); UI.refreshChips();
+          if (typeof Game !== 'undefined' && Game.running && (Game.mode === CS.MODE.RANGE || Game.mode === CS.MODE.OFFLINE)) {
+            Game.ensureMap(m.id); Game.spawnPlayerLocal(0);
+          }
+          Audio3D_SFX.uiClick();
+        });
+        const ed = document.createElement('button');
+        ed.className = 'del'; ed.textContent = 'ред.';
+        ed.title = 'Редактировать карту';
+        ed.addEventListener('click', (e) => { e.stopPropagation(); if (typeof Game !== 'undefined') Game.startEditor(m.id); });
+        const del = document.createElement('button');
+        del.className = 'del'; del.textContent = '×';
+        del.title = 'Удалить карту';
+        del.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const arr = Store.data.customMaps;
+          const i = arr.findIndex(x => x.id === m.id);
+          if (i >= 0) arr.splice(i, 1);
+          if (Store.data.map === m.id) { Store.data.map = 'arena'; }
+          Store.save();
+          if (typeof registerCustomMapsIntoRegistry === 'function') registerCustomMapsIntoRegistry();
+          UI.buildMyMaps(); UI.refreshChips();
+          Audio3D_SFX.uiClick();
+        });
+        row.appendChild(b); row.appendChild(ed); row.appendChild(del);
+        wrap.appendChild(row);
+      });
+    };
+    fill(this.el.myMaps);
+    fill(this.el.lobbyMyMaps);
   },
 
   /* time-of-day / weather / auto-cycle chip groups (environment settings).
@@ -348,6 +402,8 @@ const UI = {
       Array.from(wrap.children).forEach(b => b.classList.toggle('on', String(b.dataset[attr]) === String(val)));
     };
     mark(this.el.mapChips, 'map', S.map); mark(this.el.lobbyMaps, 'map', S.map);
+    if (this.el.myMaps) mark(this.el.myMaps, 'map', S.map);
+    if (this.el.lobbyMyMaps) mark(this.el.lobbyMyMaps, 'map', S.map);
     mark(this.el.playerChips, 'n', S.players); mark(this.el.lobbyPlayers, 'n', S.players);
     mark(this.el.hpChips, 'hp', S.maxHP); mark(this.el.lobbyHp, 'hp', S.maxHP);
     mark(this.el.hordeChips, 'horde', S.horde);
@@ -1539,3 +1595,9 @@ const Skins = {
     this.renderer.render(this.scene, this.camera);
   }
 };
+
+/* ---- глобальный помощник: перерисовать список «Мои карты» (редактор) ---- */
+function uiRefreshCustomMaps() {
+  try { if (typeof UI !== 'undefined') { UI.buildMyMaps(); UI.refreshChips(); } } catch (e) { }
+}
+window.uiRefreshCustomMaps = uiRefreshCustomMaps;

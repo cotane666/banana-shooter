@@ -489,6 +489,12 @@ const Net = {
     }
   },
   send(msg) {
+    /* КАСТОМНАЯ КАРТА: если в сообщении едет id пользовательской карты,
+       прикладываем её определение (блоки/спавн), чтобы пир построил её сам. */
+    if (msg && msg.map && typeof customMapById === 'function' && msg.mapDef === undefined) {
+      const def = customMapById(msg.map);
+      if (def) msg.mapDef = { id: def.id, name: def.name, blocks: def.blocks, spawn: def.spawn };
+    }
     if (this.role === CS.NETROLE.HOST) {
       if (!this.conns.length) return false;
       let ok = false;

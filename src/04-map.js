@@ -1401,6 +1401,7 @@ function buildMap(scene, quality, mapId) {
   MAP.destructibles = [];
   MAP._chunkGid = 0;
   MAP._chunkGroups = {};
+  MAP.customSpawn = null;
 
   MAP.def.build(group, world);
 
@@ -1417,6 +1418,12 @@ function buildMap(scene, quality, mapId) {
   scene.fog = new THREE.FogExp2(MAP.def.fog || 0xbcc6cf, MAP.def.fogDensity || 0.0055);
 
   computeSpawns(world);
+  /* КАСТОМНАЯ КАРТА: своя точка спавна игрока — ставим первой */
+  if (MAP.customSpawn) {
+    const cs = MAP.customSpawn;
+    const gy = world.groundAt(cs.x, cs.z, 6) || 0;
+    MAP.playerSpawns.unshift({ x: cs.x, z: cs.z, y: gy, yaw: cs.yaw || 0 });
+  }
   if (typeof Game !== 'undefined' && Game.applyTimeOfDay) { try { Game.applyTimeOfDay(); } catch (e) { } }
   return MAP;
 }

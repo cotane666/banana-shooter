@@ -887,6 +887,27 @@ html.touch .fld input{padding:10px;font-size:15px}
   #tDash{right:74px;top:calc(10px + env(safe-area-inset-top,0px));width:58px;height:44px;font-size:10px}
   html.touch .hud-tr{right:78px;top:10px}
 }
+
+/* ============ MAP EDITOR ============ */
+#edPanel{
+  position:fixed;left:12px;top:calc(12px + env(safe-area-inset-top,0px));
+  z-index:40;width:230px;padding:10px 12px;border-radius:12px;
+  background:rgba(14,17,20,.82);border:1px solid rgba(120,255,170,.35);
+  font-family:inherit;color:#e9eef2;backdrop-filter:blur(4px);pointer-events:auto;
+}
+#edPanel.hidden{display:none}
+#edPanel .ed-title{font-weight:800;letter-spacing:.06em;color:#9be564;margin-bottom:8px;font-size:13px}
+#edPanel .ed-row{display:flex;justify-content:space-between;align-items:center;font-size:12px;padding:3px 0;border-bottom:1px solid rgba(255,255,255,.06)}
+#edPanel .ed-row span{opacity:.7}
+#edPanel .ed-row b{color:#ffd23f}
+#edPanel .ed-hint{margin-top:8px;font-size:10.5px;line-height:1.5;opacity:.72}
+#edPanel .ed-name{width:100%;margin-top:8px;box-sizing:border-box;padding:6px 8px;border-radius:8px;
+  border:1px solid rgba(255,255,255,.18);background:rgba(0,0,0,.35);color:#fff;font-size:12px}
+#edPanel .mbtn.tiny{margin-top:6px;width:100%}
+#myMaps .mapedit{display:inline-flex;gap:4px;align-items:center}
+#myMaps .mapedit .del{border:0;background:rgba(255,90,90,.2);color:#ff8a8a;border-radius:6px;
+  padding:2px 6px;cursor:pointer;font-size:11px}
+#myMaps .mapedit .del:hover{background:rgba(255,90,90,.4)}
 </style>
 </head>
 <body>
@@ -911,6 +932,7 @@ html.touch .fld input{padding:10px;font-size:15px}
       <button class="mbtn primary" id="btnOffline"><b>ОФФЛАЙН</b><i>Волны зомби · обычный, орда ×10, бесплатная орда, свой режим</i></button>
       <button class="mbtn" id="btnRange"><b>ПОЛИГОН</b><i>Всё оружие бесплатно · манекены и урон в секунду</i></button>
       <button class="mbtn" id="btnOnline"><b>ОНЛАЙН</b><i>Бой против друзей: 2–4 игрока, выбор карты</i></button>
+      <button class="mbtn" id="btnEditor"><b>РЕДАКТОР КАРТ</b><i>Соберите свою карту из блоков и играйте в оффлайне и онлайне</i></button>
       <button class="mbtn" id="btnMatch"><b>ПАРАМЕТРЫ МАТЧА</b><i>Карта · число игроков · здоровье</i></button>
       <button class="mbtn" id="btnExtras"><b>ДОСТИЖЕНИЯ И РЕКОРДЫ</b><i>Награды за вехи · таблица лучших забегов</i></button>
       <button class="mbtn" id="btnSkins"><b>ИНВЕНТАРЬ СКИНОВ</b><i>Скины за достижения · посмотреть оружие в 3D</i></button>
@@ -1047,6 +1069,10 @@ html.touch .fld input{padding:10px;font-size:15px}
     <div class="fld">Карта
       <div class="chips" id="mapChips"></div>
     </div>
+    <div class="fld">Мои карты (редактор)
+      <div class="chips" id="myMaps"></div>
+      <div class="hintbox" style="margin-top:6px">Свои карты доступны и в оффлайне, и в онлайне (хост выбирает их в лобби). Создать — кнопка <b>РЕДАКТОР КАРТ</b> в главном меню.</div>
+    </div>
     <div class="fld">Игроков (онлайн)
       <div class="chips" id="playerChips"></div>
     </div>
@@ -1090,6 +1116,9 @@ html.touch .fld input{padding:10px;font-size:15px}
       <h2 class="mt">ПАРАМЕТРЫ МАТЧА</h2>
       <div class="fld">Карта
         <div class="chips" id="lobbyMaps"></div>
+      </div>
+      <div class="fld">Мои карты (редактор)
+        <div class="chips" id="lobbyMyMaps"></div>
       </div>
       <div class="fld">Игроков в комнате
         <div class="chips" id="lobbyPlayers"></div>
@@ -1269,6 +1298,23 @@ html.touch .fld input{padding:10px;font-size:15px}
     <button id="sdToggle">ВКЛЮЧИТЬ (V)</button>
     <div class="rp-sub">ВРАГИ</div>
     <button id="esConfig">СПАВН ВРАГА (X)</button>
+  </div>
+  <!-- ============ MAP EDITOR HUD ============ -->
+  <div id="edPanel" class="hidden">
+    <div class="ed-title">РЕДАКТОР КАРТ</div>
+    <div class="ed-row"><span>Материал</span><b id="edMat">КИРПИЧ</b></div>
+    <div class="ed-row"><span>Размер</span><b id="edSize">4 м</b></div>
+    <div class="ed-row"><span>Режим</span><b id="edMode">ПОСТАВИТЬ</b></div>
+    <div class="ed-row"><span>Блоков</span><b id="edCount">0</b></div>
+    <div class="ed-row"><span>Спавн</span><b id="edSpawn">(0, 40)</b></div>
+    <div class="ed-hint">
+      ЛКМ — поставить · ПКМ — убрать<br>
+      [ ] / R — размер · G — материал<br>
+      E — точка спавна · C — режим · Z — отмена<br>
+      F — сохранить · Esc — выйти
+    </div>
+    <input id="edName" class="ed-name" maxlength="24" placeholder="Название карты" autocomplete="off">
+    <button class="mbtn tiny" id="edSaveBtn">СОХРАНИТЬ (F)</button>
   </div>
   <div id="dmgDirs"></div>
   <div id="dmgFlash"></div>
@@ -1579,7 +1625,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
 
 const CS = window.CS = {
   version: '1.0',
-  MODE: { MENU: 'menu', OFFLINE: 'offline', ONLINE: 'online', RANGE: 'range' },
+  MODE: { MENU: 'menu', OFFLINE: 'offline', ONLINE: 'online', RANGE: 'range', EDITOR: 'editor' },
   NETROLE: { NONE: 0, HOST: 1, CLIENT: 2 }
 };
 
@@ -2755,6 +2801,8 @@ const Store = {
           grenade: 'frag', buildable: 'turret', weather: 'day', trapsEnabled: 1, offCountExact: 10, offCountFixed: 0,
           timeOfDay: 'day', skyWeather: 'clear', envAuto: 0, envOff: 0, envAutoSpeed: 1, menuTour: 1,
           ach: {}, runs: [], skinOn: {}, skinChar: '', mechSkin: '',
+          /* КАСТОМНЫЕ КАРТЫ из редактора: [{ id, name, blocks:[...], spawn:{x,z} }] */
+          customMaps: [],
           /* галактический скин персонажа открыт вместе с платиновым достижением */
           /* one saved run per offline mode: { normal|horde|freehorde|custom|bossrush|daily|endless: checkpoint } */
           checkpoints: {} },
@@ -3409,6 +3457,361 @@ function rainStreakTexture() {
     }
     TEXTURES.gun = c;
   }
+}
+
+
+/* ===== 04b-map-editor.js ===== */
+/* ============================================================
+   04b — РЕДАКТОР КАРТ
+   Простой блочный редактор: игрок ходит от первого лица, ставит/убирает
+   блоки разных материалов и размеров, задаёт точку спавна, сохраняет карту
+   в Store.data.customMaps. Сохранённые карты доступны и в ОФФЛАЙНЕ, и в
+   ОНЛАЙНЕ (хост передаёт определение карты пирам по сети).
+
+   Формат карты (компактный, сериализуется как есть):
+     { id, name, blocks: [ {x,y,z,w,h,d,m} ], spawn: {x,z,yaw} }
+     x,y,z — ЦЕНТР блока по горизонтали и НИЗ по вертикали (как aabbFromBase);
+     m     — ключ материала (brick/wood/...).
+   ============================================================ */
+const MapEditor = {
+  active: false,
+  blocks: [],            // редактируемый список
+  mapId: null,           // id редактируемой карты (null — новая)
+  mapName: 'МОЯ КАРТА',
+  mat: 'brick',          // выбранный материал
+  size: 4,               // размер куба (м)
+  step: 4,               // шаг курсора
+  erase: false,          // режим удаления
+  spawn: { x: 0, z: 40, yaw: 0 },
+  cursor: { x: 0, y: 0, z: 40, valid: true },
+  _grid: null,           // визуальная сетка-призрак
+  _cursorMesh: null,     // подсветка курсора
+  _spawnMesh: null,      // маркер спавна
+  _undo: [],
+  SIZES: [1, 2, 3, 4, 6, 8, 12],
+  MATS: [
+    { id: 'brick',    name: 'КИРПИЧ' },
+    { id: 'concrete', name: 'БЕТОН' },
+    { id: 'wood',     name: 'ДЕРЕВО' },
+    { id: 'metal',    name: 'МЕТАЛЛ' },
+    { id: 'sand',     name: 'ПЕСОК' },
+    { id: 'dark',     name: 'ТЁМНЫЙ' }
+  ],
+
+  /* ---------- список карт (штатные + пользовательские) ---------- */
+  customList() {
+    const a = Store.data.customMaps;
+    return Array.isArray(a) ? a : (Store.data.customMaps = []);
+  },
+  findCustom(id) { return this.customList().find(m => m.id === id) || null; },
+
+  /* Строитель кастомной карты: вызывается buildMap для встроенной в реестр карты */
+  buildFromDef(def) {
+    const parent = MAP.group, world = MAP.world;
+    buildEditableGround(parent, world);
+    buildEditablePerimeter(parent, world);
+    const data = def && def.data ? def.data : def;
+    const blocks = (data && data.blocks) || [];
+    for (const b of blocks) this.placeBlock(parent, world, b);
+    if (data && data.spawn) MAP.customSpawn = { x: data.spawn.x, z: data.spawn.z, yaw: data.spawn.yaw || 0 };
+  },
+
+  /* Один блок: коллайдер + обычный меш (разрушаемый, как геометрия карты).
+     Для редактора используем обычные меши, а не InstancedMesh: блоков немного
+     и они добавляются/удаляются поштучно. */
+  placeBlock(parent, world, b) {
+    const mat = MAT[b.m] || MAT.brick;
+    const aabb = aabbFromBase(b.x, b.y, b.z, b.w, b.h, b.d, 'cover');
+    aabb.destructible = true;
+    aabb.hp = aabb.maxHp = Math.max(30, b.w * b.h * b.d * 26);
+    aabb._mat = mat;
+    aabb.editorBlock = true;
+    aabb._orig = b;
+    world.addBox(aabb);
+    MAP.destructibles.push(aabb);
+    const mesh = makeBoxMesh(b.w, b.h, b.d, mat);
+    mesh.position.set(b.x, b.y + b.h / 2, b.z);
+    mesh.castShadow = true; mesh.receiveShadow = true;
+    parent.add(mesh);
+    aabb.mesh = mesh;
+    return aabb;
+  },
+
+  /* после пачки правок ничего пересобирать не нужно (обычные меши) */
+  flushNew() { },
+
+  /* ---------- жизненный цикл ---------- */
+  start(mapId) {
+    mapId = mapId || null;
+    const existing = mapId ? this.findCustom(mapId) : null;
+    this.mapId = mapId;
+    this.mapName = existing ? existing.name : 'МОЯ КАРТА';
+    this.blocks = existing ? JSON.parse(JSON.stringify(existing.blocks)) : [];
+    this.spawn = existing && existing.spawn ? Object.assign({ x: 0, z: 40, yaw: 0 }, existing.spawn)
+                                           : { x: 0, z: 40, yaw: 0 };
+    this.erase = false; this._undo = [];
+    this.active = true;
+    Game.editorActive = true;
+    Game.mode = CS.MODE.EDITOR;
+    /* карта-подложка: ровная площадка + границы */
+    if (typeof buildMap === 'function') {
+      buildMap(Game.scene, Store.data.quality, 'editorbase');
+      Game.world = MAP.world;
+      Game.applyQuality();
+    }
+    this.ensureVisuals();
+    if (this.blocks.length) this.rebuildGeometry();
+    UI.show('hud');
+    this.updatePanel();
+    UI.toast('РЕДАКТОР: ЛКМ — поставить · ПКМ — убрать · [ ] — размер · G — материал · E — спавн · F — сохранить', '#9be564');
+  },
+
+  stop() {
+    this.active = false;
+    Game.editorActive = false;
+    this.clearVisuals();
+  },
+
+  /* перепостроить всю геометрию из this.blocks (после правок) */
+  rebuildGeometry() {
+    if (typeof buildMap !== 'function') return;
+    buildMap(Game.scene, Store.data.quality, 'editorbase');
+    Game.world = MAP.world;
+    Game.applyQuality();
+    const parent = MAP.group, world = MAP.world;
+    for (const b of this.blocks) this.placeBlock(parent, world, b);
+    MAP.customSpawn = { x: this.spawn.x, z: this.spawn.z, yaw: this.spawn.yaw || 0 };
+    this.ensureVisuals();
+  },
+
+  /* ---------- визуал редактора (сетка, курсор, маркер спавна) ---------- */
+  ensureVisuals() {
+    if (!MAP.group) return;
+    if (!this._grid) {
+      const g = new THREE.Group();
+      const S = MAP.size, half = S / 2, step = this.step;
+      const pts = [];
+      for (let x = -half; x <= half + .01; x += step) { pts.push(x, .03, -half, x, .03, half); }
+      for (let z = -half; z <= half + .01; z += step) { pts.push(-half, .03, z, half, .03, z); }
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
+      const line = new THREE.LineSegments(geo, new THREE.LineBasicMaterial({ color: 0x33ff88, transparent: true, opacity: .18, depthWrite: false }));
+      line.frustumCulled = false;
+      g.add(line);
+      this._grid = g;
+      MAP.group.add(g);
+    }
+    if (!this._cursorMesh) {
+      const box = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1),
+        new THREE.MeshBasicMaterial({ color: 0x33ff88, transparent: true, opacity: .35, depthWrite: false }));
+      this._cursorMesh = box;
+      MAP.group.add(box);
+    }
+    if (!this._spawnMesh) {
+      const m = new THREE.Mesh(new THREE.CylinderGeometry(.5, .5, 2.4, 12, 1, true),
+        new THREE.MeshBasicMaterial({ color: 0xffd23f, transparent: true, opacity: .5, side: THREE.DoubleSide, depthWrite: false }));
+      m.position.y = 1.2;
+      const grp = new THREE.Group();
+      grp.add(m);
+      this._spawnMesh = grp;
+      MAP.group.add(grp);
+    }
+    this._spawnMesh.position.set(this.spawn.x, 0, this.spawn.z);
+  },
+
+  clearVisuals() {
+    for (const k of ['_grid', '_cursorMesh', '_spawnMesh']) {
+      const o = this[k];
+      if (o && o.parent) o.parent.remove(o);
+      this[k] = null;
+    }
+  },
+
+  /* ---------- управление в кадре ---------- */
+  update(dt) {
+    if (!this.active) return;
+    const p = Game.player;
+    if (!p) return;
+    /* луч от прицела до пола/стены — куда ставить */
+    const eye = Game.eyePos();
+    const dir = Game.cameraDir();
+    const reach = 60;
+    let hit = null;
+    try { hit = Game.world.raycast({ x: eye.x, y: eye.y, z: eye.z }, dir, reach, ['ground']); } catch (e) { hit = null; }
+    let cx, cy, cz;
+    if (hit && hit.point) {
+      const s = this.size;
+      cx = Math.round((hit.point.x) / Math.max(1, this.step)) * Math.max(1, this.step);
+      cz = Math.round((hit.point.z) / Math.max(1, this.step)) * Math.max(1, this.step);
+      /* низ блока — поверх поверхности под курсором */
+      cy = Math.max(0, Math.round(hit.point.y));
+    } else {
+      const gx = eye.x + dir.x * 20, gz = eye.z + dir.z * 20;
+      const ground = Game.world.groundAt(gx, gz, eye.y + 4) || 0;
+      cx = Math.round(gx / Math.max(1, this.step)) * Math.max(1, this.step);
+      cz = Math.round(gz / Math.max(1, this.step)) * Math.max(1, this.step);
+      cy = ground;
+    }
+    this.cursor.x = cx; this.cursor.y = cy; this.cursor.z = cz;
+    this.cursor.valid = Math.abs(cx) < MAP.size / 2 - 1 && Math.abs(cz) < MAP.size / 2 - 1;
+    if (this._cursorMesh) {
+      this._cursorMesh.position.set(cx, cy + this.size / 2, cz);
+      this._cursorMesh.scale.set(this.size, this.size, this.size);
+      this._cursorMesh.material.color.setHex(this.erase ? 0xff4a4a : (this.cursor.valid ? 0x33ff88 : 0x888888));
+    }
+  },
+
+  /* горячая клавиша редактора (вызывается из onKeyDown) */
+  hotkey(code) {
+    switch (code) {
+      case 'BracketRight': case 'KeyR': this.cycleSize(1); return true;
+      case 'BracketLeft': this.cycleSize(-1); return true;
+      case 'KeyG': this.cycleMat(1); return true;
+      case 'KeyE': this.setSpawnHere(); return true;
+      case 'KeyZ': this.undo(); return true;
+      case 'KeyC': this.erase = !this.erase; this.updatePanel(); UI.toast(this.erase ? 'РЕЖИМ: УБРАТЬ' : 'РЕЖИМ: ПОСТАВИТЬ', this.erase ? '#ff6a5a' : '#9be564'); return true;
+    }
+    return false;
+  },
+
+  cycleSize(d) {
+    let i = this.SIZES.indexOf(this.size);
+    i = (i + d + this.SIZES.length) % this.SIZES.length;
+    this.size = this.SIZES[i];
+    this.updatePanel(); UI.toast('Размер блока: ' + this.size + ' м');
+  },
+  cycleMat(d) {
+    let i = this.MATS.findIndex(m => m.id === this.mat);
+    i = (i + d + this.MATS.length) % this.MATS.length;
+    this.mat = this.MATS[i].id;
+    this.updatePanel(); UI.toast('Материал: ' + this.MATS[i].name);
+  },
+  setSpawnHere() {
+    const p = Game.player;
+    this.spawn = { x: p.pos.x, z: p.pos.z, yaw: p.yaw };
+    if (this._spawnMesh) this._spawnMesh.position.set(this.spawn.x, 0, this.spawn.z);
+    UI.toast('Точка спавна установлена');
+  },
+
+  /* ЛКМ — поставить блок; ПКМ — убрать */
+  place() {
+    if (!this.cursor.valid) { Audio3D_SFX.deny && Audio3D_SFX.deny(); return; }
+    this.pushUndo();
+    const b = { x: this.cursor.x, y: this.cursor.y, z: this.cursor.z, w: this.size, h: this.size, d: this.size, m: this.mat };
+    this.blocks.push(b);
+    this.placeBlock(MAP.group, MAP.world, b);
+    this.flushNew();
+    Audio3D_SFX.uiClick && Audio3D_SFX.uiClick();
+  },
+
+  removeAt() {
+    /* убираем ближайший блок к точке курсора (в пределах 1.5 м) */
+    const c = this.cursor;
+    let best = -1, bestD = 2.2 * 2.2;
+    for (let i = 0; i < this.blocks.length; i++) {
+      const b = this.blocks[i];
+      const dx = b.x - c.x, dy = (b.y + b.h / 2) - (c.y + this.size / 2), dz = b.z - c.z;
+      const d = dx * dx + dy * dy + dz * dz;
+      if (d < bestD) { bestD = d; best = i; }
+    }
+    if (best < 0) { Audio3D_SFX.deny && Audio3D_SFX.deny(); return; }
+    this.pushUndo();
+    this.blocks.splice(best, 1);
+    this.rebuildGeometry();
+    Audio3D_SFX.uiClick && Audio3D_SFX.uiClick();
+  },
+
+  pushUndo() {
+    this._undo.push(JSON.stringify(this.blocks));
+    if (this._undo.length > 40) this._undo.shift();
+  },
+  undo() {
+    if (!this._undo.length) return;
+    this.blocks = JSON.parse(this._undo.pop());
+    this.rebuildGeometry();
+    UI.toast('Отменено');
+  },
+
+  _flush() { if (MAP._chunkGroups) { for (const k in MAP._chunkGroups) MAP._chunkGroups[k].dirty = true; } if (typeof _flushChunkInstances === 'function') _flushChunkInstances(); },
+
+  /* ---------- сохранение ---------- */
+  save() {
+    const list = this.customList();
+    const name = (UI.el.edName && UI.el.edName.value.trim()) || this.mapName || 'МОЯ КАРТА';
+    let entry = this.mapId ? list.find(m => m.id === this.mapId) : null;
+    if (!entry) {
+      const id = 'custom_' + Date.now().toString(36) + Math.floor(Math.random() * 1e4).toString(36);
+      entry = { id: id, name: name, blocks: [], spawn: null };
+      list.push(entry);
+      this.mapId = id;
+    }
+    entry.name = name;
+    entry.spawn = { x: this.spawn.x, z: this.spawn.z, yaw: this.spawn.yaw || 0 };
+    entry.blocks = this.blocks.map(b => ({
+      x: +b.x.toFixed(2), y: +b.y.toFixed(2), z: +b.z.toFixed(2),
+      w: +b.w.toFixed(2), h: +b.h.toFixed(2), d: +b.d.toFixed(2), m: b.m
+    }));
+    Store.save();
+    if (typeof uiRefreshCustomMaps === 'function') uiRefreshCustomMaps();
+    UI.toast('Карта сохранена: «' + name + '» · блоков ' + entry.blocks.length, '#9be564');
+  },
+
+  /* ---------- панель ---------- */
+  updatePanel() {
+    const el = UI.el;
+    if (!el.edPanel) return;
+    if (el.edName) { el.edName.value = this.mapName; }
+    if (el.edMat) el.edMat.textContent = (this.MATS.find(m => m.id === this.mat) || {}).name || this.mat;
+    if (el.edSize) el.edSize.textContent = this.size + ' м';
+    if (el.edMode) el.edMode.textContent = this.erase ? 'УБРАТЬ' : 'ПОСТАВИТЬ';
+    if (el.edCount) el.edCount.textContent = String(this.blocks.length);
+    if (el.edSpawn) el.edSpawn.textContent = '(' + Math.round(this.spawn.x) + ', ' + Math.round(this.spawn.z) + ')';
+  }
+};
+
+/* ---------- базовая площадка для пустой карты редактора ---------- */
+function buildEditableGround(parent, world) {
+  const S = MAP.size;
+  world.addBox(AABB(-(S / 2 + 20), -2, -(S / 2 + 20), S / 2 + 20, 0, S / 2 + 20, 'ground'));
+  const gpMat = MAT.floor.clone();
+  gpMat.map = canvasTexture(TEXTURES.floor, 18, 4);
+  const gp = new THREE.Mesh(new THREE.PlaneGeometry(S + 40, S + 40), gpMat);
+  gp.rotation.x = -Math.PI / 2; gp.position.y = 0.01; gp.receiveShadow = true;
+  parent.add(gp);
+}
+function buildEditablePerimeter(parent, world) {
+  mapPerimeter(parent, world, MAT.concrete);
+}
+
+/* ============================================================
+   ИНТЕГРАЦИЯ С РЕЕСТРОМ КАРТ
+   Пользовательские карты добавляются в MAPS как обычные, с build-функцией,
+   которая строит их из данных. Так и оффлайн, и онлайн-клиент строят их ОДИНАКОВО
+   (определение карты едет по сети в сообщении settings).
+   ============================================================ */
+function registerCustomMapsIntoRegistry() {
+  const list = (Store.data.customMaps && Array.isArray(Store.data.customMaps)) ? Store.data.customMaps : [];
+  /* убираем прежние регистрации пользовательских карт */
+  for (let i = MAPS.length - 1; i >= 0; i--) if (MAPS[i].custom) MAPS.splice(i, 1);
+  for (const m of list) {
+    MAPS.push({
+      id: m.id, name: m.name, short: (m.name || 'КАРТА').slice(0, 8).toUpperCase(),
+      desc: 'Своя карта · блоков ' + ((m.blocks && m.blocks.length) || 0),
+      custom: true, data: m,
+      build: (parent, world) => MapEditor.buildFromDef({ data: m })
+    });
+  }
+  /* карта-подложка редактора */
+  if (!MAPS.find(x => x.id === 'editorbase')) {
+    MAPS.push({ id: 'editorbase', name: 'РЕДАКТОР', short: 'РЕД', desc: 'Пустая площадка редактора', custom: true,
+      build: (parent, world) => { buildEditableGround(parent, world); buildEditablePerimeter(parent, world); } });
+  }
+}
+
+/* Найти кастомную карту по id (для сети) */
+function customMapById(id) {
+  const list = (Store.data.customMaps && Array.isArray(Store.data.customMaps)) ? Store.data.customMaps : [];
+  return list.find(m => m.id === id) || null;
 }
 
 
@@ -4816,6 +5219,7 @@ function buildMap(scene, quality, mapId) {
   MAP.destructibles = [];
   MAP._chunkGid = 0;
   MAP._chunkGroups = {};
+  MAP.customSpawn = null;
 
   MAP.def.build(group, world);
 
@@ -4832,6 +5236,12 @@ function buildMap(scene, quality, mapId) {
   scene.fog = new THREE.FogExp2(MAP.def.fog || 0xbcc6cf, MAP.def.fogDensity || 0.0055);
 
   computeSpawns(world);
+  /* КАСТОМНАЯ КАРТА: своя точка спавна игрока — ставим первой */
+  if (MAP.customSpawn) {
+    const cs = MAP.customSpawn;
+    const gy = world.groundAt(cs.x, cs.z, 6) || 0;
+    MAP.playerSpawns.unshift({ x: cs.x, z: cs.z, y: gy, yaw: cs.yaw || 0 });
+  }
   if (typeof Game !== 'undefined' && Game.applyTimeOfDay) { try { Game.applyTimeOfDay(); } catch (e) { } }
   return MAP;
 }
@@ -14368,7 +14778,8 @@ const UI = {
       'account', 'accAuthBox', 'accInBox', 'accWho', 'accStatus', 'accNick', 'accEmail', 'accPass',
       'accCloudTag', 'accCloudHint', 'accCloudForm', 'accUrl', 'accKey', 'accHash',
       'btnAccount', 'btnAccountBack', 'btnAccLogin', 'btnAccRegister', 'btnAccSync', 'btnAccOut',
-      'btnAccCloud', 'btnAccCloudSave', 'btnAccCopyHash'];
+      'btnAccCloud', 'btnAccCloudSave', 'btnAccCopyHash',
+      'btnEditor', 'edPanel', 'edMat', 'edSize', 'edMode', 'edCount', 'edSpawn', 'edName', 'edSaveBtn', 'myMaps', 'lobbyMyMaps'];
     ids.forEach(i => this.el[i] = $(i));
     this.buildBuyCats();
     this.buildChips();
@@ -14385,7 +14796,7 @@ const UI = {
     this.current = name;
   },
   hideOverlays() {
-    ['buy', 'scoreboard', 'pause', 'controls', 'lobby', 'menu', 'connect', 'android', 'ios', 'credits', 'matchEnd', 'custom', 'sdScreen', 'esScreen', 'modScreen', 'extras', 'skins', 'account'].forEach(s => {
+    ['buy', 'scoreboard', 'pause', 'controls', 'lobby', 'menu', 'connect', 'android', 'ios', 'credits', 'matchEnd', 'custom', 'sdScreen', 'esScreen', 'modScreen', 'extras', 'skins', 'account', 'edPanel'].forEach(s => {
       if (this.el[s]) this.el[s].classList.add('hidden');
     });
   },
@@ -14619,7 +15030,60 @@ const UI = {
     fillRounds(this.el.lobbyRounds);
     fillShop(this.el.lobbyShop);
     this.buildEnvChips();
+    this.buildMyMaps();
     this.refreshChips();
+  },
+
+  /* ---- МОИ КАРТЫ (из редактора): выбор + редактировать + удалить ---- */
+  buildMyMaps() {
+    const fill = (wrap) => {
+      if (!wrap) return;
+      wrap.innerHTML = '';
+      const list = (Store.data.customMaps && Array.isArray(Store.data.customMaps)) ? Store.data.customMaps : [];
+      if (!list.length) {
+        const d = document.createElement('div');
+        d.className = 'hintbox'; d.style.marginTop = '0';
+        d.textContent = 'Пока нет своих карт. Откройте «РЕДАКТОР КАРТ» в главном меню.';
+        wrap.appendChild(d);
+        return;
+      }
+      list.forEach(m => {
+        const row = document.createElement('span');
+        row.className = 'mapedit';
+        const b = document.createElement('button');
+        b.dataset.map = m.id;
+        b.innerHTML = '<b>' + U.esc(m.name) + '</b><i>' + ((m.blocks && m.blocks.length) || 0) + ' блоков</i>';
+        b.addEventListener('click', () => {
+          Store.data.map = m.id; Store.save(); UI.refreshChips();
+          if (typeof Game !== 'undefined' && Game.running && (Game.mode === CS.MODE.RANGE || Game.mode === CS.MODE.OFFLINE)) {
+            Game.ensureMap(m.id); Game.spawnPlayerLocal(0);
+          }
+          Audio3D_SFX.uiClick();
+        });
+        const ed = document.createElement('button');
+        ed.className = 'del'; ed.textContent = 'ред.';
+        ed.title = 'Редактировать карту';
+        ed.addEventListener('click', (e) => { e.stopPropagation(); if (typeof Game !== 'undefined') Game.startEditor(m.id); });
+        const del = document.createElement('button');
+        del.className = 'del'; del.textContent = '×';
+        del.title = 'Удалить карту';
+        del.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const arr = Store.data.customMaps;
+          const i = arr.findIndex(x => x.id === m.id);
+          if (i >= 0) arr.splice(i, 1);
+          if (Store.data.map === m.id) { Store.data.map = 'arena'; }
+          Store.save();
+          if (typeof registerCustomMapsIntoRegistry === 'function') registerCustomMapsIntoRegistry();
+          UI.buildMyMaps(); UI.refreshChips();
+          Audio3D_SFX.uiClick();
+        });
+        row.appendChild(b); row.appendChild(ed); row.appendChild(del);
+        wrap.appendChild(row);
+      });
+    };
+    fill(this.el.myMaps);
+    fill(this.el.lobbyMyMaps);
   },
 
   /* time-of-day / weather / auto-cycle chip groups (environment settings).
@@ -14684,6 +15148,8 @@ const UI = {
       Array.from(wrap.children).forEach(b => b.classList.toggle('on', String(b.dataset[attr]) === String(val)));
     };
     mark(this.el.mapChips, 'map', S.map); mark(this.el.lobbyMaps, 'map', S.map);
+    if (this.el.myMaps) mark(this.el.myMaps, 'map', S.map);
+    if (this.el.lobbyMyMaps) mark(this.el.lobbyMyMaps, 'map', S.map);
     mark(this.el.playerChips, 'n', S.players); mark(this.el.lobbyPlayers, 'n', S.players);
     mark(this.el.hpChips, 'hp', S.maxHP); mark(this.el.lobbyHp, 'hp', S.maxHP);
     mark(this.el.hordeChips, 'horde', S.horde);
@@ -15876,6 +16342,12 @@ const Skins = {
   }
 };
 
+/* ---- глобальный помощник: перерисовать список «Мои карты» (редактор) ---- */
+function uiRefreshCustomMaps() {
+  try { if (typeof UI !== 'undefined') { UI.buildMyMaps(); UI.refreshChips(); } } catch (e) { }
+}
+window.uiRefreshCustomMaps = uiRefreshCustomMaps;
+
 
 /* ===== 11-net.js ===== */
 /* ============================================================
@@ -16369,6 +16841,12 @@ const Net = {
     }
   },
   send(msg) {
+    /* КАСТОМНАЯ КАРТА: если в сообщении едет id пользовательской карты,
+       прикладываем её определение (блоки/спавн), чтобы пир построил её сам. */
+    if (msg && msg.map && typeof customMapById === 'function' && msg.mapDef === undefined) {
+      const def = customMapById(msg.map);
+      if (def) msg.mapDef = { id: def.id, name: def.name, blocks: def.blocks, spawn: def.spawn };
+    }
     if (this.role === CS.NETROLE.HOST) {
       if (!this.conns.length) return false;
       let ok = false;
@@ -17641,6 +18119,8 @@ const Game = {
   },
 
   finishInit() {
+    /* подключаем пользовательские карты из редактора в реестр */
+    if (typeof registerCustomMapsIntoRegistry === 'function') registerCustomMapsIntoRegistry();
     buildMap(this.scene, Store.data.quality, Store.data.map);
     this.world = MAP.world;
     UI.loading(62, 'Компилируем шейдеры…');
@@ -17880,6 +18360,9 @@ const Game = {
       });
     }
     bindClick('btnOnline', () => { UI.show('lobby'); this.resetLobby(); Net.warmup(); });
+    /* РЕДАКТОР КАРТ: новая карта / продолжить последнюю */
+    bindClick('btnEditor', () => { if (typeof registerCustomMapsIntoRegistry === 'function') registerCustomMapsIntoRegistry(); this.startEditor(null); });
+    bindClick('edSaveBtn', () => { if (typeof MapEditor !== 'undefined') MapEditor.save(); });
     bindClick('btnControls', () => { this._prevScreen = 'menu'; UI.show('controls'); });
     bindClick('btnControlsBack', () => UI.show(this._prevScreen || 'menu'));
     bindClick('btnLobbyBack', () => { Net.close(false); UI.show('menu'); });
@@ -18078,6 +18561,13 @@ const Game = {
       return;
     }
     if (this.mode === CS.MODE.MENU) return;
+    /* РЕДАКТОР КАРТ: F — сохранить, Esc — выход, остальное — горячие клавиши */
+    if (this.mode === CS.MODE.EDITOR) {
+      if (code === 'KeyF') { MapEditor.save(); return; }
+      if (code === 'Escape') { this.stopToMenu(); UI.show('menu'); return; }
+      MapEditor.hotkey(code);
+      return;
+    }
     // While the buy menu is open it owns the keyboard (B / Enter / Esc close it,
     // 1-9 buy the numbered item, Tab is a no-op).
     if (this.buyOpen) {
@@ -18787,6 +19277,13 @@ const Game = {
 
   onMouseDown(btn, e) {
     if (this.mode === CS.MODE.MENU) return;
+    /* РЕДАКТОР КАРТ: ЛКМ ставит блок, ПКМ убирает */
+    if (this.mode === CS.MODE.EDITOR) {
+      if (!Input.locked) { Input.requestLock(); return; }
+      if (btn === 0) MapEditor.place();
+      else if (btn === 2) MapEditor.removeAt();
+      return;
+    }
     if (this.buyOpen || this.paused || UI.overlayOpen()) return;
     if (!Input.locked) { Input.requestLock(); return; }
     if (btn === 0) {
@@ -19025,6 +19522,19 @@ const Game = {
     UI.refreshChips();
   },
 
+  /* КАСТОМНАЯ КАРТА ПО СЕТИ: хост прислал определение — сохраняем локально и
+     регистрируем в реестре, чтобы ensureMap построил её одинаково у всех. */
+  adoptCustomMap(def) {
+    if (!def || !def.id) return;
+    const list = (Store.data.customMaps && Array.isArray(Store.data.customMaps)) ? Store.data.customMaps : (Store.data.customMaps = []);
+    const existing = list.find(m => m.id === def.id);
+    if (existing) { existing.name = def.name; existing.blocks = def.blocks || []; existing.spawn = def.spawn || null; }
+    else list.push({ id: def.id, name: def.name || 'КАРТА ХОСТА', blocks: def.blocks || [], spawn: def.spawn || null });
+    Store.save();
+    if (typeof registerCustomMapsIntoRegistry === 'function') registerCustomMapsIntoRegistry();
+    if (typeof uiRefreshCustomMaps === 'function') uiRefreshCustomMaps();
+  },
+
   attachViewModel() {
     this.player.buildViewModel();
     if (this.player.vmGroup.parent) this.player.vmGroup.parent.remove(this.player.vmGroup);
@@ -19067,6 +19577,47 @@ const Game = {
     this.enterGame();
     this.updateRangePanel();
     UI.toast('Полигон: всё бесплатно · ' + (IS_TOUCH ? 'кнопка МАГАЗИН' : 'B — магазин'), '#ff9d21');
+  },
+
+  /* ============================================================
+     РЕДАКТОР КАРТ: свободная площадка, игрок ходит от первого лица и
+     расставляет блоки. Сохранённые карты доступны в оффлайне и онлайне.
+     ============================================================ */
+  startEditor(mapId) {
+    this.stopToMenu(true);
+    this.mode = CS.MODE.EDITOR;
+    this.freePlay = true;
+    this.offline = null;
+    this.online = null;
+    this.remotePlayers = []; this.remote = null;
+
+    this.player = new Player({ id: 'p1', name: 'Вы', isLocal: true, team: 'ct' });
+    this.player.money = 999999;
+    this.player.give('knife');
+    this.player.slot = 3;
+    this.player.maxHealth = 100000;
+    this.player.health = 100000;
+    this.attachViewModel();
+
+    this.horde = new Horde(this.scene, this.world, this);
+    this.dummies = []; this.targets = [];
+    this.effects = new Effects(this.scene, Store.data.quality);
+    this.effects.clear();
+
+    MapEditor.start(mapId);
+    /* стартовая позиция — в центре площадки */
+    this.player.resetSpawn(0, (this.world.groundAt(0, 0, 4) || 0) + .05, 0, 0);
+    this.camera.position.set(0, (this.world.groundAt(0, 0, 4) || 0) + CFG.eyeHeight, 0);
+    this.roundState = 'live';
+    this.buyTimer = 0; this.roundT = 0;
+    this.enterGame();
+    this.editorUI(true);
+  },
+
+  editorUI(on) {
+    const e = UI.el;
+    if (e.edPanel) e.edPanel.classList.toggle('hidden', !on);
+    if (on) MapEditor.updatePanel();
   },
 
   spawnDummies() {
@@ -20248,6 +20799,8 @@ const Game = {
       this.enemySpawnOpen = false;
       if (this.player && this.player.vmGroup && this.player.vmGroup.parent) this.player.vmGroup.parent.remove(this.player.vmGroup);
       if (this.effects) { this.effects.clear(); }
+      if (typeof MapEditor !== 'undefined' && MapEditor.active) MapEditor.stop();
+      if (typeof this.editorUI === 'function') this.editorUI(false);
     };
     if (!keepRunning) {
       this.running = false;
@@ -20320,7 +20873,7 @@ const Game = {
     }
     const s = spawns[idx] || { x: 0, z: 42 };
     const y = this.world.groundAt(s.x, s.z, 3);
-    const yaw = Math.atan2(-(0 - s.x), -(0 - s.z)); // face the arena centre
+    const yaw = (s.yaw !== undefined) ? s.yaw : Math.atan2(-(0 - s.x), -(0 - s.z)); // face the arena centre
     this.player.resetSpawn(s.x, y + .05, s.z, yaw);
     this.camera.position.set(s.x, y + CFG.eyeHeight, s.z);
   },
@@ -26126,6 +26679,7 @@ const Game = {
     if (r.st === 'settings') {
       // the host may retune the room between rounds; clients just follow along
       if (r.hp) { this.matchHP = r.hp; this.player.maxHealth = r.hp; }
+      if (r.mapDef) this.adoptCustomMap(r.mapDef);
       if (r.map && r.map !== MAP.id && (this.roundState === 'buy' || this.roundState === 'idle')) this.ensureMap(r.map);
       if (r.players) { this.online.players = r.players; this.refreshSkipUI(); }
       if (r.free !== undefined) this.freePlay = !!r.free;
@@ -26410,7 +26964,7 @@ const Game = {
     // and not while the buy menu is open.
     const beamReady = p.def && p.def.beam && p.spinT > .85 && p.beamVent <= 0;
     const flameFiring = p.def && p.def.flame && p.triggerDown && p.weapon.mag > 0 && p.fireCd <= 0;
-    if (p.alive && !this.buyOpen && this.roundState === 'live') {
+    if (p.alive && !this.buyOpen && this.roundState === 'live' && this.mode !== CS.MODE.EDITOR) {
       const def = p.def;
       /* ---- МЕХАКОСТЮМ: ЛКМ — гигантский миниган, ПКМ — гипер-лазер ---- */
       if (this.isMechActive()) {
@@ -26474,11 +27028,13 @@ const Game = {
     this.updateGrenades(dt);
 
     // ---- AI ----
-    if (this.horde) this.horde.update(dt, p, (this.mode === CS.MODE.ONLINE && this.isCoop) ? this.remotePlayers : null);
+    if (this.horde && this.mode !== CS.MODE.EDITOR) this.horde.update(dt, p, (this.mode === CS.MODE.ONLINE && this.isCoop) ? this.remotePlayers : null);
     if (this.mode === CS.MODE.OFFLINE || this.mode === CS.MODE.RANGE || (this.mode === CS.MODE.ONLINE && this.isCoop)) { this.updateBosses(dt); this.updateBossCharges(dt); }
 
     // ---- effects ----
     if (this.effects) this.effects.update(dt);
+    /* РЕДАКТОР КАРТ: обновляем курсор и подсветку */
+    if (this.mode === CS.MODE.EDITOR && typeof MapEditor !== 'undefined') MapEditor.update(dt);
     /* экранный эффект ульты рыцаря (чёрный экран + белый слеш) */
     if (typeof UI !== 'undefined' && UI.knightUltTick) UI.knightUltTick(dt);
     if (this.mode === CS.MODE.OFFLINE || this.mode === CS.MODE.RANGE) {

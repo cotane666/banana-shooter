@@ -37,6 +37,7 @@
       <button class="mbtn primary" id="btnOffline"><b>ОФФЛАЙН</b><i>Волны зомби · обычный, орда ×10, бесплатная орда, свой режим</i></button>
       <button class="mbtn" id="btnRange"><b>ПОЛИГОН</b><i>Всё оружие бесплатно · манекены и урон в секунду</i></button>
       <button class="mbtn" id="btnOnline"><b>ОНЛАЙН</b><i>Бой против друзей: 2–4 игрока, выбор карты</i></button>
+      <button class="mbtn" id="btnEditor"><b>РЕДАКТОР КАРТ</b><i>Соберите свою карту из блоков и играйте в оффлайне и онлайне</i></button>
       <button class="mbtn" id="btnMatch"><b>ПАРАМЕТРЫ МАТЧА</b><i>Карта · число игроков · здоровье</i></button>
       <button class="mbtn" id="btnExtras"><b>ДОСТИЖЕНИЯ И РЕКОРДЫ</b><i>Награды за вехи · таблица лучших забегов</i></button>
       <button class="mbtn" id="btnSkins"><b>ИНВЕНТАРЬ СКИНОВ</b><i>Скины за достижения · посмотреть оружие в 3D</i></button>
@@ -173,6 +174,10 @@
     <div class="fld">Карта
       <div class="chips" id="mapChips"></div>
     </div>
+    <div class="fld">Мои карты (редактор)
+      <div class="chips" id="myMaps"></div>
+      <div class="hintbox" style="margin-top:6px">Свои карты доступны и в оффлайне, и в онлайне (хост выбирает их в лобби). Создать — кнопка <b>РЕДАКТОР КАРТ</b> в главном меню.</div>
+    </div>
     <div class="fld">Игроков (онлайн)
       <div class="chips" id="playerChips"></div>
     </div>
@@ -216,6 +221,9 @@
       <h2 class="mt">ПАРАМЕТРЫ МАТЧА</h2>
       <div class="fld">Карта
         <div class="chips" id="lobbyMaps"></div>
+      </div>
+      <div class="fld">Мои карты (редактор)
+        <div class="chips" id="lobbyMyMaps"></div>
       </div>
       <div class="fld">Игроков в комнате
         <div class="chips" id="lobbyPlayers"></div>
@@ -395,6 +403,23 @@
     <button id="sdToggle">ВКЛЮЧИТЬ (V)</button>
     <div class="rp-sub">ВРАГИ</div>
     <button id="esConfig">СПАВН ВРАГА (X)</button>
+  </div>
+  <!-- ============ MAP EDITOR HUD ============ -->
+  <div id="edPanel" class="hidden">
+    <div class="ed-title">РЕДАКТОР КАРТ</div>
+    <div class="ed-row"><span>Материал</span><b id="edMat">КИРПИЧ</b></div>
+    <div class="ed-row"><span>Размер</span><b id="edSize">4 м</b></div>
+    <div class="ed-row"><span>Режим</span><b id="edMode">ПОСТАВИТЬ</b></div>
+    <div class="ed-row"><span>Блоков</span><b id="edCount">0</b></div>
+    <div class="ed-row"><span>Спавн</span><b id="edSpawn">(0, 40)</b></div>
+    <div class="ed-hint">
+      ЛКМ — поставить · ПКМ — убрать<br>
+      [ ] / R — размер · G — материал<br>
+      E — точка спавна · C — режим · Z — отмена<br>
+      F — сохранить · Esc — выйти
+    </div>
+    <input id="edName" class="ed-name" maxlength="24" placeholder="Название карты" autocomplete="off">
+    <button class="mbtn tiny" id="edSaveBtn">СОХРАНИТЬ (F)</button>
   </div>
   <div id="dmgDirs"></div>
   <div id="dmgFlash"></div>

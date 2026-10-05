@@ -588,11 +588,23 @@ const Audio3D_SFX = {
   music: {
     menu:    { root: 98.0,  scale: [0, 4, 7, 11, 14], prog: [0, -3, 5, -5], bpm: 76,  wave: 'sawtooth', bright: 1100, loop: true,  gain: .34, pad: true, drums: false },
     game:    { root: 82.41, scale: [0, 3, 5, 7, 10],  prog: [0, -2, -4, -1], bpm: 112, wave: 'sawtooth', bright: 1400, loop: true,  gain: .40, pad: true, drums: true },
-    boss:    { root: 73.42, scale: [0, 2, 3, 6, 10],  prog: [0, -1, -5, -3], bpm: 138, wave: 'square',   bright: 1600, loop: true,  gain: .5,  pad: false, drums: true },
-    bossWarden: { root: 110.0,  scale: [0, 3, 5, 7, 10], prog: [0, -2, -4, -5], bpm: 96,  wave: 'sawtooth', bright: 1200, loop: true, gain: .5, pad: true, drums: false },
-    bossBrute:  { root: 87.31,  scale: [0, 2, 3, 7, 8],  prog: [0, -3, -1, -5], bpm: 132, wave: 'square',   bright: 1500, loop: true, gain: .5, pad: false, drums: true },
-    bossTitan:  { root: 65.41,  scale: [0, 2, 5, 7, 10], prog: [0, -5, -3, -7], bpm: 84,  wave: 'sawtooth', bright: 900,  loop: true, gain: .5, pad: true, drums: false },
-    bossFinal:  { root: 55.0,   scale: [0, 1, 5, 6, 10], prog: [0, -1, -6, -4], bpm: 150, wave: 'square',   bright: 1800, loop: true, gain: .55, pad: false, drums: true }
+    boss:    { root: 73.42, scale: [0, 2, 3, 6, 10],  prog: [0, -1, -5, -3], bpm: 138, wave: 'square',   bright: 1600, loop: true,  gain: .5,  pad: false, drums: true, snare: true, metal: true, riff: [0, 0, 3, 0, 5, 3, 0, -1] },
+    /* ---- БОССЫ: у каждого своя тема в духе DOOM / Undertale / Deltarune ---- */
+    /* СТРАЖ — торжественный марш (дух «Spear of Justice» / Undertale) */
+    bossWarden: { root: 110.0, scale: [0, 3, 5, 7, 10], prog: [0, -2, -4, -5], bpm: 96,  wave: 'sawtooth', bright: 1200, loop: true, gain: .5, pad: true, drums: true, snare: true,
+                  riff: [0, -1, 0, -1, 3, -1, 5, -1], melody: [0, 3, 5, 7, 5, 3, 0, -2] },
+    /* ЖНЕЦ — мрачный вальс-жнец (дух Deltarune) */
+    bossBrute:  { root: 87.31, scale: [0, 2, 3, 7, 8],  prog: [0, -3, -1, -5], bpm: 132, wave: 'square',   bright: 1500, loop: true, gain: .5, pad: false, drums: true, snare: true, metal: true,
+                  riff: [0, 0, 8, 7, 5, 3, 0, -1], melody: [12, 10, 8, 7, 5, 3, 2, 0] },
+    /* ТИТАН — тяжёлый DOOM-рифф */
+    bossTitan:  { root: 65.41, scale: [0, 2, 5, 7, 10], prog: [0, -5, -3, -7], bpm: 92,  wave: 'sawtooth', bright: 900,  loop: true, gain: .5, pad: true, drums: true, snare: true, metal: true,
+                  riff: [0, 0, 0, 0, 3, 3, 5, 3], melody: [0, 0, 5, 3, 7, 5, 10, 8] },
+    /* ПОЖИРАТЕЛЬ — тёмный орган-финал (дух «Asgore» / DOOM) */
+    bossFinal:  { root: 55.0,   scale: [0, 1, 5, 6, 10], prog: [0, -1, -6, -4], bpm: 150, wave: 'square',   bright: 1800, loop: true, gain: .55, pad: true, drums: true, snare: true, metal: true,
+                  riff: [0, 0, 1, 0, -1, 6, 5, -1], melody: [0, 1, 5, 6, 5, 1, 0, -1] },
+    /* ФИНАЛЬНЫЙ БОСС «МОЗГ»: бешеная метал-тема с хором (дух DOOM Eternal) */
+    brainBoss:  { root: 61.74,  scale: [0, 1, 3, 6, 8],  prog: [0, -2, -5, -1], bpm: 158, wave: 'sawtooth', bright: 1300, loop: true, gain: .55, pad: true, drums: true, snare: true, metal: true,
+                  riff: [0, 0, 0, 6, 5, 5, 3, 1], melody: [0, 3, 6, 8, 6, 3, 1, 0] }
   },
   /* play a track by name (idempotent); no-op if music is disabled */
   musicStart(name) {
@@ -655,6 +667,29 @@ const Audio3D_SFX = {
       o.connect(lp); lp.connect(g); g.connect(m.out);
       o.start(t); o.stop(t + beat);
     }
+    /* ---- МЕТАЛ-РИФФ (дух DOOM): рычащий дисторшн-гитар на каждой доле ---- */
+    if (th.riff) {
+      const rn = th.riff[i % th.riff.length];
+      const rg = this.ctx.createGain();
+      rg.gain.setValueAtTime(.001, t);
+      rg.gain.linearRampToValueAtTime(.16, t + .012);
+      rg.gain.exponentialRampToValueAtTime(.001, t + beat * .48);
+      /* дисторшн через WaveShaper */
+      const ws = this.ctx.createWaveShaper();
+      if (!this._distCurve) {
+        const c = new Float32Array(256);
+        for (let k = 0; k < 256; k++) { const x = k / 128 - 1; c[k] = Math.tanh(x * 4.5); }
+        this._distCurve = c;
+      }
+      ws.curve = this._distCurve; ws.oversample = '2x';
+      const lp = this.ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 2600; lp.Q.value = 1.1;
+      const o1 = this.ctx.createOscillator(); o1.type = 'sawtooth';
+      o1.frequency.setValueAtTime(semi(chord + rn), t);
+      const o2 = this.ctx.createOscillator(); o2.type = 'sawtooth';
+      o2.frequency.setValueAtTime(semi(chord + rn + .12), t);       // лёгкий расстрой
+      o1.connect(ws); o2.connect(ws); ws.connect(lp); lp.connect(rg); rg.connect(m.out);
+      o1.start(t); o1.stop(t + beat * .5); o2.start(t); o2.stop(t + beat * .5);
+    }
     // a soft kick + hat for the driving tracks
     if (th.drums) {
       if (i % 2 === 0) {
@@ -668,8 +703,16 @@ const Audio3D_SFX = {
         const src = this.ctx.createBufferSource(); src.buffer = this.noiseBuf;
         const hp = this.ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 6000;
         const hg = this.ctx.createGain();
-        hg.gain.setValueAtTime(.05, t); hg.gain.exponentialRampToValueAtTime(.001, t + .06);
-        src.connect(hp); hp.connect(hg); hg.connect(m.out); src.start(t); src.stop(t + .08);
+        hg.gain.setValueAtTime(.05 * (th.metal ? 1.6 : 1), t); hg.gain.exponentialRampToValueAtTime(.001, t + (th.metal ? .1 : .06));
+        src.connect(hp); hp.connect(hg); hg.connect(m.out); src.start(t); src.stop(t + .12);
+      }
+      /* ---- SNARE (для боссовых тем): на 2 и 4 ---- */
+      if (th.snare && i % 4 === 2) {
+        const s = this.ctx.createBufferSource(); s.buffer = this.noiseBuf;
+        const bp = this.ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 1900; bp.Q.value = .8;
+        const sg = this.ctx.createGain();
+        sg.gain.setValueAtTime(.14, t); sg.gain.exponentialRampToValueAtTime(.001, t + .18);
+        s.connect(bp); bp.connect(sg); sg.connect(m.out); s.start(t); s.stop(t + .2);
       }
     }
     // arpeggio note (higher)
@@ -682,6 +725,16 @@ const Audio3D_SFX = {
     ag.gain.exponentialRampToValueAtTime(.001, t + beat * .45);
     a.connect(bp); bp.connect(ag); ag.connect(m.out);
     a.start(t); a.stop(t + beat * .5);
+    /* ---- МЕЛОДИЯ: ведущая линия поверх риффа (у боссов) ---- */
+    if (th.melody) {
+      const mn = th.melody[i % th.melody.length];
+      const mo = this.ctx.createOscillator(); mo.type = 'square';
+      mo.frequency.setValueAtTime(semi(chord + mn + 12), t);
+      const mg = this.ctx.createGain();
+      mg.gain.setValueAtTime(.001, t); mg.gain.linearRampToValueAtTime(.075, t + .01);
+      mg.gain.exponentialRampToValueAtTime(.001, t + beat * .46);
+      mo.connect(mg); mg.connect(m.out); mo.start(t); mo.stop(t + beat * .5);
+    }
     // a sustained pad at the top of each bar (warm triangle — same notes)
     if (i % 8 === 0) {
       const p = this.ctx.createOscillator(); p.type = 'triangle';

@@ -33,7 +33,7 @@ const UI = {
       'accCloudTag', 'accCloudHint', 'accCloudForm', 'accUrl', 'accKey', 'accHash',
       'btnAccount', 'btnAccountBack', 'btnAccLogin', 'btnAccRegister', 'btnAccSync', 'btnAccOut',
       'btnAccCloud', 'btnAccCloudSave', 'btnAccCopyHash',
-      'btnEditor', 'edPanel', 'edMat', 'edSize', 'edMode', 'edCount', 'edSpawn', 'edName', 'edSaveBtn', 'myMaps', 'lobbyMyMaps'];
+      'btnEditor', 'edPanel', 'edMat', 'edSize', 'edMode', 'edCount', 'edSpawn', 'edName', 'edSaveBtn', 'myMaps', 'lobbyMyMaps', 'dashFx'];
     ids.forEach(i => this.el[i] = $(i));
     this.buildBuyCats();
     this.buildChips();
@@ -557,6 +557,15 @@ const UI = {
     setTimeout(() => wrap.remove(), 1200);
   },
   lowHP(on) { this.el.lowhp.style.display = on ? 'block' : 'none'; },
+
+  /* ЭФФЕКТ РЫВКА «ГОСПОДИНА ЦВЕТОВ»: цветные полосы и виньетка по краям
+     экрана — читается как ускорение/пробивание. omega — ярче (форма Омега). */
+  dashFx(on, omega) {
+    const e = this.el.dashFx;
+    if (!e) return;
+    e.classList.toggle('on', !!on);
+    e.classList.toggle('omega', !!omega);
+  },
 
   /* ============================================================
      УЛЬТА МЕЧА РОКОЧУЩЕГО РЫЦАРЯ: чёрный экран + гигантский БЕЛЫЙ слеш,

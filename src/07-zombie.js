@@ -20,6 +20,11 @@ function buildZombieMesh(type) {
   const g = new THREE.Group();
   const parts = {};
 
+  /* ФИНАЛЬНЫЙ БОСС «МОЗГ»: своя модель (гигантский мозг с глазом). */
+  if (ZOMBIES[type] && ZOMBIES[type].brain && typeof BrainBoss !== 'undefined') {
+    return BrainBoss.buildModel();
+  }
+
   const mk = (w, h, d, mat, px, py, pz, pivotY) => {
     // limb groups pivot at the top for natural swing
     const pivot = new THREE.Group();
@@ -671,6 +676,14 @@ class Zombie {
   /* local-space hitboxes (scaled) */
   hitboxDefs() {
     const s = this.scale;
+    /* МОЗГ: единственная уязвимая точка — ГЛАЗ (когда открыт). Остальное —
+       тело, по которому урон не проходит (см. BrainBoss.onBossDamage). */
+    if (this.def && this.def.brain) {
+      return [
+        { part: 'eye',  cx: 0, cy: 2.5 * s, cz: 1.85 * s, hw: .85 * s, hh: .85 * s, hd: .55 * s },
+        { part: 'body', cx: 0, cy: 2.6 * s, cz: 0, hw: 2.6 * s, hh: 2.6 * s, hd: 2.4 * s }
+      ];
+    }
     return [
       { part: 'head', cx: 0, cy: 1.52 * s, cz: 0, hw: .17 * s, hh: .17 * s, hd: .17 * s },
       { part: 'body', cx: 0, cy: 1.02 * s, cz: 0, hw: .29 * s, hh: .34 * s, hd: .17 * s },
@@ -690,6 +703,14 @@ class Zombie {
 
   takeDamage(amount, part, fromDir) {
     if (this.dying || !this.alive) return false;
+    /* МОЗГ-ПОЖИРАТЕЛЬ: урон проходит только в ОТКРЫТЫЙ ГЛАЗ. Пока глаз закрыт
+       (фаза колб) — урон не наносится вовсе. */
+    if (this.def && this.def.brain && typeof BrainBoss !== 'undefined') {
+      const eff = BrainBoss.onBossDamage(this, amount, part, fromDir);
+      if (eff <= 0) { this.hitFlash = .12; return false; }
+      amount = eff;
+      if (part !== 'eye') { this.hitFlash = .12; return false; }
+    }
     /* a FROZEN body banks all damage; it only pays out when it thaws (or is
        shattered early by a big hit). This makes freeze-then-shatter work. */
     if (this.frozen) {
@@ -788,6 +809,15 @@ class Zombie {
       return;
     }
     if (!this.alive) return;
+
+    /* МОЗГ-ПОЖИРАТЕЛЬ: босс стоит на месте (атаки и фазы — в BrainBoss.update),
+       только дышит и поворачивается. Движение/мили отключены. */
+    if (this.def && this.def.brain && typeof BrainBoss !== 'undefined' && BrainBoss.active) {
+      this.attackCd = Math.max(0, this.attackCd - dt);
+      this.hitFlash = Math.max(0, this.hitFlash - dt);
+      this.applyVisual(dt, 0);
+      return;
+    }
 
     this.attackCd = Math.max(0, this.attackCd - dt);
     this.staggerT = Math.max(0, this.staggerT - dt);
@@ -1132,6 +1162,12 @@ class Zombie {
 
   applyVisual(dt, moveSpeed) {
     const p = this.parts;
+    /* МОЗГ: своя модель без стандартных конечностей — своя анимация. */
+    if (this.def && this.def.brain) {
+      this.group.position.set(this.pos.x, this.pos.y, this.pos.z);
+      this.group.rotation.y = this.yaw;
+      return;
+    }
     const bob = moveSpeed > .1 ? moveSpeed / Math.max(this.speed, .01) : 0;
     this.walkPhase += dt * (2.6 + bob * 5.5);
     const ph = this.walkPhase;
@@ -1468,6 +1504,7 @@ class Horde {
   get activeCount() { let n = 0; for (const z of this.list) if (!z.dying) n++; return n; }
 
   clear() {
+    if (typeof BrainBoss !== 'undefined' && BrainBoss.active) BrainBoss.cleanup();
     for (const z of this.list) z.dispose(this.scene);
     this.list.length = 0;
   }

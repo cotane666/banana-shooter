@@ -3782,8 +3782,9 @@ const Game = {
       want = 'game';
       if (this.horde) {
         const boss = this.horde.list.find(z => (z.isBoss || z.isMiniBoss) && z.alive && !z.dying);
-        if (boss && boss.isBoss && ZOMBIES[boss.type] && Audio3D_SFX.music[boss.type]) want = boss.type;
-        else if (boss && boss.isBoss) want = 'boss';
+        if (boss && ZOMBIES[boss.type] && Audio3D_SFX.music[boss.type]) want = boss.type;
+        else if (boss && boss.isBoss) want = 'boss';           // у босса без своей темы — общая
+        else if (boss && boss.isMiniBoss) want = 'boss';       // мини-босс — боссовая тема
       }
     }
     Audio3D_SFX.musicStart(want);
@@ -4960,15 +4961,14 @@ const Game = {
 
   /* which boss (if any) belongs to this wave */
   bossForWave(wave) {
-    if (wave === 100) return 'bossFinal';
+    if (wave === 100) return 'brainBoss';
     if (wave === 50) return 'bossTitan';
     if (wave === 30) return 'bossBrute';
     if (wave === 15) return 'bossWarden';
     return null;
   },
-
-  /* ---- special modes: endless modifiers & boss-rush ---- */
-  bossRushList() { return ['bossWarden', 'bossBrute', 'bossTitan', 'bossFinal']; },
+  /* финальный босс-мозг доступен и в босс-раше */
+  bossRushList() { return ['bossWarden', 'bossBrute', 'bossTitan', 'brainBoss', 'bossFinal']; },
   _modList() { return MODIFIERS.filter(m => (Store.data.offMods || {})[m.id]); },
   openModifierPicker(wave) {
     const choices = MODIFIERS.slice().sort(() => Math.random() - .5).slice(0, 3);
@@ -5021,6 +5021,10 @@ const Game = {
     b.health = b.maxHealth;
     b.isBoss = true;
     b._introT = 1.6;                    // drives the entrance FX / slow time-in
+    /* МОЗГ-ПОЖИРАТЕЛЬ: начинаем постановочный многофазный бой */
+    if (b.def && b.def.brain && typeof BrainBoss !== 'undefined') {
+      try { BrainBoss.begin(b); } catch (e) { console.error(e); }
+    }
     // a dramatic arrival: blast ring + aura burst + the boss's own theme
     const gy = b.pos.y;
     this.effects.explosion(b.pos.x, gy + 1.2, b.pos.z, 5.5, [ZOMBIES[type].aura || 0xff5a2a, 0x100608], ZOMBIES[type].final);
@@ -7891,8 +7895,9 @@ const Game = {
      ЛКМ «ГОСПОДИНА ЦВЕТОВ» — БЫСТРЫЙ ПРЯМОЙ ПРОБИВАЮЩИЙ ТАРАН.
      Игрок стремительно летит вперёд, ЛОМАЯ блоки на своём пути, круша врагов
      и отбрасывая их. Неуязвим на всё время рывка.
-     В ФОРМЕ ОМЕГА ФЛАВЕРИ: кулдаун 0.5с и вдоль всего рывка происходят
-     цветочные взрывы, а в конце — большой финальный взрыв.
+     РЫВОК — ПО РЕПЛИКЕ: один войсклип = один рывок. Пока реплика звучит,
+     следующий рывок недоступен; кулдаун — это лишь минимальный зазор.
+     В ФОРМЕ ОМЕГА ФЛАВЕРИ: вдоль всего рывка идут цветочные взрывы.
      ============================================================ */
   flowerDash() {
     const p = this.player;
@@ -7905,6 +7910,8 @@ const Game = {
     const now = U.now();
     const cdMs = (omega ? (def.omegaDashCd || .5) : (def.dashCd || 1.4)) * 1000;
     if (this._flowerDashAt && now - this._flowerDashAt < cdMs) return false;
+    /* 1 войсклип = 1 рывок: пока реплика звучит, рывок недоступен */
+    if (this._flowerVoiceUntil && now < this._flowerVoiceUntil) return false;
     this._flowerDashAt = now;
     this._startFlowerRush(omega ? 'omegaDash' : 'dash');
     return true;
@@ -7923,8 +7930,11 @@ const Game = {
     const rx = -fz, rz = fx;                        // правый перпендикуляр
     const omega = kind === 'omegaDash';
 
-    /* реплика-рывок */
-    if (Audio3D_SFX.flowerVoice) Audio3D_SFX.flowerVoice(pickFlowerVoice(FLOWER_VOICE_DASH_ALL), 1.0);
+    /* РЕПЛИКА-РЫВОК: именно она «открывает» следующий рывок. Как только
+       реплика закончится — можно рвать снова. */
+    let vDur = 1.0;
+    if (Audio3D_SFX.flowerVoice) vDur = Audio3D_SFX.flowerVoice(pickFlowerVoice(FLOWER_VOICE_DASH_ALL), 1.0) || 1.0;
+    this._flowerVoiceUntil = U.now() + vDur * 1000;
     p.recoil = (p.recoil || 0) + .3;
     p.viewPunchP = (p.viewPunchP || 0) + .2;
 
@@ -7935,13 +7945,14 @@ const Game = {
       baseY: p.pos.y,
       fx: fx, fz: fz, rx: rx, rz: rz,
       tfx: fx, tfz: fz,
-      grabbed: [], grabR: (def.dashGrabR || 3.0) * (omega ? 1.5 : 1),
-      dps: (def.dashDmg || 220) * (omega ? 5 : 4),
+      grabbed: [], grabR: (def.dashGrabR || 2.6) * (omega ? 1.5 : 1),
+      dps: (def.dashDmg || 120) * (omega ? 5 : 4),
       finished: false, omega: omega,
-      dist: omega ? (def.omegaDist || 40) : (def.dashSpeed || 40) * (def.dashDur || .5),
-      R: def.ultR || 13, dmg: def.ultDmg || 5200, breakR: def.ultBreakR || 12
+      dist: omega ? (def.omegaDist || 34) : (def.dashSpeed || 34) * (def.dashDur || .5),
+      R: def.ultR || 10, dmg: def.ultDmg || 1600, breakR: def.ultBreakR || 8
     };
     if (this.effects && this.effects.flowerAura) this.effects.flowerAura(p.pos.x, p.pos.y + .15, p.pos.z, true);
+    if (typeof UI !== 'undefined' && UI.dashFx) UI.dashFx(true, omega);
     p.bulletsFired += 1;
   },
 
@@ -8242,6 +8253,7 @@ const Game = {
       this._flowerRush = null;
     }
     if (this.effects && this.effects.flowerAura && !this._omega) this.effects.flowerAura(0, 0, 0, false);
+    if (typeof UI !== 'undefined' && UI.dashFx) UI.dashFx(false, false);
     const p = this.player;
     if (p) {
       /* СТРАХОВКА: если рывок закончился внутри геометрии — поднять наверх,
@@ -8375,6 +8387,11 @@ const Game = {
         any = true;
       }
       if (!any && wallHit && wallT < Infinity && this.effects) this.effects.impact(wallHit.point, wallHit.normal, 'concrete', (def.melee && def.melee.indexOf('knightsword') === 0) ? 'knight' : (p && p.skinTheme) || null);
+      /* МОЗГ: ближний бой бьёт по колбам */
+      if (typeof BrainBoss !== 'undefined' && BrainBoss.active) {
+        const fh = BrainBoss.raycastFlask(origin, dir, reach);
+        if (fh && (!wallHit || fh.t < wallT)) { BrainBoss.damageFlask(fh.index, def.dmg * 1.4); any = true; }
+      }
       p.bulletsHit += hitList.length;
       // ПОЛОСА УДАРА: яркая дуга проносится перед игроком
       if (this.effects) {
@@ -8487,6 +8504,18 @@ const Game = {
       else wallHits.push(allHits[i]);
     }
     const zHit = this.horde ? this.horde.raycast(origin, dir, maxDist) : null;
+    /* МОЗГ-ПОЖИРАТЕЛЬ: колбы разрушаемы — пуля бьёт по ближайшей на пути */
+    const flaskHit = (typeof BrainBoss !== 'undefined' && BrainBoss.active)
+      ? BrainBoss.raycastFlask(origin, dir, maxDist) : null;
+    if (flaskHit && (!zHit || flaskHit.t < zHit.t)) {
+      p.bulletsHit++;
+      const dmg = (def.dmg || 30) * 2.2;
+      this.effects.tracer(muzzleWorld, flaskHit.point, 1, true, _shotCol);
+      Audio3D_SFX.hit(flaskHit.point.x, flaskHit.point.y, flaskHit.point.z, false);
+      BrainBoss.damageFlask(flaskHit.index, dmg);
+      p.damageDealt += dmg;
+      return;
+    }
     let dmgMul = 1;
     let stopT = maxDist;
     let stopNormal = null;
@@ -8661,6 +8690,15 @@ const Game = {
      МГНОВЕННО (весь блок в радиусе исчезает сразу, а не копит урон). */
   breakMapAt(x, y, z, radius, dmg) {
     if (typeof damageMapAt !== 'function') return 0;
+    /* МОЗГ: взрывы бьют по колбам в радиусе */
+    if (typeof BrainBoss !== 'undefined' && BrainBoss.active) {
+      const b = BrainBoss.active;
+      for (let i = 0; i < b.flasks.length; i++) {
+        const f = b.flasks[i]; if (!f.alive) continue;
+        const d = Math.hypot(f.x - x, f.z - z, (f.y + 1) - y);
+        if (d < radius * 1.1) BrainBoss.damageFlask(i, (dmg || 100) * 1.2 * (1 - d / (radius * 1.1) * .5));
+      }
+    }
     const destroyed = damageMapAt(x, y, z, radius, Infinity);
     if (destroyed && this.effects) {
       const b = MAP._lastBreak || { x: x, y: y, z: z };
@@ -9073,6 +9111,10 @@ const Game = {
       Audio3D_SFX.explosionAt(z.pos.x, z.pos.y + 1, z.pos.z);
       UI.center(z.isBoss ? 'БОСС ПОВЕРЖЕН' : 'МИНИ-БОСС ПОВЕРЖЕН', def.name, 2.4);
       Audio3D_SFX.roundEnd(true);
+      if (def.brain && typeof BrainBoss !== 'undefined') {
+        UI.center('МОЗГ УНИЧТОЖЕН', def.name + ' · МИР СПАСЁН', 5.0);
+        BrainBoss.cleanup();
+      }
       // no boss left alive → back to the battle track (or menu)
       const anyLeft = this.horde && this.horde.list.some(o => o !== z && (o.isBoss || o.isMiniBoss) && o.alive && !o.dying);
       if (!anyLeft) this.refreshMusic();
@@ -10047,6 +10089,8 @@ const Game = {
     // ---- AI ----
     if (this.horde && this.mode !== CS.MODE.EDITOR) this.horde.update(dt, p, (this.mode === CS.MODE.ONLINE && this.isCoop) ? this.remotePlayers : null);
     if (this.mode === CS.MODE.OFFLINE || this.mode === CS.MODE.RANGE || (this.mode === CS.MODE.ONLINE && this.isCoop)) { this.updateBosses(dt); this.updateBossCharges(dt); }
+    /* ФИНАЛЬНЫЙ БОСС «МОЗГ»: фазы, колбы, атаки */
+    if (typeof BrainBoss !== 'undefined' && BrainBoss.active) BrainBoss.update(dt);
 
     // ---- effects ----
     if (this.effects) this.effects.update(dt);

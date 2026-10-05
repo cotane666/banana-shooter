@@ -415,12 +415,12 @@ const WEAPONS = {
            прохода с мёртвыми петлями, взлёт по большой дуге и пикирование), по
            пути таранит врагов, а в конце — цветочный взрыв и ударные волны.
      Во время обоих рывков игрок НЕ получает урона. */
-  lordOfFlowers: { name: 'ГОСПОДИН ЦВЕТОВ', cat: 'melee', slot: 3, price: 123456, dmg: 320, rpm: 150, mag: Infinity, reserve: 0,
-          auto: false, spread: 0, moveSpread: 0, recoil: 2.6, falloff: 1, range: 4.6, headMul: 2.4, sound: 'knife',
-          melee: 'lordOfFlowers', knockback: 16, flowerMelee: true,
-          flowerDash: true, dashCd: 1.4, dashSpeed: 40, dashDur: .5, dashDmg: 240, dashGrabR: 3.0,
-          omegaDashCd: .5, omegaDist: 40,
-          ult: true, ultCd: 16, ultR: 13, ultDmg: 5200, ultBreakR: 12, ultBreakDelay: 0, ultDist: 52,
+  lordOfFlowers: { name: 'ГОСПОДИН ЦВЕТОВ', cat: 'melee', slot: 3, price: 123456, dmg: 170, rpm: 150, mag: Infinity, reserve: 0,
+          auto: false, spread: 0, moveSpread: 0, recoil: 2.6, falloff: 1, range: 4.6, headMul: 2.0, sound: 'knife',
+          melee: 'lordOfFlowers', knockback: 12, flowerMelee: true,
+          flowerDash: true, dashCd: 1.4, dashSpeed: 34, dashDur: .5, dashDmg: 120, dashGrabR: 2.6,
+          omegaDashCd: .5, omegaDist: 34,
+          ult: true, ultCd: 20, ultR: 10, ultDmg: 1600, ultBreakR: 8, ultBreakDelay: 0, ultDist: 44,
           flowerUlt: true }
 };
 /* ============================================================
@@ -628,7 +628,12 @@ const ZOMBIES = {
   bossTitan:  { name: 'ТИТАН',        hp: 26000, speed: 1.20, dmg: 104, score: 24000, money: 10000, scale: 3.35, color: 0x6b2b2b, atkRange: 3.3, boss: true, armor: .30,
                 abilities: ['shockwave', 'summon', 'charge', 'barrage'], abilityCd: 8, aura: 0xff4a2a },
   bossFinal:  { name: 'ПОЖИРАТЕЛЬ',   hp: 70000, speed: 1.10, dmg: 135, score: 80000, money: 22000, scale: 4.20, color: 0x2e1b4d, atkRange: 3.7, boss: true, final: true, armor: .35,
-                abilities: ['barrage', 'summon', 'shockwave', 'summonMinions'], abilityCd: 5.5, aura: 0x9a3aff }
+                abilities: ['barrage', 'summon', 'shockwave', 'summonMinions'], abilityCd: 5.5, aura: 0x9a3aff },
+  /* ФИНАЛЬНЫЙ БОСС «МОЗГ»: гигантский мозг с глазом. Требует не просто урона —
+     сперва разрушить КОЛБЫ, затем поразить ОТКРЫТЫЙ ГЛАЗ, переживая волны
+     атак. Многофазный (см. 07b-brain-boss.js). */
+  brainBoss:  { name: 'МОЗГ-ПОЖИРАТЕЛЬ', hp: 90000, speed: .55, dmg: 120, score: 150000, money: 40000, scale: 3.6, color: 0xd98fb5, atkRange: 5.5, boss: true, final: true, brain: true, armor: .2,
+                abilities: [], abilityCd: 4.5, aura: 0xff5d8f }
 };
 
 /* ---------------- endless-mode modifiers ----------------

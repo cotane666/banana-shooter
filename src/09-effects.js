@@ -159,6 +159,7 @@ class Effects {
   /* УЛЬТА ГОСПОДИНА ЦВЕТОВ: радужное «новое» кольцо из цветов расходится от центра. */
   flowerNova(x, y, z, R) {
     this.flowerNovas = this.flowerNovas || [];
+    this.flowerBits = this.flowerBits || [];
     for (let ring = 0; ring < 3; ring++) {
       const color = FLOWER_NOVA_COLORS[ring % FLOWER_NOVA_COLORS.length];
       const mat = new THREE.MeshBasicMaterial({ color: color, transparent: true, opacity: .9,

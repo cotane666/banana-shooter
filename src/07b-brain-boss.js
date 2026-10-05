@@ -23,72 +23,157 @@ const BrainBoss = {
   buildModel() {
     const g = new THREE.Group();
     const parts = {};
-    const BRAIN = 0xd98fb5, BRAIN2 = 0xb56a92, DARK = 0x3a1526, VEIN = 0xff5d8f;
+    /* палитра как на референсе: розово-красный мозг, тёмные борозды,
+       красно-бордовые щупальца, серовато-бежевый спинной отросток */
+    const BRAIN = 0xd98a94, BRAIN2 = 0xc76a78, DARK = 0x9e4a58;
+    const TENT = 0xb5424e, TENT2 = 0x8f2f3c;
+    const SPINE = 0xcfc6bc, SPINE2 = 0xa89f94;
+    const VEIN = 0xff5d8f;
 
-    /* панцирь-скорлупа: полусфера, которая закрывает мозг (фаза 1) */
-    const shellMat = new THREE.MeshLambertMaterial({ color: 0x6b4b5a, transparent: true, opacity: .96 });
-    const shell = new THREE.Group();
-    for (let i = 0; i < 10; i++) {
-      const a = (i / 10) * Math.PI * 2;
-      const pl = new THREE.Mesh(new THREE.BoxGeometry(.70, 3.6, .40), shellMat);
-      pl.position.set(Math.cos(a) * 3.0, .2, Math.sin(a) * 3.0);
-      pl.rotation.y = -a; pl.rotation.x = .14;
-      pl.castShadow = true;
-      shell.add(pl);
-    }
-    shell.position.y = 2.4;
-    g.add(shell); parts.shell = shell;
-
-    /* мозг: несколько долей из сфер + извилины-трубы */
-    const brain = new THREE.Group();
+    /* ============ МОЗГ: два полушария + плотные извилины по поверхности ============ */
     const lobeMat = new THREE.MeshLambertMaterial({ color: BRAIN });
-    const main = new THREE.Mesh(new THREE.SphereGeometry(2.5, 20, 16), lobeMat);
-    main.scale.set(1.15, .92, 1.0);
-    main.castShadow = true; brain.add(main);
-    const lobe2 = new THREE.Mesh(new THREE.SphereGeometry(1.5, 16, 12), new THREE.MeshLambertMaterial({ color: BRAIN2 }));
-    lobe2.position.set(-1.4, .35, .5); lobe2.scale.set(1, .9, 1.05); brain.add(lobe2);
-    const lobe3 = lobe2.clone(); lobe3.position.set(1.4, .35, -.4); brain.add(lobe3);
-    /* извилины */
-    for (let i = 0; i < 14; i++) {
-      const tor = new THREE.Mesh(new THREE.TorusGeometry(U.rand(.3, .7), U.rand(.05, .09), 6, 12, Math.PI * U.rand(1.1, 1.9)), new THREE.MeshLambertMaterial({ color: BRAIN2 }));
-      const a = U.rand(0, Math.PI * 2), r = U.rand(.6, 2.1);
-      tor.position.set(Math.cos(a) * r, U.rand(-1.4, 1.6), Math.sin(a) * r);
-      tor.rotation.set(U.rand(0, 3), U.rand(0, 3), U.rand(0, 3));
+    const gyrusMat = new THREE.MeshLambertMaterial({ color: BRAIN2 });
+    const grooveMat = new THREE.MeshLambertMaterial({ color: DARK });
+
+    const brain = new THREE.Group();
+    /* основная масса */
+    const main = new THREE.Mesh(new THREE.SphereGeometry(2.45, 26, 20), lobeMat);
+    main.scale.set(1.16, .98, 1.05);
+    main.castShadow = true; main.receiveShadow = true;
+    brain.add(main);
+    /* два полушария поверх (лёгкая асимметрия, как на референсе) */
+    [-1, 1].forEach(sgn => {
+      const hemi = new THREE.Mesh(new THREE.SphereGeometry(1.55, 20, 16), lobeMat);
+      hemi.position.set(sgn * 1.05, .25, sgn * .12);
+      hemi.scale.set(1.0, .92, 1.15);
+      hemi.castShadow = true;
+      brain.add(hemi);
+    });
+    /* продольная борозда между полушариями */
+    const fissure = new THREE.Mesh(new THREE.BoxGeometry(.14, .9, 3.1), grooveMat);
+    fissure.position.set(0, 2.35, -.2); brain.add(fissure);
+    /* ИЗВИЛИНЫ: торусы, лежащие НА поверхности сферы (нормаль наружу) */
+    const up = new THREE.Vector3(0, 0, 1);
+    for (let i = 0; i < 46; i++) {
+      /* равномерное распределение по сфере (спираль Фибоначчи) */
+      const t = (i + .5) / 46;
+      const phi = Math.acos(1 - 2 * t);
+      const theta = Math.PI * (1 + Math.sqrt(5)) * i;
+      const nx = Math.sin(phi) * Math.cos(theta);
+      const ny = Math.cos(phi);
+      const nz = Math.sin(phi) * Math.sin(theta);
+      const R = 2.45 * .95;
+      const pos = new THREE.Vector3(nx * R * 1.16, ny * R * .98, nz * R * 1.05);
+      const big = (i % 3 === 0);
+      const tor = new THREE.Mesh(
+        new THREE.TorusGeometry(U.rand(.30, .62), U.rand(.075, .12), 7, 16, Math.PI * U.rand(1.3, 2.0)),
+        (i % 4 === 0) ? grooveMat : gyrusMat);
+      tor.position.copy(pos);
+      tor.quaternion.setFromUnitVectors(up, pos.clone().normalize());
+      tor.rotateZ(U.rand(0, Math.PI * 2));
+      tor.castShadow = true;
       brain.add(tor);
     }
-    brain.position.y = 2.6;
+    brain.position.y = 3.1;
     g.add(brain); parts.brain = brain;
 
-    /* ганглиозные пучки-щупальца снизу (анимируются) */
+    /* ============ ЩУПАЛЬЦА-ЛАПЫ (красные, длинные, изогнутые) ============ */
+    const matT = new THREE.MeshLambertMaterial({ color: TENT });
+    const matT2 = new THREE.MeshLambertMaterial({ color: TENT2 });
     const tentacles = [];
-    for (let i = 0; i < 6; i++) {
-      const a = (i / 6) * Math.PI * 2;
-      const t = new THREE.Group();
-      for (let s = 0; s < 4; s++) {
-        const seg = new THREE.Mesh(new THREE.CylinderGeometry(.16 - s * .03, .13 - s * .03, .7, 7), lobeMat);
-        seg.position.y = -s * .62; seg.castShadow = true;
-        t.add(seg);
+    const tentacleSpec = [
+      { a: 0.35, len: 5.2, curl: .55 }, { a: 1.15, len: 4.6, curl: -.7 },
+      { a: 2.0, len: 5.6, curl: .45 }, { a: 2.9, len: 4.2, curl: -.6 },
+      { a: 3.7, len: 5.0, curl: .7 }, { a: 4.5, len: 4.4, curl: -.5 },
+      { a: 5.3, len: 5.4, curl: .6 }, { a: 6.0, len: 4.8, curl: -.65 }
+    ];
+    tentacleSpec.forEach((spec, ti) => {
+      const root = new THREE.Group();
+      const segs = 7;
+      let parent = root;
+      let r = .30;
+      const h = spec.len / segs;
+      for (let s = 0; s < segs; s++) {
+        const seg = new THREE.Group();
+        const m = new THREE.Mesh(new THREE.CylinderGeometry(r * .82, r, h, 8),
+          (s % 2 === 0) ? matT : matT2);
+        m.position.y = -h / 2;
+        m.castShadow = true;
+        seg.add(m);
+        /* лёгкое суставное искривление по длине */
+        seg.position.y = (s === 0) ? 0 : -h;
+        seg.rotation.x = (spec.curl / segs) * (0.6 + s * .18);
+        seg.rotation.z = (spec.curl * .3 / segs) * ((ti % 2) ? 1 : -1);
+        parent.add(seg);
+        parent = seg;
+        r *= .84;
       }
-      t.position.set(Math.cos(a) * 1.1, 1.0, Math.sin(a) * 1.1);
-      g.add(t); tentacles.push(t);
-    }
+      /* на конце — острый коготь */
+      const claw = new THREE.Mesh(new THREE.ConeGeometry(r * .9, .5, 7), matT2);
+      claw.position.y = -h * .5 - .2; claw.rotation.x = Math.PI;
+      parent.add(claw);
+      /* цепляем щупальце снизу-сбоку мозга, разворачивая наружу */
+      const a = spec.a;
+      root.position.set(Math.cos(a) * 1.6, 1.9, Math.sin(a) * 1.6);
+      root.rotation.y = -a + Math.PI / 2;
+      root.rotation.z = (ti % 2 ? .35 : -.35);
+      root.userData.baseZ = root.rotation.z;
+      root.userData.phase = ti * .8;
+      g.add(root); tentacles.push(root);
+    });
     parts.tentacles = tentacles;
 
-    /* ГЛАЗ: сфера + зрачок + веко (веко закрывает глаз в фазе 1) */
+    /* ============ СПИННОЙ ОТРОСТОК (серый сегментированный, снизу) ============ */
+    const spine = new THREE.Group();
+    let py = 0;
+    for (let s = 0; s < 6; s++) {
+      const rr = .42 - s * .045;
+      const seg = new THREE.Mesh(new THREE.CylinderGeometry(rr, rr * 1.12, .42, 10), (s % 2 ? new THREE.MeshLambertMaterial({ color: SPINE2 }) : new THREE.MeshLambertMaterial({ color: SPINE })));
+      seg.position.set(s * .06, py, -s * .10);
+      seg.rotation.x = .22 + s * .06;
+      seg.castShadow = true;
+      spine.add(seg);
+      /* «рёбрышки» на сегментах */
+      const rib = new THREE.Mesh(new THREE.TorusGeometry(rr * .95, .05, 6, 12), new THREE.MeshLambertMaterial({ color: SPINE2 }));
+      rib.rotation.x = Math.PI / 2 + .22 + s * .06;
+      rib.position.copy(seg.position);
+      spine.add(rib);
+      py -= .40;
+    }
+    spine.position.set(0, 1.4, .2);
+    g.add(spine); parts.spine = spine;
+
+    /* ============ ГЛАЗ (механика фаз): спереди в нижней части мозга ============ */
     const eye = new THREE.Group();
-    const sclera = new THREE.Mesh(new THREE.SphereGeometry(.85, 18, 14), new THREE.MeshLambertMaterial({ color: 0xf5f0ea }));
+    const sclera = new THREE.Mesh(new THREE.SphereGeometry(.8, 18, 14), new THREE.MeshLambertMaterial({ color: 0xf5f0ea }));
     eye.add(sclera);
-    const iris = new THREE.Mesh(new THREE.SphereGeometry(.5, 16, 12), new THREE.MeshBasicMaterial({ color: 0xff5d8f }));
-    iris.position.z = .45; eye.add(iris);
-    const pupil = new THREE.Mesh(new THREE.SphereGeometry(.24, 12, 10), new THREE.MeshBasicMaterial({ color: 0x120407 }));
-    pupil.position.z = .82; eye.add(pupil);
+    const iris = new THREE.Mesh(new THREE.SphereGeometry(.47, 16, 12), new THREE.MeshBasicMaterial({ color: 0xff5d8f }));
+    iris.position.z = .42; eye.add(iris);
+    const pupil = new THREE.Mesh(new THREE.SphereGeometry(.23, 12, 10), new THREE.MeshBasicMaterial({ color: 0x120407 }));
+    pupil.position.z = .78; eye.add(pupil);
     const glow = new THREE.PointLight(0xff5d8f, 0, 7, 2); glow.position.z = 1.2; eye.add(glow);
-    eye.position.set(0, 2.5, 1.85);
+    eye.position.set(0, 2.2, 2.0);
     g.add(eye); parts.eye = eye; parts.iris = iris; parts.pupil = pupil; parts.eyeGlow = glow;
-    /* веки (две створки), закрыты в начале — смыкаются в центре глаза */
-    const lidTop = new THREE.Mesh(new THREE.BoxGeometry(2.1, .95, .35), new THREE.MeshLambertMaterial({ color: 0x7a4a5e }));
-    lidTop.position.set(0, .47, .25); eye.add(lidTop);
-    const lidBot = lidTop.clone(); lidBot.position.set(0, -.47, .25); eye.add(lidBot);
+
+    /* ПАНЦИРЬ = плотные кожные складки-«веки» вокруг глаза (фаза 1).
+       На референсе панциря нет, поэтому это органичные складки мозга. */
+    const shellMat = new THREE.MeshLambertMaterial({ color: DARK });
+    const shell = new THREE.Group();
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2;
+      const fold = new THREE.Mesh(new THREE.BoxGeometry(.55, 1.7, .55), shellMat);
+      fold.position.set(Math.cos(a) * 1.0, Math.sin(a) * 1.0, 0);
+      fold.rotation.z = a; fold.rotation.x = .1;
+      fold.castShadow = true;
+      shell.add(fold);
+    }
+    shell.position.copy(eye.position);
+    shell.position.z += .15;
+    g.add(shell); parts.shell = shell;
+    /* веки (закрывают глаз в фазе 1) */
+    const lidTop = new THREE.Mesh(new THREE.BoxGeometry(1.9, .85, .4), new THREE.MeshLambertMaterial({ color: BRAIN2 }));
+    lidTop.position.set(0, .45, .3); eye.add(lidTop);
+    const lidBot = lidTop.clone(); lidBot.position.set(0, -.45, .3); eye.add(lidBot);
     parts.lidTop = lidTop; parts.lidBot = lidBot;
 
     /* аура/свет */
@@ -209,14 +294,16 @@ const BrainBoss = {
       const want = Math.atan2(p.pos.x - z.pos.x, p.pos.z - z.pos.z);
       z.yaw = U.angleLerp(z.yaw, want, 1 - Math.pow(.05, dt));
     }
-    /* анимация щупалец и глаза */
+    /* анимация щупалец (качаются, тянутся) и глаза */
     if (parts.tentacles) {
       for (let i = 0; i < parts.tentacles.length; i++) {
         const t = parts.tentacles[i];
-        t.rotation.x = Math.sin(_bt * .8 + i) * .18;
-        t.rotation.z = Math.cos(_bt * .7 + i) * .18;
+        const ph = _bt * .8 + (t.userData.phase || 0);
+        t.rotation.x = Math.sin(ph) * .28;
+        t.rotation.z = (t.userData.baseZ || 0) + Math.cos(ph * .9) * .22;
       }
     }
+    if (parts.brain) { parts.brain.rotation.y = Math.sin(_bt * .35) * .04; parts.brain.position.y = 3.1 + Math.sin(_bt * .9) * .06; }
     if (parts.eye) parts.eye.rotation.z = Math.sin(_bt * .9) * .06;
 
     /* вспышки колб угасают */
@@ -232,6 +319,19 @@ const BrainBoss = {
     if (b.phase === 2) {
       b.eyeOpenT -= dt;
       if (b.eyeOpenT <= 0) this.closeEye();
+    }
+
+    /* огненный след снарядов босса */
+    if (Game.enemyShots && Game.effects) {
+      for (const s of Game.enemyShots) {
+        if (s.kind !== 'brain') continue;
+        s.trailT = (s.trailT || 0) - dt;
+        if (s.trailT <= 0) {
+          s.trailT = .05;
+          Game.effects.particle(s.pos.x, s.pos.y, s.pos.z, U.rand(-1, 1), U.rand(-.5, 1), U.rand(-1, 1),
+            U.rand(.08, .16), 'spark', U.rand(.15, .35));
+        }
+      }
     }
 
     /* ---- АТАКИ (в любой фазе, чаще в агонии) ---- */
@@ -262,32 +362,62 @@ const BrainBoss = {
   },
 
   attack(z, p, b) {
-    const kinds = b.phase === 3 ? ['beam', 'barrage', 'shockwave', 'beam', 'implosion']
-      : b.phase === 2 ? ['beam', 'barrage', 'shockwave', 'frost']
-      : ['beam', 'barrage', 'shockwave', 'summon'];
+    /* наборы атак по фазам: огонь, кровь/плоть, молнии, залпы, волны, притяжение */
+    const kinds = b.phase === 3
+      ? ['inferno', 'beam', 'barrage', 'goreNova', 'shockwave', 'implosion', 'beamTwin']
+      : b.phase === 2
+      ? ['inferno', 'beam', 'barrage', 'goreNova', 'shockwave', 'beamTwin']
+      : ['inferno', 'beam', 'barrage', 'shockwave', 'summon'];
     const kind = kinds[(Math.random() * kinds.length) | 0];
     if (!p) return;
-    const from = { x: z.pos.x, y: z.pos.y + 2.6, z: z.pos.z };
-    if (kind === 'beam') {
-      /* зелёный луч по прямой в игрока: телеграф + удар */
-      this.tell('ЛУЧ!');
-      const to = { x: from.x + 0, y: from.y, z: from.z };
-      const dir = { x: p.pos.x - from.x, y: 0, z: p.pos.z - from.z };
-      const L = Math.hypot(dir.x, dir.z) || 1; dir.x /= L; dir.z /= L;
-      if (Game.effects) Game.effects.laser(from, { x: from.x + dir.x * 60, y: from.y, z: from.z + dir.z * 60 });
-      Audio3D_SFX.laser && Audio3D_SFX.laser(from.x, from.y, from.z);
-      /* урон по линии */
-      const rx = p.pos.x - from.x, rz = p.pos.z - from.z;
-      const along = rx * dir.x + rz * dir.z;
-      const side = Math.abs(-rx * dir.z + rz * dir.x);
-      if (along > 0 && side < 1.6) Game.playerHurt(z.def.dmg * .7, z);
-      Game.breakMapAt(from.x + dir.x * 10, from.y, from.z + dir.z * 10, 3, 260);
+    const from = { x: z.pos.x, y: z.pos.y + 3.0, z: z.pos.z };
+    if (kind === 'beam' || kind === 'beamTwin') {
+      this.tell(kind === 'beamTwin' ? 'ДВОЙНОЙ ЛУЧ!' : 'ЛУЧ!');
+      const aim = (off) => {
+        const a = Math.atan2(p.pos.x - from.x, p.pos.z - from.z) + off;
+        return { x: Math.sin(a), z: Math.cos(a) };
+      };
+      const offs = kind === 'beamTwin' ? [-.22, .22] : [0];
+      for (const off of offs) {
+        const d = aim(off);
+        if (Game.effects) Game.effects.laser(from, { x: from.x + d.x * 60, y: from.y, z: from.z + d.z * 60 });
+        Audio3D_SFX.laser && Audio3D_SFX.laser(from.x, from.y, from.z);
+        const rx = p.pos.x - from.x, rz = p.pos.z - from.z;
+        const along = rx * d.x + rz * d.z;
+        const side = Math.abs(-rx * d.z + rz * d.x);
+        if (along > 0 && side < 1.8) Game.playerHurt(z.def.dmg * .7, z);
+        Game.breakMapAt(from.x + d.x * 10, from.y, from.z + d.z * 10, 3, 260);
+      }
+    } else if (kind === 'inferno') {
+      /* ОГНЕННОЕ КОЛЬЦО: босс выжигает землю вокруг — кольцо пламени + угли */
+      this.tell('ИСПЕПЕЛЕНИЕ!');
+      const R = 13;
+      for (let i = 0; i < 26; i++) {
+        const a = (i / 26) * Math.PI * 2;
+        const fx = z.pos.x + Math.cos(a) * R, fz = z.pos.z + Math.sin(a) * R;
+        const fy = (Game.world.groundAt(fx, fz, z.pos.y + 3) || z.pos.y) + .3;
+        if (Game.effects) Game.effects.fireBurst(fx, fy, fz, 3.2);
+      }
+      Audio3D_SFX.explosionAt(z.pos.x, z.pos.y + 1, z.pos.z);
+      Game.breakMapAt(z.pos.x, z.pos.y + .5, z.pos.z, R * .7, 320);
+      const pd = Math.hypot(p.pos.x - z.pos.x, p.pos.z - z.pos.z);
+      if (pd > R * .55 && pd < R * 1.15) Game.playerHurt(z.def.dmg * 1.1, z);
+    } else if (kind === 'goreNova') {
+      /* КРОВАВАЯ НОВА: выброс плоти и крови по площади — жёсткий, но ближний */
+      this.tell('КРОВАВАЯ ВСПЫШКА!');
+      if (Game.effects) { Game.effects.goreBurst(z.pos.x, z.pos.y + 1.6, z.pos.z, 12); Game.effects.groundWave(z.pos.x, z.pos.y + .05, z.pos.z, 11); }
+      Audio3D_SFX.explosionAt(z.pos.x, z.pos.y + 1, z.pos.z);
+      if (p && Math.hypot(p.pos.x - z.pos.x, p.pos.z - z.pos.z) < 11) Game.playerHurt(z.def.dmg * .9, z);
+      /* брызги долетают и бьют по зомби вокруг */
+      if (Game.horde) for (const o of Game.horde.list) {
+        if (!o.alive || o.dying || o === z) continue;
+        if (Math.hypot(o.pos.x - z.pos.x, o.pos.z - z.pos.z) < 11) o.takeDamage(z.def.dmg * .5, 'body', { x: o.pos.x - z.pos.x, y: 0, z: o.pos.z - z.pos.z });
+      }
     } else if (kind === 'barrage') {
       this.tell('ЗАЛП');
-      const ring = [];
-      for (let i = 0; i < 9; i++) {
-        const a = (i / 9) * Math.PI * 2;
-        this.spawnBolt(from, { x: Math.cos(a), y: 0, z: Math.sin(a) }, 26, z.def.dmg * .4, 0xff5d8f);
+      for (let i = 0; i < 10; i++) {
+        const a = (i / 10) * Math.PI * 2;
+        this.spawnBolt(from, { x: Math.cos(a), y: U.rand(-.1, .2), z: Math.sin(a) }, 26, z.def.dmg * .4, 0xff5d8f);
       }
     } else if (kind === 'shockwave') {
       this.tell('УДАРНАЯ ВОЛНА');
@@ -295,16 +425,12 @@ const BrainBoss = {
       Audio3D_SFX.explosionAt(z.pos.x, z.pos.y + 1, z.pos.z);
       Game.breakMapAt(z.pos.x, z.pos.y + .5, z.pos.z, 9, 400);
       if (p && Math.hypot(p.pos.x - z.pos.x, p.pos.z - z.pos.z) < 13) Game.playerHurt(z.def.dmg, z);
-    } else if (kind === 'frost') {
-      this.tell('СТУЖА');
-      if (Game.effects) Game.effects.frostBurst(z.pos.x, z.pos.y + 1.5, z.pos.z, 10);
-      if (p && Math.hypot(p.pos.x - z.pos.x, p.pos.z - z.pos.z) < 12) { p.freezeT = Math.max(p.freezeT || 0, 2.2); Game.playerHurt(z.def.dmg * .4, z); }
     } else if (kind === 'implosion') {
       this.tell('ПРИТЯЖЕНИЕ');
       if (Game.effects) Game.effects.implodeFx(z.pos.x, z.pos.y + 1.5, z.pos.z, 12);
       if (p) {
         const dx = z.pos.x - p.pos.x, dz = z.pos.z - p.pos.z, d = Math.hypot(dx, dz) || 1;
-        p.vel.x += (dx / d) * 30; p.vel.z += (dz / d) * 30;
+        p.vel.x += (dx / d) * 32; p.vel.z += (dz / d) * 32;
       }
     } else if (kind === 'summon') {
       this.summon(z);
@@ -313,10 +439,15 @@ const BrainBoss = {
 
   miniAttack(z, p, b) {
     if (!p) return;
-    const from = { x: z.pos.x, y: z.pos.y + 2.6, z: z.pos.z };
+    const from = { x: z.pos.x, y: z.pos.y + 3.0, z: z.pos.z };
     const dx = p.pos.x - from.x, dz = p.pos.z - from.z, dy = (p.pos.y + 1) - from.y;
     const d = Math.hypot(dx, dy, dz) || 1;
-    this.spawnBolt(from, { x: dx / d, y: dy / d, z: dz / d }, 34, z.def.dmg * .28, b.phase === 2 ? 0x66e06a : 0xff5d8f);
+    /* огненный снаряд, в агонии — пара подряд */
+    this.spawnBolt(from, { x: dx / d, y: dy / d, z: dz / d }, 34, z.def.dmg * .28, 0xff7a1e);
+    if (b.phase === 3) {
+      const a = Math.atan2(dx, dz) + U.rand(-.2, .2);
+      this.spawnBolt(from, { x: Math.sin(a), y: dy / d, z: Math.cos(a) }, 32, z.def.dmg * .22, 0xff5d8f);
+    }
   },
 
   summon(z) {
@@ -334,17 +465,22 @@ const BrainBoss = {
     }
   },
 
-  /* снаряд-«плазма» босса, летит в игрока */
+  /* снаряд-«плазма» босса, летит в игрока (с огненным свечением и следом) */
   spawnBolt(from, dir, speed, dmg, color) {
-    const mesh = new THREE.Mesh(new THREE.SphereGeometry(.32, 10, 8), new THREE.MeshBasicMaterial({ color: color }));
-    const pt = new THREE.PointLight(color, 4, 7, 2); mesh.add(pt);
-    mesh.position.set(from.x, from.y, from.z);
-    Game.scene.add(mesh);
+    const grp = new THREE.Group();
+    const core = new THREE.Mesh(new THREE.SphereGeometry(.30, 10, 8), new THREE.MeshBasicMaterial({ color: color }));
+    grp.add(core);
+    const halo = new THREE.Mesh(new THREE.SphereGeometry(.52, 10, 8),
+      new THREE.MeshBasicMaterial({ color: color, transparent: true, opacity: .35, blending: THREE.AdditiveBlending, depthWrite: false }));
+    grp.add(halo);
+    const pt = new THREE.PointLight(color, 5, 8, 2); grp.add(pt);
+    grp.position.set(from.x, from.y, from.z);
+    Game.scene.add(grp);
     Game.enemyShots.push({
-      mesh: mesh, kind: 'brain', life: 4.0, dmg: dmg, headMul: 1,
+      mesh: grp, kind: 'brain', life: 4.0, dmg: dmg, headMul: 1, color: color, trailT: 0,
       pos: { x: from.x, y: from.y, z: from.z },
       vel: { x: dir.x * speed, y: dir.y * speed, z: dir.z * speed },
-      grav: 0, color: color
+      grav: 0
     });
     if (Game.enemyShots.length > 40) { const o = Game.enemyShots.shift(); if (o.mesh.parent) o.mesh.parent.remove(o.mesh); }
   },

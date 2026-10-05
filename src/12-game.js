@@ -2870,11 +2870,14 @@ const Game = {
       zz.maxHealth *= mul; zz.health = zz.maxHealth;
       if (d.boss) zz.isBoss = true;
       else if (d.miniBoss) zz.isMiniBoss = true;
+      if (d.brain && typeof BrainBoss !== 'undefined') { try { BrainBoss.begin(zz); } catch (e) { } }
       last = zz;
     }
     UI.toast('Полигон: ' + d.name + (n > 1 ? ' ×' + n : '') + (mul !== 1 ? ' · ×' + mul + ' HP' : ''),
       d.boss ? '#c24bff' : d.miniBoss ? '#4ad6ff' : '#e33a2e');
     Audio3D_SFX.growl(px, py + 1.2, pz, d.boss ? 'brute' : id);
+    /* САУНДТРЕК БОССА: на полигоне тоже включаем боссовую тему */
+    if (d.boss || d.miniBoss) this.refreshMusic();
     // do not let a stray hit on the horde count as a wave clear
     if (this._panelT <= 0) this.updateRangePanel();
   },
@@ -5030,7 +5033,8 @@ const Game = {
     this.effects.explosion(b.pos.x, gy + 1.2, b.pos.z, 5.5, [ZOMBIES[type].aura || 0xff5a2a, 0x100608], ZOMBIES[type].final);
     Audio3D_SFX.explosionAt(b.pos.x, gy + 1, b.pos.z);
     Audio3D_SFX.growl(b.pos.x, gy + 1.5, b.pos.z, 'brute');
-    if (this.mode === CS.MODE.OFFLINE) this.refreshMusic();
+    /* САУНДТРЕК БОССА — во ВСЕХ режимах (оффлайн, кооп, орда, босс-раш) */
+    this.refreshMusic();
     return b;
   },
 
@@ -5482,6 +5486,7 @@ const Game = {
       s.isMiniBoss = true;
       Audio3D_SFX.growl(s.pos.x, s.pos.y, s.pos.z, 'brute');
       UI.toast(ZOMBIES[mbType].name + ' в бою', '#4ad6ff');
+      this.refreshMusic();
     }
 
     // spawn queue

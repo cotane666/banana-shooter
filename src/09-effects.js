@@ -1072,6 +1072,48 @@ class Effects {
     this.decal(pos.x, .02, pos.z, 0, -1, 0, U.rand(1.0, 1.8), 'blood');
   }
 
+  /* ============================================================
+     ОГОНЬ: вспышка пламени с углями и дымом (для атак мозгового босса).
+     ============================================================ */
+  fireBurst(x, y, z, radius, dir) {
+    const n = 18 + ((radius || 4) | 0);
+    for (let i = 0; i < n; i++) {
+      const a = U.rand(0, 6.28), e = U.rand(.2, 1);
+      const p = this.particle(x, y, z,
+        Math.cos(a) * U.rand(2, 5 + radius) + (dir ? dir.x * 6 : 0),
+        e * U.rand(3, 8 + radius),
+        Math.sin(a) * U.rand(2, 5 + radius) + (dir ? dir.z * 6 : 0),
+        U.rand(.16, .48), 'spark', U.rand(.35, .8));
+      if (p) p.material = this._tintMat(i % 2 ? 0xff8a1e : 0xffd23f, true);
+    }
+    for (let i = 0; i < Math.round(n * .6); i++) {
+      const p = this.particle(x, y, z, U.rand(-3, 3), U.rand(1, 5), U.rand(-3, 3), U.rand(.3, .7), 'smoke', U.rand(.7, 1.6));
+      if (p) p.material = this._tintMat(0x2a1a12, false);
+    }
+    const light = new THREE.PointLight(0xff8a1e, 70 * (1 + (radius || 4) * .12), (radius || 4) * 3.2, 2);
+    light.position.set(x, y, z); this.scene.add(light);
+    this.particles.push({ mesh: light, light: true, life: .22, max: .22, vx: 0, vy: 0, vz: 0, grav: 0 });
+    this.decal(x, .02, z, 0, -1, 0, U.rand(1.4, 2.6), 'scorch');
+  }
+
+  /* ============================================================
+     ПЛОТЬ/КРОВЬ: мощный выброс крови и мяса (взрыв по «живой» цели).
+     ============================================================ */
+  goreBurst(x, y, z, radius) {
+    const n = 22 + ((radius || 4) | 0) * 2;
+    for (let i = 0; i < n; i++) {
+      const a = U.rand(0, 6.28);
+      this.particle(x, y, z,
+        Math.cos(a) * U.rand(2, 7 + radius), U.rand(2, 7 + radius), Math.sin(a) * U.rand(2, 7 + radius),
+        U.rand(.07, .2), 'blood', U.rand(.5, 1.1));
+    }
+    for (let i = 0; i < n * .5; i++) {
+      const p = this.particle(x, y, z, U.rand(-3, 3), U.rand(1, 5), U.rand(-3, 3), U.rand(.12, .28), 'smoke', U.rand(.4, .9));
+      if (p) p.material = this._tintMat(0x6a0e12, false);
+    }
+    this.decal(x, .02, z, 0, -1, 0, U.rand(1.8, 3.2), 'blood');
+  }
+
   galaxyImpact(pos, normal) {
     const n = normal || { x: 0, y: 1, z: 0 };
     // неоновая фиолетовая вспышка на месте попадания

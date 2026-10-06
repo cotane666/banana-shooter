@@ -152,51 +152,48 @@ function buildHyperPipis() {
 }
 
 
-/* ---------- ЗВУК ЗАРЯДА [BIG SHOT] — непрерывный нарастающий гул (как на видео) ----------
-   Пока держишь ПКМ: тянется плотный жужжаще-дрожащий гул, который становится
-   выше, громче и «злее» с ростом заряда. На отпускании плавно затихает. */
+/* ---------- ЗВУК ЗАРЯДА [BIG SHOT] — ОРИГИНАЛЬНЫЙ ФАЙЛ (Deltarune charging) ----------
+   Пока держишь ПКМ, проигрывается встроенный звук зарядки (loop). С ростом заряда
+   он ускоряется и становится громче; на отпускании плавно затихает.
+   Ассет встроен как base64 в 05a-spamton-audio.js. */
+Audio3D_SFX._loadSpamtonCharge = function () {
+  if (this._chargeBuf || !this.ctx || typeof SPAMTON_CHARGE_MP3_B64 === 'undefined') return;
+  try {
+    const bin = atob(SPAMTON_CHARGE_MP3_B64);
+    const len = bin.length;
+    const buf = new Uint8Array(len);
+    for (let i = 0; i < len; i++) buf[i] = bin.charCodeAt(i);
+    const self = this;
+    this.ctx.decodeAudioData(buf.buffer,
+      (decoded) => { self._chargeBuf = decoded; },
+      () => {});
+  } catch (e) {}
+};
 Audio3D_SFX.spamtonChargeStart = function () {
   if (!this.ctx || this.muted || this._charge) return;
+  if (this._loadSpamtonCharge) this._loadSpamtonCharge();
+  if (!this._chargeBuf) return;                 // ещё не декодирован — пропускаем
   const t = this.ctx.currentTime;
   const out = this.ctx.createGain(); out.gain.value = .0001; out.connect(this.sfx);
-  /* основной пилообразный тон */
-  const o = this.ctx.createOscillator(); o.type = 'sawtooth'; o.frequency.value = 280;
-  const og = this.ctx.createGain(); og.gain.value = .5;
-  o.connect(og); og.connect(out);
-  /* чуть расстроенный квадрат — «дрожь» */
-  const o2 = this.ctx.createOscillator(); o2.type = 'square'; o2.frequency.value = 424;
-  const o2g = this.ctx.createGain(); o2g.gain.value = .22;
-  o2.connect(o2g); o2g.connect(out);
-  /* шумовой слой через полосовой фильтр + тремоло-LFO (вибрирующий «глитч») */
-  const noise = this.ctx.createBufferSource(); noise.buffer = this.noiseBuf; noise.loop = true;
-  const bp = this.ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 900; bp.Q.value = 1.4;
-  const ng = this.ctx.createGain(); ng.gain.value = .5;
-  const trem = this.ctx.createGain(); trem.gain.value = 1;
-  const lfo = this.ctx.createOscillator(); lfo.type = 'square'; lfo.frequency.value = 18;
-  const lfoG = this.ctx.createGain(); lfoG.gain.value = .55;
-  lfo.connect(lfoG); lfoG.connect(trem.gain);
-  noise.connect(bp); bp.connect(ng); ng.connect(trem); trem.connect(out);
-  o.start(t); o2.start(t); noise.start(t); lfo.start(t);
-  this._charge = { out, o, o2, bp, trem, lfo, noise, t0: t };
+  const src = this.ctx.createBufferSource();
+  src.buffer = this._chargeBuf; src.loop = true;
+  src.connect(out);
+  src.start(t);
+  this._charge = { out, src, t0: t };
 };
 Audio3D_SFX.spamtonChargeUpdate = function (k) {
   if (!this.ctx || !this._charge) return;
   k = U.clamp(k || 0, 0, 1);
   const c = this._charge, t = this.ctx.currentTime;
-  const step = .04;
-  /* частота и громкость растут вместе с зарядом */
-  c.o.frequency.setTargetAtTime(260 + k * 900, t, step);
-  c.o2.frequency.setTargetAtTime(380 + k * 1500, t, step);
-  c.bp.frequency.setTargetAtTime(700 + k * 3200, t, step);
-  c.lfo.frequency.setTargetAtTime(14 + k * 42, t, step);
-  c.out.gain.setTargetAtTime(.05 + k * .14, t, step);
+  /* с зарядом звук чуть ускоряется и становится громче */
+  if (c.src) c.src.playbackRate.setTargetAtTime(1 + k * .18, t, .05);
+  c.out.gain.setTargetAtTime(.45 + k * .5, t, .05);
 };
 Audio3D_SFX.spamtonChargeStop = function () {
   if (!this.ctx || !this._charge) return;
   const c = this._charge, t = this.ctx.currentTime;
-  c.out.gain.setTargetAtTime(.0001, t, .04);
-  c.o.stop(t + .25); c.o2.stop(t + .25); c.lfo.stop(t + .25);
-  try { c.noise && c.noise.stop(t + .25); } catch (e) {}
+  c.out.gain.setTargetAtTime(.0001, t, .05);
+  try { c.src && c.src.stop(t + .3); } catch (e) {}
   this._charge = null;
 };
 /* полный заряд: «BIG SHOT!» готов — резкий восходящий сигнал */

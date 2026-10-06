@@ -8432,13 +8432,10 @@ const Game = {
     p._spamtonCharging = true;
     p._spamtonChargeT = Math.min((def.chargeTime || 1.6), p._spamtonChargeT + dt);
     const k = U.clamp(p._spamtonChargeT / (def.chargeTime || 1.6), 0, 1);
-    /* звук заряда: короткий «тик», ускоряющийся и повышающийся — как BIG SHOT */
-    p._spamtonTick = (p._spamtonTick || 0) - dt;
-    if (p._spamtonTick <= 0) {
-      p._spamtonTick = .16 * (1 - k * .7) + .03;
-      if (Audio3D_SFX.spamtonChargeTick) Audio3D_SFX.spamtonChargeTick(k);
-    }
-    /* при полном заряде — гулкий «готов» */
+    /* звук заряда: непрерывный нарастающий гул (как на видео) */
+    if (Audio3D_SFX.spamtonChargeStart && !Audio3D_SFX._charge) Audio3D_SFX.spamtonChargeStart();
+    if (Audio3D_SFX.spamtonChargeUpdate) Audio3D_SFX.spamtonChargeUpdate(k);
+    /* при полном заряде — «BIG SHOT!» готов */
     if (k >= 1 && !p._spamtonReady) { p._spamtonReady = true; if (Audio3D_SFX.spamtonChargeReady) Audio3D_SFX.spamtonChargeReady(); }
     /* визуал: пушка дёргается и светится, вокруг летают пиписы */
     p.recoil = (p.recoil || 0) * .9;
@@ -8453,6 +8450,7 @@ const Game = {
   releaseHyperPipis() {
     const p = this.player;
     p._spamtonCharging = false;
+    if (Audio3D_SFX.spamtonChargeStop) Audio3D_SFX.spamtonChargeStop();
     const k = U.clamp((p._spamtonChargeT || 0) / ((p.def && p.def.chargeTime) || 1.6), 0, 1);
     p._spamtonChargeT = 0; p._spamtonReady = false;
     if (k < .12) return;                       // слишком слабый заряд — впустую
@@ -10234,6 +10232,9 @@ const Game = {
     // and not while the buy menu is open.
     const beamReady = p.def && p.def.beam && p.spinT > .85 && p.beamVent <= 0;
     const flameFiring = p.def && p.def.flame && p.triggerDown && p.weapon.mag > 0 && p.fireCd <= 0;
+    /* страховка: если гул заряда ещё играет, а пушка Спамтона уже не в руках —
+       глушим его, чтобы звук не «залипал» */
+    if (Audio3D_SFX._charge && !(p.def && p.def.spamtonCharge)) Audio3D_SFX.spamtonChargeStop();
     if (p.alive && !this.buyOpen && this.roundState === 'live' && this.mode !== CS.MODE.EDITOR) {
       const def = p.def;
       /* ---- МЕХАКОСТЮМ: ЛКМ — гигантский миниган, ПКМ — гипер-лазер ---- */

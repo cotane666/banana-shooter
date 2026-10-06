@@ -64,29 +64,32 @@ function buildPipisProjectile(kind) {
   return g;
 }
 
-/* ---------- ЗВУКИ СПАМТОНА (синтез в духе BIG SHOT / глитч-продавец) ---------- */
+/* ---------- ЗВУКИ СПАМТОНА (синтез: сочный «поп» выстрела + гул заряда) ---------- */
+/* Выстрел пиписом: сочный низко-средний «поп/плюх» (как на видео), а не бип */
 Audio3D_SFX.spamtonShot = function (x, y, z) {
   if (!this.ctx || this.muted) return;
   const sp = this._spatial(x, y, z, 3, 120);
   if (sp.gain <= .004) return;
   const t = this.ctx.currentTime;
-  /* «BIG SHOT!» — резкий восходящий крик-бип + глитч */
-  const o = this.ctx.createOscillator(); o.type = 'square';
-  o.frequency.setValueAtTime(760, t);
-  o.frequency.exponentialRampToValueAtTime(1500, t + .06);
-  o.frequency.exponentialRampToValueAtTime(420, t + .18);
-  const g = this.ctx.createGain();
-  g.gain.setValueAtTime(.14 * sp.gain, t);
-  g.gain.exponentialRampToValueAtTime(.001, t + .2);
-  o.connect(g); g.connect(this.sfx); o.start(t); o.stop(t + .22);
-  /* хриплый «пипис»-плевок */
+  const out = this.ctx.createGain(); out.gain.value = sp.gain;
+  const pan = this.ctx.createStereoPanner ? this.ctx.createStereoPanner() : null;
+  if (pan) { pan.pan.value = sp.pan; out.connect(pan); pan.connect(this.sfx); } else out.connect(this.sfx);
+  /* «поп»: шумовой всплеск через полосовой фильтр */
   const src = this.ctx.createBufferSource(); src.buffer = this.noiseBuf;
-  src.playbackRate.value = 1.6;
-  const bp = this.ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 1800; bp.Q.value = 3;
+  src.playbackRate.value = .95 + Math.random() * .2;
+  const bp = this.ctx.createBiquadFilter();
+  bp.type = 'bandpass'; bp.frequency.value = 780 * (.9 + Math.random() * .25); bp.Q.value = 1.1;
+  const hp = this.ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 220;
   const ng = this.ctx.createGain();
-  ng.gain.setValueAtTime(.09 * sp.gain, t);
-  ng.gain.exponentialRampToValueAtTime(.001, t + .12);
-  src.connect(bp); bp.connect(ng); ng.connect(this.sfx); src.start(t); src.stop(t + .14);
+  ng.gain.setValueAtTime(.5, t); ng.gain.exponentialRampToValueAtTime(.001, t + .16);
+  src.connect(bp); bp.connect(hp); hp.connect(ng); ng.connect(out);
+  src.start(t); src.stop(t + .18);
+  /* тело: короткий низкий «бум» */
+  const o = this.ctx.createOscillator(); o.type = 'sine';
+  o.frequency.setValueAtTime(210, t); o.frequency.exponentialRampToValueAtTime(72, t + .13);
+  const og = this.ctx.createGain();
+  og.gain.setValueAtTime(.42, t); og.gain.exponentialRampToValueAtTime(.001, t + .15);
+  o.connect(og); og.connect(out); o.start(t); o.stop(t + .17);
 };
 /* детонация взрывного пиписа */
 Audio3D_SFX.spamtonBoom = function (x, y, z) {
@@ -149,31 +152,58 @@ function buildHyperPipis() {
 }
 
 
-/* ---------- ЗВУК ЗАРЯДА [BIG SHOT] (как при атаке игрока в бою со Спамтоном) ----------
-   Короткий высокий «тик», который с ростом заряда становится выше, громче и
-   чаще — фирменный раскручивающийся писк. */
-Audio3D_SFX.spamtonChargeTick = function (k) {
-  if (!this.ctx || this.muted) return;
-  k = U.clamp(k || 0, 0, 1);
+/* ---------- ЗВУК ЗАРЯДА [BIG SHOT] — непрерывный нарастающий гул (как на видео) ----------
+   Пока держишь ПКМ: тянется плотный жужжаще-дрожащий гул, который становится
+   выше, громче и «злее» с ростом заряда. На отпускании плавно затихает. */
+Audio3D_SFX.spamtonChargeStart = function () {
+  if (!this.ctx || this.muted || this._charge) return;
   const t = this.ctx.currentTime;
-  const o = this.ctx.createOscillator(); o.type = 'square';
-  o.frequency.setValueAtTime(400 + k * 1500, t);
-  const g = this.ctx.createGain();
-  g.gain.setValueAtTime((.05 + k * .10), t);
-  g.gain.exponentialRampToValueAtTime(.001, t + .06);
-  o.connect(g); g.connect(this.sfx); o.start(t); o.stop(t + .07);
-  /* под-гармоника, чтобы «раскручивалось» */
-  const o2 = this.ctx.createOscillator(); o2.type = 'sawtooth';
-  o2.frequency.setValueAtTime(200 + k * 700, t);
-  const g2 = this.ctx.createGain();
-  g2.gain.setValueAtTime(.03 + k * .05, t);
-  g2.gain.exponentialRampToValueAtTime(.001, t + .06);
-  o2.connect(g2); g2.connect(this.sfx); o2.start(t); o2.stop(t + .07);
+  const out = this.ctx.createGain(); out.gain.value = .0001; out.connect(this.sfx);
+  /* основной пилообразный тон */
+  const o = this.ctx.createOscillator(); o.type = 'sawtooth'; o.frequency.value = 280;
+  const og = this.ctx.createGain(); og.gain.value = .5;
+  o.connect(og); og.connect(out);
+  /* чуть расстроенный квадрат — «дрожь» */
+  const o2 = this.ctx.createOscillator(); o2.type = 'square'; o2.frequency.value = 424;
+  const o2g = this.ctx.createGain(); o2g.gain.value = .22;
+  o2.connect(o2g); o2g.connect(out);
+  /* шумовой слой через полосовой фильтр + тремоло-LFO (вибрирующий «глитч») */
+  const noise = this.ctx.createBufferSource(); noise.buffer = this.noiseBuf; noise.loop = true;
+  const bp = this.ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 900; bp.Q.value = 1.4;
+  const ng = this.ctx.createGain(); ng.gain.value = .5;
+  const trem = this.ctx.createGain(); trem.gain.value = 1;
+  const lfo = this.ctx.createOscillator(); lfo.type = 'square'; lfo.frequency.value = 18;
+  const lfoG = this.ctx.createGain(); lfoG.gain.value = .55;
+  lfo.connect(lfoG); lfoG.connect(trem.gain);
+  noise.connect(bp); bp.connect(ng); ng.connect(trem); trem.connect(out);
+  o.start(t); o2.start(t); noise.start(t); lfo.start(t);
+  this._charge = { out, o, o2, bp, trem, lfo, noise, t0: t };
 };
-/* полный заряд: «BIG SHOT!» готов — восходящий аккорд */
+Audio3D_SFX.spamtonChargeUpdate = function (k) {
+  if (!this.ctx || !this._charge) return;
+  k = U.clamp(k || 0, 0, 1);
+  const c = this._charge, t = this.ctx.currentTime;
+  const step = .04;
+  /* частота и громкость растут вместе с зарядом */
+  c.o.frequency.setTargetAtTime(260 + k * 900, t, step);
+  c.o2.frequency.setTargetAtTime(380 + k * 1500, t, step);
+  c.bp.frequency.setTargetAtTime(700 + k * 3200, t, step);
+  c.lfo.frequency.setTargetAtTime(14 + k * 42, t, step);
+  c.out.gain.setTargetAtTime(.05 + k * .14, t, step);
+};
+Audio3D_SFX.spamtonChargeStop = function () {
+  if (!this.ctx || !this._charge) return;
+  const c = this._charge, t = this.ctx.currentTime;
+  c.out.gain.setTargetAtTime(.0001, t, .04);
+  c.o.stop(t + .25); c.o2.stop(t + .25); c.lfo.stop(t + .25);
+  try { c.noise && c.noise.stop(t + .25); } catch (e) {}
+  this._charge = null;
+};
+/* полный заряд: «BIG SHOT!» готов — резкий восходящий сигнал */
 Audio3D_SFX.spamtonChargeReady = function () {
   if (!this.ctx || this.muted) return;
-  [660, 880, 1320].forEach((f, i) => setTimeout(() => this.tone(f, .18, 'square', .12), i * 60));
+  this.tone(1040, .12, 'square', .12, undefined, undefined, undefined, 1560);
+  setTimeout(() => this.tone(1560, .16, 'square', .10), 90);
 };
 /* выстрел ГИПЕР-ПИПИСА — мощный «BIG SHOT»-залп */
 Audio3D_SFX.spamtonHyperShot = function (x, y, z) {
@@ -192,80 +222,51 @@ Audio3D_SFX.spamtonHyperShot = function (x, y, z) {
   src.connect(lp); lp.connect(ng); ng.connect(this.sfx); src.start(t); src.stop(t + .48);
 };
 
-/* ---------- МОДЕЛЬ РУКИ-ПУШКИ [BIG SHOT] ----------
-   Детализированная механическая рука Спамтона NEO: розово-фиолетовая броня,
-   жёлтое дуло-«лампочка» с ободком, белые костяные пальцы, панель-экран с
-   рекламным «бегущим» огоньком, индикаторы, кабели. Это view-model. */
+/* ---------- МОДЕЛЬ РУКИ-ПУШКИ [BIG SHOT] — ГЛАДКАЯ 3D (без пикселей) ----------
+   Как в видео: малиновая рука-ствол, светлая розовая манжета и большое гладкое
+   жёлтое кольцо-дуло. Пластиковые глянцевые материалы (Phong). */
 function buildSpamtonGunModel() {
   const g = new THREE.Group();
-  /* палитра как в спрайте: жёлтое кольцо, розовые/пурпурные пиксели, чёрный контур */
-  const OUT = 0x160a18, YEL = 0xf2c018, YEL2 = 0xcaa010,
-        PINK = 0xec93c4, PINK2 = 0xd44f8f, MAG = 0xa8306f,
-        PUR = 0x7b3fa0, PUR2 = 0x552a75;
-  const vox = (x, y, z, w, h, d, c, em) => {
-    const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d),
-      new THREE.MeshLambertMaterial({ color: c, emissive: em || 0x000000 }));
-    m.position.set(x, y, z); m.castShadow = true; g.add(m); return m;
-  };
+  const YEL = 0xf4c81e, PINKL = 0xf3b6d4, MAG = 0xd23a8a, MAGD = 0xa8236a,
+        PUR = 0x7b3fa0, DARK = 0x140a14;
+  const shiny = (c, em, shin) => new THREE.MeshPhongMaterial({
+    color: c, emissive: em || 0x000000,
+    shininess: shin === undefined ? 55 : shin, specular: 0x666666 });
+  const dark = new THREE.MeshLambertMaterial({ color: DARK });
 
-  /* ================= КОЛЬЦО-ДУЛО (пиксельный «пончик») ================= */
-  const Zf = -0.44;
-  const ringVox = (radius, size, zz, colFn) => {
-    const N = 16;
-    for (let i = 0; i < N; i++) {
-      const a = (i / N) * Math.PI * 2;
-      const x = Math.cos(a) * radius, y = Math.sin(a) * radius;
-      const c = colFn(i);
-      if (c !== null) vox(x, y, zz, size, size, .05, c, c === YEL ? 0x4a3606 : 0);
-    }
-  };
-  /* чёрная окантовка кольца */
-  ringVox(0.205, 0.118, Zf - .003, () => OUT);
-  /* внешнее жёлтое кольцо с розово-пурпурными пиксельными вставками */
-  ringVox(0.205, 0.088, Zf, (i) => (
-    (i === 8 || i === 9) ? PINK :
-    (i === 7 || i === 10) ? PUR :
-    (i === 0 || i === 15) ? PINK2 :
-    (i === 4 || i === 5) ? PUR2 : YEL
-  ));
-  /* внутреннее кольцо (розово-пурпурный узор) */
-  ringVox(0.125, 0.078, Zf + .012, (i) => (
-    (i >= 7 && i <= 10) ? PINK2 :
-    (i === 2 || i === 13) ? PUR :
-    (i === 0 || i === 1 || i === 14 || i === 15) ? PINK : MAG
-  ));
-  /* тёмное отверстие ствола (заполняет центр кольца) */
-  vox(0, 0, Zf + .004, .175, .175, .05, OUT);
-  vox(0, 0, Zf - .026, .150, .150, .02, 0x05020a);
+  /* ---- ствол-рука: гладкий сужающийся малиновый цилиндр ---- */
+  const barrel = new THREE.Mesh(new THREE.CylinderGeometry(.118, .100, .50, 24), shiny(MAG, 0x2a0818, 45));
+  barrel.rotation.x = Math.PI / 2; barrel.position.set(0, 0, -.13); g.add(barrel);
+  /* скруглённый торец со стороны руки */
+  const cap = new THREE.Mesh(new THREE.SphereGeometry(.118, 20, 12, 0, Math.PI * 2, 0, Math.PI / 2), shiny(MAGD, 0x1a0510, 35));
+  cap.rotation.x = -Math.PI / 2; cap.position.set(0, 0, .12); g.add(cap);
+  /* пурпурная полоса сверху (гладкая) */
+  const stripe = new THREE.Mesh(new THREE.CylinderGeometry(.021, .021, .47, 10), shiny(PUR, 0x1a0a28, 80));
+  stripe.rotation.x = Math.PI / 2; stripe.position.set(0, .110, -.13); g.add(stripe);
 
-  /* ============ СТВОЛ-«БРУСОК»: розовый верх / малиновый низ ============ */
-  const BZ = -0.14, BL = 0.50;
-  const BW = .126, BH = .118;
-  vox(0, .034, BZ, BW, .054, BL, PINK);                  // верх розовый
-  vox(0, -.034, BZ, BW, .054, BL, MAG);                  // низ малиновый
-  vox(0, 0, BZ, BW + .002, .014, BL, PUR);               // срединная линия
-  vox(-.034, .034, BZ - .004, .022, .038, .14, 0xf6b6d8);// глянцевая полоса
-  /* чёрный контур по БОКАМ (ниже верха, чтобы сверху был цвет) */
-  vox(-BW / 2 - .007, 0, BZ, .015, BH, BL, OUT);
-  vox( BW / 2 + .007, 0, BZ, .015, BH, BL, OUT);
-  /* ТЫЛЬНАЯ грань — ЦВЕТНАЯ (её видит игрок); передняя (у кольца) — чёрный контур */
-  vox(0, 0, BZ + BL / 2 + .006, BW + .030, BH + .030, .016, PINK2);  // задняя цветная
-  vox(0, 0, BZ - BL / 2 - .006, BW + .030, BH + .030, .016, OUT);    // передний чёрный торец
+  /* ---- светлая розовая манжета между стволом и кольцом ---- */
+  const collar = new THREE.Mesh(new THREE.CylinderGeometry(.132, .132, .075, 26), shiny(PINKL, 0x3a2030, 70));
+  collar.rotation.x = Math.PI / 2; collar.position.set(0, 0, -.355); g.add(collar);
 
-  /* ============ КОЛЬЦО-МАНЖЕТА на стыке (жёлтая) ============ */
-  const cuff = new THREE.Mesh(new THREE.CylinderGeometry(.118, .118, .07, 12),
-    new THREE.MeshLambertMaterial({ color: YEL2, emissive: 0x2a1e02 }));
-  cuff.rotation.x = Math.PI / 2; cuff.position.set(0, 0, Zf + .11); g.add(cuff);
+  /* ---- большое гладкое жёлтое кольцо-дуло (тор) ---- */
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(.152, .080, 20, 34), shiny(YEL, 0x4a3606, 95));
+  ring.position.set(0, 0, -.455); g.add(ring);
+  /* жёлтый «баллон» за кольцом (объём) */
+  const bulb = new THREE.Mesh(new THREE.SphereGeometry(.158, 24, 16), shiny(YEL, 0x3a2a04, 80));
+  bulb.scale.set(1, 1, .72); bulb.position.set(0, 0, -.415); g.add(bulb);
 
-  /* ============ мелкие жёлтые «рекламные» пиксели ============ */
-  [-1, 1].forEach(sx => vox(sx * .155, .155, Zf + .17, .038, .038, .03, YEL, 0x4a3606));
+  /* ---- тёмное отверстие ствола внутри кольца ---- */
+  const boreCyl = new THREE.Mesh(new THREE.CylinderGeometry(.084, .084, .06, 22), dark);
+  boreCyl.rotation.x = Math.PI / 2; boreCyl.position.set(0, 0, -.505); g.add(boreCyl);
+  const bore = new THREE.Mesh(new THREE.CircleGeometry(.084, 22), dark);
+  bore.rotation.y = Math.PI; bore.position.set(0, 0, -.537); g.add(bore);
 
-  /* лёгкое свечение внутри кольца (не перекрывает форму) */
-  const halo = new THREE.Mesh(new THREE.SphereGeometry(.075, 10, 8),
-    new THREE.MeshBasicMaterial({ color: YEL, transparent: true, opacity: .25, blending: THREE.AdditiveBlending, depthWrite: false }));
-  halo.position.set(0, 0, Zf - .02); g.add(halo);
-  g.userData.muzzleZ = Zf - .07;
+  /* лёгкое свечение в дуле */
+  const halo = new THREE.Mesh(new THREE.SphereGeometry(.115, 12, 10),
+    new THREE.MeshBasicMaterial({ color: YEL, transparent: true, opacity: .26, blending: THREE.AdditiveBlending, depthWrite: false }));
+  halo.position.set(0, 0, -.465); g.add(halo);
+
+  g.userData.muzzleZ = -.53;
   g.userData.spamtonGun = true;
-  g.scale.setScalar(.62);
   return g;
 }

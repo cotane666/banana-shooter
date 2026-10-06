@@ -26501,7 +26501,7 @@ const Game = {
       explosionColor: [0xff5d8f, 0x1a0d12], noSelfDamage: true, chargeK: k, hyper: true
     });
     Audio3D_SFX.spamtonHyperShot && Audio3D_SFX.spamtonHyperShot(origin.x, origin.y, origin.z);
-    p.recoil = (p.recoil || 0) + 6.5; p.viewPunchP = (p.viewPunchP || 0) + 4.5;
+    p.recoil = (p.recoil || 0) + .16; p.viewPunchP = (p.viewPunchP || 0) + .10;
     UI.center('BIG SHOT!', '· ГИПЕР-ПИПИС ·', 1.2);
     if (this.effects) {
       this.effects.explosion(origin.x + fx * 1.4, origin.y, origin.z + fz * 1.4, 4, [0xff5d8f, 0x1a0d12]);
@@ -26559,9 +26559,9 @@ const Game = {
     };
     push(this.horde && this.horde.list, false);
     if (this.mode === CS.MODE.ONLINE) push(this.remotePlayers, true);
-    /* ТРЯСКА КАМЕРЫ — тяжёлый удар */
-    p.recoil = (p.recoil || 0) + 14; p.viewPunchP = (p.viewPunchP || 0) + 10;
-    p.viewPunchY = (p.viewPunchY || 0) + U.rand(-.5, .5);
+    /* лёгкая тряска камеры — тяжёлый удар, но без «кручения» */
+    p.recoil = (p.recoil || 0) + .22; p.viewPunchP = (p.viewPunchP || 0) + .14;
+    p.viewPunchY = (p.viewPunchY || 0) + U.rand(-.05, .05);
     if (this._camShake !== undefined) this._camShake = 1.2;
     UI.toast('BIG SHOT!', '#ff5d8f');
   },

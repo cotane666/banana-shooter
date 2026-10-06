@@ -218,51 +218,59 @@ Audio3D_SFX.spamtonHyperShot = function (x, y, z) {
   src.connect(lp); lp.connect(ng); ng.connect(this.sfx); src.start(t); src.stop(t + .48);
 };
 
-/* ---------- МОДЕЛЬ РУКИ-ПУШКИ [BIG SHOT] — ГЛАДКАЯ 3D (без пикселей) ----------
-   Как в видео: малиновая рука-ствол, светлая розовая манжета и большое гладкое
-   жёлтое кольцо-дуло. Пластиковые глянцевые материалы (Phong). */
+/* ---------- МОДЕЛЬ РУКИ-ПУШКИ [BIG SHOT] — ГЛАДКАЯ 3D по форме спрайта ----------
+   Вид сбоку как в Deltarune: БОЛЬШОЕ жёлтое кольцо-дуло спереди, розовое «лицо»,
+   светлая розовая манжета и толстый малиновый ствол со светлой розовой накладкой
+   и фиолетовой полосой сверху. Пластиковые глянцевые материалы (Phong). */
 function buildSpamtonGunModel() {
   const g = new THREE.Group();
-  const YEL = 0xf4c81e, PINKL = 0xf3b6d4, MAG = 0xd23a8a, MAGD = 0xa8236a,
-        PUR = 0x7b3fa0, DARK = 0x140a14;
+  const YEL = 0xf4c81e, PINKL = 0xf3b6d4, PINK2 = 0xec93c4,
+        MAG = 0xd23a8a, MAGD = 0xa8236a, PUR = 0x7b3fa0, DARK = 0x140a14;
   const shiny = (c, em, shin) => new THREE.MeshPhongMaterial({
     color: c, emissive: em || 0x000000,
     shininess: shin === undefined ? 55 : shin, specular: 0x666666 });
   const dark = new THREE.MeshLambertMaterial({ color: DARK });
 
-  /* ---- ствол-рука: гладкий сужающийся малиновый цилиндр ---- */
-  const barrel = new THREE.Mesh(new THREE.CylinderGeometry(.118, .100, .50, 24), shiny(MAG, 0x2a0818, 45));
-  barrel.rotation.x = Math.PI / 2; barrel.position.set(0, 0, -.13); g.add(barrel);
+  /* ---- ствол: толстый малиновый цилиндр (чуть сплюснут по высоте) ---- */
+  const barrel = new THREE.Mesh(new THREE.CylinderGeometry(.126, .116, .42, 24), shiny(MAG, 0x2a0818, 45));
+  barrel.rotation.x = Math.PI / 2; barrel.position.set(0, 0, -.06); barrel.scale.set(1, .90, 1); g.add(barrel);
   /* скруглённый торец со стороны руки */
-  const cap = new THREE.Mesh(new THREE.SphereGeometry(.118, 20, 12, 0, Math.PI * 2, 0, Math.PI / 2), shiny(MAGD, 0x1a0510, 35));
-  cap.rotation.x = -Math.PI / 2; cap.position.set(0, 0, .12); g.add(cap);
-  /* пурпурная полоса сверху (гладкая) */
-  const stripe = new THREE.Mesh(new THREE.CylinderGeometry(.021, .021, .47, 10), shiny(PUR, 0x1a0a28, 80));
-  stripe.rotation.x = Math.PI / 2; stripe.position.set(0, .110, -.13); g.add(stripe);
+  const cap = new THREE.Mesh(new THREE.SphereGeometry(.126, 20, 12, 0, Math.PI * 2, 0, Math.PI / 2), shiny(MAGD, 0x1a0510, 35));
+  cap.rotation.x = -Math.PI / 2; cap.scale.set(1, .90, 1); cap.position.set(0, 0, .15); g.add(cap);
+  /* СВЕТЛАЯ РОЗОВАЯ верхняя накладка (крупная, как в спрайте) */
+  const band = new THREE.Mesh(new THREE.BoxGeometry(.226, .072, .40), shiny(PINKL, 0x3a2030, 60));
+  band.position.set(0, .058, -.06); g.add(band);
+  /* ФИОЛЕТОВАЯ тонкая полоса по самому верху */
+  const stripe = new THREE.Mesh(new THREE.BoxGeometry(.238, .022, .405), shiny(PUR, 0x1a0a28, 85));
+  stripe.position.set(0, .104, -.06); g.add(stripe);
 
   /* ---- светлая розовая манжета между стволом и кольцом ---- */
-  const collar = new THREE.Mesh(new THREE.CylinderGeometry(.132, .132, .075, 26), shiny(PINKL, 0x3a2030, 70));
-  collar.rotation.x = Math.PI / 2; collar.position.set(0, 0, -.355); g.add(collar);
+  const collar = new THREE.Mesh(new THREE.CylinderGeometry(.140, .140, .085, 26), shiny(PINKL, 0x3a2030, 70));
+  collar.rotation.x = Math.PI / 2; collar.position.set(0, 0, -.315); g.add(collar);
 
-  /* ---- большое гладкое жёлтое кольцо-дуло (тор) ---- */
-  const ring = new THREE.Mesh(new THREE.TorusGeometry(.152, .080, 20, 34), shiny(YEL, 0x4a3606, 95));
-  ring.position.set(0, 0, -.455); g.add(ring);
-  /* жёлтый «баллон» за кольцом (объём) */
-  const bulb = new THREE.Mesh(new THREE.SphereGeometry(.158, 24, 16), shiny(YEL, 0x3a2a04, 80));
-  bulb.scale.set(1, 1, .72); bulb.position.set(0, 0, -.415); g.add(bulb);
+  /* ---- розовое «лицо» (диск) сразу за кольцом ---- */
+  const face = new THREE.Mesh(new THREE.CylinderGeometry(.170, .170, .06, 26), shiny(PINK2, 0x30081c, 50));
+  face.rotation.x = Math.PI / 2; face.position.set(0, 0, -.372); g.add(face);
+
+  /* ---- БОЛЬШОЕ гладкое жёлтое кольцо-дуло (тор) ---- */
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(.180, .104, 20, 36), shiny(YEL, 0x4a3606, 95));
+  ring.position.set(0, 0, -.458); g.add(ring);
+  /* жёлтый «баллон» за кольцом (объём, чтобы сбоку читалось крупное пятно) */
+  const bulb = new THREE.Mesh(new THREE.SphereGeometry(.178, 24, 16), shiny(YEL, 0x3a2a04, 80));
+  bulb.scale.set(1, 1, .70); bulb.position.set(0, 0, -.412); g.add(bulb);
 
   /* ---- тёмное отверстие ствола внутри кольца ---- */
-  const boreCyl = new THREE.Mesh(new THREE.CylinderGeometry(.084, .084, .06, 22), dark);
-  boreCyl.rotation.x = Math.PI / 2; boreCyl.position.set(0, 0, -.505); g.add(boreCyl);
-  const bore = new THREE.Mesh(new THREE.CircleGeometry(.084, 22), dark);
-  bore.rotation.y = Math.PI; bore.position.set(0, 0, -.537); g.add(bore);
+  const boreCyl = new THREE.Mesh(new THREE.CylinderGeometry(.090, .090, .06, 22), dark);
+  boreCyl.rotation.x = Math.PI / 2; boreCyl.position.set(0, 0, -.512); g.add(boreCyl);
+  const bore = new THREE.Mesh(new THREE.CircleGeometry(.090, 22), dark);
+  bore.rotation.y = Math.PI; bore.position.set(0, 0, -.545); g.add(bore);
 
   /* лёгкое свечение в дуле */
-  const halo = new THREE.Mesh(new THREE.SphereGeometry(.115, 12, 10),
+  const halo = new THREE.Mesh(new THREE.SphereGeometry(.120, 12, 10),
     new THREE.MeshBasicMaterial({ color: YEL, transparent: true, opacity: .26, blending: THREE.AdditiveBlending, depthWrite: false }));
-  halo.position.set(0, 0, -.465); g.add(halo);
+  halo.position.set(0, 0, -.468); g.add(halo);
 
-  g.userData.muzzleZ = -.53;
+  g.userData.muzzleZ = -.54;
   g.userData.spamtonGun = true;
   return g;
 }

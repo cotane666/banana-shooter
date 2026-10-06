@@ -8488,9 +8488,11 @@ const Game = {
     const R = pr.splash || 13, dmg = pr.splashDmg || 1200;
     const p = this.player;
     const onGround = !normal || normal.y > .5 || point.y < .35;
-    /* грибовидный взрыв + огонь + мясо */
+    /* БТС [BIG SHOT]: жёлто-золотой взрыв (мushroom+tornado) + огонь + мясо */
+    const spamtonPalette = { bright: 0xffd21e, mid: 0xd9a410, dark: 0x2a1c04, pale: 0xfff3b0, glowDark: 0xb88a06 };
     if (this.effects) {
-      this.effects.explosion(point.x, point.y + .5, point.z, R, [0xff5d8f, 0x1a0d12], true);
+      this.effects.explosion(point.x, point.y + .5, point.z, R, [0xffd21e, 0x2a1c04], true, spamtonPalette);
+      if (this.effects.spamtonBurst) this.effects.spamtonBurst(point.x, point.y + .5, point.z, R);
       if (this.effects.fireBurst) this.effects.fireBurst(point.x, point.y + .4, point.z, R * .7);
       if (this.effects.goreBurst) this.effects.goreBurst(point.x, point.y + .6, point.z, R * .6);
       this.effects.groundWave(point.x, .05, point.z, R * 1.4);

@@ -7031,51 +7031,59 @@ Audio3D_SFX.spamtonHyperShot = function (x, y, z) {
   src.connect(lp); lp.connect(ng); ng.connect(this.sfx); src.start(t); src.stop(t + .48);
 };
 
-/* ---------- МОДЕЛЬ РУКИ-ПУШКИ [BIG SHOT] — ГЛАДКАЯ 3D (без пикселей) ----------
-   Как в видео: малиновая рука-ствол, светлая розовая манжета и большое гладкое
-   жёлтое кольцо-дуло. Пластиковые глянцевые материалы (Phong). */
+/* ---------- МОДЕЛЬ РУКИ-ПУШКИ [BIG SHOT] — ГЛАДКАЯ 3D по форме спрайта ----------
+   Вид сбоку как в Deltarune: БОЛЬШОЕ жёлтое кольцо-дуло спереди, розовое «лицо»,
+   светлая розовая манжета и толстый малиновый ствол со светлой розовой накладкой
+   и фиолетовой полосой сверху. Пластиковые глянцевые материалы (Phong). */
 function buildSpamtonGunModel() {
   const g = new THREE.Group();
-  const YEL = 0xf4c81e, PINKL = 0xf3b6d4, MAG = 0xd23a8a, MAGD = 0xa8236a,
-        PUR = 0x7b3fa0, DARK = 0x140a14;
+  const YEL = 0xf4c81e, PINKL = 0xf3b6d4, PINK2 = 0xec93c4,
+        MAG = 0xd23a8a, MAGD = 0xa8236a, PUR = 0x7b3fa0, DARK = 0x140a14;
   const shiny = (c, em, shin) => new THREE.MeshPhongMaterial({
     color: c, emissive: em || 0x000000,
     shininess: shin === undefined ? 55 : shin, specular: 0x666666 });
   const dark = new THREE.MeshLambertMaterial({ color: DARK });
 
-  /* ---- ствол-рука: гладкий сужающийся малиновый цилиндр ---- */
-  const barrel = new THREE.Mesh(new THREE.CylinderGeometry(.118, .100, .50, 24), shiny(MAG, 0x2a0818, 45));
-  barrel.rotation.x = Math.PI / 2; barrel.position.set(0, 0, -.13); g.add(barrel);
+  /* ---- ствол: толстый малиновый цилиндр (чуть сплюснут по высоте) ---- */
+  const barrel = new THREE.Mesh(new THREE.CylinderGeometry(.126, .116, .42, 24), shiny(MAG, 0x2a0818, 45));
+  barrel.rotation.x = Math.PI / 2; barrel.position.set(0, 0, -.06); barrel.scale.set(1, .90, 1); g.add(barrel);
   /* скруглённый торец со стороны руки */
-  const cap = new THREE.Mesh(new THREE.SphereGeometry(.118, 20, 12, 0, Math.PI * 2, 0, Math.PI / 2), shiny(MAGD, 0x1a0510, 35));
-  cap.rotation.x = -Math.PI / 2; cap.position.set(0, 0, .12); g.add(cap);
-  /* пурпурная полоса сверху (гладкая) */
-  const stripe = new THREE.Mesh(new THREE.CylinderGeometry(.021, .021, .47, 10), shiny(PUR, 0x1a0a28, 80));
-  stripe.rotation.x = Math.PI / 2; stripe.position.set(0, .110, -.13); g.add(stripe);
+  const cap = new THREE.Mesh(new THREE.SphereGeometry(.126, 20, 12, 0, Math.PI * 2, 0, Math.PI / 2), shiny(MAGD, 0x1a0510, 35));
+  cap.rotation.x = -Math.PI / 2; cap.scale.set(1, .90, 1); cap.position.set(0, 0, .15); g.add(cap);
+  /* СВЕТЛАЯ РОЗОВАЯ верхняя накладка (крупная, как в спрайте) */
+  const band = new THREE.Mesh(new THREE.BoxGeometry(.226, .072, .40), shiny(PINKL, 0x3a2030, 60));
+  band.position.set(0, .058, -.06); g.add(band);
+  /* ФИОЛЕТОВАЯ тонкая полоса по самому верху */
+  const stripe = new THREE.Mesh(new THREE.BoxGeometry(.238, .022, .405), shiny(PUR, 0x1a0a28, 85));
+  stripe.position.set(0, .104, -.06); g.add(stripe);
 
   /* ---- светлая розовая манжета между стволом и кольцом ---- */
-  const collar = new THREE.Mesh(new THREE.CylinderGeometry(.132, .132, .075, 26), shiny(PINKL, 0x3a2030, 70));
-  collar.rotation.x = Math.PI / 2; collar.position.set(0, 0, -.355); g.add(collar);
+  const collar = new THREE.Mesh(new THREE.CylinderGeometry(.140, .140, .085, 26), shiny(PINKL, 0x3a2030, 70));
+  collar.rotation.x = Math.PI / 2; collar.position.set(0, 0, -.315); g.add(collar);
 
-  /* ---- большое гладкое жёлтое кольцо-дуло (тор) ---- */
-  const ring = new THREE.Mesh(new THREE.TorusGeometry(.152, .080, 20, 34), shiny(YEL, 0x4a3606, 95));
-  ring.position.set(0, 0, -.455); g.add(ring);
-  /* жёлтый «баллон» за кольцом (объём) */
-  const bulb = new THREE.Mesh(new THREE.SphereGeometry(.158, 24, 16), shiny(YEL, 0x3a2a04, 80));
-  bulb.scale.set(1, 1, .72); bulb.position.set(0, 0, -.415); g.add(bulb);
+  /* ---- розовое «лицо» (диск) сразу за кольцом ---- */
+  const face = new THREE.Mesh(new THREE.CylinderGeometry(.170, .170, .06, 26), shiny(PINK2, 0x30081c, 50));
+  face.rotation.x = Math.PI / 2; face.position.set(0, 0, -.372); g.add(face);
+
+  /* ---- БОЛЬШОЕ гладкое жёлтое кольцо-дуло (тор) ---- */
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(.180, .104, 20, 36), shiny(YEL, 0x4a3606, 95));
+  ring.position.set(0, 0, -.458); g.add(ring);
+  /* жёлтый «баллон» за кольцом (объём, чтобы сбоку читалось крупное пятно) */
+  const bulb = new THREE.Mesh(new THREE.SphereGeometry(.178, 24, 16), shiny(YEL, 0x3a2a04, 80));
+  bulb.scale.set(1, 1, .70); bulb.position.set(0, 0, -.412); g.add(bulb);
 
   /* ---- тёмное отверстие ствола внутри кольца ---- */
-  const boreCyl = new THREE.Mesh(new THREE.CylinderGeometry(.084, .084, .06, 22), dark);
-  boreCyl.rotation.x = Math.PI / 2; boreCyl.position.set(0, 0, -.505); g.add(boreCyl);
-  const bore = new THREE.Mesh(new THREE.CircleGeometry(.084, 22), dark);
-  bore.rotation.y = Math.PI; bore.position.set(0, 0, -.537); g.add(bore);
+  const boreCyl = new THREE.Mesh(new THREE.CylinderGeometry(.090, .090, .06, 22), dark);
+  boreCyl.rotation.x = Math.PI / 2; boreCyl.position.set(0, 0, -.512); g.add(boreCyl);
+  const bore = new THREE.Mesh(new THREE.CircleGeometry(.090, 22), dark);
+  bore.rotation.y = Math.PI; bore.position.set(0, 0, -.545); g.add(bore);
 
   /* лёгкое свечение в дуле */
-  const halo = new THREE.Mesh(new THREE.SphereGeometry(.115, 12, 10),
+  const halo = new THREE.Mesh(new THREE.SphereGeometry(.120, 12, 10),
     new THREE.MeshBasicMaterial({ color: YEL, transparent: true, opacity: .26, blending: THREE.AdditiveBlending, depthWrite: false }));
-  halo.position.set(0, 0, -.465); g.add(halo);
+  halo.position.set(0, 0, -.468); g.add(halo);
 
-  g.userData.muzzleZ = -.53;
+  g.userData.muzzleZ = -.54;
   g.userData.spamtonGun = true;
   return g;
 }
@@ -9288,7 +9296,7 @@ const MUZZLE_Z = {
   rocketgun: -0.94, shield: -0.30,
   banana: -0.92,
   lordOfFlowers: -0.96,
-  spamtonGun: -0.53,
+  spamtonGun: -0.54,
   acid: -0.76, hive: -0.26, disc: -0.32, freeze: -0.76, tesla: -0.72,
   portal: -0.48, blackhole: -0.54, turretDrone: -0.28, chrono: -0.48,
   tesla: -0.50,
@@ -14046,6 +14054,11 @@ class Effects {
     this.vsparkMat = new THREE.MeshBasicMaterial({ color: 0xc060ff, blending: THREE.AdditiveBlending, transparent: true, depthWrite: false });
     this.smokeMat = new THREE.MeshBasicMaterial({ color: 0x9a9a94, transparent: true, opacity: .4, depthWrite: false });
     this.bananaMat = new THREE.MeshLambertMaterial({ color: 0xf2c93b, emissive: 0x3a2c08 });
+    /* уникальные частицы [BIG SHOT] в стиле Спамтона */
+    this.spamtonGoldMat = new THREE.MeshBasicMaterial({ color: 0xffd21e, blending: THREE.AdditiveBlending, transparent: true, depthWrite: false });
+    this.spamtonPinkMat = new THREE.MeshBasicMaterial({ color: 0xff5fb0, transparent: true, depthWrite: false });
+    this.spamtonCashMat = new THREE.MeshBasicMaterial({ color: 0x39d94a, transparent: true, depthWrite: false, side: THREE.DoubleSide });
+    this.spamtonPhoneMat = new THREE.MeshBasicMaterial({ color: 0xf7f7ff, transparent: true, depthWrite: false, side: THREE.DoubleSide });
 
     this.decalGeo = new THREE.PlaneGeometry(1, 1);
     this.decalMats = {
@@ -15294,7 +15307,7 @@ class Effects {
   /* ---------- explosion / grenade-ish ----------
      `tint` optionally recolours the blast (e.g. the atomic RPG's green/black);
      `nuke` additionally spawns the mushroom cloud + tornado FX. */
-  explosion(x, y, z, radius, tint, nuke) {
+  explosion(x, y, z, radius, tint, nuke, palette) {
     const sparkMat = tint ? this._tintMat(tint[0], true) : null;
     const smokeMat = tint ? this._tintMat(tint[1], false) : null;
     for (let i = 0; i < 30; i++) {
@@ -15311,7 +15324,57 @@ class Effects {
     light.position.set(x, y, z);
     this.scene.add(light);
     this.particles.push({ mesh: light, light: true, life: .22, max: .22, vx: 0, vy: 0, vz: 0, grav: 0 });
-    if (nuke) this.nukeFx(x, y, z);
+    if (nuke) this.nukeFx(x, y, z, palette);
+  }
+
+  /* ---------- УНИКАЛЬНЫЕ ЧАСТИЦЫ [BIG SHOT] (Спамтон NEO) ----------
+     Фирменные штуки продавца-марионетки: золотые «биг-шот» искры, розовые
+     пиписы-капли, зелёные «доллары/кромеры» (вращающиеся купюры) и белые
+     «телефонные» панельки. Собраны для взрыва гипер-пиписа. */
+  spamtonBurst(x, y, z, radius) {
+    const R = radius || 8;
+    /* 1) золотые искры-звёздочки (в обе стороны) */
+    for (let i = 0; i < 26; i++) {
+      const a = U.rand(0, 6.28), e = U.rand(-.2, 1);
+      const m = this.particle(x, y, z, Math.cos(a) * U.rand(3, R * 1.1), e * U.rand(4, R), Math.sin(a) * U.rand(3, R * 1.1),
+        U.rand(.14, .34), 'spark', U.rand(.35, .9));
+      if (m) m.material = this.spamtonGoldMat;
+    }
+    /* 2) розовые пиписы-капли */
+    for (let i = 0; i < 18; i++) {
+      const a = U.rand(0, 6.28);
+      const m = this.particle(x, y + .3, z, Math.cos(a) * U.rand(2, R * .8), U.rand(2, R * .7), Math.sin(a) * U.rand(2, R * .8),
+        U.rand(.12, .3), 'spamtonPipis', U.rand(.5, 1.2));
+      if (m) { m.material = this.spamtonPinkMat; m.rotation.set(U.rand(0, 3), U.rand(0, 3), U.rand(0, 3)); }
+    }
+    /* 3) зелёные «доллары/кромеры» — вращающиеся тонкие купюры */
+    for (let i = 0; i < 16; i++) {
+      const a = U.rand(0, 6.28);
+      const m = this.particle(x, y + .5, z, Math.cos(a) * U.rand(2, R * .9), U.rand(3, R * .8), Math.sin(a) * U.rand(2, R * .9),
+        U.rand(.16, .32), 'spamtonCash', U.rand(.7, 1.5));
+      if (m) {
+        m.material = this.spamtonCashMat;
+        m.scale.set(U.rand(.22, .34), U.rand(.10, .16), .02);
+        m.rotation.set(0, 0, U.rand(0, 3.14));
+        const rec = this.particles[this.particles.length - 1];
+        if (rec) { rec.grav = 9; rec.spin = { x: U.rand(-2, 2), y: U.rand(-3, 3), z: U.rand(6, 12) }; }
+      }
+    }
+    /* 4) белые «телефонные» панельки с рекламным свечением */
+    for (let i = 0; i < 8; i++) {
+      const a = U.rand(0, 6.28);
+      const m = this.particle(x, y + .6, z, Math.cos(a) * U.rand(2, R * .6), U.rand(3, R * .6), Math.sin(a) * U.rand(2, R * .6),
+        U.rand(.2, .38), 'spamtonPhone', U.rand(.8, 1.6));
+      if (m) {
+        m.material = this.spamtonPhoneMat; m.scale.set(.26, .34, .03); m.rotation.z = U.rand(-.4, .4);
+        const rec = this.particles[this.particles.length - 1];
+        if (rec) { rec.grav = 8; rec.spin = { x: U.rand(-2, 2), y: U.rand(-4, 4), z: U.rand(-3, 3) }; }
+      }
+    }
+    /* вспышка-огонёк в стиле Спамтона */
+    const light = new THREE.PointLight(0xffd21e, 40, R * 3, 2);
+    light.position.set(x, y + .5, z); this.scene.add(light);
+    this.particles.push({ mesh: light, light: true, life: .3, max: .3, vx: 0, vy: 0, vz: 0, grav: 0 });
   }
 
   /* ---------- nuclear FX: a green/black mushroom cloud + a spinning tornado ----------
@@ -15320,8 +15383,12 @@ class Effects {
      Layout: a ground shockwave ring, a glowing core flash, a rising mushroom
      (stalk rings + swelling cap) and a tornado of helical glow ribbons that
      spin and drift upward. */
-  nukeFx(x, y, z) {
-    const GREEN = 0x39ff5a, DARK = 0x0b1a0e, MID = 0x1e3d24, PALE = 0xa8ffc4;
+  nukeFx(x, y, z, palette) {
+    /* палитра по умолчанию — зелёная (атомная ракета). Гипер-пипис передаёт
+       свою (жёлто-золотую) в palette. */
+    const P = palette || {};
+    const GREEN = P.bright || 0x39ff5a, DARK = P.dark || 0x0b1a0e, MID = P.mid || 0x1e3d24, PALE = P.pale || 0xa8ffc4;
+    const GLOWDARK = P.glowDark || 0x1e8a3a;
     // per-instance materials so the FX can fade its opacity independently
     const mkMat = (color, op) => new THREE.MeshBasicMaterial({ color: color, transparent: true, opacity: op, depthWrite: false });
     const matGreen = mkMat(GREEN, 0), matMid = mkMat(MID, 0), matDark = mkMat(DARK, 0);
@@ -15383,7 +15450,7 @@ class Effects {
     const tornado = new THREE.Group();
     const glowGreen = new THREE.MeshBasicMaterial({ color: GREEN, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending });
     const glowPale = new THREE.MeshBasicMaterial({ color: PALE, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending });
-    const glowDark = new THREE.MeshBasicMaterial({ color: 0x1e8a3a, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending });
+    const glowDark = new THREE.MeshBasicMaterial({ color: GLOWDARK, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending });
     mats.push(glowGreen, glowPale, glowDark);
 
     // build one helical strand as a tube through a spiral curve
@@ -26520,9 +26587,11 @@ const Game = {
     const R = pr.splash || 13, dmg = pr.splashDmg || 1200;
     const p = this.player;
     const onGround = !normal || normal.y > .5 || point.y < .35;
-    /* грибовидный взрыв + огонь + мясо */
+    /* БТС [BIG SHOT]: жёлто-золотой взрыв (мushroom+tornado) + огонь + мясо */
+    const spamtonPalette = { bright: 0xffd21e, mid: 0xd9a410, dark: 0x2a1c04, pale: 0xfff3b0, glowDark: 0xb88a06 };
     if (this.effects) {
-      this.effects.explosion(point.x, point.y + .5, point.z, R, [0xff5d8f, 0x1a0d12], true);
+      this.effects.explosion(point.x, point.y + .5, point.z, R, [0xffd21e, 0x2a1c04], true, spamtonPalette);
+      if (this.effects.spamtonBurst) this.effects.spamtonBurst(point.x, point.y + .5, point.z, R);
       if (this.effects.fireBurst) this.effects.fireBurst(point.x, point.y + .4, point.z, R * .7);
       if (this.effects.goreBurst) this.effects.goreBurst(point.x, point.y + .6, point.z, R * .6);
       this.effects.groundWave(point.x, .05, point.z, R * 1.4);

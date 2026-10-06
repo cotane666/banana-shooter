@@ -1316,6 +1316,7 @@ const Game = {
       else this.startOffline(false, false, false, true);   // normal / bossrush / daily / endless
     });
     bindClick('btnCreditsClose', () => this.closeCredits());
+    bindClick('btnKromClose', () => { if (typeof UI !== 'undefined') UI.show('hud'); this.kromerOpen = false; });
     bindClick('btnMatchAgain', () => this.rematchOnline());
     bindClick('btnMatchMenu', () => this.backToMenuFromMatch());
     // clicking the backdrop (not the text or a button) also closes the credits
@@ -2340,6 +2341,9 @@ const Game = {
   startOffline(horde, free, custom, forcePreset) {
     this.stopToMenu(true);
     this.mode = CS.MODE.OFFLINE;
+    /* [BIG SHOT] КРОМЕР: сбрасываем прогресс улучшений на новую игру */
+    if (typeof kromerReset === 'function') { kromerReset(); this.kromerCoins = []; }
+    this.kromerOpen = false;
     this._campaignDone = false;
     this._campaignWon = false;
     this._offeredRestart = false;
@@ -3836,6 +3840,8 @@ const Game = {
       this.enemySpawnOpen = false;
       if (this.player && this.player.vmGroup && this.player.vmGroup.parent) this.player.vmGroup.parent.remove(this.player.vmGroup);
       if (this.effects) { this.effects.clear(); }
+      if (typeof kromerClearCoins === 'function') kromerClearCoins(this);
+      this.kromerOpen = false;
       if (typeof MapEditor !== 'undefined' && MapEditor.active) MapEditor.stop();
       if (typeof this.editorUI === 'function') this.editorUI(false);
     };
@@ -4902,6 +4908,15 @@ const Game = {
     o.wave++;
     o.bosses = 0;
     o.bossPending = 0;
+    /* [BIG SHOT] КРОМЕР-МАГАЗИН: раз в 2 волны (волны 2,4,6…),
+       но только если в руках пушка Спамтона */
+    if (typeof KromerState !== 'undefined' && this.mode === CS.MODE.OFFLINE &&
+        this.player && this.player.def && this.player.def.spamtonCharge &&
+        (o.wave - 1) % 2 === 0 && o.wave > 1) {
+      KromerState.active = true;
+      this.kromerOpen = true;
+      setTimeout(() => { if (this.kromerOpen) kromerOpenShop(this); }, 900);
+    }
     /* endless: every 10 waves pause and let the player pick a modifier */
     if (this.isEndless && o.wave > 1 && (o.wave - 1) % 10 === 0) {
       this.openModifierPicker(o.wave);
@@ -6058,7 +6073,15 @@ const Game = {
       if (def.projectile === 'pipis' && def.spamtonComboChance && Math.random() < def.spamtonComboChance) {
         this.startSpamtonCombo();
       } else {
+        /* [BIG SHOT] КРОМЕР: «РАСПРОДАЖА» — доп. пиписы за выстрел */
+        const extra = (def.projectile === 'pipis' && typeof KromerState !== 'undefined' && KromerState.active)
+          ? KromerMul('extra') : 0;
         this.spawnProjectile(def, muzzleWorld, baseDir, p);
+        for (let e = 0; e < extra; e++) this.spawnProjectile(def, muzzleWorld, baseDir, p);
+        /* [BIG SHOT] КРОМЕР: «СКОРОСТРЕЛ» — быстрее перезарядка выстрела */
+        if (def.projectile === 'pipis' && typeof KromerState !== 'undefined' && KromerState.active) {
+          p.fireCd *= KromerMul('rate');
+        }
       }
       // recoil / feedback still applies
       p.spread = Math.min(.09, p.spread + def.recoil * .0055);
@@ -6296,14 +6319,26 @@ const Game = {
     if (kind === 'chrono') { pr.chronoR = def.chronoR; pr.chronoLife = def.chronoLife; pr.chronoSlow = def.chronoSlow; }
     if (kind === 'disc') { pr.bounces = def.bounces; pr.discReturn = def.discReturn; pr.returnT = def.discReturn; pr.bounced = 0; }
     if (kind === 'flower') { pr.flowerCol = flowerCol; pr.splash = def.flowerSplash || 3.0; pr.splashDmg = def.flowerSplashDmg || 120; }
-    /* СПАМТОН-ПИПИСЫ: у каждого вида своё поведение */
+    /* СПАМТОН-ПИПИСЫ: у каждого вида своё поведение + бонусы КРОМЕР-улучшений */
     if (kind === 'pipis') {
       pr.pipis = pipisKind;
       pr.spamton = true;
       pr.bounces = 0;
-      if (pipisKind === 'explosive') { pr.splash = 4.0; pr.splashDmg = def.pipisDmg || 90; pr.explosionColor = [0xff7a1e, 0x1a0d05]; }
-      else if (pipisKind === 'spiky') { pr.pierce = true; pr.spiky = true; }
-      else { pr.bouncy = true; pr.life = 9; }
+      const km = (typeof KromerState !== 'undefined' && KromerState.active) ? KromerMul : null;
+      if (km) {
+        pr.dmg *= km('dmg');                            // урон
+        pr.homing = kromerHoming();                     // самонаведение
+      }
+      if (pipisKind === 'explosive') {
+        pr.splash = 4.0; pr.splashDmg = def.pipisDmg || 90; pr.explosionColor = [0xff7a1e, 0x1a0d05];
+        if (km) pr.splash *= km('size');
+      } else if (pipisKind === 'spiky') {
+        pr.pierce = 4 + (km ? km('pierce') : 0); pr.spiky = true;
+      } else {
+        pr.bouncy = true; pr.life = 9;
+        if (km) pr.maxBounces = 6 + Math.round(km('bounce') * 3);
+      }
+      if (km) { const s = km('size'); if (s !== 1) pr.mesh.scale.multiplyScalar(s); }
     }
     if (kind === 'freeze') pr.life = 7;
     this.projectiles.push(pr);
@@ -6344,6 +6379,25 @@ const Game = {
       }
 
       pr.vel.y -= pr.grav * dt;
+
+      /* [BIG SHOT] КРОМЕР: «ДОСТАВКА» — пипис сам доворачивает на ближайшего врага */
+      if (pr.homing && this.horde) {
+        let best = null, bestD = 1e9;
+        for (const z of this.horde.list) {
+          if (!z.alive || z.dying) continue;
+          const d = Math.hypot(z.pos.x - pr.pos.x, z.pos.z - pr.pos.z);
+          if (d < 16 && d < bestD) { bestD = d; best = z; }
+        }
+        if (best) {
+          const spd = Math.hypot(pr.vel.x, pr.vel.y, pr.vel.z) || 1;
+          const tx = best.pos.x - pr.pos.x, ty = (best.pos.y + 1) - pr.pos.y, tz = best.pos.z - pr.pos.z;
+          const tl = Math.hypot(tx, ty, tz) || 1;
+          const k = .9 * dt;                      // плавный доворот
+          pr.vel.x += (tx / tl * spd - pr.vel.x) * k;
+          pr.vel.y += (ty / tl * spd - pr.vel.y) * k;
+          pr.vel.z += (tz / tl * spd - pr.vel.z) * k;
+        }
+      }
 
       /* ЧЁРНАЯ ДЫРА: drag the horde toward the singularity while it flies */
       if (pr.kind === 'blackhole') {
@@ -6529,12 +6583,12 @@ const Game = {
             this.removeProjectile(i);
             continue;
           } else if (pr.pipis === 'spiky') {
-            /* ШИПОВАННЫЙ: прошивает врагов насквозь (до 4), но вязнет в стене */
+            /* ШИПОВАННЫЙ: прошивает врагов насквозь (до pr.pierce), но вязнет в стене */
             if (!impactNormal) {
               pr.pierces = (pr.pierces || 0) + 1;
               if (this.effects) this.effects.bloodBurst(impactPoint, dir, 6);
               UI.hitmark(true); this._hitmarkT = U.now();
-              if (pr.pierces < 4) continue;          // летит дальше
+              if (pr.pierces < (pr.pierce || 4)) continue;   // летит дальше
               this.removeProjectile(i);
               continue;
             }
@@ -6545,7 +6599,7 @@ const Game = {
           } else {
             /* ПРЫГУЧИЙ: отскакивает от стен/пола и врагов, пока не выдохнется */
             pr.bounces = (pr.bounces || 0) + 1;
-            if (pr.bounces > 6) { this.removeProjectile(i); continue; }
+            if (pr.bounces > (pr.maxBounces || 6)) { this.removeProjectile(i); continue; }
             let n = impactNormal;
             if (!n) {
               /* попал во врага — отскакивает назад */
@@ -9352,6 +9406,15 @@ const Game = {
     p.kills++;
     this._waveKills = (this._waveKills || 0) + 1;
     if (this._waveKills > (this._maxWaveKills || 0)) this._maxWaveKills = this._waveKills;
+    /* [BIG SHOT] КРОМЕР: за убийство с пушкой Спамтона выпадает монетка */
+    if (typeof KromerState !== 'undefined' && KromerState.active && p.def && p.def.spamtonCharge) {
+      this.kromerCoins = this.kromerCoins || [];
+      const n = kromerPerKill(z);
+      for (let i = 0; i < Math.min(6, n); i++) {
+        this.kromerCoins.push(kromerSpawnCoin(this.scene, z.pos.x + U.rand(-.6, .6), z.pos.y, z.pos.z + U.rand(-.6, .6)));
+      }
+      if (n > 6) this.kromerCoins[this.kromerCoins.length - 1].kromer = n - 5;   // излишек в одну монету
+    }
     /* скоростная цель: сколько убийств уложилось в скользящее окно 5 секунд */
     const now = U.now();
     this._killTimes = this._killTimes || [];
@@ -10400,6 +10463,11 @@ const Game = {
     // ---- round flow ----
     this.updateBuyPhase(dt);
     if (this.mode === CS.MODE.OFFLINE && !this._modPickOpen) { this.updateOffline(dt); this.updateCrates(dt); }
+    /* [BIG SHOT] КРОМЕР: активен, пока в руках пушка Спамтона (оффлайн) */
+    if (typeof KromerState !== 'undefined') {
+      KromerState.active = this.mode === CS.MODE.OFFLINE && !!(this.player && this.player.def && this.player.def.spamtonCharge);
+      kromerUpdate(this, dt);
+    }
     if (this.mode === CS.MODE.ONLINE && this.isCoop) { this.updateCoop(dt); this.updateCrates(dt); }
     /* клиент плавно подтягивает зомби к снапшотам хоста */
     if (this.mode === CS.MODE.ONLINE && this.isCoop && Net.role !== CS.NETROLE.HOST) this.interpRemoteZombies(dt);

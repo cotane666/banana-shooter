@@ -915,3 +915,29 @@ html.touch .fld input{padding:10px;font-size:15px}
     linear-gradient(90deg, rgba(155,107,255,.4), rgba(0,0,0,0) 16%, rgba(0,0,0,0) 84%, rgba(255,210,63,.4));
   box-shadow:inset 0 0 150px rgba(155,107,255,.5), inset 0 0 70px rgba(255,210,63,.4);
 }
+
+/* ============================================================
+   [BIG SHOT] МАГАЗИН УЛУЧШЕНИЙ «КРОМЕР» — пиксельно-спамтоновский стиль
+   ============================================================ */
+#kromer{background:radial-gradient(circle at 50% 20%, rgba(255,210,30,.10), rgba(0,0,0,.86));}
+.krom-panel{border-top:4px solid #ffd21e; box-shadow:0 0 40px rgba(255,210,30,.18), inset 0 0 60px rgba(255,95,176,.06);}
+.krom-title{color:#ffd21e;letter-spacing:2px;text-shadow:2px 2px 0 #a0207a, 4px 4px 0 rgba(0,0,0,.5);position:relative;}
+.krom-title .krom-glitch{color:#ff5fb0;animation:kromglitch 1.4s steps(2) infinite;}
+@keyframes kromglitch{0%{opacity:1}47%{opacity:1}48%{opacity:.35;transform:translateX(2px)}52%{opacity:1;transform:translateX(-2px)}100%{opacity:1}}
+.krom-bar{display:flex;flex-wrap:wrap;justify-content:space-between;gap:10px;align-items:center;margin:2px 0 12px;}
+.krom-have{font-size:14px;color:#e8e2c0;letter-spacing:1px}
+.krom-have b{color:#ffd21e}
+.krom-hint{font-size:11px;color:var(--dim)}
+.krom-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px;margin-top:6px}
+.kromcard{--kc:#ffd21e;position:relative;text-align:left;cursor:pointer;padding:12px 12px 34px;border-radius:6px;
+  background:linear-gradient(180deg,#2a1c14,#180f0a);border:2px solid #000;border-left:5px solid var(--kc);
+  box-shadow:inset 0 0 24px rgba(0,0,0,.5);transition:transform .08s, box-shadow .1s;}
+.kromcard b{display:block;font-size:13.5px;letter-spacing:1.5px;color:#ffe58a;margin-bottom:6px;text-shadow:1px 1px 0 #000}
+.kromcard i{font-style:normal;font-size:11.5px;color:#cdbfa6;line-height:1.4}
+.kromcard .klvl{position:absolute;right:10px;top:10px;font-size:10px;color:#8d7f66;letter-spacing:1px}
+.kromcard .kprice{position:absolute;left:12px;bottom:9px;font-size:12px;color:#39d94a;letter-spacing:1px}
+.kromcard .kprice .kcoin{color:#ffd21e;font-weight:700}
+.kromcard:hover{transform:translateY(-2px);box-shadow:0 4px 18px rgba(255,210,30,.25), inset 0 0 24px rgba(0,0,0,.4)}
+.kromcard.cant{filter:grayscale(.6) brightness(.8);cursor:not-allowed}
+.kromcard.maxed{filter:brightness(.7);cursor:default;border-left-color:#4a4a4a}
+.kromcard.maxed .kprice{color:#8d7f66}

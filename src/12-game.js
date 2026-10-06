@@ -8458,6 +8458,9 @@ const Game = {
     p._spamtonChargeT = 0; p._spamtonReady = false;
     if (k < .12) return;                       // слишком слабый заряд — впустую
     const def = p.def;
+    /* перезарядка ГИПЕР-ПИПИСА: раз в `hyperCooldown` секунд */
+    p._spamtonCd = def.hyperCooldown || 30;
+    p._spamtonCdNotified = 0;
     const origin = this.eyePos();
     const dir = this.cameraDir();
     const flat = Math.hypot(dir.x, dir.z) || 1;
@@ -10237,6 +10240,8 @@ const Game = {
     // and not while the buy menu is open.
     const beamReady = p.def && p.def.beam && p.spinT > .85 && p.beamVent <= 0;
     const flameFiring = p.def && p.def.flame && p.triggerDown && p.weapon.mag > 0 && p.fireCd <= 0;
+    /* перезарядка ГИПЕР-ПИПИСА [BIG SHOT]: гипер-выстрел доступен раз в 30 с */
+    if (p._spamtonCd > 0) p._spamtonCd = Math.max(0, p._spamtonCd - dt);
     /* страховка: если гул заряда ещё играет, а пушка Спамтона уже не в руках —
        глушим его, чтобы звук не «залипал» */
     if (Audio3D_SFX._charge && !(p.def && p.def.spamtonCharge)) Audio3D_SFX.spamtonChargeStop();
@@ -10253,8 +10258,17 @@ const Game = {
         this.updateFlamer(dt);
       } else if (def.spamtonCharge && (Input.aimDown() || (IS_TOUCH && TouchUI.aimPressed)) && canLook) {
         /* [BIG SHOT]: ПКМ — ЗАРЯД. Держи, чтобы раскрутить пушку, отпусти —
-           ГИПЕР-ПИПИС. Пока заряжаем, обычная стрельба ЛКМ тоже блокируется. */
-        this.updateSpamtonCharge(dt, true);
+           ГИПЕР-ПИПИС. Пока заряжаем, обычная стрельба ЛКМ тоже блокируется.
+           ГИПЕР-ПИПИС доступен раз в `hyperCooldown` секунд (30 с). */
+        if ((p._spamtonCd || 0) > 0) {
+          if (!p._spamtonCdNotified || this._t - p._spamtonCdNotified > 1) {
+            p._spamtonCdNotified = this._t;
+            UI.toast('Заряд BIG SHOT через ' + Math.ceil(p._spamtonCd) + 'с', '#ffd21e');
+          }
+          if (Audio3D_SFX.spamtonChargeStop) Audio3D_SFX.spamtonChargeStop();
+        } else {
+          this.updateSpamtonCharge(dt, true);
+        }
       } else if (def.spamtonCharge && p._spamtonCharging) {
         this.releaseHyperPipis();
       } else if (def.ult && Input.aimDown() && canLook && !this._ultAimLatch) {

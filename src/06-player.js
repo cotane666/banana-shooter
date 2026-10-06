@@ -2204,7 +2204,7 @@ const MUZZLE_Z = {
   rocketgun: -0.94, shield: -0.30,
   banana: -0.92,
   lordOfFlowers: -0.96,
-  spamtonGun: -0.54,
+  spamtonGun: -0.58,
   acid: -0.76, hive: -0.26, disc: -0.32, freeze: -0.76, tesla: -0.72,
   portal: -0.48, blackhole: -0.54, turretDrone: -0.28, chrono: -0.48,
   tesla: -0.50,

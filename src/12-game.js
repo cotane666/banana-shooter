@@ -3772,6 +3772,9 @@ const Game = {
     }
     UI.el.netInfo.classList.toggle('hidden', this.mode !== CS.MODE.ONLINE);
     Audio3D_SFX.init(); Audio3D_SFX.resume(); Audio3D_SFX.ambientStart();
+    /* предзагрузка звуков Спамтона (выстрел/гипер/заряд), чтобы не было задержки */
+    if (Audio3D_SFX._loadSpamtonSfx) Audio3D_SFX._loadSpamtonSfx();
+    if (Audio3D_SFX._loadSpamtonCharge) Audio3D_SFX._loadSpamtonCharge();
     this.refreshMusic();
   },
 

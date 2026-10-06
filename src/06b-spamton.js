@@ -64,32 +64,45 @@ function buildPipisProjectile(kind) {
   return g;
 }
 
-/* ---------- ЗВУКИ СПАМТОНА (синтез: сочный «поп» выстрела + гул заряда) ---------- */
-/* Выстрел пиписом: сочный низко-средний «поп/плюх» (как на видео), а не бип */
-Audio3D_SFX.spamtonShot = function (x, y, z) {
-  if (!this.ctx || this.muted) return;
-  const sp = this._spatial(x, y, z, 3, 120);
-  if (sp.gain <= .004) return;
+/* ---------- ЗВУКИ СПАМТОНА: ВЫСТРЕЛ и ГИПЕР-ВЫСТРЕЛ (оригинальные файлы) ----------
+   Оба звука встроены как base64 (MP3) в 05z-spamton-audio.js и проигрываются
+   ровно как есть, с учётом позиции в мире. */
+Audio3D_SFX._spamtonBufs = { shot: null, bigshot: null };
+Audio3D_SFX._loadSpamtonSfx = function () {
+  if (!this.ctx) return;
+  const self = this;
+  const load = (b64, slot) => {
+    if (self._spamtonBufs[slot] || typeof b64 === 'undefined') return;
+    try {
+      const bin = atob(b64);
+      const len = bin.length;
+      const u8 = new Uint8Array(len);
+      for (let i = 0; i < len; i++) u8[i] = bin.charCodeAt(i);
+      self.ctx.decodeAudioData(u8.buffer,
+        (decoded) => { self._spamtonBufs[slot] = decoded; },
+        () => {});
+    } catch (e) {}
+  };
+  load(typeof SPAMTON_SHOT_MP3_B64 !== 'undefined' ? SPAMTON_SHOT_MP3_B64 : undefined, 'shot');
+  load(typeof SPAMTON_BIGSHOT_MP3_B64 !== 'undefined' ? SPAMTON_BIGSHOT_MP3_B64 : undefined, 'bigshot');
+};
+/* проигрывает встроенный звук (slot: 'shot' | 'bigshot') с позиционированием */
+Audio3D_SFX._playSpamton = function (slot, x, y, z, refDist, maxDist, vol) {
+  if (!this.ctx || this.muted) return false;
+  const buf = this._spamtonBufs[slot];
+  if (!buf) { this._loadSpamtonSfx(); return false; }
+  const sp = this._spatial(x, y, z, refDist || 3, maxDist || 160);
+  if (sp.gain <= .002) return true;
   const t = this.ctx.currentTime;
-  const out = this.ctx.createGain(); out.gain.value = sp.gain;
+  const out = this.ctx.createGain(); out.gain.value = sp.gain * (vol === undefined ? 1 : vol);
   const pan = this.ctx.createStereoPanner ? this.ctx.createStereoPanner() : null;
   if (pan) { pan.pan.value = sp.pan; out.connect(pan); pan.connect(this.sfx); } else out.connect(this.sfx);
-  /* «поп»: шумовой всплеск через полосовой фильтр */
-  const src = this.ctx.createBufferSource(); src.buffer = this.noiseBuf;
-  src.playbackRate.value = .95 + Math.random() * .2;
-  const bp = this.ctx.createBiquadFilter();
-  bp.type = 'bandpass'; bp.frequency.value = 780 * (.9 + Math.random() * .25); bp.Q.value = 1.1;
-  const hp = this.ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 220;
-  const ng = this.ctx.createGain();
-  ng.gain.setValueAtTime(.5, t); ng.gain.exponentialRampToValueAtTime(.001, t + .16);
-  src.connect(bp); bp.connect(hp); hp.connect(ng); ng.connect(out);
-  src.start(t); src.stop(t + .18);
-  /* тело: короткий низкий «бум» */
-  const o = this.ctx.createOscillator(); o.type = 'sine';
-  o.frequency.setValueAtTime(210, t); o.frequency.exponentialRampToValueAtTime(72, t + .13);
-  const og = this.ctx.createGain();
-  og.gain.setValueAtTime(.42, t); og.gain.exponentialRampToValueAtTime(.001, t + .15);
-  o.connect(og); og.connect(out); o.start(t); o.stop(t + .17);
+  const src = this.ctx.createBufferSource(); src.buffer = buf;
+  src.connect(out); src.start(t);
+  return true;
+};
+Audio3D_SFX.spamtonShot = function (x, y, z) {
+  this._playSpamton('shot', x, y, z, 3, 120, 1);
 };
 /* детонация взрывного пиписа */
 Audio3D_SFX.spamtonBoom = function (x, y, z) {
@@ -201,55 +214,91 @@ Audio3D_SFX.spamtonChargeReady = function () {
   this.tone(1040, .12, 'square', .12, undefined, undefined, undefined, 1560);
   setTimeout(() => this.tone(1560, .16, 'square', .10), 90);
 };
-/* выстрел ГИПЕР-ПИПИСА — мощный «BIG SHOT»-залп */
+/* выстрел ГИПЕР-ПИПИСА — оригинальный «BIG SHOT» файл */
 Audio3D_SFX.spamtonHyperShot = function (x, y, z) {
-  if (!this.ctx || this.muted) return;
-  const sp = this._spatial(x, y, z, 4, 200);
-  const t = this.ctx.currentTime;
-  const o = this.ctx.createOscillator(); o.type = 'square';
-  o.frequency.setValueAtTime(1400, t); o.frequency.exponentialRampToValueAtTime(160, t + .35);
-  const g = this.ctx.createGain();
-  g.gain.setValueAtTime(.3 * Math.max(sp.gain, .3), t); g.gain.exponentialRampToValueAtTime(.001, t + .4);
-  o.connect(g); g.connect(this.sfx); o.start(t); o.stop(t + .42);
-  const src = this.ctx.createBufferSource(); src.buffer = this.noiseBuf;
-  const lp = this.ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 1400;
-  const ng = this.ctx.createGain();
-  ng.gain.setValueAtTime(.26 * Math.max(sp.gain, .3), t); ng.gain.exponentialRampToValueAtTime(.001, t + .45);
-  src.connect(lp); lp.connect(ng); ng.connect(this.sfx); src.start(t); src.stop(t + .48);
+  this._playSpamton('bigshot', x, y, z, 4, 220, 1);
 };
 
-/* ---------- МОДЕЛЬ РУКИ-ПУШКИ [BIG SHOT] — как в видео ----------
-   Простая ПЛОСКАЯ форма: большое жёлтое округлое дуло, светлый розовый обод и
-   малиновый сужающийся ствол. Плоские матовые цвета без глянца и полос. */
+/* ---------- МОДЕЛЬ РУКИ-ПУШКИ [BIG SHOT] — ПЕРВАЯ версия (механическая) ----------
+   Детализированная механическая рука Спамтона NEO: розово-фиолетовая броня,
+   жёлтое дуло-«лампочка» с ободком, белые костяные пальцы, панель-экран с
+   рекламным «бегущим» огоньком, индикаторы, кабели. Это view-model. */
 function buildSpamtonGunModel() {
   const g = new THREE.Group();
-  const YEL = 0xf5e02a, PINKL = 0xf2c3dc, MAG = 0xd6338f, DARK = 0x140a14;
-  /* матовые, но чуть подсвеченные цвета — читаются как плоские, как в видео */
-  const flat = (c, em) => new THREE.MeshLambertMaterial({ color: c, emissive: em || c, emissiveIntensity: .35 });
-  const dark = new THREE.MeshBasicMaterial({ color: DARK });
+  const PINK = 0xc0366e, PINK2 = 0xa02c5c, PURPLE = 0x6b2f8f, PURPLE2 = 0x8a44b0;
+  const YELLOW = 0xf2c318, YELLOW2 = 0xcaa010, METAL = 0xe6e6ec, METAL2 = 0xa9a9b4, BLACK = 0x241020;
 
-  /* ---- СТВОЛ: малиновый сужающийся цилиндр (шире у дула) ---- */
-  const barrel = new THREE.Mesh(new THREE.CylinderGeometry(.105, .150, .46, 22), flat(MAG, 0x5a1438));
-  barrel.rotation.x = Math.PI / 2; barrel.position.set(0, 0, -.06); g.add(barrel);
-  const cap = new THREE.Mesh(new THREE.SphereGeometry(.105, 18, 12, 0, Math.PI * 2, 0, Math.PI / 2), flat(0xa8236a, 0x48102c));
-  cap.rotation.x = -Math.PI / 2; cap.position.set(0, 0, .16); g.add(cap);
+  /* ---- предплечье: многосегментная броня ---- */
+  const fore = new THREE.Mesh(new THREE.BoxGeometry(.17, .16, .5), new THREE.MeshLambertMaterial({ color: PINK }));
+  fore.position.set(0, 0, .04); g.add(fore);
+  /* сегментные полосы */
+  for (let i = 0; i < 4; i++) {
+    const band = new THREE.Mesh(new THREE.BoxGeometry(.185, .175, .03), new THREE.MeshLambertMaterial({ color: PINK2 }));
+    band.position.set(0, 0, -.14 + i * .12); g.add(band);
+  }
+  /* фиолетовая пластина сверху с жёлтым треугольником */
+  const plate = new THREE.Mesh(new THREE.BoxGeometry(.21, .045, .34), new THREE.MeshLambertMaterial({ color: PURPLE }));
+  plate.position.set(0, .095, .0); g.add(plate);
+  const tri = new THREE.Mesh(new THREE.ConeGeometry(.05, .06, 3), new THREE.MeshBasicMaterial({ color: YELLOW }));
+  tri.rotation.x = -Math.PI / 2; tri.position.set(0, .12, .02); g.add(tri);
+  /* боковые кабели */
+  [-1, 1].forEach(sx => {
+    const cab = new THREE.Mesh(new THREE.CylinderGeometry(.018, .018, .38, 6), new THREE.MeshLambertMaterial({ color: BLACK }));
+    cab.rotation.x = Math.PI / 2; cab.position.set(sx * .095, -.03, .02); g.add(cab);
+  });
 
-  /* ---- СВЕТЛЫЙ РОЗОВЫЙ ОБОД между стволом и дулом ---- */
-  const collar = new THREE.Mesh(new THREE.CylinderGeometry(.168, .168, .10, 24), flat(PINKL, 0x7a5568));
-  collar.rotation.x = Math.PI / 2; collar.position.set(0, 0, -.335); g.add(collar);
+  /* ---- запястье / крепление дула ---- */
+  const wrist = new THREE.Mesh(new THREE.BoxGeometry(.2, .19, .14), new THREE.MeshLambertMaterial({ color: PINK2 }));
+  wrist.position.set(0, 0, -.24); g.add(wrist);
+  const cuff = new THREE.Mesh(new THREE.CylinderGeometry(.105, .115, .1, 14), new THREE.MeshLambertMaterial({ color: PURPLE2 }));
+  cuff.rotation.x = Math.PI / 2; cuff.position.set(0, 0, -.31); g.add(cuff);
 
-  /* ---- БОЛЬШОЕ ЖЁЛТОЕ ОКРУГЛОЕ ДУЛО (сплюснутый овал) ---- */
-  const muzzle = new THREE.Mesh(new THREE.SphereGeometry(.185, 22, 16), flat(YEL, 0x6a5c08));
-  muzzle.scale.set(1, 1, 1.12); muzzle.position.set(0, 0, -.47); g.add(muzzle);
+  /* ---- жёлтое дуло-лампа с ободком (как на арте) ---- */
+  const bulb = new THREE.Mesh(new THREE.SphereGeometry(.12, 16, 14), new THREE.MeshLambertMaterial({ color: YELLOW, emissive: 0x4a3a04 }));
+  bulb.scale.set(1, 1, 1.4); bulb.position.set(0, 0, -.42); g.add(bulb);
+  const rim = new THREE.Mesh(new THREE.TorusGeometry(.10, .022, 8, 18), new THREE.MeshLambertMaterial({ color: 0xdfa8c0 }));
+  rim.position.set(0, 0, -.50); g.add(rim);
+  const muzzle = new THREE.Mesh(new THREE.CylinderGeometry(.065, .08, .08, 16), new THREE.MeshLambertMaterial({ color: YELLOW2 }));
+  muzzle.rotation.x = Math.PI / 2; muzzle.position.set(0, 0, -.55); g.add(muzzle);
+  /* тёмное отверстие */
+  const bore = new THREE.Mesh(new THREE.CircleGeometry(.05, 14), new THREE.MeshBasicMaterial({ color: 0x120608 }));
+  bore.rotation.y = Math.PI; bore.position.set(0, 0, -.592); g.add(bore);
 
-  /* ---- тёмное отверстие ствола ---- */
-  const bore = new THREE.Mesh(new THREE.CylinderGeometry(.088, .088, .06, 20), dark);
-  bore.rotation.x = Math.PI / 2; bore.position.set(0, 0, -.565); g.add(bore);
-  const boreCap = new THREE.Mesh(new THREE.CircleGeometry(.088, 20), dark);
-  boreCap.rotation.y = Math.PI; boreCap.position.set(0, 0, -.598); g.add(boreCap);
+  /* ---- белые «костяные» пальцы, обхватившие дуло ---- */
+  for (let i = 0; i < 3; i++) {
+    const knuckle = new THREE.Mesh(new THREE.SphereGeometry(.026, 8, 6), new THREE.MeshLambertMaterial({ color: METAL }));
+    knuckle.position.set(-.075 + i * .075, .10, -.30); g.add(knuckle);
+    const f = new THREE.Mesh(new THREE.BoxGeometry(.05, .055, .17), new THREE.MeshLambertMaterial({ color: METAL }));
+    f.position.set(-.075 + i * .075, .11, -.40); f.rotation.x = -.55; g.add(f);
+    const tip = new THREE.Mesh(new THREE.BoxGeometry(.045, .05, .06), new THREE.MeshLambertMaterial({ color: METAL2 }));
+    tip.position.set(-.075 + i * .075, .045, -.48); tip.rotation.x = -.9; g.add(tip);
+  }
 
-  g.userData.muzzleZ = -.58;
+  /* ---- панель-ЭКРАН с рекламными точками (стиль Спамтона) ---- */
+  const screenMat = new THREE.MeshBasicMaterial({ color: 0x0a2a12 });
+  const screen = new THREE.Mesh(new THREE.BoxGeometry(.13, .05, .005), screenMat);
+  screen.position.set(0, .055, .22); g.add(screen);
+  const dots = [];
+  for (let i = 0; i < 6; i++) {
+    const d = new THREE.Mesh(new THREE.BoxGeometry(.016, .03, .006), new THREE.MeshBasicMaterial({ color: 0x66ff66 }));
+    d.position.set(-.05 + i * .02, .055, .223); d.userData.i = i; g.add(d); dots.push(d);
+  }
+  g.userData.adScreen = screen; g.userData.adDots = dots;
+
+  /* три жёлтых «глаза»-индикатора на дуле */
+  for (let i = 0; i < 3; i++) {
+    const e = new THREE.Mesh(new THREE.SphereGeometry(.021, 8, 6), new THREE.MeshBasicMaterial({ color: YELLOW }));
+    e.position.set((i - 1) * .065, .062, -.30); g.add(e);
+  }
+  /* мелкие болты/заклёпки */
+  for (let i = 0; i < 6; i++) {
+    const b = new THREE.Mesh(new THREE.CylinderGeometry(.008, .008, .006, 6), new THREE.MeshLambertMaterial({ color: METAL2 }));
+    b.rotation.x = Math.PI / 2; b.position.set((i % 3 - 1) * .075, -.055, -.08 + ((i / 3) | 0) * .16); g.add(b);
+  }
+
+  addGlowSphere(g, .20, YELLOW, .4);
+  g.userData.muzzleZ = -.62;
   g.userData.spamtonGun = true;
-  g.scale.setScalar(.92);
+  g.scale.setScalar(.62);
   return g;
 }

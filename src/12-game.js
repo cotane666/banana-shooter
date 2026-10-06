@@ -6054,7 +6054,12 @@ const Game = {
     const muzzleWorld = this.muzzleWorldPos();
     /* ---- projectile weapons launch a physical object ---- */
     if (def.projectile) {
-      this.spawnProjectile(def, muzzleWorld, baseDir, p);
+      /* [BIG SHOT]: редкий (~5%) шанс КОМБО-АТАКИ вместо обычного выстрела */
+      if (def.projectile === 'pipis' && def.spamtonComboChance && Math.random() < def.spamtonComboChance) {
+        this.startSpamtonCombo();
+      } else {
+        this.spawnProjectile(def, muzzleWorld, baseDir, p);
+      }
       // recoil / feedback still applies
       p.spread = Math.min(.09, p.spread + def.recoil * .0055);
       p.recoil += def.recoil * .0042;
@@ -6226,7 +6231,7 @@ const Game = {
     while (this._slashProjs.length) this.removeSlashProjectile(0);
   },
 
-  spawnProjectile(def, origin, dir, owner) {
+  spawnProjectile(def, origin, dir, owner, pipisKindOverride) {
     const p = this.player;
     const spread = p.aimSpread();
     const d = this.spreadDirection(dir, spread, false);
@@ -6234,7 +6239,9 @@ const Game = {
     const isRocket = kind === 'rocket';
     const isGuided = kind === 'guided';
     /* СПАМТОН: каждый выстрел — случайный пипис (взрывной/шипованный/прыгучий) */
-    const pipisKind = kind === 'pipis' ? ['explosive', 'spiky', 'bouncy'][(Math.random() * 3) | 0] : null;
+    const pipisKind = kind === 'pipis'
+      ? (pipisKindOverride || ['explosive', 'spiky', 'bouncy'][(Math.random() * 3) | 0])
+      : null;
     const builder = {
       guided: buildGuidedMissile, rocket: buildRocketProjectile, acid: buildAcidProjectile,
       hive: buildHivePod, disc: buildDiscProjectile, freeze: buildFreezeOrb,
@@ -8464,6 +8471,64 @@ const Game = {
     }
   },
 
+  /* ============================================================
+     [BIG SHOT] РЕДКАЯ КОМБО-АТАКА (~5%). Вместо обычного пиписа игрок
+     выдаёт серию: 3 взрывных → пауза → 3 шиповых → пауза → 3 розовых
+     (пиписы летят с неба по площади) → короткая пауза → 1.5с ПУЛЕМЁТ
+     из всех видов пиписов сразу (высокая скорострельность).
+     ============================================================ */
+  startSpamtonCombo() {
+    const p = this.player;
+    if (p._spamtonCombo) return;                       // уже идёт — не дублируем
+    p._spamtonCombo = {
+      t: 0, stage: 0, burstTimer: 0, burstsDone: 0, minigun: 0, gunTimer: 0
+    };
+    UI.center('BIG SHOT!!', '· КОМБО ·', 1.4);
+    if (Audio3D_SFX.spamtonChargeReady) Audio3D_SFX.spamtonChargeReady();
+  },
+
+  /* спавн одного пиписа комбо заданного вида (летит по направлению взгляда) */
+  _comboPipis(kind) {
+    const def = WEAPONS.spamtonGun;
+    const baseDir = this.cameraDir();
+    const d = this.spreadDirection(baseDir, .05, false);
+    this.spawnProjectile(def, this.muzzleWorldPos(), d, this.player, kind);
+  },
+
+  updateSpamtonCombo(dt) {
+    const p = this.player;
+    const c = p && p._spamtonCombo;
+    if (!c) return;
+    /* если игрок умер/сменил оружие — комбо прерывается */
+    if (!p.alive || !(p.def && p.def.spamtonCharge)) { p._spamtonCombo = null; return; }
+    c.t += dt;
+    /* фаза 1: серии по 3 пиписа с паузами */
+    if (c.stage === 0) {
+      c.burstTimer -= dt;
+      if (c.burstTimer <= 0) {
+        const kinds = ['explosive', 'spiky', 'bouncy'];   // розовый = редкий bouncy-пипис
+        const kind = kinds[c.burstsDone] || 'bouncy';
+        for (let i = 0; i < 3; i++) this._comboPipis(kind);
+        c.burstsDone++;
+        if (c.burstsDone >= 3) { c.stage = 1; c.burstTimer = .4; }
+        else c.burstTimer = (c.burstsDone === 1 ? .5 : .3);   // паузы 0.5 и 0.3
+      }
+    } else if (c.stage === 1) {
+      /* короткая пауза перед пулемётом */
+      c.burstTimer -= dt;
+      if (c.burstTimer <= 0) { c.stage = 2; c.minigun = 1.5; c.gunTimer = 0; }
+    } else if (c.stage === 2) {
+      /* фаза 2: ПУЛЕМЁТ из всех видов пиписов 1.5 секунды */
+      c.minigun -= dt;
+      c.gunTimer -= dt;
+      if (c.gunTimer <= 0) {
+        c.gunTimer = .045;                               // ~ миниган
+        this._comboPipis(['explosive', 'spiky', 'bouncy'][(Math.random() * 3) | 0]);
+      }
+      if (c.minigun <= 0) p._spamtonCombo = null;
+    }
+  },
+
   releaseHyperPipis() {
     const p = this.player;
     p._spamtonCharging = false;
@@ -10145,6 +10210,7 @@ const Game = {
         }
       }
       if (this.effects) this.effects.update(dt);
+      this.updateSpamtonCombo(dt);
       this.updateProjectiles(dt);
       this.updateSlashProjectiles(dt);
       /* The other players keep moving while we fly the drone: without this the
@@ -10388,6 +10454,7 @@ const Game = {
     if (this._achTick <= 0) { this._achTick = 0.2; if (typeof UI !== 'undefined' && UI.tickAchProgress) UI.tickAchProgress(); }
 
     // ---- flying bananas ----
+    this.updateSpamtonCombo(dt);
     this.updateProjectiles(dt);
     this.updateSlashProjectiles(dt);
     if (this.mode === CS.MODE.RANGE) this.updateDummyProjectiles(dt);

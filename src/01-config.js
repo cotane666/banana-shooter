@@ -401,7 +401,8 @@ const WEAPONS = {
           pipisDmg: 90, spamton: true,
           /* ПКМ — ЗАРЯД: держи, чтобы раскрутить «BIG SHOT», отпусти — ГИПЕР-ПИПИС */
           spamtonCharge: true, chargeTime: 1.6, hyperDmg: 1400, hyperSplash: 13, hyperSplashDmg: 1200,
-          hyperProjSpeed: 26, hyperBreakR: 11, hyperCooldown: 30 },
+          hyperProjSpeed: 26, hyperBreakR: 11, hyperCooldown: 30,
+          spamtonComboChance: .05 },
 
   /* ---------- МЕХАКОСТЮМ: giant 6-barrel minigun (primary) + hyper laser (secondary) ---------- */
   mechMinigun: { name: 'МЕХА-МИНИГАН', cat: 'exp', slot: 2, price: 0, dmg: 55, rpm: 1600, mag: 9999, reserve: 0,

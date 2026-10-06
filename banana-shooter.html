@@ -6994,79 +6994,73 @@ Audio3D_SFX.spamtonHyperShot = function (x, y, z) {
    рекламным «бегущим» огоньком, индикаторы, кабели. Это view-model. */
 function buildSpamtonGunModel() {
   const g = new THREE.Group();
-  const PINK = 0xc0366e, PINK2 = 0xa02c5c, PINK3 = 0xd94f86, PURPLE = 0x6b2f8f, PURPLE2 = 0x8a44b0;
-  const YELLOW = 0xf2c318, YELLOW2 = 0xcaa010, METAL = 0xe6e6ec, METAL2 = 0xa9a9b4, BLACK = 0x241020;
+  /* палитра как в спрайте: жёлтое кольцо, розовые/пурпурные пиксели, чёрный контур */
+  const OUT = 0x160a18, YEL = 0xf2c018, YEL2 = 0xcaa010,
+        PINK = 0xec93c4, PINK2 = 0xd44f8f, MAG = 0xa8306f,
+        PUR = 0x7b3fa0, PUR2 = 0x552a75;
+  const vox = (x, y, z, w, h, d, c, em) => {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d),
+      new THREE.MeshLambertMaterial({ color: c, emissive: em || 0x000000 }));
+    m.position.set(x, y, z); m.castShadow = true; g.add(m); return m;
+  };
 
-  /* ---- предплечье: многосегментная броня ---- */
-  const fore = new THREE.Mesh(new THREE.BoxGeometry(.17, .16, .5), new THREE.MeshLambertMaterial({ color: PINK }));
-  fore.position.set(0, 0, .04); g.add(fore);
-  /* сегментные полосы */
-  for (let i = 0; i < 4; i++) {
-    const band = new THREE.Mesh(new THREE.BoxGeometry(.185, .175, .03), new THREE.MeshLambertMaterial({ color: PINK2 }));
-    band.position.set(0, 0, -.14 + i * .12); g.add(band);
-  }
-  /* фиолетовая пластина сверху с жёлтым треугольником */
-  const plate = new THREE.Mesh(new THREE.BoxGeometry(.21, .045, .34), new THREE.MeshLambertMaterial({ color: PURPLE }));
-  plate.position.set(0, .095, .0); g.add(plate);
-  const tri = new THREE.Mesh(new THREE.ConeGeometry(.05, .06, 3), new THREE.MeshBasicMaterial({ color: YELLOW }));
-  tri.rotation.x = -Math.PI / 2; tri.position.set(0, .12, .02); g.add(tri);
-  /* боковые кабели */
-  [-1, 1].forEach(sx => {
-    const cab = new THREE.Mesh(new THREE.CylinderGeometry(.018, .018, .38, 6), new THREE.MeshLambertMaterial({ color: BLACK }));
-    cab.rotation.x = Math.PI / 2; cab.position.set(sx * .095, -.03, .02); g.add(cab);
-  });
+  /* ================= КОЛЬЦО-ДУЛО (пиксельный «пончик») ================= */
+  const Zf = -0.44;
+  const ringVox = (radius, size, zz, colFn) => {
+    const N = 16;
+    for (let i = 0; i < N; i++) {
+      const a = (i / N) * Math.PI * 2;
+      const x = Math.cos(a) * radius, y = Math.sin(a) * radius;
+      const c = colFn(i);
+      if (c !== null) vox(x, y, zz, size, size, .05, c, c === YEL ? 0x4a3606 : 0);
+    }
+  };
+  /* чёрная окантовка кольца */
+  ringVox(0.205, 0.118, Zf - .003, () => OUT);
+  /* внешнее жёлтое кольцо с розово-пурпурными пиксельными вставками */
+  ringVox(0.205, 0.088, Zf, (i) => (
+    (i === 8 || i === 9) ? PINK :
+    (i === 7 || i === 10) ? PUR :
+    (i === 0 || i === 15) ? PINK2 :
+    (i === 4 || i === 5) ? PUR2 : YEL
+  ));
+  /* внутреннее кольцо (розово-пурпурный узор) */
+  ringVox(0.125, 0.078, Zf + .012, (i) => (
+    (i >= 7 && i <= 10) ? PINK2 :
+    (i === 2 || i === 13) ? PUR :
+    (i === 0 || i === 1 || i === 14 || i === 15) ? PINK : MAG
+  ));
+  /* тёмное отверстие ствола (заполняет центр кольца) */
+  vox(0, 0, Zf + .004, .175, .175, .05, OUT);
+  vox(0, 0, Zf - .026, .150, .150, .02, 0x05020a);
 
-  /* ---- запястье / крепление дула ---- */
-  const wrist = new THREE.Mesh(new THREE.BoxGeometry(.2, .19, .14), new THREE.MeshLambertMaterial({ color: PINK2 }));
-  wrist.position.set(0, 0, -.24); g.add(wrist);
-  const cuff = new THREE.Mesh(new THREE.CylinderGeometry(.105, .115, .1, 14), new THREE.MeshLambertMaterial({ color: PURPLE2 }));
-  cuff.rotation.x = Math.PI / 2; cuff.position.set(0, 0, -.31); g.add(cuff);
+  /* ============ СТВОЛ-«БРУСОК»: розовый верх / малиновый низ ============ */
+  const BZ = -0.14, BL = 0.50;
+  const BW = .126, BH = .118;
+  vox(0, .034, BZ, BW, .054, BL, PINK);                  // верх розовый
+  vox(0, -.034, BZ, BW, .054, BL, MAG);                  // низ малиновый
+  vox(0, 0, BZ, BW + .002, .014, BL, PUR);               // срединная линия
+  vox(-.034, .034, BZ - .004, .022, .038, .14, 0xf6b6d8);// глянцевая полоса
+  /* чёрный контур по БОКАМ (ниже верха, чтобы сверху был цвет) */
+  vox(-BW / 2 - .007, 0, BZ, .015, BH, BL, OUT);
+  vox( BW / 2 + .007, 0, BZ, .015, BH, BL, OUT);
+  /* ТЫЛЬНАЯ грань — ЦВЕТНАЯ (её видит игрок); передняя (у кольца) — чёрный контур */
+  vox(0, 0, BZ + BL / 2 + .006, BW + .030, BH + .030, .016, PINK2);  // задняя цветная
+  vox(0, 0, BZ - BL / 2 - .006, BW + .030, BH + .030, .016, OUT);    // передний чёрный торец
 
-  /* ---- жёлтое дуло-лампа с ободком (как на арте) ---- */
-  const bulb = new THREE.Mesh(new THREE.SphereGeometry(.12, 16, 14), new THREE.MeshLambertMaterial({ color: YELLOW, emissive: 0x4a3a04 }));
-  bulb.scale.set(1, 1, 1.4); bulb.position.set(0, 0, -.42); g.add(bulb);
-  const rim = new THREE.Mesh(new THREE.TorusGeometry(.10, .022, 8, 18), new THREE.MeshLambertMaterial({ color: 0xdfa8c0 }));
-  rim.position.set(0, 0, -.50); g.add(rim);
-  const muzzle = new THREE.Mesh(new THREE.CylinderGeometry(.065, .08, .08, 16), new THREE.MeshLambertMaterial({ color: YELLOW2 }));
-  muzzle.rotation.x = Math.PI / 2; muzzle.position.set(0, 0, -.55); g.add(muzzle);
-  /* тёмное отверстие */
-  const bore = new THREE.Mesh(new THREE.CircleGeometry(.05, 14), new THREE.MeshBasicMaterial({ color: 0x120608 }));
-  bore.rotation.y = Math.PI; bore.position.set(0, 0, -.592); g.add(bore);
+  /* ============ КОЛЬЦО-МАНЖЕТА на стыке (жёлтая) ============ */
+  const cuff = new THREE.Mesh(new THREE.CylinderGeometry(.118, .118, .07, 12),
+    new THREE.MeshLambertMaterial({ color: YEL2, emissive: 0x2a1e02 }));
+  cuff.rotation.x = Math.PI / 2; cuff.position.set(0, 0, Zf + .11); g.add(cuff);
 
-  /* ---- белые «костяные» пальцы, обхватившие дуло ---- */
-  for (let i = 0; i < 3; i++) {
-    const knuckle = new THREE.Mesh(new THREE.SphereGeometry(.026, 8, 6), new THREE.MeshLambertMaterial({ color: METAL }));
-    knuckle.position.set(-.075 + i * .075, .10, -.30); g.add(knuckle);
-    const f = new THREE.Mesh(new THREE.BoxGeometry(.05, .055, .17), new THREE.MeshLambertMaterial({ color: METAL }));
-    f.position.set(-.075 + i * .075, .11, -.40); f.rotation.x = -.55; g.add(f);
-    const tip = new THREE.Mesh(new THREE.BoxGeometry(.045, .05, .06), new THREE.MeshLambertMaterial({ color: METAL2 }));
-    tip.position.set(-.075 + i * .075, .045, -.48); tip.rotation.x = -.9; g.add(tip);
-  }
+  /* ============ мелкие жёлтые «рекламные» пиксели ============ */
+  [-1, 1].forEach(sx => vox(sx * .155, .155, Zf + .17, .038, .038, .03, YEL, 0x4a3606));
 
-  /* ---- панель-ЭКРАН с рекламными точками (стиль Спамтона) ---- */
-  const screenMat = new THREE.MeshBasicMaterial({ color: 0x0a2a12 });
-  const screen = new THREE.Mesh(new THREE.BoxGeometry(.13, .05, .005), screenMat);
-  screen.position.set(0, .055, .22); g.add(screen);
-  const dots = [];
-  for (let i = 0; i < 6; i++) {
-    const d = new THREE.Mesh(new THREE.BoxGeometry(.016, .03, .006), new THREE.MeshBasicMaterial({ color: 0x66ff66 }));
-    d.position.set(-.05 + i * .02, .055, .223); d.userData.i = i; g.add(d); dots.push(d);
-  }
-  g.userData.adScreen = screen; g.userData.adDots = dots;
-
-  /* три жёлтых «глаза»-индикатора на дуле */
-  for (let i = 0; i < 3; i++) {
-    const e = new THREE.Mesh(new THREE.SphereGeometry(.021, 8, 6), new THREE.MeshBasicMaterial({ color: YELLOW }));
-    e.position.set((i - 1) * .065, .062, -.30); g.add(e);
-  }
-  /* мелкие болты/заклёпки */
-  for (let i = 0; i < 6; i++) {
-    const b = new THREE.Mesh(new THREE.CylinderGeometry(.008, .008, .006, 6), new THREE.MeshLambertMaterial({ color: METAL2 }));
-    b.rotation.x = Math.PI / 2; b.position.set((i % 3 - 1) * .075, -.055, -.08 + ((i / 3) | 0) * .16); g.add(b);
-  }
-
-  addGlowSphere(g, .20, YELLOW, .4, 0, 0, -.44);
-  g.userData.muzzleZ = -.62;
+  /* лёгкое свечение внутри кольца (не перекрывает форму) */
+  const halo = new THREE.Mesh(new THREE.SphereGeometry(.075, 10, 8),
+    new THREE.MeshBasicMaterial({ color: YEL, transparent: true, opacity: .25, blending: THREE.AdditiveBlending, depthWrite: false }));
+  halo.position.set(0, 0, Zf - .02); g.add(halo);
+  g.userData.muzzleZ = Zf - .07;
   g.userData.spamtonGun = true;
   g.scale.setScalar(.62);
   return g;
@@ -9280,7 +9274,7 @@ const MUZZLE_Z = {
   rocketgun: -0.94, shield: -0.30,
   banana: -0.92,
   lordOfFlowers: -0.96,
-  spamtonGun: -0.52,
+  spamtonGun: -0.51,
   acid: -0.76, hive: -0.26, disc: -0.32, freeze: -0.76, tesla: -0.72,
   portal: -0.48, blackhole: -0.54, turretDrone: -0.28, chrono: -0.48,
   tesla: -0.50,

@@ -6966,9 +6966,9 @@ function buildHyperPipis() {
 
 
 /* ---------- ЗВУК ЗАРЯДА [BIG SHOT] — ОРИГИНАЛЬНЫЙ ФАЙЛ (Deltarune charging) ----------
-   Пока держишь ПКМ, проигрывается встроенный звук зарядки (loop). С ростом заряда
-   он ускоряется и становится громче; на отпускании плавно затихает.
-   Ассет встроен как base64 в 05a-spamton-audio.js. */
+   Пока держишь ПКМ, проигрывается встроенный звук зарядки РОВНО как есть (loop),
+   без изменения скорости/тона. На отпускании плавно затихает.
+   Ассет встроен как base64 в 05z-spamton-audio.js. */
 Audio3D_SFX._loadSpamtonCharge = function () {
   if (this._chargeBuf || !this.ctx || typeof SPAMTON_CHARGE_MP3_B64 === 'undefined') return;
   try {
@@ -6996,11 +6996,10 @@ Audio3D_SFX.spamtonChargeStart = function () {
 };
 Audio3D_SFX.spamtonChargeUpdate = function (k) {
   if (!this.ctx || !this._charge) return;
-  k = U.clamp(k || 0, 0, 1);
+  /* Звук заряда играет РОВНО как в файле — без изменения скорости/тона и без
+     искажений. Громкость постоянная. */
   const c = this._charge, t = this.ctx.currentTime;
-  /* с зарядом звук чуть ускоряется и становится громче */
-  if (c.src) c.src.playbackRate.setTargetAtTime(1 + k * .18, t, .05);
-  c.out.gain.setTargetAtTime(.45 + k * .5, t, .05);
+  c.out.gain.setTargetAtTime(.7, t, .05);
 };
 Audio3D_SFX.spamtonChargeStop = function () {
   if (!this.ctx || !this._charge) return;

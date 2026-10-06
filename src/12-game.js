@@ -2327,7 +2327,11 @@ const Game = {
   },
 
   switchSlot(s) {
-    if (this.player.takeWeapon(s)) Audio3D_SFX.reloadStep(0);
+    if (this.player.takeWeapon(s)) {
+      Audio3D_SFX.reloadStep(0);
+      /* [BIG SHOT]: смена оружия переключает музыку (её тема / обычная) */
+      this.refreshMusic();
+    }
   },
 
   /* ============================================================
@@ -3782,7 +3786,16 @@ const Game = {
      alive, otherwise the battle track in a match, otherwise the menu theme. */
   refreshMusic() {
     if (typeof Audio3D_SFX === 'undefined') return;
-    if (Audio3D_SFX.musicOff) { Audio3D_SFX.musicStop(); return; }
+    if (Audio3D_SFX.musicOff) { Audio3D_SFX.musicStop(); if (Audio3D_SFX.spamtonMusicStop) Audio3D_SFX.spamtonMusicStop(); return; }
+    /* [BIG SHOT]: пока пушка Спамтона в руках — постоянно играет её тема */
+    const holdingSpamton = this.running && this.mode !== CS.MODE.MENU && this.player &&
+      this.player.def && this.player.def.spamtonCharge && this.player.alive;
+    if (holdingSpamton) {
+      Audio3D_SFX.musicStop();
+      if (Audio3D_SFX.spamtonMusicStart) Audio3D_SFX.spamtonMusicStart();
+      return;
+    }
+    if (Audio3D_SFX.spamtonMusicStop) Audio3D_SFX.spamtonMusicStop();
     let want = 'menu';
     if (this.running && this.mode !== CS.MODE.MENU) {
       want = 'game';
@@ -4139,6 +4152,7 @@ const Game = {
     this.player.buildViewModel();
     this.attachViewModel();
     Audio3D_SFX.buy();
+    this.refreshMusic();                    // [BIG SHOT]: включаем/выключаем её тему
     UI.toast('Куплено: ' + w.name, '#57d16a');
     UI.renderBuy(this.player, this.buyTimer);
     if (this.mode === CS.MODE.ONLINE) this.broadcastScore();

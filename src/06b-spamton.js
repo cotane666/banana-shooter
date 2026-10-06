@@ -214,6 +214,61 @@ Audio3D_SFX.spamtonChargeReady = function () {
   this.tone(1040, .12, 'square', .12, undefined, undefined, undefined, 1560);
   setTimeout(() => this.tone(1560, .16, 'square', .10), 90);
 };
+
+/* ---------- САУНДТРЕК [BIG SHOT] (Toby Fox — BIG SHOT) ----------
+   Играет ПОСТОЯННО, пока в руках пушка [BIG SHOT]. Запускается через
+   Game.refreshMusic() при смене оружия; глушится при уходе с пушки. */
+Audio3D_SFX._loadSpamtonMusic = function () {
+  if (this._bigshotMusicBuf || !this.ctx || typeof SPAMTON_MUSIC_MP3_B64 === 'undefined') return;
+  try {
+    const bin = atob(SPAMTON_MUSIC_MP3_B64);
+    const len = bin.length;
+    const u8 = new Uint8Array(len);
+    for (let i = 0; i < len; i++) u8[i] = bin.charCodeAt(i);
+    const self = this;
+    this.ctx.decodeAudioData(u8.buffer,
+      (decoded) => { self._bigshotMusicBuf = decoded; },
+      () => {});
+  } catch (e) {}
+};
+Audio3D_SFX.spamtonMusicStart = function () {
+  if (!this.ctx || this.muted || this.musicOff) return;
+  if (this._bigshotMusic) return;                 // уже играет
+  this._loadSpamtonMusic();
+  if (!this._bigshotMusicBuf) {
+    /* трек ещё декодируется — ждём и пробуем снова, пока пушка в руках */
+    if (!this._bigshotTimer) {
+      const self = this;
+      this._bigshotTimer = setInterval(() => {
+        const holding = (typeof Game !== 'undefined' && Game.player && Game.player.def && Game.player.def.spamtonCharge && Game.running && Game.mode !== CS.MODE.MENU);
+        if (!holding || self.musicOff) { clearInterval(self._bigshotTimer); self._bigshotTimer = null; return; }
+        if (self._bigshotMusicBuf) { clearInterval(self._bigshotTimer); self._bigshotTimer = null; self.spamtonMusicStart(); }
+      }, 400);
+    }
+    return;
+  }
+  this.musicStop();                               // глушим процедурную тему
+  const out = this.ctx.createGain(); out.gain.value = .0001;
+  out.connect(this.musicBus);
+  const src = this.ctx.createBufferSource();
+  src.buffer = this._bigshotMusicBuf; src.loop = true;
+  src.connect(out); src.start();
+  const t0 = this.ctx.currentTime;
+  out.gain.linearRampToValueAtTime(.55, t0 + 1.0);
+  this._bigshotMusic = { out, src };
+};
+Audio3D_SFX.spamtonMusicStop = function () {
+  if (this._bigshotTimer) { clearInterval(this._bigshotTimer); this._bigshotTimer = null; }
+  if (!this._bigshotMusic) return;
+  const m = this._bigshotMusic; this._bigshotMusic = null;
+  try {
+    const t = this.ctx.currentTime;
+    m.out.gain.cancelScheduledValues(t);
+    m.out.gain.setValueAtTime(m.out.gain.value, t);
+    m.out.gain.linearRampToValueAtTime(.0001, t + .5);
+    setTimeout(() => { try { m.src.stop(); m.out.disconnect(); } catch (e) {} }, 600);
+  } catch (e) {}
+};
 /* выстрел ГИПЕР-ПИПИСА — оригинальный «BIG SHOT» файл */
 Audio3D_SFX.spamtonHyperShot = function (x, y, z) {
   this._playSpamton('bigshot', x, y, z, 4, 220, 1);

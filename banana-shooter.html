@@ -26669,7 +26669,7 @@ const Game = {
     const def = p.def;
     /* перезарядка ГИПЕР-ПИПИСА: раз в `hyperCooldown` секунд */
     p._spamtonCd = def.hyperCooldown || 30;
-    p._spamtonCdNotified = 0;
+    p._spamtonCdNotifyT = 0;
     const origin = this.eyePos();
     const dir = this.cameraDir();
     const flat = Math.hypot(dir.x, dir.z) || 1;
@@ -28470,8 +28470,10 @@ const Game = {
            ГИПЕР-ПИПИС. Пока заряжаем, обычная стрельба ЛКМ тоже блокируется.
            ГИПЕР-ПИПИС доступен раз в `hyperCooldown` секунд (30 с). */
         if ((p._spamtonCd || 0) > 0) {
-          if (!p._spamtonCdNotified || this._t - p._spamtonCdNotified > 1) {
-            p._spamtonCdNotified = this._t;
+          /* троттлинг: показываем отсчёт не чаще раза в секунду */
+          p._spamtonCdNotifyT = (p._spamtonCdNotifyT || 0) - dt;
+          if (p._spamtonCdNotifyT <= 0) {
+            p._spamtonCdNotifyT = 1;
             UI.toast('Заряд BIG SHOT через ' + Math.ceil(p._spamtonCd) + 'с', '#ffd21e');
           }
           if (Audio3D_SFX.spamtonChargeStop) Audio3D_SFX.spamtonChargeStop();

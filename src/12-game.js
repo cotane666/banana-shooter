@@ -4761,7 +4761,9 @@ const Game = {
         const txt = won ? 'РАУНД ВЫИГРАН' : winnerIsMe === false ? 'РАУНД ПРОИГРАН' : 'НИЧЬЯ';
         UI.center(txt, this.online.scoreMe + ' : ' + this.online.scoreThem + (reason ? ' · ' + reason : ''), 2.6);
         Audio3D_SFX.roundEnd(won);
-        const finished = this.online.played >= this.online.rounds;
+        /* МАТЧ ДО N ПОБЕД: завершаем, как только кто-то набрал нужное число побед */
+        const target = this.online.rounds;
+        const finished = this.online.roundWins.me >= target || this.online.roundWins.them >= target;
         // on the final round, tell the room who actually won the match
         let winnerName;
         if (finished) {
@@ -5669,6 +5671,11 @@ const Game = {
   /* Player eye position in world space (the camera's actual origin). */
   eyePos() {
     const p = this.player;
+    /* РЕДАКТОР КАРТ в свободной камере: «глаз» — это позиция камеры,
+       чтобы прицел-курсор совпадал с тем, что видит игрок */
+    if (this.mode === CS.MODE.EDITOR && typeof MapEditor !== 'undefined' && MapEditor.freeCam) {
+      return { x: MapEditor.camPos.x, y: MapEditor.camPos.y, z: MapEditor.camPos.z };
+    }
     const mech = this.isMechActive();
     const eye = mech ? CFG.mechEyeHeight : (p.crouching ? CFG.eyeHeightCrouch : CFG.eyeHeight);
     return {
@@ -5743,6 +5750,12 @@ const Game = {
 
   cameraDir() {
     const p = this.player;
+    /* РЕДАКТОР: направление свободной камеры */
+    if (this.mode === CS.MODE.EDITOR && typeof MapEditor !== 'undefined' && MapEditor.freeCam) {
+      const e = new THREE.Euler(MapEditor.camPitch, MapEditor.camYaw, 0, 'YXZ');
+      const d = _v3.set(0, 0, -1).applyEuler(e);
+      return { x: d.x, y: d.y, z: d.z };
+    }
     const e = new THREE.Euler(
       p.pitch + p.recoil + p.viewPunchP,
       p.yaw + p.recoilYaw + p.viewPunchY,
@@ -10142,8 +10155,11 @@ const Game = {
         this.doNewRoundClient(r.hp);
         break;
       case 'rounds':
-        // the host changed the number of rounds between rounds
-        if (r.rounds) { this.online.rounds = MATCH.clampRounds(r.rounds); if (this.online.played >= this.online.rounds) this.endMatch(); }
+        // the host changed the number of wins needed between rounds
+        if (r.rounds) {
+          this.online.rounds = MATCH.clampRounds(r.rounds);
+          if (this.online.roundWins.me >= this.online.rounds || this.online.roundWins.them >= this.online.rounds) this.endMatch();
+        }
         break;
       case 'rematch':
         // the host restarted the match: reset the score and start round 1
@@ -10260,6 +10276,27 @@ const Game = {
     const p = this.player;
     if (!p) return;
 
+    /* ---- РЕДАКТОР КАРТ (свободная камера): мышь вращает камеру, движение —
+       полёт; физика игрока и стрельба отключены ---- */
+    if (this.mode === CS.MODE.EDITOR && typeof MapEditor !== 'undefined' && MapEditor.freeCam) {
+      const mm = Input.lookDelta();
+      const blocked = UI.overlayOpen();
+      if (!blocked) {
+        MapEditor.camYaw -= mm.dx;
+        MapEditor.camPitch -= mm.dy;
+        MapEditor.camPitch = U.clamp(MapEditor.camPitch, -1.4, 1.4);
+        MapEditor.camYaw = ((MapEditor.camYaw + Math.PI) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2) - Math.PI;
+      }
+      this._frameLook = { dx: mm.dx, dy: mm.dy };
+      MapEditor.update(dt);
+      if (this.effects) this.effects.update(dt);
+      if (typeof MapElements !== 'undefined' && MapElements.list.length) MapElements.update(dt, this);
+      this.cameraUpdate(dt);
+      this.renderFrame(dt);
+      this.updateHUD(dt);
+      if (IS_TOUCH) TouchUI.update();
+      return;
+    }
     /* ---- guided drone: while it flies, the player steers it and the normal
        movement/physics loop is suspended for the body ---- */
     if (this.drone) {
@@ -10483,6 +10520,8 @@ const Game = {
     if (this.effects) this.effects.update(dt);
     /* РЕДАКТОР КАРТ: обновляем курсор и подсветку */
     if (this.mode === CS.MODE.EDITOR && typeof MapEditor !== 'undefined') MapEditor.update(dt);
+    /* ИГРОВЫЕ ЭЛЕМЕНТЫ КАРТ: движущиеся платформы/шипы/телепорты */
+    if (typeof MapElements !== 'undefined' && MapElements.list.length) MapElements.update(dt, this);
     /* экранный эффект ульты рыцаря (чёрный экран + белый слеш) */
     if (typeof UI !== 'undefined' && UI.knightUltTick) UI.knightUltTick(dt);
     if (this.mode === CS.MODE.OFFLINE || this.mode === CS.MODE.RANGE) {
@@ -10746,6 +10785,23 @@ const Game = {
     }
     UI.el.missileHud && UI.el.missileHud.classList.add('hidden');
 
+    /* РЕДАКТОР КАРТ в свободной камере: камера летит по арене (Stage Builder).
+       Оружие в руках скрываем, прицел оставляем как «кисть». */
+    if (this.mode === CS.MODE.EDITOR && typeof MapEditor !== 'undefined' && MapEditor.freeCam) {
+      const cp = MapEditor.camPos;
+      this.camera.position.set(cp.x, cp.y, cp.z);
+      this.camera.rotation.order = 'YXZ';
+      this.camera.rotation.y = MapEditor.camYaw;
+      this.camera.rotation.x = MapEditor.camPitch;
+      this.camera.rotation.z = 0;
+      if (Math.abs(this.camera.fov - this.baseFov) > .01) { this.camera.fov = this.baseFov; this.camera.updateProjectionMatrix(); }
+      UI.crosshairState(true, false);
+      UI.scope(false);
+      const fx = -Math.sin(MapEditor.camYaw), fz = -Math.cos(MapEditor.camYaw);
+      Audio3D_SFX.setListener(cp.x, cp.y, cp.z, fx, fz);
+      return;
+    }
+
     /* While the drone is airborne the camera follows it from behind, so the
        player sees where they are flying. */
     if (this.drone) {
@@ -11004,8 +11060,9 @@ const Game = {
       else objective = 'ЗАКУПКА · волна ' + (o.wave + 1);
     } else if (this.mode === CS.MODE.ONLINE) {
       const alive = (p.alive ? 1 : 0) + this.remotePlayers.filter(r => r.alive).length;
-      const total = this.online ? this.online.rounds : 1;
-      const label = 'РАУНД ' + Math.min(this.roundNo, total) + '/' + total;
+      const target = this.online ? this.online.rounds : 1;
+      const me = this.online ? this.online.roundWins.me : 0, them = this.online ? this.online.roundWins.them : 0;
+      const label = 'ДО ' + target + ' ПОБЕД · ' + me + ':' + them;
       if (this.online && this.online.matchOver) {
         objective = 'МАТЧ ОКОНЧЕН · СЧЁТ ' + this.online.roundWins.me + ':' + this.online.roundWins.them + ' · Enter — в меню';
         timer = 0;

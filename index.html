@@ -1173,7 +1173,7 @@ html.touch .fld input{padding:10px;font-size:15px}
       <div class="fld">Здоровье игрока
         <div class="chips" id="lobbyHp"></div>
       </div>
-      <div class="fld">Боёв (раундов)
+      <div class="fld">Матч до N побед
         <div class="chips" id="lobbyRounds"></div>
       </div>
       <div class="fld">Режим (для обоих)
@@ -1352,13 +1352,14 @@ html.touch .fld input{padding:10px;font-size:15px}
     <div class="ed-row"><span>Материал</span><b id="edMat">КИРПИЧ</b></div>
     <div class="ed-row"><span>Размер</span><b id="edSize">4 м</b></div>
     <div class="ed-row"><span>Режим</span><b id="edMode">ПОСТАВИТЬ</b></div>
+    <div class="ed-row"><span>Элемент</span><b id="edElem">НЕТ</b></div>
     <div class="ed-row"><span>Блоков</span><b id="edCount">0</b></div>
     <div class="ed-row"><span>Спавн</span><b id="edSpawn">(0, 40)</b></div>
     <div class="ed-hint">
-      ЛКМ — поставить · ПКМ — убрать<br>
-      [ ] / R — размер · G — материал<br>
-      E — точка спавна · C — режим · Z — отмена<br>
-      F — сохранить · Esc — выйти
+      ЛКМ — поставить/выбрать · ПКМ — убрать<br>
+      [ ]/R — размер · G — материал · T — элемент<br>
+      E — спавн · C — режим · Z — отмена<br>
+      F — сохранить · Esc — выйти · V — свободная камера
     </div>
     <input id="edName" class="ed-name" maxlength="24" placeholder="Название карты" autocomplete="off">
     <button class="mbtn tiny" id="edSaveBtn">СОХРАНИТЬ (F)</button>
@@ -1827,7 +1828,7 @@ const MATCH = window.MATCH = {
   maps: [],                 // filled from MAPS once 04-map.js has loaded
   playerCounts: [1, 2, 3, 4],
   hpOptions: [50, 75, 100, 125, 150, 200],
-  roundOptions: [1, 3, 5, 7],
+  roundOptions: [1, 3, 5, 7, 10],
   maxPlayers: 4,
   minPlayers: 2,
 
@@ -1840,10 +1841,10 @@ const MATCH = window.MATCH = {
     const lo = online ? 2 : 1;
     return U.clamp(n, lo, MATCH.maxPlayers);
   },
+  /* онлайн: матч идёт ДО N ПОБЕД (а не до N сыгранных раундов). Любое число. */
   clampRounds(n) {
     n = Math.round(n || 1);
-    if (MATCH.roundOptions.indexOf(n) < 0) n = 3;
-    return n;
+    return U.clamp(n, 1, 99);
   },
   /* custom offline mode: how many zombies and how tough they are */
   countOptions: [1, 2, 5, 10, 20],
@@ -2959,6 +2960,30 @@ class CollisionWorld {
     return aabb;
   }
 
+  /* Динамическая платформа: как addBox, но запоминает ячейки сетки, чтобы
+     потом её можно было переиндексировать при движении. */
+  addDynamicBox(aabb) {
+    const id = this.boxes.length;
+    aabb._wid = id;
+    aabb._dynamic = true;
+    this.boxes.push(aabb);
+    const cells = [];
+    const c = this.cell;
+    const x0 = Math.floor(aabb.minX / c), x1 = Math.floor(aabb.maxX / c);
+    const z0 = Math.floor(aabb.minZ / c), z1 = Math.floor(aabb.maxZ / c);
+    for (let ix = x0; ix <= x1; ix++) {
+      for (let iz = z0; iz <= z1; iz++) {
+        const k = this._key(ix, iz);
+        let arr = this.grid.get(k);
+        if (!arr) { arr = []; this.grid.set(k, arr); }
+        arr.push(id);
+        cells.push(k);
+      }
+    }
+    aabb._cells = cells;
+    return aabb;
+  }
+
   /* ---- РАЗРУШАЕМОСТЬ: мягко «убрать» бокс (removed) и вернуть его.
      O(1) через сохранённый id — раньше indexOf по тысячам боксов тормозил. ---- */
   removeBox(aabb) {
@@ -2970,6 +2995,34 @@ class CollisionWorld {
     if (!aabb || aabb._wid === undefined) return false;
     aabb.removed = false;
     return true;
+  }
+
+  /* ПЕРЕИНДЕКСАЦИЯ бокса после смены координат (движущиеся/падающие платформы).
+     Старые ячейки сетки очищаем, затем вставляем по новым границам. */
+  reindexBox(aabb) {
+    if (!aabb || aabb._wid === undefined) return;
+    const c = this.cell;
+    if (aabb._cells) {
+      for (let k = 0; k < aabb._cells.length; k++) {
+        const arr = this.grid.get(aabb._cells[k]);
+        if (!arr) continue;
+        const i = arr.indexOf(aabb._wid);
+        if (i >= 0) arr.splice(i, 1);
+      }
+    }
+    const cells = [];
+    const x0 = Math.floor(aabb.minX / c), x1 = Math.floor(aabb.maxX / c);
+    const z0 = Math.floor(aabb.minZ / c), z1 = Math.floor(aabb.maxZ / c);
+    for (let ix = x0; ix <= x1; ix++) {
+      for (let iz = z0; iz <= z1; iz++) {
+        const k = this._key(ix, iz);
+        let arr = this.grid.get(k);
+        if (!arr) { arr = []; this.grid.set(k, arr); }
+        arr.push(aabb._wid);
+        cells.push(k);
+      }
+    }
+    aabb._cells = cells;
   }
 
   _key(ix, iz) { return ix + ',' + iz; }
@@ -3569,7 +3622,24 @@ const MapEditor = {
   _cursorMesh: null,     // подсветка курсора
   _spawnMesh: null,      // маркер спавна
   _undo: [],
+  /* СВОБОДНАЯ КАМЕРА РЕДАКТОРА (в духе Stage Builder): полёт по арене,
+     мышь — обзор, WASD — движение, Space/Ctrl — вверх/вниз, колесо — скорость. */
+  freeCam: true,
+  camPos: { x: 0, y: 12, z: 40 },
+  camYaw: 0,
+  camPitch: -0.15,
+  camSpeed: 24,
   SIZES: [1, 2, 3, 4, 6, 8, 12],
+  /* ИГРОВЫЕ ЭЛЕМЕНТЫ (Stage Builder): тип для размещения */
+  elems: [],          // размещённые элементы (сериализуются)
+  elemKind: null,     // текущий выбранный тип (null = режим блоков)
+  ELEM_KINDS: [
+    { k: 'mover',    name: 'ДВИЖ. ПЛАТФОРМА' },
+    { k: 'faller',   name: 'ПАДАЮЩАЯ' },
+    { k: 'vanish',   name: 'ИСЧЕЗАЮЩАЯ' },
+    { k: 'spikes',   name: 'ШИПЫ' },
+    { k: 'teleport', name: 'ТЕЛЕПОРТ' }
+  ],
   MATS: [
     { id: 'brick',    name: 'КИРПИЧ' },
     { id: 'concrete', name: 'БЕТОН' },
@@ -3595,6 +3665,8 @@ const MapEditor = {
     const blocks = (data && data.blocks) || [];
     for (const b of blocks) this.placeBlock(parent, world, b);
     if (data && data.spawn) MAP.customSpawn = { x: data.spawn.x, z: data.spawn.z, yaw: data.spawn.yaw || 0 };
+    /* игровые элементы карты (движущиеся платформы, шипы, телепорты) */
+    if (typeof MapElements !== 'undefined' && data && data.elements) MapElements.build(data.elements, parent, world);
   },
 
   /* Один блок: коллайдер + обычный меш (разрушаемый, как геометрия карты).
@@ -3628,6 +3700,8 @@ const MapEditor = {
     this.mapId = mapId;
     this.mapName = existing ? existing.name : 'МОЯ КАРТА';
     this.blocks = existing ? JSON.parse(JSON.stringify(existing.blocks)) : [];
+    this.elems = existing && existing.elements ? JSON.parse(JSON.stringify(existing.elements)) : [];
+    this.elemKind = null;
     this.spawn = existing && existing.spawn ? Object.assign({ x: 0, z: 40, yaw: 0 }, existing.spawn)
                                            : { x: 0, z: 40, yaw: 0 };
     this.erase = false; this._undo = [];
@@ -3642,6 +3716,7 @@ const MapEditor = {
     }
     this.ensureVisuals();
     if (this.blocks.length) this.rebuildGeometry();
+    if (typeof MapElements !== 'undefined' && this.elems.length) MapElements.build(this.elems, MAP.group, MAP.world);
     UI.show('hud');
     this.updatePanel();
     UI.toast('РЕДАКТОР: ЛКМ — поставить · ПКМ — убрать · [ ] — размер · G — материал · E — спавн · F — сохранить', '#9be564');
@@ -3711,6 +3786,24 @@ const MapEditor = {
   /* ---------- управление в кадре ---------- */
   update(dt) {
     if (!this.active) return;
+    /* СВОБОДНАЯ КАМЕРА: WASD — полёт, мышь — обзор (см. cameraUpdate) */
+    if (this.freeCam) {
+      const mv = Input.moveVector();
+      const sp = this.camSpeed * (Input.keys && Input.keys.ShiftLeft ? 3 : 1) * dt;
+      const yaw = this.camYaw;
+      const fx = -Math.sin(yaw), fz = -Math.cos(yaw);
+      const rx = Math.cos(yaw), rz = -Math.sin(yaw);
+      /* подъём/спуск: ПК — Space/Ctrl; телефон — кнопки ВЫШЕ/НИЖЕ */
+      const climb = (IS_TOUCH ? ((this._touchUp ? 1 : 0) - (this._touchDown ? 1 : 0))
+        : ((Input.keys && Input.keys.Space ? 1 : 0) - (Input.keys && Input.keys.ControlLeft ? 1 : 0)));
+      this.camPos.x += (fx * mv.f + rx * mv.r) * sp;
+      this.camPos.z += (fz * mv.f + rz * mv.r) * sp;
+      this.camPos.y += climb * sp;
+      const half = MAP.size / 2 + 30;
+      this.camPos.x = U.clamp(this.camPos.x, -half, half);
+      this.camPos.z = U.clamp(this.camPos.z, -half, half);
+      this.camPos.y = U.clamp(this.camPos.y, 1, 90);
+    }
     const p = Game.player;
     if (!p) return;
     /* луч от прицела до пола/стены — куда ставить */
@@ -3748,11 +3841,26 @@ const MapEditor = {
       case 'BracketRight': case 'KeyR': this.cycleSize(1); return true;
       case 'BracketLeft': this.cycleSize(-1); return true;
       case 'KeyG': this.cycleMat(1); return true;
+      case 'KeyT': this.cycleElem(1); return true;
       case 'KeyE': this.setSpawnHere(); return true;
+      case 'KeyV': this.freeCam = !this.freeCam; UI.toast(this.freeCam ? 'Свободная камера' : 'Камера от игрока'); return true;
       case 'KeyZ': this.undo(); return true;
       case 'KeyC': this.erase = !this.erase; this.updatePanel(); UI.toast(this.erase ? 'РЕЖИМ: УБРАТЬ' : 'РЕЖИМ: ПОСТАВИТЬ', this.erase ? '#ff6a5a' : '#9be564'); return true;
     }
     return false;
+  },
+
+  cycleElem(d) {
+    /* порядок: (нет) → mover → faller → vanish → spikes → teleport → (нет) */
+    const kinds = this.ELEM_KINDS;
+    const order = [null].concat(kinds.map(x => x.k));
+    let i = order.indexOf(this.elemKind);
+    if (i < 0) i = 0;
+    i = (i + d + order.length) % order.length;
+    this.elemKind = order[i];
+    this.updatePanel();
+    const nm = this.elemKind ? (kinds.find(x => x.k === this.elemKind) || {}).name : 'НЕТ (БЛОКИ)';
+    UI.toast('Элемент: ' + nm, '#8a5cff');
   },
 
   cycleSize(d) {
@@ -3774,9 +3882,10 @@ const MapEditor = {
     UI.toast('Точка спавна установлена');
   },
 
-  /* ЛКМ — поставить блок; ПКМ — убрать */
+  /* ЛКМ — поставить блок ИЛИ игровой элемент (в зависимости от режима) */
   place() {
     if (!this.cursor.valid) { Audio3D_SFX.deny && Audio3D_SFX.deny(); return; }
+    if (this.elemKind) { this.placeElement(); return; }
     this.pushUndo();
     const b = { x: this.cursor.x, y: this.cursor.y, z: this.cursor.z, w: this.size, h: this.size, d: this.size, m: this.mat };
     this.blocks.push(b);
@@ -3785,8 +3894,40 @@ const MapEditor = {
     Audio3D_SFX.uiClick && Audio3D_SFX.uiClick();
   },
 
+  /* разместить игровой элемент в точке курсора */
+  placeElement() {
+    const c = this.cursor, k = this.elemKind;
+    const e = { k: k, x: c.x, y: c.y, z: c.z, w: this.size, h: Math.max(1, this.size / 3), d: this.size };
+    if (k === 'mover') { e.ax = 1; e.ay = 0; e.az = 0; e.amp = Math.max(4, this.size * 2); e.speed = 1; }
+    if (k === 'spikes') { e.d = this.size; }
+    if (k === 'teleport') {
+      /* связываем телепорты попарно: каждые два — один link */
+      const count = this.elems.filter(x => x.k === 'teleport').length;
+      e.link = Math.floor(count / 2);
+    }
+    this.pushUndo();
+    this.elems.push(e);
+    if (typeof MapElements !== 'undefined') MapElements.build(this.elems, MAP.group, MAP.world);
+    Audio3D_SFX.uiClick && Audio3D_SFX.uiClick();
+    UI.toast('Элемент: ' + (this.ELEM_KINDS.find(x => x.k === k) || {}).name, '#8a5cff');
+  },
+
   removeAt() {
-    /* убираем ближайший блок к точке курсора (в пределах 1.5 м) */
+    /* сначала пытаемся убрать игровой элемент рядом с курсором */
+    if (typeof MapElements !== 'undefined' && MapElements.list.length) {
+      const ne = MapElements.nearest(this.cursor.x, this.cursor.y, this.cursor.z);
+      if (ne) {
+        const i = this.elems.indexOf(ne.def);
+        if (i >= 0) {
+          this.pushUndo();
+          this.elems.splice(i, 1);
+          MapElements.build(this.elems, MAP.group, MAP.world);
+          Audio3D_SFX.uiClick && Audio3D_SFX.uiClick();
+          return;
+        }
+      }
+    }
+    /* иначе — блок */
     const c = this.cursor;
     let best = -1, bestD = 2.2 * 2.2;
     for (let i = 0; i < this.blocks.length; i++) {
@@ -3832,6 +3973,8 @@ const MapEditor = {
       x: +b.x.toFixed(2), y: +b.y.toFixed(2), z: +b.z.toFixed(2),
       w: +b.w.toFixed(2), h: +b.h.toFixed(2), d: +b.d.toFixed(2), m: b.m
     }));
+    /* игровые элементы (движущиеся платформы/шипы/телепорты) */
+    entry.elements = (this.elems || []).map(e => JSON.parse(JSON.stringify(e)));
     Store.save();
     if (typeof uiRefreshCustomMaps === 'function') uiRefreshCustomMaps();
     UI.toast('Карта сохранена: «' + name + '» · блоков ' + entry.blocks.length, '#9be564');
@@ -3845,6 +3988,7 @@ const MapEditor = {
     if (el.edMat) el.edMat.textContent = (this.MATS.find(m => m.id === this.mat) || {}).name || this.mat;
     if (el.edSize) el.edSize.textContent = this.size + ' м';
     if (el.edMode) el.edMode.textContent = this.erase ? 'УБРАТЬ' : 'ПОСТАВИТЬ';
+    if (el.edElem) el.edElem.textContent = this.elemKind ? ((this.ELEM_KINDS.find(x => x.k === this.elemKind) || {}).name || this.elemKind) : 'НЕТ';
     if (el.edCount) el.edCount.textContent = String(this.blocks.length);
     if (el.edSpawn) el.edSpawn.textContent = '(' + Math.round(this.spawn.x) + ', ' + Math.round(this.spawn.z) + ')';
   }
@@ -3894,6 +4038,209 @@ function customMapById(id) {
   const list = (Store.data.customMaps && Array.isArray(Store.data.customMaps)) ? Store.data.customMaps : [];
   return list.find(m => m.id === id) || null;
 }
+
+
+/* ===== 04c-map-elements.js ===== */
+/* ============================================================
+   04c — ИГРОВЫЕ ЭЛЕМЕНТЫ КАРТ (в духе Stage Builder из Smash)
+   Движущиеся / падающие / исчезающие платформы, шипы и телепорты.
+   Строятся из определения карты и тикаются в игровом цикле.
+
+   Формат элемента в данных карты:
+     { k:'mover'|'faller'|'vanish'|'spikes'|'teleport',
+       x,y,z, w,h,d,          // размеры платформы (кроме spikes/телепорта)
+       ax,ay,az, amp, speed,  // mover: ось движения, амплитуда, скорость
+       phase, link }          // телепорты связываются по link (пара)
+   ============================================================ */
+const MapElements = {
+  list: [],          // активные элементы (mesh + aabb + параметры)
+
+  clear() {
+    for (const e of this.list) {
+      if (e.mesh && e.mesh.parent) e.mesh.parent.remove(e.mesh);
+      if (e.aabb) e.aabb.removed = true;
+    }
+    this.list.length = 0;
+  },
+
+  /* собрать все элементы карты. Вызывается из MapEditor.buildFromDef и при
+     старте игры с кастомной картой. */
+  build(elements, parent, world) {
+    this.clear();
+    if (!elements || !elements.length) return;
+    const mkPlat = (e, color) => {
+      const mesh = new THREE.Mesh(
+        new THREE.BoxGeometry(e.w || 3, e.h || .6, e.d || 3),
+        new THREE.MeshLambertMaterial({ color: color, emissive: 0x101010 }));
+      mesh.castShadow = true; mesh.receiveShadow = true;
+      mesh.position.set(e.x, (e.y || 0) + (e.h || .6) / 2, e.z);
+      parent.add(mesh);
+      const aabb = aabbFromBase(e.x, e.y || 0, e.z, e.w || 3, e.h || .6, e.d || 3, 'platform');
+      world.addDynamicBox(aabb);
+      aabb._mat = MAT.metal;
+      return { mesh, aabb };
+    };
+
+    for (const e of elements) {
+      if (e.k === 'spikes') {
+        /* шипы: статичная зона урона */
+        const g = new THREE.Group();
+        const base = new THREE.Mesh(new THREE.BoxGeometry(e.w || 3, .15, e.d || 3),
+          new THREE.MeshLambertMaterial({ color: 0x2a2e33 }));
+        base.position.y = .07; g.add(base);
+        const n = Math.max(3, Math.round((e.w || 3) / .5));
+        for (let i = 0; i < n; i++) {
+          const sp = new THREE.Mesh(new THREE.ConeGeometry(.11, .5, 6),
+            new THREE.MeshLambertMaterial({ color: 0xb9c2cc }));
+          sp.position.set((i - (n - 1) / 2) * .5, .32, 0); g.add(sp);
+        }
+        g.position.set(e.x, e.y || 0, e.z);
+        parent.add(g);
+        this.list.push({ kind: 'spikes', def: e, mesh: g, x: e.x, z: e.z, r: Math.max(e.w || 3, e.d || 3) * .5, dps: 32, phase: 0 });
+      } else if (e.k === 'teleport') {
+        const g = new THREE.Group();
+        const ring = new THREE.Mesh(new THREE.TorusGeometry(1.1, .14, 10, 24),
+          new THREE.MeshBasicMaterial({ color: 0x7d3fff }));
+        ring.rotation.x = -Math.PI / 2; ring.position.y = .05; g.add(ring);
+        const core = new THREE.Mesh(new THREE.CylinderGeometry(1.0, 1.0, .06, 20),
+          new THREE.MeshBasicMaterial({ color: 0xb98cff, transparent: true, opacity: .55 }));
+        core.position.y = .03; g.add(core);
+        const beam = new THREE.Mesh(new THREE.CylinderGeometry(.35, .35, 3, 12, 1, true),
+          new THREE.MeshBasicMaterial({ color: 0x7d3fff, transparent: true, opacity: .3, side: THREE.DoubleSide, depthWrite: false }));
+        beam.position.y = 1.5; g.add(beam);
+        const light = new THREE.PointLight(0x9a5bff, 8, 8, 2); light.position.y = 1; g.add(light);
+        g.position.set(e.x, e.y || 0, e.z);
+        parent.add(g);
+        this.list.push({ kind: 'teleport', def: e, mesh: g, x: e.x, y: e.y || 0, z: e.z, link: e.link || 0, cd: 0 });
+      } else {
+        /* платформы: mover / faller / vanish */
+        const color = e.k === 'mover' ? 0x8a5cff : e.k === 'faller' ? 0xd07a2a : 0x2fa0c0;
+        const { mesh, aabb } = mkPlat(e, color);
+        const el = {
+          kind: e.k, def: e, mesh: mesh, aabb: aabb,
+          base: { x: e.x, y: e.y || 0, z: e.z },
+          ax: e.ax || 0, ay: e.ay || 0, az: e.az || 0,
+          amp: e.amp === undefined ? 6 : e.amp,
+          speed: e.speed || 1, phase: e.phase || 0
+        };
+        if (e.k === 'faller') { el.armed = false; el.fallT = 0; el.dropY = 0; el.cd = 0; }
+        if (e.k === 'vanish') { el.cycle = e.cycle || 3; el.onT = Math.max(1, e.onT || 2); }
+        this.list.push(el);
+      }
+    }
+  },
+
+  /* сдвинуть AABB платформы в новое положение и переиндексировать сетку */
+  _moveAabb(aabb, x, y, z, w, h, d) {
+    aabb.minX = x - w / 2; aabb.maxX = x + w / 2;
+    aabb.minY = y; aabb.maxY = y + h;
+    aabb.minZ = z - d / 2; aabb.maxZ = z + d / 2;
+    if (Game.world && Game.world.reindexBox) Game.world.reindexBox(aabb);
+  },
+
+  update(dt, game) {
+    if (!this.list.length) return;
+    const p = game.player;
+    for (const e of this.list) {
+      if (e.kind === 'spikes') {
+        e.phase += dt;
+        if (p && p.alive) {
+          const d = Math.hypot(p.pos.x - e.x, p.pos.z - e.z);
+          if (d < e.r && Math.abs(p.pos.y - (e.def.y || 0)) < 2.2) game.applyDamageToSelf(e.dps * dt, { x: e.x, y: 0, z: e.z });
+        }
+        if (game.horde) for (const z of game.horde.list) {
+          if (!z.alive || z.dying || z.isBoss) continue;
+          if (Math.hypot(z.pos.x - e.x, z.pos.z - e.z) < e.r) z.takeDamage(e.dps * dt * 2, 'body', { x: 0, y: 0, z: 0 });
+        }
+        continue;
+      }
+      if (e.kind === 'teleport') {
+        e.cd = Math.max(0, (e.cd || 0) - dt);
+        if (p && p.alive && e.cd <= 0) {
+          const d = Math.hypot(p.pos.x - e.x, p.pos.z - e.z);
+          if (d < 1.2 && Math.abs(p.pos.y - e.y) < 2.4) {
+            /* найти парный телепорт (тот же link) */
+            const dest = this.list.find(o => o.kind === 'teleport' && o !== e && o.link === e.link) || null;
+            if (dest) {
+              p.pos.x = dest.x; p.pos.z = dest.z;
+              p.pos.y = (game.world.groundAt(dest.x, dest.z, dest.y + 4) || dest.y) + .05;
+              e.cd = 1.2; dest.cd = 1.2;
+              if (game.effects) game.effects.particle(dest.x, dest.y + 1, dest.z, 0, 3, 0, .5, 'vspark', .5);
+              Audio3D_SFX.pickup && Audio3D_SFX.pickup();
+            }
+          }
+        }
+        continue;
+      }
+
+      /* платформы */
+      const w = e.def.w || 3, h = e.def.h || .6, d = e.def.d || 3;
+      let nx = e.base.x, ny = e.base.y, nz = e.base.z;
+      let active = true;
+      if (e.kind === 'mover') {
+        e.phase += dt * e.speed;
+        const off = Math.sin(e.phase) * e.amp;
+        nx += e.ax * off; ny += e.ay * off; nz += e.az * off;
+      } else if (e.kind === 'vanish') {
+        e.phase += dt;
+        const cyc = e.phase % e.cycle;
+        active = cyc < e.onT;
+        e.aabb.removed = !active;
+        e.mesh.visible = true;
+        e.mesh.material.opacity = active ? 1 : .18;
+        e.mesh.material.transparent = !active;
+      } else if (e.kind === 'faller') {
+        e.cd = Math.max(0, (e.cd || 0) - dt);
+        if (!e.armed && e.cd <= 0) {
+          /* срабатывает, когда игрок стоит на платформе */
+          if (p && p.alive && p.onGround &&
+              Math.abs(p.pos.x - e.base.x) < w / 2 + .4 && Math.abs(p.pos.z - e.base.z) < d / 2 + .4 &&
+              Math.abs(p.pos.y - (e.base.y + h)) < .35) {
+            e.armed = true; e.fallT = 0;
+          }
+        }
+        if (e.armed) {
+          e.fallT += dt;
+          e.dropY -= 18 * dt;                       // падает вниз
+          ny += e.dropY;
+          if (p && p.alive && p.onGround &&
+              Math.abs(p.pos.x - e.base.x) < w / 2 + .4 && Math.abs(p.pos.z - e.base.z) < d / 2 + .4 &&
+              Math.abs(p.pos.y - (e.base.y + h + e.dropY)) < .35) {
+            p.pos.y += e.dropY - (p._fallCarry || 0);  // увлекаем игрока вниз
+            p._fallCarry = e.dropY;
+          }
+          if (e.dropY < -60) { e.armed = false; e.dropY = 0; e.cd = 3; }   // возврат
+        } else { p && (p._fallCarry = 0); }
+      }
+
+      /* перенос игрока движущейся платформой */
+      if (e.kind === 'mover' && p && p.alive && p.onGround) {
+        const onTop = Math.abs(p.pos.x - e.aabb.minX - w / 2) < w / 2 + .35 &&
+                      Math.abs(p.pos.z - e.aabb.minZ - d / 2) < d / 2 + .35 &&
+                      Math.abs(p.pos.y - e.aabb.maxY) < .3;
+        if (onTop) {
+          p.pos.x += (nx - (e.aabb.minX + w / 2));
+          p.pos.z += (nz - (e.aabb.minZ + d / 2));
+          p.pos.y += (ny - e.aabb.minY);
+        }
+      }
+
+      e.mesh.position.set(nx, ny + h / 2, nz);
+      this._moveAabb(e.aabb, nx, ny, nz, w, h, d);
+    }
+  },
+
+  /* ближайший элемент к точке (для редактора: удаление/выделение) */
+  nearest(x, y, z) {
+    let best = null, bd = 6;
+    for (const e of this.list) {
+      const ex = e.base ? e.base.x : e.x, ey = e.base ? e.base.y : (e.y || 0), ez = e.base ? e.base.z : e.z;
+      const d = Math.hypot(ex - x, ey - y, ez - z);
+      if (d < bd) { bd = d; best = e; }
+    }
+    return best;
+  }
+};
 
 
 /* ===== 04-map.js ===== */
@@ -5301,6 +5648,7 @@ function buildMap(scene, quality, mapId) {
   MAP._chunkGid = 0;
   MAP._chunkGroups = {};
   MAP.customSpawn = null;
+  if (typeof MapElements !== 'undefined') MapElements.clear();
 
   MAP.def.build(group, world);
 
@@ -13843,6 +14191,12 @@ const TouchUI = {
         '<button id="tDummy" class="tbtn act accent">МАНЕКЕН</button>' +
         '<button id="tSpawn" class="tbtn act accent">СПАВН</button>' +
         '<button id="tUnstick" class="tbtn act">СБРОС</button>' +
+        '<button id="tEdUp" class="tbtn act accent">ВЫШЕ</button>' +
+        '<button id="tEdDown" class="tbtn act accent">НИЖЕ</button>' +
+        '<button id="tEdPlace" class="tbtn act accent">ПОСТАВИТЬ</button>' +
+        '<button id="tEdErase" class="tbtn act accent">УБРАТЬ</button>' +
+        '<button id="tEdMat" class="tbtn act">МАТЕРИАЛ</button>' +
+        '<button id="tEdSize" class="tbtn act">РАЗМЕР</button>' +
       '</div>' +
       '<div id="tHint">Слева — ходьба · Справа — обзор · Тап — огонь · АВТО — очередь · Кнопки справа появляются по ситуации</div>';
     document.body.appendChild(wrap);
@@ -13874,6 +14228,12 @@ const TouchUI = {
       dummy: document.getElementById('tDummy'),
       spawn: document.getElementById('tSpawn'),
       unstick: document.getElementById('tUnstick'),
+      edUp: document.getElementById('tEdUp'),
+      edDown: document.getElementById('tEdDown'),
+      edPlace: document.getElementById('tEdPlace'),
+      edErase: document.getElementById('tEdErase'),
+      edMat: document.getElementById('tEdMat'),
+      edSize: document.getElementById('tEdSize'),
       hint: document.getElementById('tHint')
     };
     // fire/aim must be usable while a match is not running too, so we set the
@@ -13932,6 +14292,13 @@ const TouchUI = {
     E.dummy.addEventListener('touchstart', e => { swallow(e); Bus.emit('touchRangeDummy'); E.dummy.classList.add('down'); setTimeout(() => E.dummy.classList.remove('down'), 160); }, { passive: false });
     E.spawn.addEventListener('touchstart', e => { swallow(e); Bus.emit('touchRangeSpawn'); E.spawn.classList.add('down'); setTimeout(() => E.spawn.classList.remove('down'), 160); }, { passive: false });
     E.unstick.addEventListener('touchstart', e => { swallow(e); Bus.emit('touchUnstick'); E.unstick.classList.add('down'); setTimeout(() => E.unstick.classList.remove('down'), 160); }, { passive: false });
+    /* ---- РЕДАКТОР КАРТ: кнопки для телефона ---- */
+    holdBtn(E.edUp, () => { MapEditor._touchUp = true; }, () => { MapEditor._touchUp = false; });
+    holdBtn(E.edDown, () => { MapEditor._touchDown = true; }, () => { MapEditor._touchDown = false; });
+    E.edPlace.addEventListener('touchstart', e => { swallow(e); MapEditor.place(); E.edPlace.classList.add('down'); setTimeout(() => E.edPlace.classList.remove('down'), 130); }, { passive: false });
+    E.edErase.addEventListener('touchstart', e => { swallow(e); MapEditor.removeAt(); E.edErase.classList.add('down'); setTimeout(() => E.edErase.classList.remove('down'), 130); }, { passive: false });
+    E.edMat.addEventListener('touchstart', e => { swallow(e); MapEditor.cycleMat(1); E.edMat.classList.add('down'); setTimeout(() => E.edMat.classList.remove('down'), 130); }, { passive: false });
+    E.edSize.addEventListener('touchstart', e => { swallow(e); MapEditor.cycleSize(1); E.edSize.classList.add('down'); setTimeout(() => E.edSize.classList.remove('down'), 130); }, { passive: false });
     E.buy.addEventListener('touchstart', e => { swallow(e); Bus.emit('touchBuy'); E.buy.classList.add('down'); setTimeout(() => E.buy.classList.remove('down'), 130); }, { passive: false });
     E.menu.addEventListener('touchstart', e => { swallow(e); Bus.emit('touchPause'); E.menu.classList.add('down'); setTimeout(() => E.menu.classList.remove('down'), 130); }, { passive: false });
     // double-tap the stick area toggles auto-run
@@ -14052,6 +14419,19 @@ const TouchUI = {
     const p = (typeof Game !== 'undefined') ? Game.player : null;
     const inMech = !!(typeof Game !== 'undefined' && Game.isMechActive && Game.isMechActive());
     const round = Game && Game.roundState;
+    const inEditor = !!(typeof Game !== 'undefined' && Game.mode === (typeof CS !== 'undefined' ? CS.MODE.EDITOR : -1));
+
+    /* ---- РЕДАКТОР КАРТ: свои кнопки, обычные боевые прячем ---- */
+    if (inEditor) {
+      ['aim', 'auto', 'jump', 'crouch', 'reload', 'swap', 'heal', 'drone', 'grenade', 'grenadeKind',
+       'sticky', 'missiles', 'surge', 'mech', 'turret', 'dummy', 'spawn', 'unstick', 'climb', 'dash', 'buy'
+      ].forEach(k => { if (E[k]) E[k].style.display = 'none'; });
+      dim(E.edUp, show); dim(E.edDown, show); dim(E.edPlace, show);
+      dim(E.edErase, show); dim(E.edMat, show); dim(E.edSize, show);
+      dim(E.menu, show);
+      if (E.hint) E.hint.textContent = 'Слева — полёт · Справа — обзор · ВЫШЕ/НИЖЕ — высота · ПОСТАВИТЬ/УБРАТЬ — блоки · МАТЕРИАЛ/РАЗМЕР — настройка';
+      return;
+    }
 
     // --- always-available core buttons (dim under an overlay) ---
     dim(E.aim, show);
@@ -14133,6 +14513,8 @@ const TouchUI = {
       const fresh = show && this._hintAt && (U.now() - this._hintAt < 9000);
       E.hint.style.display = fresh ? 'block' : 'none';
     }
+    /* редакторские кнопки прячем вне редактора */
+    ['edUp', 'edDown', 'edPlace', 'edErase', 'edMat', 'edSize'].forEach(k => { if (E[k]) E[k].style.display = 'none'; });
   },
 
   setSens(v) { this.sens = v; Store.data.touchSens = v; Store.save(); }
@@ -16185,7 +16567,7 @@ const UI = {
       'accCloudTag', 'accCloudHint', 'accCloudForm', 'accUrl', 'accKey', 'accHash',
       'btnAccount', 'btnAccountBack', 'btnAccLogin', 'btnAccRegister', 'btnAccSync', 'btnAccOut',
       'btnAccCloud', 'btnAccCloudSave', 'btnAccCopyHash',
-      'btnEditor', 'edPanel', 'edMat', 'edSize', 'edMode', 'edCount', 'edSpawn', 'edName', 'edSaveBtn', 'myMaps', 'lobbyMyMaps', 'dashFx'];
+      'btnEditor', 'edPanel', 'edMat', 'edSize', 'edMode', 'edCount', 'edSpawn', 'edName', 'edSaveBtn', 'edElem', 'myMaps', 'lobbyMyMaps', 'dashFx'];
     ids.forEach(i => this.el[i] = $(i));
     this.buildBuyCats();
     this.buildChips();
@@ -16291,19 +16673,33 @@ const UI = {
     const fillRounds = (wrap) => {
       if (!wrap) return;
       wrap.innerHTML = '';
+      const pushRounds = (n) => {
+        Store.data.rounds = n; Store.save(); this.refreshChips();
+        if (typeof Net !== 'undefined' && Net.role === CS.NETROLE.HOST && Net.connected) {
+          Net.send({ t: 'round', st: 'settings', players: Store.data.players, hp: Store.data.maxHP, map: Store.data.map, free: Store.data.freeplay, rounds: Store.data.rounds });
+        }
+        Audio3D_SFX.uiClick();
+      };
       MATCH.roundOptions.forEach(n => {
         const b = document.createElement('button');
         b.dataset.rounds = n;
-        b.innerHTML = '<b>' + n + '</b><i>' + (n === 1 ? 'бой' : 'боёв') + '</i>';
-        b.addEventListener('click', () => {
-          Store.data.rounds = n; Store.save(); this.refreshChips();
-          if (typeof Net !== 'undefined' && Net.role === CS.NETROLE.HOST && Net.connected) {
-            Net.send({ t: 'round', st: 'settings', players: Store.data.players, hp: Store.data.maxHP, map: Store.data.map, free: Store.data.freeplay, rounds: Store.data.rounds });
-          }
-          Audio3D_SFX.uiClick();
-        });
+        b.innerHTML = '<b>' + n + '</b><i>' + (n === 1 ? 'победа' : 'побед') + '</i>';
+        b.addEventListener('click', () => pushRounds(n));
         wrap.appendChild(b);
       });
+      /* СВОЁ ЧИСЛО ПОБЕД: сколько угодно (1..99) */
+      const num = document.createElement('input');
+      num.type = 'number'; num.min = 1; num.max = 99; num.step = 1;
+      num.className = 'numin roundsnum';
+      num.value = Store.data.rounds || 3;
+      num.title = 'Своё число побед для матча';
+      num.addEventListener('change', () => {
+        let v = Math.round(parseFloat(num.value) || 1);
+        v = U.clamp(v, 1, 99);
+        num.value = v;
+        pushRounds(v);
+      });
+      wrap.appendChild(num);
     };
     /* custom-offline chips: zombie count, zombie health, shop economics */
     const saveOff = () => {
@@ -23159,7 +23555,9 @@ const Game = {
         const txt = won ? 'РАУНД ВЫИГРАН' : winnerIsMe === false ? 'РАУНД ПРОИГРАН' : 'НИЧЬЯ';
         UI.center(txt, this.online.scoreMe + ' : ' + this.online.scoreThem + (reason ? ' · ' + reason : ''), 2.6);
         Audio3D_SFX.roundEnd(won);
-        const finished = this.online.played >= this.online.rounds;
+        /* МАТЧ ДО N ПОБЕД: завершаем, как только кто-то набрал нужное число побед */
+        const target = this.online.rounds;
+        const finished = this.online.roundWins.me >= target || this.online.roundWins.them >= target;
         // on the final round, tell the room who actually won the match
         let winnerName;
         if (finished) {
@@ -24067,6 +24465,11 @@ const Game = {
   /* Player eye position in world space (the camera's actual origin). */
   eyePos() {
     const p = this.player;
+    /* РЕДАКТОР КАРТ в свободной камере: «глаз» — это позиция камеры,
+       чтобы прицел-курсор совпадал с тем, что видит игрок */
+    if (this.mode === CS.MODE.EDITOR && typeof MapEditor !== 'undefined' && MapEditor.freeCam) {
+      return { x: MapEditor.camPos.x, y: MapEditor.camPos.y, z: MapEditor.camPos.z };
+    }
     const mech = this.isMechActive();
     const eye = mech ? CFG.mechEyeHeight : (p.crouching ? CFG.eyeHeightCrouch : CFG.eyeHeight);
     return {
@@ -24141,6 +24544,12 @@ const Game = {
 
   cameraDir() {
     const p = this.player;
+    /* РЕДАКТОР: направление свободной камеры */
+    if (this.mode === CS.MODE.EDITOR && typeof MapEditor !== 'undefined' && MapEditor.freeCam) {
+      const e = new THREE.Euler(MapEditor.camPitch, MapEditor.camYaw, 0, 'YXZ');
+      const d = _v3.set(0, 0, -1).applyEuler(e);
+      return { x: d.x, y: d.y, z: d.z };
+    }
     const e = new THREE.Euler(
       p.pitch + p.recoil + p.viewPunchP,
       p.yaw + p.recoilYaw + p.viewPunchY,
@@ -28540,8 +28949,11 @@ const Game = {
         this.doNewRoundClient(r.hp);
         break;
       case 'rounds':
-        // the host changed the number of rounds between rounds
-        if (r.rounds) { this.online.rounds = MATCH.clampRounds(r.rounds); if (this.online.played >= this.online.rounds) this.endMatch(); }
+        // the host changed the number of wins needed between rounds
+        if (r.rounds) {
+          this.online.rounds = MATCH.clampRounds(r.rounds);
+          if (this.online.roundWins.me >= this.online.rounds || this.online.roundWins.them >= this.online.rounds) this.endMatch();
+        }
         break;
       case 'rematch':
         // the host restarted the match: reset the score and start round 1
@@ -28658,6 +29070,27 @@ const Game = {
     const p = this.player;
     if (!p) return;
 
+    /* ---- РЕДАКТОР КАРТ (свободная камера): мышь вращает камеру, движение —
+       полёт; физика игрока и стрельба отключены ---- */
+    if (this.mode === CS.MODE.EDITOR && typeof MapEditor !== 'undefined' && MapEditor.freeCam) {
+      const mm = Input.lookDelta();
+      const blocked = UI.overlayOpen();
+      if (!blocked) {
+        MapEditor.camYaw -= mm.dx;
+        MapEditor.camPitch -= mm.dy;
+        MapEditor.camPitch = U.clamp(MapEditor.camPitch, -1.4, 1.4);
+        MapEditor.camYaw = ((MapEditor.camYaw + Math.PI) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2) - Math.PI;
+      }
+      this._frameLook = { dx: mm.dx, dy: mm.dy };
+      MapEditor.update(dt);
+      if (this.effects) this.effects.update(dt);
+      if (typeof MapElements !== 'undefined' && MapElements.list.length) MapElements.update(dt, this);
+      this.cameraUpdate(dt);
+      this.renderFrame(dt);
+      this.updateHUD(dt);
+      if (IS_TOUCH) TouchUI.update();
+      return;
+    }
     /* ---- guided drone: while it flies, the player steers it and the normal
        movement/physics loop is suspended for the body ---- */
     if (this.drone) {
@@ -28881,6 +29314,8 @@ const Game = {
     if (this.effects) this.effects.update(dt);
     /* РЕДАКТОР КАРТ: обновляем курсор и подсветку */
     if (this.mode === CS.MODE.EDITOR && typeof MapEditor !== 'undefined') MapEditor.update(dt);
+    /* ИГРОВЫЕ ЭЛЕМЕНТЫ КАРТ: движущиеся платформы/шипы/телепорты */
+    if (typeof MapElements !== 'undefined' && MapElements.list.length) MapElements.update(dt, this);
     /* экранный эффект ульты рыцаря (чёрный экран + белый слеш) */
     if (typeof UI !== 'undefined' && UI.knightUltTick) UI.knightUltTick(dt);
     if (this.mode === CS.MODE.OFFLINE || this.mode === CS.MODE.RANGE) {
@@ -29144,6 +29579,23 @@ const Game = {
     }
     UI.el.missileHud && UI.el.missileHud.classList.add('hidden');
 
+    /* РЕДАКТОР КАРТ в свободной камере: камера летит по арене (Stage Builder).
+       Оружие в руках скрываем, прицел оставляем как «кисть». */
+    if (this.mode === CS.MODE.EDITOR && typeof MapEditor !== 'undefined' && MapEditor.freeCam) {
+      const cp = MapEditor.camPos;
+      this.camera.position.set(cp.x, cp.y, cp.z);
+      this.camera.rotation.order = 'YXZ';
+      this.camera.rotation.y = MapEditor.camYaw;
+      this.camera.rotation.x = MapEditor.camPitch;
+      this.camera.rotation.z = 0;
+      if (Math.abs(this.camera.fov - this.baseFov) > .01) { this.camera.fov = this.baseFov; this.camera.updateProjectionMatrix(); }
+      UI.crosshairState(true, false);
+      UI.scope(false);
+      const fx = -Math.sin(MapEditor.camYaw), fz = -Math.cos(MapEditor.camYaw);
+      Audio3D_SFX.setListener(cp.x, cp.y, cp.z, fx, fz);
+      return;
+    }
+
     /* While the drone is airborne the camera follows it from behind, so the
        player sees where they are flying. */
     if (this.drone) {
@@ -29402,8 +29854,9 @@ const Game = {
       else objective = 'ЗАКУПКА · волна ' + (o.wave + 1);
     } else if (this.mode === CS.MODE.ONLINE) {
       const alive = (p.alive ? 1 : 0) + this.remotePlayers.filter(r => r.alive).length;
-      const total = this.online ? this.online.rounds : 1;
-      const label = 'РАУНД ' + Math.min(this.roundNo, total) + '/' + total;
+      const target = this.online ? this.online.rounds : 1;
+      const me = this.online ? this.online.roundWins.me : 0, them = this.online ? this.online.roundWins.them : 0;
+      const label = 'ДО ' + target + ' ПОБЕД · ' + me + ':' + them;
       if (this.online && this.online.matchOver) {
         objective = 'МАТЧ ОКОНЧЕН · СЧЁТ ' + this.online.roundWins.me + ':' + this.online.roundWins.them + ' · Enter — в меню';
         timer = 0;

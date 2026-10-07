@@ -25,7 +25,24 @@ const MapEditor = {
   _cursorMesh: null,     // подсветка курсора
   _spawnMesh: null,      // маркер спавна
   _undo: [],
+  /* СВОБОДНАЯ КАМЕРА РЕДАКТОРА (в духе Stage Builder): полёт по арене,
+     мышь — обзор, WASD — движение, Space/Ctrl — вверх/вниз, колесо — скорость. */
+  freeCam: true,
+  camPos: { x: 0, y: 12, z: 40 },
+  camYaw: 0,
+  camPitch: -0.15,
+  camSpeed: 24,
   SIZES: [1, 2, 3, 4, 6, 8, 12],
+  /* ИГРОВЫЕ ЭЛЕМЕНТЫ (Stage Builder): тип для размещения */
+  elems: [],          // размещённые элементы (сериализуются)
+  elemKind: null,     // текущий выбранный тип (null = режим блоков)
+  ELEM_KINDS: [
+    { k: 'mover',    name: 'ДВИЖ. ПЛАТФОРМА' },
+    { k: 'faller',   name: 'ПАДАЮЩАЯ' },
+    { k: 'vanish',   name: 'ИСЧЕЗАЮЩАЯ' },
+    { k: 'spikes',   name: 'ШИПЫ' },
+    { k: 'teleport', name: 'ТЕЛЕПОРТ' }
+  ],
   MATS: [
     { id: 'brick',    name: 'КИРПИЧ' },
     { id: 'concrete', name: 'БЕТОН' },
@@ -51,6 +68,8 @@ const MapEditor = {
     const blocks = (data && data.blocks) || [];
     for (const b of blocks) this.placeBlock(parent, world, b);
     if (data && data.spawn) MAP.customSpawn = { x: data.spawn.x, z: data.spawn.z, yaw: data.spawn.yaw || 0 };
+    /* игровые элементы карты (движущиеся платформы, шипы, телепорты) */
+    if (typeof MapElements !== 'undefined' && data && data.elements) MapElements.build(data.elements, parent, world);
   },
 
   /* Один блок: коллайдер + обычный меш (разрушаемый, как геометрия карты).
@@ -84,6 +103,8 @@ const MapEditor = {
     this.mapId = mapId;
     this.mapName = existing ? existing.name : 'МОЯ КАРТА';
     this.blocks = existing ? JSON.parse(JSON.stringify(existing.blocks)) : [];
+    this.elems = existing && existing.elements ? JSON.parse(JSON.stringify(existing.elements)) : [];
+    this.elemKind = null;
     this.spawn = existing && existing.spawn ? Object.assign({ x: 0, z: 40, yaw: 0 }, existing.spawn)
                                            : { x: 0, z: 40, yaw: 0 };
     this.erase = false; this._undo = [];
@@ -98,6 +119,7 @@ const MapEditor = {
     }
     this.ensureVisuals();
     if (this.blocks.length) this.rebuildGeometry();
+    if (typeof MapElements !== 'undefined' && this.elems.length) MapElements.build(this.elems, MAP.group, MAP.world);
     UI.show('hud');
     this.updatePanel();
     UI.toast('РЕДАКТОР: ЛКМ — поставить · ПКМ — убрать · [ ] — размер · G — материал · E — спавн · F — сохранить', '#9be564');
@@ -167,6 +189,24 @@ const MapEditor = {
   /* ---------- управление в кадре ---------- */
   update(dt) {
     if (!this.active) return;
+    /* СВОБОДНАЯ КАМЕРА: WASD — полёт, мышь — обзор (см. cameraUpdate) */
+    if (this.freeCam) {
+      const mv = Input.moveVector();
+      const sp = this.camSpeed * (Input.keys && Input.keys.ShiftLeft ? 3 : 1) * dt;
+      const yaw = this.camYaw;
+      const fx = -Math.sin(yaw), fz = -Math.cos(yaw);
+      const rx = Math.cos(yaw), rz = -Math.sin(yaw);
+      /* подъём/спуск: ПК — Space/Ctrl; телефон — кнопки ВЫШЕ/НИЖЕ */
+      const climb = (IS_TOUCH ? ((this._touchUp ? 1 : 0) - (this._touchDown ? 1 : 0))
+        : ((Input.keys && Input.keys.Space ? 1 : 0) - (Input.keys && Input.keys.ControlLeft ? 1 : 0)));
+      this.camPos.x += (fx * mv.f + rx * mv.r) * sp;
+      this.camPos.z += (fz * mv.f + rz * mv.r) * sp;
+      this.camPos.y += climb * sp;
+      const half = MAP.size / 2 + 30;
+      this.camPos.x = U.clamp(this.camPos.x, -half, half);
+      this.camPos.z = U.clamp(this.camPos.z, -half, half);
+      this.camPos.y = U.clamp(this.camPos.y, 1, 90);
+    }
     const p = Game.player;
     if (!p) return;
     /* луч от прицела до пола/стены — куда ставить */
@@ -204,11 +244,26 @@ const MapEditor = {
       case 'BracketRight': case 'KeyR': this.cycleSize(1); return true;
       case 'BracketLeft': this.cycleSize(-1); return true;
       case 'KeyG': this.cycleMat(1); return true;
+      case 'KeyT': this.cycleElem(1); return true;
       case 'KeyE': this.setSpawnHere(); return true;
+      case 'KeyV': this.freeCam = !this.freeCam; UI.toast(this.freeCam ? 'Свободная камера' : 'Камера от игрока'); return true;
       case 'KeyZ': this.undo(); return true;
       case 'KeyC': this.erase = !this.erase; this.updatePanel(); UI.toast(this.erase ? 'РЕЖИМ: УБРАТЬ' : 'РЕЖИМ: ПОСТАВИТЬ', this.erase ? '#ff6a5a' : '#9be564'); return true;
     }
     return false;
+  },
+
+  cycleElem(d) {
+    /* порядок: (нет) → mover → faller → vanish → spikes → teleport → (нет) */
+    const kinds = this.ELEM_KINDS;
+    const order = [null].concat(kinds.map(x => x.k));
+    let i = order.indexOf(this.elemKind);
+    if (i < 0) i = 0;
+    i = (i + d + order.length) % order.length;
+    this.elemKind = order[i];
+    this.updatePanel();
+    const nm = this.elemKind ? (kinds.find(x => x.k === this.elemKind) || {}).name : 'НЕТ (БЛОКИ)';
+    UI.toast('Элемент: ' + nm, '#8a5cff');
   },
 
   cycleSize(d) {
@@ -230,9 +285,10 @@ const MapEditor = {
     UI.toast('Точка спавна установлена');
   },
 
-  /* ЛКМ — поставить блок; ПКМ — убрать */
+  /* ЛКМ — поставить блок ИЛИ игровой элемент (в зависимости от режима) */
   place() {
     if (!this.cursor.valid) { Audio3D_SFX.deny && Audio3D_SFX.deny(); return; }
+    if (this.elemKind) { this.placeElement(); return; }
     this.pushUndo();
     const b = { x: this.cursor.x, y: this.cursor.y, z: this.cursor.z, w: this.size, h: this.size, d: this.size, m: this.mat };
     this.blocks.push(b);
@@ -241,8 +297,40 @@ const MapEditor = {
     Audio3D_SFX.uiClick && Audio3D_SFX.uiClick();
   },
 
+  /* разместить игровой элемент в точке курсора */
+  placeElement() {
+    const c = this.cursor, k = this.elemKind;
+    const e = { k: k, x: c.x, y: c.y, z: c.z, w: this.size, h: Math.max(1, this.size / 3), d: this.size };
+    if (k === 'mover') { e.ax = 1; e.ay = 0; e.az = 0; e.amp = Math.max(4, this.size * 2); e.speed = 1; }
+    if (k === 'spikes') { e.d = this.size; }
+    if (k === 'teleport') {
+      /* связываем телепорты попарно: каждые два — один link */
+      const count = this.elems.filter(x => x.k === 'teleport').length;
+      e.link = Math.floor(count / 2);
+    }
+    this.pushUndo();
+    this.elems.push(e);
+    if (typeof MapElements !== 'undefined') MapElements.build(this.elems, MAP.group, MAP.world);
+    Audio3D_SFX.uiClick && Audio3D_SFX.uiClick();
+    UI.toast('Элемент: ' + (this.ELEM_KINDS.find(x => x.k === k) || {}).name, '#8a5cff');
+  },
+
   removeAt() {
-    /* убираем ближайший блок к точке курсора (в пределах 1.5 м) */
+    /* сначала пытаемся убрать игровой элемент рядом с курсором */
+    if (typeof MapElements !== 'undefined' && MapElements.list.length) {
+      const ne = MapElements.nearest(this.cursor.x, this.cursor.y, this.cursor.z);
+      if (ne) {
+        const i = this.elems.indexOf(ne.def);
+        if (i >= 0) {
+          this.pushUndo();
+          this.elems.splice(i, 1);
+          MapElements.build(this.elems, MAP.group, MAP.world);
+          Audio3D_SFX.uiClick && Audio3D_SFX.uiClick();
+          return;
+        }
+      }
+    }
+    /* иначе — блок */
     const c = this.cursor;
     let best = -1, bestD = 2.2 * 2.2;
     for (let i = 0; i < this.blocks.length; i++) {
@@ -288,6 +376,8 @@ const MapEditor = {
       x: +b.x.toFixed(2), y: +b.y.toFixed(2), z: +b.z.toFixed(2),
       w: +b.w.toFixed(2), h: +b.h.toFixed(2), d: +b.d.toFixed(2), m: b.m
     }));
+    /* игровые элементы (движущиеся платформы/шипы/телепорты) */
+    entry.elements = (this.elems || []).map(e => JSON.parse(JSON.stringify(e)));
     Store.save();
     if (typeof uiRefreshCustomMaps === 'function') uiRefreshCustomMaps();
     UI.toast('Карта сохранена: «' + name + '» · блоков ' + entry.blocks.length, '#9be564');
@@ -301,6 +391,7 @@ const MapEditor = {
     if (el.edMat) el.edMat.textContent = (this.MATS.find(m => m.id === this.mat) || {}).name || this.mat;
     if (el.edSize) el.edSize.textContent = this.size + ' м';
     if (el.edMode) el.edMode.textContent = this.erase ? 'УБРАТЬ' : 'ПОСТАВИТЬ';
+    if (el.edElem) el.edElem.textContent = this.elemKind ? ((this.ELEM_KINDS.find(x => x.k === this.elemKind) || {}).name || this.elemKind) : 'НЕТ';
     if (el.edCount) el.edCount.textContent = String(this.blocks.length);
     if (el.edSpawn) el.edSpawn.textContent = '(' + Math.round(this.spawn.x) + ', ' + Math.round(this.spawn.z) + ')';
   }

@@ -1402,6 +1402,7 @@ function buildMap(scene, quality, mapId) {
   MAP._chunkGid = 0;
   MAP._chunkGroups = {};
   MAP.customSpawn = null;
+  if (typeof MapElements !== 'undefined') MapElements.clear();
 
   MAP.def.build(group, world);
 

@@ -34,7 +34,7 @@ const UI = {
       'accCloudTag', 'accCloudHint', 'accCloudForm', 'accUrl', 'accKey', 'accHash',
       'btnAccount', 'btnAccountBack', 'btnAccLogin', 'btnAccRegister', 'btnAccSync', 'btnAccOut',
       'btnAccCloud', 'btnAccCloudSave', 'btnAccCopyHash',
-      'btnEditor', 'edPanel', 'edMat', 'edSize', 'edMode', 'edCount', 'edSpawn', 'edName', 'edSaveBtn', 'myMaps', 'lobbyMyMaps', 'dashFx'];
+      'btnEditor', 'edPanel', 'edMat', 'edSize', 'edMode', 'edCount', 'edSpawn', 'edName', 'edSaveBtn', 'edElem', 'myMaps', 'lobbyMyMaps', 'dashFx'];
     ids.forEach(i => this.el[i] = $(i));
     this.buildBuyCats();
     this.buildChips();
@@ -140,19 +140,33 @@ const UI = {
     const fillRounds = (wrap) => {
       if (!wrap) return;
       wrap.innerHTML = '';
+      const pushRounds = (n) => {
+        Store.data.rounds = n; Store.save(); this.refreshChips();
+        if (typeof Net !== 'undefined' && Net.role === CS.NETROLE.HOST && Net.connected) {
+          Net.send({ t: 'round', st: 'settings', players: Store.data.players, hp: Store.data.maxHP, map: Store.data.map, free: Store.data.freeplay, rounds: Store.data.rounds });
+        }
+        Audio3D_SFX.uiClick();
+      };
       MATCH.roundOptions.forEach(n => {
         const b = document.createElement('button');
         b.dataset.rounds = n;
-        b.innerHTML = '<b>' + n + '</b><i>' + (n === 1 ? 'бой' : 'боёв') + '</i>';
-        b.addEventListener('click', () => {
-          Store.data.rounds = n; Store.save(); this.refreshChips();
-          if (typeof Net !== 'undefined' && Net.role === CS.NETROLE.HOST && Net.connected) {
-            Net.send({ t: 'round', st: 'settings', players: Store.data.players, hp: Store.data.maxHP, map: Store.data.map, free: Store.data.freeplay, rounds: Store.data.rounds });
-          }
-          Audio3D_SFX.uiClick();
-        });
+        b.innerHTML = '<b>' + n + '</b><i>' + (n === 1 ? 'победа' : 'побед') + '</i>';
+        b.addEventListener('click', () => pushRounds(n));
         wrap.appendChild(b);
       });
+      /* СВОЁ ЧИСЛО ПОБЕД: сколько угодно (1..99) */
+      const num = document.createElement('input');
+      num.type = 'number'; num.min = 1; num.max = 99; num.step = 1;
+      num.className = 'numin roundsnum';
+      num.value = Store.data.rounds || 3;
+      num.title = 'Своё число побед для матча';
+      num.addEventListener('change', () => {
+        let v = Math.round(parseFloat(num.value) || 1);
+        v = U.clamp(v, 1, 99);
+        num.value = v;
+        pushRounds(v);
+      });
+      wrap.appendChild(num);
     };
     /* custom-offline chips: zombie count, zombie health, shop economics */
     const saveOff = () => {

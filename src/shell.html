@@ -231,7 +231,7 @@
       <div class="fld">Здоровье игрока
         <div class="chips" id="lobbyHp"></div>
       </div>
-      <div class="fld">Боёв (раундов)
+      <div class="fld">Матч до N побед
         <div class="chips" id="lobbyRounds"></div>
       </div>
       <div class="fld">Режим (для обоих)
@@ -410,13 +410,14 @@
     <div class="ed-row"><span>Материал</span><b id="edMat">КИРПИЧ</b></div>
     <div class="ed-row"><span>Размер</span><b id="edSize">4 м</b></div>
     <div class="ed-row"><span>Режим</span><b id="edMode">ПОСТАВИТЬ</b></div>
+    <div class="ed-row"><span>Элемент</span><b id="edElem">НЕТ</b></div>
     <div class="ed-row"><span>Блоков</span><b id="edCount">0</b></div>
     <div class="ed-row"><span>Спавн</span><b id="edSpawn">(0, 40)</b></div>
     <div class="ed-hint">
-      ЛКМ — поставить · ПКМ — убрать<br>
-      [ ] / R — размер · G — материал<br>
-      E — точка спавна · C — режим · Z — отмена<br>
-      F — сохранить · Esc — выйти
+      ЛКМ — поставить/выбрать · ПКМ — убрать<br>
+      [ ]/R — размер · G — материал · T — элемент<br>
+      E — спавн · C — режим · Z — отмена<br>
+      F — сохранить · Esc — выйти · V — свободная камера
     </div>
     <input id="edName" class="ed-name" maxlength="24" placeholder="Название карты" autocomplete="off">
     <button class="mbtn tiny" id="edSaveBtn">СОХРАНИТЬ (F)</button>

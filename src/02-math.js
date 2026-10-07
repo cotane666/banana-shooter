@@ -52,6 +52,30 @@ class CollisionWorld {
     return aabb;
   }
 
+  /* Динамическая платформа: как addBox, но запоминает ячейки сетки, чтобы
+     потом её можно было переиндексировать при движении. */
+  addDynamicBox(aabb) {
+    const id = this.boxes.length;
+    aabb._wid = id;
+    aabb._dynamic = true;
+    this.boxes.push(aabb);
+    const cells = [];
+    const c = this.cell;
+    const x0 = Math.floor(aabb.minX / c), x1 = Math.floor(aabb.maxX / c);
+    const z0 = Math.floor(aabb.minZ / c), z1 = Math.floor(aabb.maxZ / c);
+    for (let ix = x0; ix <= x1; ix++) {
+      for (let iz = z0; iz <= z1; iz++) {
+        const k = this._key(ix, iz);
+        let arr = this.grid.get(k);
+        if (!arr) { arr = []; this.grid.set(k, arr); }
+        arr.push(id);
+        cells.push(k);
+      }
+    }
+    aabb._cells = cells;
+    return aabb;
+  }
+
   /* ---- РАЗРУШАЕМОСТЬ: мягко «убрать» бокс (removed) и вернуть его.
      O(1) через сохранённый id — раньше indexOf по тысячам боксов тормозил. ---- */
   removeBox(aabb) {
@@ -63,6 +87,34 @@ class CollisionWorld {
     if (!aabb || aabb._wid === undefined) return false;
     aabb.removed = false;
     return true;
+  }
+
+  /* ПЕРЕИНДЕКСАЦИЯ бокса после смены координат (движущиеся/падающие платформы).
+     Старые ячейки сетки очищаем, затем вставляем по новым границам. */
+  reindexBox(aabb) {
+    if (!aabb || aabb._wid === undefined) return;
+    const c = this.cell;
+    if (aabb._cells) {
+      for (let k = 0; k < aabb._cells.length; k++) {
+        const arr = this.grid.get(aabb._cells[k]);
+        if (!arr) continue;
+        const i = arr.indexOf(aabb._wid);
+        if (i >= 0) arr.splice(i, 1);
+      }
+    }
+    const cells = [];
+    const x0 = Math.floor(aabb.minX / c), x1 = Math.floor(aabb.maxX / c);
+    const z0 = Math.floor(aabb.minZ / c), z1 = Math.floor(aabb.maxZ / c);
+    for (let ix = x0; ix <= x1; ix++) {
+      for (let iz = z0; iz <= z1; iz++) {
+        const k = this._key(ix, iz);
+        let arr = this.grid.get(k);
+        if (!arr) { arr = []; this.grid.set(k, arr); }
+        arr.push(aabb._wid);
+        cells.push(k);
+      }
+    }
+    aabb._cells = cells;
   }
 
   _key(ix, iz) { return ix + ',' + iz; }

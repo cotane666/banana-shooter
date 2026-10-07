@@ -274,6 +274,12 @@ const TouchUI = {
         '<button id="tDummy" class="tbtn act accent">МАНЕКЕН</button>' +
         '<button id="tSpawn" class="tbtn act accent">СПАВН</button>' +
         '<button id="tUnstick" class="tbtn act">СБРОС</button>' +
+        '<button id="tEdUp" class="tbtn act accent">ВЫШЕ</button>' +
+        '<button id="tEdDown" class="tbtn act accent">НИЖЕ</button>' +
+        '<button id="tEdPlace" class="tbtn act accent">ПОСТАВИТЬ</button>' +
+        '<button id="tEdErase" class="tbtn act accent">УБРАТЬ</button>' +
+        '<button id="tEdMat" class="tbtn act">МАТЕРИАЛ</button>' +
+        '<button id="tEdSize" class="tbtn act">РАЗМЕР</button>' +
       '</div>' +
       '<div id="tHint">Слева — ходьба · Справа — обзор · Тап — огонь · АВТО — очередь · Кнопки справа появляются по ситуации</div>';
     document.body.appendChild(wrap);
@@ -305,6 +311,12 @@ const TouchUI = {
       dummy: document.getElementById('tDummy'),
       spawn: document.getElementById('tSpawn'),
       unstick: document.getElementById('tUnstick'),
+      edUp: document.getElementById('tEdUp'),
+      edDown: document.getElementById('tEdDown'),
+      edPlace: document.getElementById('tEdPlace'),
+      edErase: document.getElementById('tEdErase'),
+      edMat: document.getElementById('tEdMat'),
+      edSize: document.getElementById('tEdSize'),
       hint: document.getElementById('tHint')
     };
     // fire/aim must be usable while a match is not running too, so we set the
@@ -363,6 +375,13 @@ const TouchUI = {
     E.dummy.addEventListener('touchstart', e => { swallow(e); Bus.emit('touchRangeDummy'); E.dummy.classList.add('down'); setTimeout(() => E.dummy.classList.remove('down'), 160); }, { passive: false });
     E.spawn.addEventListener('touchstart', e => { swallow(e); Bus.emit('touchRangeSpawn'); E.spawn.classList.add('down'); setTimeout(() => E.spawn.classList.remove('down'), 160); }, { passive: false });
     E.unstick.addEventListener('touchstart', e => { swallow(e); Bus.emit('touchUnstick'); E.unstick.classList.add('down'); setTimeout(() => E.unstick.classList.remove('down'), 160); }, { passive: false });
+    /* ---- РЕДАКТОР КАРТ: кнопки для телефона ---- */
+    holdBtn(E.edUp, () => { MapEditor._touchUp = true; }, () => { MapEditor._touchUp = false; });
+    holdBtn(E.edDown, () => { MapEditor._touchDown = true; }, () => { MapEditor._touchDown = false; });
+    E.edPlace.addEventListener('touchstart', e => { swallow(e); MapEditor.place(); E.edPlace.classList.add('down'); setTimeout(() => E.edPlace.classList.remove('down'), 130); }, { passive: false });
+    E.edErase.addEventListener('touchstart', e => { swallow(e); MapEditor.removeAt(); E.edErase.classList.add('down'); setTimeout(() => E.edErase.classList.remove('down'), 130); }, { passive: false });
+    E.edMat.addEventListener('touchstart', e => { swallow(e); MapEditor.cycleMat(1); E.edMat.classList.add('down'); setTimeout(() => E.edMat.classList.remove('down'), 130); }, { passive: false });
+    E.edSize.addEventListener('touchstart', e => { swallow(e); MapEditor.cycleSize(1); E.edSize.classList.add('down'); setTimeout(() => E.edSize.classList.remove('down'), 130); }, { passive: false });
     E.buy.addEventListener('touchstart', e => { swallow(e); Bus.emit('touchBuy'); E.buy.classList.add('down'); setTimeout(() => E.buy.classList.remove('down'), 130); }, { passive: false });
     E.menu.addEventListener('touchstart', e => { swallow(e); Bus.emit('touchPause'); E.menu.classList.add('down'); setTimeout(() => E.menu.classList.remove('down'), 130); }, { passive: false });
     // double-tap the stick area toggles auto-run
@@ -483,6 +502,19 @@ const TouchUI = {
     const p = (typeof Game !== 'undefined') ? Game.player : null;
     const inMech = !!(typeof Game !== 'undefined' && Game.isMechActive && Game.isMechActive());
     const round = Game && Game.roundState;
+    const inEditor = !!(typeof Game !== 'undefined' && Game.mode === (typeof CS !== 'undefined' ? CS.MODE.EDITOR : -1));
+
+    /* ---- РЕДАКТОР КАРТ: свои кнопки, обычные боевые прячем ---- */
+    if (inEditor) {
+      ['aim', 'auto', 'jump', 'crouch', 'reload', 'swap', 'heal', 'drone', 'grenade', 'grenadeKind',
+       'sticky', 'missiles', 'surge', 'mech', 'turret', 'dummy', 'spawn', 'unstick', 'climb', 'dash', 'buy'
+      ].forEach(k => { if (E[k]) E[k].style.display = 'none'; });
+      dim(E.edUp, show); dim(E.edDown, show); dim(E.edPlace, show);
+      dim(E.edErase, show); dim(E.edMat, show); dim(E.edSize, show);
+      dim(E.menu, show);
+      if (E.hint) E.hint.textContent = 'Слева — полёт · Справа — обзор · ВЫШЕ/НИЖЕ — высота · ПОСТАВИТЬ/УБРАТЬ — блоки · МАТЕРИАЛ/РАЗМЕР — настройка';
+      return;
+    }
 
     // --- always-available core buttons (dim under an overlay) ---
     dim(E.aim, show);
@@ -564,6 +596,8 @@ const TouchUI = {
       const fresh = show && this._hintAt && (U.now() - this._hintAt < 9000);
       E.hint.style.display = fresh ? 'block' : 'none';
     }
+    /* редакторские кнопки прячем вне редактора */
+    ['edUp', 'edDown', 'edPlace', 'edErase', 'edMat', 'edSize'].forEach(k => { if (E[k]) E[k].style.display = 'none'; });
   },
 
   setSens(v) { this.sens = v; Store.data.touchSens = v; Store.save(); }

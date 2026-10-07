@@ -564,6 +564,7 @@ const Net = {
       case 'state': case 'shot': case 'hit': case 'died': case 'respawn':
       case 'score': case 'chat': case 'drone': case 'boom': case 'splat':
       case 'mmissile':
+      case 'mapbrk':
       case 'coopWave':
       case 'zstate':
       case 'zhurt':

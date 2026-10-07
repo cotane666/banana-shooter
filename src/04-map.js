@@ -354,6 +354,7 @@ function damageMapBox(b, dmg) {
 function removeMapChunk(b) {
   if (!b || b.removed) return;
   b.removed = true;
+  _netMapBreak(b);                       // онлайн: сообщить сопернику об этом разрушении
   if (b._chunkGroup && b._chunkGroup.items[b._chunkIndex]) {
     const it = b._chunkGroup.items[b._chunkIndex];
     it.visible = false;
@@ -363,6 +364,48 @@ function removeMapChunk(b) {
   /* привязанные меши (бочка поверх кирпичной «сердцевины») тоже прячем */
   if (b.link) for (let i = 0; i < b.link.length; i++) if (b.link[i]) b.link[i].visible = false;
   if (MAP.world) MAP.world.removeBox(b);
+}
+
+/* ============================================================
+   СЕТЕВАЯ СИНХРОНИЗАЦИЯ РАЗРУШЕНИЙ
+   В онлайне карта у каждого своя копия, поэтому разрушение надо передать.
+   Отправляем ТОЧКУ (центр чанка): по ней получатель находит тот же блок и
+   ломает его. Точка устойчива к разному порядку чанков (в отличие от индекса).
+   Взрывы и так шлют 'boom' — их чанки не дублируем, чтобы не слать лишнего.
+   ============================================================ */
+function mapBreakAtPoint(x, y, z) {
+  if (!MAP.destructibles || !MAP.destructibles.length) return false;
+  /* допуск = размер чанка + запас (крупные блоки редактора могут быть больше) */
+  let best = null, bestD = 1e9;
+  for (let i = 0; i < MAP.destructibles.length; i++) {
+    const b = MAP.destructibles[i];
+    if (b.removed || !b.destructible) continue;
+    const cx = (b.minX + b.maxX) / 2, cy = (b.minY + b.maxY) / 2, cz = (b.minZ + b.maxZ) / 2;
+    const dx = cx - x, dy = cy - y, dz = cz - z;
+    const d2 = dx * dx + dy * dy + dz * dz;
+    if (d2 < bestD) { bestD = d2; best = b; }
+  }
+  if (!best) return false;
+  /* слишком далеко — это не тот блок (уже разрушен у обоих) */
+  const reach = Math.max(2.6, (best._iw || 1.3) * 1.6, (best._id || 1.3) * 1.6);
+  if (bestD > reach * reach) return false;
+  removeMapChunk(best);
+  _flushChunkInstances();
+  return true;
+}
+
+function _netMapBreak(b) {
+  if (b._netBreakSent) return;
+  /* только онлайн и только настоящие разрушения (не восстановление) */
+  if (typeof Game === 'undefined' || !Game || Game.mode !== CS.MODE.ONLINE) return;
+  if (typeof Net === 'undefined' || !Net.send || !Net.connected) return;
+  /* применяем ЧУЖОЕ разрушение — не отсылаем его обратно (иначе эхо-цикл) */
+  if (Game._applyingRemoteBreak) return;
+  /* при взрыве соперник уже получает 'boom' и ломает карту сам — не дублируем */
+  if (MAP._netBoomGuard) return;
+  b._netBreakSent = true;
+  const cx = (b.minX + b.maxX) / 2, cy = (b.minY + b.maxY) / 2, cz = (b.minZ + b.maxZ) / 2;
+  Net.send({ t: 'mapbrk', x: +cx.toFixed(2), y: +cy.toFixed(2), z: +cz.toFixed(2) });
 }
 
 /* пометить инстанс-буферы к обновлению — только изменённые группы */
@@ -390,6 +433,7 @@ function restoreMap() {
     if (!b.removed) continue;
     b.removed = false;
     b.hp = b.maxHp;
+    b._netBreakSent = false;      // снова можно синхронизировать это разрушение
     if (b._chunkGroup && b._chunkGroup.items[b._chunkIndex]) {
       const it = b._chunkGroup.items[b._chunkIndex];
       it.visible = true;

@@ -1549,6 +1549,7 @@ const Game = {
     Net.on('round', r => this.onRoundMsg(r));
     Net.on('drone', d => this.onRemoteDrone(d));
     Net.on('boom', b => this.onRemoteBoom(b));
+    Net.on('mapbrk', m => this.onRemoteMapBreak(m));
     Net.on('mmissile', m => this.onRemoteMechMissile(m));
     Net.on('coopWave', m => { if (this.mode === CS.MODE.ONLINE && this.isCoop && Net.role !== CS.NETROLE.HOST) this.coopStartWave(m.w); });
     Net.on('zstate', m => this.onZombieState(m));
@@ -1813,7 +1814,8 @@ const Game = {
      ============================================================ */
   /* Save the run right now, at any moment, into this mode's slot. */
   manualSave() {
-    if (this.mode !== CS.MODE.OFFLINE) { UI.toast('Сохранение доступно в оффлайне', '#e33a2e'); Audio3D_SFX.deny(); return false; }
+    const onlineCoop = this.mode === CS.MODE.ONLINE && this.isCoop;
+    if (this.mode !== CS.MODE.OFFLINE && !onlineCoop) { UI.toast('Сохранение доступно в оффлайне и коопе', '#e33a2e'); Audio3D_SFX.deny(); return false; }
     if (!this.player || !this.offline) return false;
     this.saveCheckpoint(this.offline.wave || 1);
     UI.center('ИГРА СОХРАНЕНА', offlineModeLabel(this.checkpointKey()) + ' · волна ' + (this.offline.wave || 1), 1.6);
@@ -3631,8 +3633,9 @@ const Game = {
       this.effects.clear();
       this.spawnPlayerLocal(this.rosterSpawnIndex());
       console.log('[coop] start', (Net.role === CS.NETROLE.HOST ? 'HOST' : 'CLIENT'), this.onlinePvE);
-      this.roundState = 'live';
-      this.coopStartWave(1);
+      /* СТАРТОВАЯ ЗАКУПКА: даём игрокам купить оружие перед первой волной */
+      if (Net.role === CS.NETROLE.HOST) this.beginBuyPhase(25, 'КООП — ВОЛНА 1');
+      else { this.roundState = 'buy'; this.buyTimer = 25; this.roundT = 25; this.resetSkipVotes(); }
       this.enterGame();
       this._peerWarned = false; this._peerLost = false;
       this._silentT = 0; this._lastSeenPacket = 0;
@@ -4740,6 +4743,15 @@ const Game = {
     if (this.mode === CS.MODE.OFFLINE && this.offline) {
       this.startWave();
     }
+    /* КООП: после закупки начинается следующая волна у обоих игроков */
+    if (this.mode === CS.MODE.ONLINE && this.isCoop) {
+      if (Net.role === CS.NETROLE.HOST) {
+        this.coopStartWave((this.offline ? this.offline.wave : 0) + 1);
+        Net.send({ t: 'coopWave', w: this.offline.wave });
+        Net.send({ t: 'round', st: 'live', time: CFG.roundTime, no: this.roundNo, hp: this.matchHP, map: MAP.id, players: this.onlinePlayerCount() });
+      }
+      return;
+    }
     if (this.mode === CS.MODE.ONLINE && Net.role === CS.NETROLE.HOST) {
       Net.send({ t: 'round', st: 'live', time: CFG.roundTime, no: this.roundNo, hp: this.matchHP, map: MAP.id, players: this.onlinePlayerCount() });
     }
@@ -5342,11 +5354,13 @@ const Game = {
         o.breakT -= dt;
         if (o.breakT <= 0) {
           o.betweenWaves = false;
-          this.coopStartWave(o.wave + 1);
-          Net.send({ t: 'coopWave', w: o.wave });
+          /* МАГАЗИН МЕЖДУ ВОЛНАМИ: открываем фазу закупки у обоих (как в оффлайне) */
+          this.beginBuyPhase(22, 'ВОЛНА ' + (o.wave + 1));
         }
         return;
       }
+      /* волну спавним только в бою — во время закупки очередь ждёт */
+      if (this.roundState !== 'live') return;
       // spawn queue (same tuning as single-player)
       if (o.toSpawn > 0) {
         o.spawnAcc = (o.spawnAcc || 0) + dt;
@@ -9053,6 +9067,10 @@ const Game = {
      МГНОВЕННО (весь блок в радиусе исчезает сразу, а не копит урон). */
   breakMapAt(x, y, z, radius, dmg) {
     if (typeof damageMapAt !== 'function') return 0;
+    /* ВЗРЫВ: карту ломает и так синхронизированное 'boom' — не шлём ещё и mapbrk
+       по каждому чанку (иначе десятки лишних сообщений на один взрыв). */
+    MAP._netBoomGuard = true;
+    try {
     /* МОЗГ: взрывы бьют по колбам в радиусе */
     if (typeof BrainBoss !== 'undefined' && BrainBoss.active) {
       const b = BrainBoss.active;
@@ -9072,6 +9090,7 @@ const Game = {
       }
     }
     return destroyed;
+    } finally { MAP._netBoomGuard = false; }
   },
 
   hitEffect(point, dir, part, headshot) {
@@ -10009,6 +10028,17 @@ const Game = {
     this.breakMapAt(b.x, b.y, b.z, R * 1.05, 90);
     // drop the cosmetic copy so it does not fly on and detonate again
     this.removeRemoteProjectileNear(b.x, b.y, b.z);
+  },
+
+  /* соперник сломал блок пулей/лазером — ломаем тот же блок у себя */
+  onRemoteMapBreak(m) {
+    if (this.mode !== CS.MODE.ONLINE) return;
+    if (Game && Game._applyingRemoteBreak) return;
+    if (typeof mapBreakAtPoint === 'function') {
+      this._applyingRemoteBreak = true;
+      try { mapBreakAtPoint(m.x, m.y, m.z); }
+      finally { this._applyingRemoteBreak = false; }
+    }
   },
 
   onRemoteSplat(s) {
@@ -11058,6 +11088,15 @@ const Game = {
       }
       else if (o.betweenWaves) { objective = 'ПЕРЕДЫШКА · волна ' + (o.wave + 1); timer = o.breakT; }
       else objective = 'ЗАКУПКА · волна ' + (o.wave + 1);
+    } else if (this.mode === CS.MODE.ONLINE && this.isCoop) {
+      /* КООП-ВОЛНЫ: показываем волну/передышку/закупку, а не счёт побед */
+      const oc = this.offline;
+      if (oc) {
+        const left = oc.toSpawn + (this.horde ? this.horde.aliveCount : 0);
+        if (this.roundState === 'buy') { objective = 'ЗАКУПКА · волна ' + (oc.wave + 1); timer = this.buyTimer; }
+        else if (oc.betweenWaves) { objective = 'ПЕРЕДЫШКА · волна ' + (oc.wave + 1); timer = oc.breakT; }
+        else objective = 'КООП · ВОЛНА ' + oc.wave + ' · осталось ' + left;
+      }
     } else if (this.mode === CS.MODE.ONLINE) {
       const alive = (p.alive ? 1 : 0) + this.remotePlayers.filter(r => r.alive).length;
       const target = this.online ? this.online.rounds : 1;

@@ -45,13 +45,13 @@ function spawnLimbDebris(scene, part, dir) {
   const d = dir || { x: 0, y: 0, z: 0 };
   const dl = Math.hypot(d.x, d.z) || 1;
   ZOMBIE_LIMB_DEBRIS.push({
-    mesh: part, life: 3.2, max: 3.2,
-    vel: { x: (d.x / dl) * U.rand(2, 5) + U.rand(-2, 2), y: U.rand(3, 6.5), z: (d.z / dl) * U.rand(2, 5) + U.rand(-2, 2) },
-    spin: { x: U.rand(-10, 10), y: U.rand(-10, 10), z: U.rand(-10, 10) },
-    grounded: false
+    mesh: part, life: 4.0, max: 4.0,
+    vel: { x: (d.x / dl) * U.rand(3, 6.5) + U.rand(-2.5, 2.5), y: U.rand(3.5, 7), z: (d.z / dl) * U.rand(3, 6.5) + U.rand(-2.5, 2.5) },
+    spin: { x: U.rand(-12, 12), y: U.rand(-12, 12), z: U.rand(-12, 12) },
+    grounded: false, bloodT: 0
   });
 }
-function updateLimbDebris(dt, world) {
+function updateLimbDebris(dt, world, game) {
   for (let i = ZOMBIE_LIMB_DEBRIS.length - 1; i >= 0; i--) {
     const b = ZOMBIE_LIMB_DEBRIS[i];
     b.life -= dt;
@@ -74,7 +74,17 @@ function updateLimbDebris(dt, world) {
     b.mesh.rotation.x += b.spin.x * dt;
     b.mesh.rotation.y += b.spin.y * dt;
     b.mesh.rotation.z += b.spin.z * dt;
-    if (b.life < .8) b.mesh.scale.multiplyScalar(1 - dt * 1.2);
+    /* КРОВАВЫЙ СЛЕД: пока конечность летит — брызги и лужа под ней */
+    if (game && game.effects) {
+      if (!b.grounded) {
+        b.bloodT -= dt;
+        if (b.bloodT <= 0) { b.bloodT = .04; game.effects.particle(p.x, p.y, p.z, U.rand(-1, 1), U.rand(0, 1.2), U.rand(-1, 1), U.rand(.05, .12), 'blood', U.rand(.3, .6)); }
+      } else if (b.bloodT < 3.0) {
+        b.bloodT = 3.0 + 0.5;   // поставить один раз лужу
+        game.effects.decal(p.x, .02, p.z, 0, -1, 0, U.rand(.6, 1.2), 'blood');
+      }
+    }
+    if (b.life < 1.0) b.mesh.scale.multiplyScalar(1 - dt * 1.0);
   }
 }
 
@@ -895,13 +905,20 @@ class Zombie {
     this.deadT = 0;
     this.fallDir = headshot ? U.rand(-1, 1) : U.rand(-1, 1);
     this.fallSpeed = U.rand(2.2, 3.4);
-    /* ---- УЛЬТРА: рэгдолл — тело падает с физикой (толчок + вращение) ---- */
+    /* ---- УЛЬТРА: рэгдолл — тело падает с физикой (толчок + вращение),
+       а каждая конечность БОЛТАЕТСЯ независимо ---- */
     if (zombieUltra() && !this.ragdoll) {
       this.ragdoll = {
-        vel: { x: U.rand(-2.2, 2.2), y: U.rand(2.4, 5.2), z: U.rand(-2.2, 2.2) },
-        spin: { x: U.rand(-7, 7), y: U.rand(-5, 5), z: U.rand(-6, 6) },
+        vel: { x: U.rand(-2.6, 2.6), y: U.rand(2.6, 5.6), z: U.rand(-2.6, 2.6) },
+        spin: { x: U.rand(-8, 8), y: U.rand(-6, 6), z: U.rand(-7, 7) },
         grounded: false, settle: 0
       };
+      /* каждая конечность получает своё угловое колебание (болтается отдельно) */
+      const flail = {};
+      const mk = () => ({ rx: U.rand(-1.2, 1.2), rz: U.rand(-1.2, 1.2), ph: U.rand(0, 6.28), amp: U.rand(.5, 1.4), damp: 1 });
+      for (const k of ['armL', 'armR', 'legL', 'legR']) if (!this.severed[k]) flail[k] = mk();
+      this._flail = flail;
+      this._flailT = 0;
     }
     Bus.emit('zombieDied', this, headshot);
   }
@@ -972,6 +989,19 @@ class Zombie {
         this.group.rotation.y += r.spin.y * dt;
         this.group.rotation.z += r.spin.z * dt;
         this.group.position.set(this.pos.x, this.pos.y, this.pos.z);
+        /* КОНЕЧНОСТИ БОЛТАЮТСЯ ОТДЕЛЬНО: каждая машет с собственной фазой,
+           затухая по мере оседания тела */
+        if (this._flail) {
+          this._flailT += dt;
+          const pt = this.parts;
+          const damp = r.grounded ? Math.max(0, 1 - this._flailT * .8) : 1;
+          for (const k in this._flail) {
+            const f = this._flail[k], piv = pt[k];
+            if (!piv) continue;
+            piv.rotation.x = f.rx + Math.sin(this._flailT * 9 + f.ph) * f.amp * damp;
+            piv.rotation.z = f.rz + Math.cos(this._flailT * 7 + f.ph) * f.amp * .6 * damp;
+          }
+        }
         const fade = U.clamp(1 - (this.deadT - 3.2) / 1.0, 0, 1);
         if (this.deadT > 3.0) this.group.scale.setScalar(this.scale * U.clamp(fade, .01, 1));
         return;
@@ -1332,6 +1362,17 @@ class Zombie {
         this.group.rotation.y += r.spin.y * dt;
         this.group.rotation.z += r.spin.z * dt;
         this.group.position.set(this.pos.x, this.pos.y, this.pos.z);
+        if (this._flail) {
+          this._flailT = (this._flailT || 0) + dt;
+          const pt = this.parts;
+          const damp = r.grounded ? Math.max(0, 1 - this._flailT * .8) : 1;
+          for (const k in this._flail) {
+            const f = this._flail[k], piv = pt[k];
+            if (!piv) continue;
+            piv.rotation.x = f.rx + Math.sin(this._flailT * 9 + f.ph) * f.amp * damp;
+            piv.rotation.z = f.rz + Math.cos(this._flailT * 7 + f.ph) * f.amp * .6 * damp;
+          }
+        }
         const fade = U.clamp(1 - (this.deadT - 3.2) / 1.0, 0, 1);
         if (this.deadT > 3.0) this.group.scale.setScalar(this.scale * U.clamp(fade, .01, 1));
         return;
@@ -1722,7 +1763,7 @@ class Horde {
       if (z.dying && z.deadT > 4.2) { z.dispose(this.scene); this.list.splice(i, 1); }
     }
     /* УЛЬТРА: физика оторванных конечностей (общие обломки) */
-    if (typeof updateLimbDebris === 'function') updateLimbDebris(dt, this.world);
+    if (typeof updateLimbDebris === 'function') updateLimbDebris(dt, this.world, this.game);
   }
 
   get aliveCount() { let n = 0; for (const z of this.list) if (z.alive && !z.dying) n++; return n; }

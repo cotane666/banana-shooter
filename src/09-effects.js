@@ -2,8 +2,129 @@
    09 — EFFECTS: tracers, decals, particles, blood, impact sparks
    ============================================================ */
 
-/* Цвета радужного «нового» кольца ульты «Господина цветов». */
+/* Цвета радужного «нового» кольца ульты «Господина Flowers». */
 const FLOWER_NOVA_COLORS = [0xff5d8f, 0xffd23f, 0x5dd6ff, 0x9b6bff, 0x66e06a];
+
+/* ============================================================
+   БЫСТРЫЕ ЧАСТИЦЫ (GPU): все обычные искры/дым/кровь рисуются ОДНИМ
+   THREE.Points на всю игру вместо сотен отдельных mesh'ей (раньше каждая
+   частица = отдельный draw call → просадки). Позиции/цвета/размер/прозрачность
+   пишутся в буферы, рисуются одним вызовом с мягкой текстурой-точкой.
+   Две системы: аддитивная (свечения) и обычная (кровь/дым/банан).
+   ============================================================ */
+function FxPoints(scene, tex, additive) {
+  this.scene = scene;
+  this.additive = additive;
+  this.max = 1500;
+  this.count = 0;
+  this.free = [];
+  this.pos = new Float32Array(this.max * 3);
+  this.col = new Float32Array(this.max * 3);
+  this.siz = new Float32Array(this.max);
+  this.alp = new Float32Array(this.max);
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(this.pos, 3).setUsage(THREE.DynamicDrawUsage));
+  geo.setAttribute('pcolor', new THREE.BufferAttribute(this.col, 3).setUsage(THREE.DynamicDrawUsage));
+  geo.setAttribute('psize', new THREE.BufferAttribute(this.siz, 1).setUsage(THREE.DynamicDrawUsage));
+  geo.setAttribute('palpha', new THREE.BufferAttribute(this.alp, 1).setUsage(THREE.DynamicDrawUsage));
+  geo.setDrawRange(0, 0);
+  const mat = new THREE.ShaderMaterial({
+    uniforms: { uMap: { value: tex }, uPixel: { value: 1200 } },
+    vertexShader:
+      'attribute vec3 pcolor;\nattribute float psize;\nattribute float palpha;\n' +
+      'varying vec3 vCol;\nvarying float vA;\nuniform float uPixel;\n' +
+      'void main(){ vCol=pcolor; vA=palpha;' +
+      ' vec4 mv = modelViewMatrix * vec4(position,1.0);' +
+      ' gl_PointSize = clamp(psize * uPixel / max(0.2,-mv.z), 1.0, 170.0);' +
+      ' gl_Position = projectionMatrix * mv; }',
+    fragmentShader:
+      'uniform sampler2D uMap;\nvarying vec3 vCol;\nvarying float vA;\n' +
+      'void main(){ vec4 t = texture2D(uMap, gl_PointCoord);' +
+      ' float a = t.a * vA; if(a < 0.02) discard;' +
+      ' gl_FragColor = vec4(vCol, a); }',
+    transparent: true, depthWrite: false, depthTest: true,
+    blending: additive ? THREE.AdditiveBlending : THREE.NormalBlending
+  });
+  this.geo = geo;
+  this.mat = mat;
+  this.points = new THREE.Points(geo, mat);
+  this.points.frustumCulled = false;
+  this.points.renderOrder = 3;
+  scene.add(this.points);
+}
+FxPoints.prototype.alloc = function () {
+  if (this.free.length) return this.free.pop();
+  if (this.count < this.max) return this.count++;
+  return -1;
+};
+FxPoints.prototype.release = function (i) {
+  this.alp[i] = 0; this.siz[i] = 0;   // погасить слот
+  this.free.push(i);
+};
+/* пул записей, чтобы не аллоцировать объект на каждую частицу */
+FxPoints.prototype.newRec = function () {
+  const r = (this.recPool && this.recPool.pop()) || new FastParticle(this, -1);
+  r.sys = this; r._vis = true;
+  return r;
+};
+FxPoints.prototype.freeRec = function (r) {
+  if (!this.recPool) this.recPool = [];
+  if (this.recPool.length < 512) this.recPool.push(r);
+};
+FxPoints.prototype.flush = function () {
+  const g = this.geo;
+  g.setDrawRange(0, this.count);
+  g.attributes.position.needsUpdate = true;
+  g.attributes.pcolor.needsUpdate = true;
+  g.attributes.psize.needsUpdate = true;
+  g.attributes.palpha.needsUpdate = true;
+};
+FxPoints.prototype.reset = function () {
+  this.free.length = 0;
+  for (let i = 0; i < this.count; i++) this.free.push(i);
+  for (let i = 0; i < this.count; i++) { this.alp[i] = 0; this.siz[i] = 0; }
+};
+
+/* записать поля записи частицы в буферы системы */
+function _fxWrite(sys, r) {
+  const i = r.idx * 3;
+  sys.pos[i] = r.x; sys.pos[i + 1] = r.y; sys.pos[i + 2] = r.z;
+  sys.col[i] = r.cr; sys.col[i + 1] = r.cg; sys.col[i + 2] = r.cb;
+  sys.siz[r.idx] = r.size;
+  sys.alp[r.idx] = r.alpha;
+}
+/* погасить слот: позиция сохраняется, размер и альфа в ноль */
+function _fxZero(sys, r) {
+  sys.siz[r.idx] = 0;
+  sys.alp[r.idx] = 0;
+}
+
+/* Быстрая частица: один слот в общем THREE.Points. Поддерживает присвоение
+   `.material` (используется кодом для перекраски) — берём цвет и на этом всё. */
+class FastParticle {
+  constructor(sys, idx) {
+    this.sys = sys;
+    this.idx = idx;
+    this.x = 0; this.y = 0; this.z = 0;
+    this.cr = 1; this.cg = 1; this.cb = 1;
+    this.size = .1; this.baseSize = .1; this.alpha = 1; this.baseAlpha = 1;
+    this.vx = 0; this.vy = 0; this.vz = 0;
+    this.life = .5; this.max = .5; this.grav = 16;
+    this.type = 'spark'; this.smoke = false; this.pulse = false;
+  }
+  set material(m) {
+    if (m && m.color) { this.cr = m.color.r; this.cg = m.color.g; this.cb = m.color.b; }
+  }
+  get material() { return null; }
+  set visible(v) { this._vis = v; }
+  get visible() { return this._vis !== false; }
+  /* заглушки: код иногда зовёт их у частиц (важно только для мешей-исключений) */
+  get scale() { return _fxDummyScale; }
+  get rotation() { return _fxDummyRot; }
+}
+const _fxDummyScale = { set() { }, setScalar() { }, multiplyScalar() { }, copy() { } };
+const _fxDummyRot = { set() { }, x: 0, y: 0, z: 0 };
+
 
 /* Instanced-friendly particle pool using points+sprites is overkill;
    we use small meshes pooled per type (cheap at our scale). */
@@ -15,12 +136,14 @@ class Effects {
     this.particles = [];
     this.decals = [];
     this.maxDecals = quality === 0 ? 40 : quality === 1 ? 90 : 150;
-    this.maxParticles = quality === 0 ? 220 : quality === 1 ? 520 : 1000;
+    /* ЛИМИТ: сами частицы теперь дешёвые (1 draw call на всё), поэтому лимит
+       определяется скорее объёмом буфера. Держим разумным. */
+    this.maxParticles = quality === 0 ? 300 : quality === 1 ? 700 : 1200;
     /* пресет графики домножает лимиты (низкая графика = меньше частиц/декалей) */
     const pm = (CFG && CFG.particleMul) || 1;
     const dm = (CFG && CFG.decalMul) || 1;
     this.maxDecals = Math.max(12, Math.round(this.maxDecals * dm));
-    this.maxParticles = Math.max(60, Math.round(this.maxParticles * pm));
+    this.maxParticles = Math.max(80, Math.round(this.maxParticles * pm));
     /* множитель КОЛИЧЕСТВА частиц: больше частиц на пресетах повыше */
     this.partMul = Math.max(0.5, pm);
 
@@ -32,6 +155,9 @@ class Effects {
     this.particleGeo = new THREE.PlaneGeometry(1, 1);   // билборд-квад вместо куба
     /* мягкая круглая «точка» — частицы выглядят как свечения, а не квадраты */
     const dot = this._dotTexture();
+    /* БЫСТРЫЕ GPU-частицы: два THREE.Points — аддитивный (свечения) и обычный (кровь/дым) */
+    this.fxAdd = new FxPoints(scene, dot, true);
+    this.fxBlend = new FxPoints(scene, dot, false);
     const soft = (color, opts) => new THREE.MeshBasicMaterial(Object.assign({
       color: color, map: dot, transparent: true, depthWrite: false,
       side: THREE.DoubleSide, alphaTest: 0.01
@@ -1038,26 +1164,47 @@ class Effects {
   endLightning() { if (this._lightning) this._lightning.visible = false; }
 
   /* ---------- particles ---------- */
+  /* Обычные частицы (искры/дым/кровь/банан/пиписы) идут через БЫСТРЫЕ GPU-точки:
+     один draw call на всё. Купюры/панельки Спамтона остались отдельными мешами
+     (им нужен прямоугольный вид и собственный 3D-разворот). */
   particle(x, y, z, vx, vy, vz, size, type, life) {
     if (this.particles.length > this.maxParticles) return null;
-    let m = this.particlePool.pop();
+    if (type === 'spamtonCash' || type === 'spamtonPhone') {
+      let m = this.particlePool.pop();
+      const mat = type === 'spamtonCash' ? this.spamtonCashMat : this.spamtonPhoneMat;
+      if (!m) m = new THREE.Mesh(this.particleGeo, mat);
+      m.material = mat;
+      m.position.set(x, y, z);
+      m.rotation.set(0, 0, 0);
+      m.scale.setScalar(size);
+      m.visible = true;
+      if (m.parent !== this.scene) this.scene.add(m);
+      this.particles.push({ mesh: m, vx, vy, vz, life: life, max: life, grav: type === 'smoke' ? -1.5 : 16, type, bb: false, meshP: true });
+      return m;
+    }
+    const additive = (type === 'spark' || type === 'vspark' || type === 'spamtonGold');
+    const sys = additive ? this.fxAdd : this.fxBlend;
+    const idx = sys.alloc();
+    if (idx < 0) return null;
+    const rec = sys.newRec();
+    rec.idx = idx;
+    rec.x = x; rec.y = y; rec.z = z;
+    rec.vx = vx; rec.vy = vy; rec.vz = vz;
+    rec.size = size; rec.baseSize = size;
+    rec.life = life; rec.max = life;
+    rec.type = type; rec.smoke = (type === 'smoke'); rec.grav = type === 'smoke' ? -1.5 : 16;
+    rec.pulse = additive && (type === 'spark' || type === 'vspark' || type === 'spamtonPipis');
+    /* цвет из соответствующего материала */
     const mat = type === 'blood' ? this.bloodMat : type === 'smoke' ? this.smokeMat
       : type === 'banana' ? this.bananaMat : type === 'vspark' ? this.vsparkMat
-      : type === 'spamtonPipis' ? this.spamtonPinkMat : type === 'spamtonCash' ? this.spamtonCashMat
-      : type === 'spamtonPhone' ? this.spamtonPhoneMat : this.sparkMat;
-    if (!m) m = new THREE.Mesh(this.particleGeo, mat);
-    m.material = mat;
-    m.position.set(x, y, z);
-    /* billboard: плоские «свечения» всегда смотрят в камеру (кроме купюр/панелек,
-       которым нужен собственный 3D-разворот) */
-    const bb = !(type === 'spamtonCash' || type === 'spamtonPhone');
-    if (bb && this._cam) m.quaternion.copy(this._cam.quaternion);
-    else m.rotation.set(0, 0, 0);
-    m.scale.setScalar(size);
-    m.visible = true;
-    if (m.parent !== this.scene) this.scene.add(m);
-    this.particles.push({ mesh: m, vx, vy, vz, life: life, max: life, grav: type === 'smoke' ? -1.5 : 16, type, bb });
-    return m;
+      : type === 'spamtonPipis' ? this.spamtonPinkMat : type === 'spamtonGold' ? this.spamtonGoldMat
+      : this.sparkMat;
+    if (mat && mat.color) { rec.cr = mat.color.r; rec.cg = mat.color.g; rec.cb = mat.color.b; }
+    rec.baseAlpha = (type === 'smoke') ? .55 : (type === 'blood' ? .95 : 1);
+    rec.alpha = rec.baseAlpha;
+    _fxWrite(sys, rec);
+    this.particles.push(rec);
+    return rec;
   }
 
   /* comedic banana explosion: yellow chunks + a green peel fleck */
@@ -1769,7 +1916,11 @@ class Effects {
       const p = this.particles[i];
       p.life -= dt;
       if (p.life <= 0) {
-        if (p.light) {
+        if (p instanceof FastParticle) {
+          _fxZero(p.sys, p);
+          p.sys.release(p.idx);
+          p.sys.freeRec(p);
+        } else if (p.light) {
           if (p.mesh.parent) p.mesh.parent.remove(p.mesh);
           if (p.light.parent) p.light.parent.remove(p.light);
           if (p.mesh !== p.light) { if (p.mesh.geometry) p.mesh.geometry.dispose(); if (p.mesh.material) p.mesh.material.dispose(); }
@@ -1787,6 +1938,21 @@ class Effects {
           this.particlePool.push(p.mesh);
         }
         this.particles.splice(i, 1);
+        continue;
+      }
+      /* БЫСТРАЯ GPU-частица: физика + запись в буфер */
+      if (p instanceof FastParticle) {
+        p.vy -= p.grav * dt;
+        p.x += p.vx * dt; p.y += p.vy * dt; p.z += p.vz * dt;
+        if (p.y < .02) { p.y = .02; p.vx *= .4; p.vz *= .4; p.vy = 0; }
+        const k = U.clamp(p.life / p.max, 0, 1);
+        let sz = p.baseSize, alpha = p.baseAlpha;
+        if (p.smoke) { sz = p.baseSize * (1 + (1 - k) * 1.5); alpha = p.baseAlpha * Math.max(0, k) * .8; }
+        else if (p.pulse) { const flick = 1 + Math.sin(p.life * 40 + p.x) * .12 * (1 - k); sz = p.baseSize * (.55 + .45 * k) * flick; alpha = Math.min(1, k * 2) * p.baseAlpha; }
+        else { alpha = Math.min(1, k * 2) * p.baseAlpha; }
+        p.size = sz;
+        p.alpha = alpha;
+        _fxWrite(p.sys, p);
         continue;
       }
       if (p.light) {
@@ -1852,6 +2018,9 @@ class Effects {
         }
       }
     }
+    /* единый вызов: залить буферы GPU-частиц */
+    if (this.fxAdd) this.fxAdd.flush();
+    if (this.fxBlend) this.fxBlend.flush();
   }
 
   clear() {
@@ -1868,11 +2037,15 @@ class Effects {
     }
     if (this.arcs) { this.arcs.forEach(a => { if (a.mesh.parent) a.mesh.parent.remove(a.mesh); if (a.mesh.geometry) a.mesh.geometry.dispose(); }); this.arcs.length = 0; }
     this.particles.forEach(p => {
+      if (p instanceof FastParticle) return;   // GPU-частицы сбрасываются ниже
       if (p.group || p.field) { if (p.mesh.parent) p.mesh.parent.remove(p.mesh); p.mesh.traverse && p.mesh.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material) o.material.dispose(); }); if (p.light && p.light.parent) p.light.parent.remove(p.light); }
       else if (!p.light) { if (p.mesh.parent) p.mesh.parent.remove(p.mesh); this.particlePool.push(p.mesh); }
       else if (p.mesh.parent) p.mesh.parent.remove(p.mesh);
     });
     this.particles.length = 0;
+    /* сбросить GPU-частицы */
+    if (this.fxAdd) { this.fxAdd.reset(); this.fxAdd.flush(); }
+    if (this.fxBlend) { this.fxBlend.reset(); this.fxBlend.flush(); }
     this.decals.forEach(d => this.scene.remove(d));
     this.decals.length = 0;
     this.fields.length = 0;

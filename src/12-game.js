@@ -2344,7 +2344,7 @@ const Game = {
     this.stopToMenu(true);
     this.mode = CS.MODE.OFFLINE;
     /* [BIG SHOT] КРОМЕР: сбрасываем прогресс улучшений на новую игру */
-    if (typeof kromerReset === 'function') { kromerReset(); this.kromerCoins = []; }
+    if (typeof kromerReset === 'function') { kromerReset(); this.kromerCoins = []; if (typeof kromerClearFamiliars === 'function') kromerClearFamiliars(this); }
     this.kromerOpen = false;
     this._campaignDone = false;
     this._campaignWon = false;
@@ -3853,6 +3853,7 @@ const Game = {
       if (this.player && this.player.vmGroup && this.player.vmGroup.parent) this.player.vmGroup.parent.remove(this.player.vmGroup);
       if (this.effects) { this.effects.clear(); }
       if (typeof kromerClearCoins === 'function') kromerClearCoins(this);
+      if (typeof kromerClearFamiliars === 'function') kromerClearFamiliars(this);
       this.kromerOpen = false;
       if (typeof MapEditor !== 'undefined' && MapEditor.active) MapEditor.stop();
       if (typeof this.editorUI === 'function') this.editorUI(false);
@@ -4940,6 +4941,9 @@ const Game = {
       this.kromerOpen = true;
       setTimeout(() => { if (this.kromerOpen) kromerOpenShop(this); }, 900);
     }
+    /* КРОМЕР: пассивные эффекты (HP/броня/мантия/щит) к новой волне */
+    if (typeof kromerApplyPassive === 'function' && KromerState.active) kromerApplyPassive(this);
+    if (typeof kromerSyncFamiliars === 'function' && KromerState.active) kromerSyncFamiliars(this);
     /* endless: every 10 waves pause and let the player pick a modifier */
     if (this.isEndless && o.wave > 1 && (o.wave - 1) % 10 === 0) {
       this.openModifierPicker(o.wave);
@@ -6109,11 +6113,22 @@ const Game = {
       if (def.projectile === 'pipis' && def.spamtonComboChance && Math.random() < def.spamtonComboChance) {
         this.startSpamtonCombo();
       } else {
-        /* [BIG SHOT] КРОМЕР: «РАСПРОДАЖА» — доп. пиписы за выстрел */
+        /* [BIG SHOT] КРОМЕР: «РАСПРОДАЖА» + «РАЗДАЧА» — доп. пиписы за выстрел */
         const extra = (def.projectile === 'pipis' && typeof KromerState !== 'undefined' && KromerState.active)
-          ? KromerMul('extra') : 0;
-        this.spawnProjectile(def, muzzleWorld, baseDir, p);
-        for (let e = 0; e < extra; e++) this.spawnProjectile(def, muzzleWorld, baseDir, p);
+          ? (KromerMul('extra') + (typeof kromerExtraShots === 'function' ? kromerExtraShots() : 0)) : 0;
+        const pipisShots = 1 + extra;
+        for (let e = 0; e < pipisShots; e++) {
+          /* веер: каждый следующий пипис чуть в сторону */
+          let shotDir = baseDir;
+          if (pipisShots > 1) {
+            const off = (e - (pipisShots - 1) / 2) * .06;
+            const rx = Math.cos(p.yaw), rz = -Math.sin(p.yaw);
+            shotDir = { x: baseDir.x + rx * off, y: baseDir.y, z: baseDir.z + rz * off };
+            const l = Math.hypot(shotDir.x, shotDir.y, shotDir.z) || 1;
+            shotDir = { x: shotDir.x / l, y: shotDir.y / l, z: shotDir.z / l };
+          }
+          this.spawnProjectile(def, muzzleWorld, shotDir, p);
+        }
         /* [BIG SHOT] КРОМЕР: «СКОРОСТРЕЛ» — быстрее перезарядка выстрела */
         if (def.projectile === 'pipis' && typeof KromerState !== 'undefined' && KromerState.active) {
           p.fireCd *= KromerMul('rate');
@@ -6292,7 +6307,8 @@ const Game = {
 
   spawnProjectile(def, origin, dir, owner, pipisKindOverride) {
     const p = this.player;
-    const spread = p.aimSpread();
+    /* КРОМЕР: КОВБОЙСКАЯ ШЛЯПА — пули летят ровнее (разброс меньше) */
+    const spread = p.aimSpread() * ((def.projectile === 'pipis' && typeof KromerMul === 'function' && KromerState.active) ? KromerMul('spread') : 1);
     const d = this.spreadDirection(dir, spread, false);
     const kind = def.projectile;
     const isRocket = kind === 'rocket';
@@ -6364,17 +6380,29 @@ const Game = {
       if (km) {
         pr.dmg *= km('dmg');                            // урон
         pr.homing = kromerHoming();                     // самонаведение
+        pr.homingStr = typeof kromerStat === 'function' ? kromerStat('homingStr') : 0;
+        pr.speedMul = km('speed');                      // скорость снаряда
+        if (typeof kromerCritChance === 'function') pr.crit = kromerCritChance();
+        if (typeof kromerLifesteal === 'function') pr.lifesteal = kromerLifesteal();
+        if (typeof kromerStat === 'function') {
+          pr.freezeChance = kromerStat('freeze');
+          pr.burn = kromerStat('burn');
+        }
       }
       if (pipisKind === 'explosive') {
         pr.splash = 4.0; pr.splashDmg = def.pipisDmg || 90; pr.explosionColor = [0xff7a1e, 0x1a0d05];
-        if (km) pr.splash *= km('size');
+        if (km) { pr.splash *= km('size') * km('splash'); pr.splashDmg *= km('splashDmg'); }
       } else if (pipisKind === 'spiky') {
         pr.pierce = 4 + (km ? km('pierce') : 0); pr.spiky = true;
       } else {
-        pr.bouncy = true; pr.life = 9;
+        pr.bouncy = true;
+        pr.life = 9 + (km ? km('bouncyLife') : 0);
         if (km) pr.maxBounces = 6 + Math.round(km('bounce') * 3);
       }
       if (km) { const s = km('size'); if (s !== 1) pr.mesh.scale.multiplyScalar(s); }
+      if (pr.speedMul && pr.speedMul !== 1) {
+        pr.vel.x *= pr.speedMul; pr.vel.y *= pr.speedMul; pr.vel.z *= pr.speedMul;
+      }
     }
     if (kind === 'freeze') pr.life = 7;
     this.projectiles.push(pr);
@@ -6515,8 +6543,13 @@ const Game = {
           this.sendPvpHit(pr.dmg * mul, hitP.part, hs, hitP.rp, pr.kind, pr.pid);
           impactPoint = hitP.point;
         } else {
-          const killed = hitZ.zombie.takeDamage(pr.dmg, hitZ.part, dir);
-          this.player.damageDealt += pr.dmg;
+          /* КРОМЕР: крит, лифстил, заморозка, поджог */
+          let hitDmg = pr.dmg;
+          if (pr.crit && Math.random() < pr.crit) hitDmg *= 2;
+          if ((hitZ.zombie.isBoss || hitZ.zombie.isMiniBoss) && typeof KromerMul === 'function' && KromerState.active) hitDmg *= KromerMul('dmgBoss');
+          const killed = hitZ.zombie.takeDamage(hitDmg, hitZ.part, dir);
+          this.player.damageDealt += hitDmg;
+          this.applyKromerOnHit(hitZ.zombie, pr, hitDmg, dir);
           if (killed) { /* scored in onZombieDied */ }
           this.player.bulletsHit++;
           impactPoint = { x: pr.pos.x + dir.x * hitZ.t, y: pr.pos.y + dir.y * hitZ.t, z: pr.pos.z + dir.z * hitZ.t };
@@ -7257,6 +7290,28 @@ const Game = {
           if (this.effects) this.effects.impact({ x: z.pos.x, y: z.pos.y + 1.0, z: z.pos.z }, { x: -p.dashDir.x, y: 0, z: -p.dashDir.z }, 'flesh');
           Audio3D_SFX.flesh(z.pos.x, z.pos.y + 1.0, z.pos.z);
         }
+      },
+      /* THE MANTLE: рывок вне меха тоже наносит круговую атаку по врагам рядом */
+      updateMantleDash(dt) {
+        const p = this.player;
+        if (!p || !p.dashGearT || p.dashGearT <= 0) return;
+        if (typeof KromerState === 'undefined' || !KromerState.active || kromerCount('mantle') <= 0) return;
+        if (!this.horde) return;
+        if (!p._mantleTook) p._mantleTook = {};
+        const R = 3.2;
+        for (const z of this.horde.list) {
+          if (!z.alive || z.dying) continue;
+          if (p._mantleTook[z.id]) continue;
+          const d = Math.hypot(z.pos.x - p.pos.x, z.pos.z - p.pos.z);
+          if (d > R) continue;
+          p._mantleTook[z.id] = 1;
+          const dmg = 90;
+          z.takeDamage(dmg, 'body', { x: p.dashGearDir ? p.dashGearDir.x : 0, y: 0, z: p.dashGearDir ? p.dashGearDir.z : 0 });
+          p.damageDealt += dmg;
+          z.staggerT = Math.max(z.staggerT || 0, .4);
+        }
+        /* сброс списка, когда рывок закончился */
+        if (p.dashGearT <= .02) p._mantleTook = {};
       },
       /* ЛКМ fires the minigun, ПКМ fires the laser, both independent and held */
       updateMech(dt, lmb, rmb) {
@@ -9363,6 +9418,18 @@ const Game = {
        летит вперёд, он не получает урона (кроме собственного урона захвата). */
     if (this._flowerRush && !this._flowerRushDmg) return;
     let actual = dmg;
+    /* КРОМЕР: УКЛОНЕНИЕ — шанс полностью избежать урона */
+    if (typeof kromerEvade === 'function' && KromerState.active && Math.random() < kromerEvade()) {
+      UI.toast('[[УКЛОНЕНИЕ]]!', '#8fe0ff');
+      return;
+    }
+    /* КРОМЕР: ЩИТ ЛАЙТНЕРА — сначала поглощает запас щита */
+    if (typeof kromerAbsorbShield === 'function' && KromerState.active && KromerState.shield > 0) {
+      const before = actual;
+      actual = kromerAbsorbShield(actual);
+      if (before - actual > 0 && this.effects) this.effects.frostBurst(p.pos.x, p.pos.y + 1.2, p.pos.z, 1.2);
+    }
+    if (actual <= 0) return;
     // the mech chassis soaks HALF of every hit before armour
     if (this.isMechActive()) actual *= .5;
     if (p.armor > 0) {
@@ -9389,8 +9456,23 @@ const Game = {
       const ang = Math.atan2(fromPos.x - p.pos.x, fromPos.z - p.pos.z) - p.yaw;
       UI.damageDirection(ang);
     }
+    /* КРОМЕР: ОТПОР — отражаем часть урона обратно в ближайшего врага */
+    if (typeof kromerThorns === 'function' && KromerState.active && actual > 0 && this.horde && kromerThorns() > 0) {
+      const th = kromerThorns();
+      let best = null, bd = 3.2 * 3.2;
+      for (const z of this.horde.list) {
+        if (!z.alive || z.dying) continue;
+        const d2 = (z.pos.x - p.pos.x) ** 2 + (z.pos.z - p.pos.z) ** 2;
+        if (d2 < bd) { bd = d2; best = z; }
+      }
+      if (best) best.takeDamage(actual * th, 'body', { x: 0, y: 0, z: 0 });
+    }
     if (p.health <= 0) {
       p.health = 0;
+      /* КРОМЕР: REVIVEMINT — воскрешение после смерти */
+      if (typeof kromerTryRevive === 'function' && KromerState.active && KromerState.kromer >= 0 && kromerCount('revivemint') > 0 && !KromerState.reviveUsed) {
+        if (kromerTryRevive(this)) return;
+      }
       this.onLocalDeath();
     }
   },
@@ -9441,6 +9523,22 @@ const Game = {
     }
   },
 
+  /* КРОМЕР: эффекты попадания пиписа — поджог/заморозка/лифстил */
+  applyKromerOnHit(z, pr, dmg, dir) {
+    const p = this.player;
+    if (!z || !z.alive || z.dying) return;
+    if (pr.burn && Math.random() < 0.5 && !z.isBoss) {
+      z.burnT = Math.max(z.burnT || 0, 2.5);
+      z.burnDps = Math.max(z.burnDps || 0, (pr.dmg || 20) * 0.18 * pr.burn);
+    }
+    if (pr.freezeChance && Math.random() < pr.freezeChance && !z.isBoss) {
+      if (typeof z.freeze === 'function') z.freeze(1.6);
+    }
+    if (pr.lifesteal && p) {
+      p.health = Math.min(p.maxHealth, p.health + dmg * pr.lifesteal);
+    }
+  },
+
   onZombieDied(z, headshot) {
     const p = this.player;
     p.zombieKills++;
@@ -9455,6 +9553,11 @@ const Game = {
         this.kromerCoins.push(kromerSpawnCoin(this.scene, z.pos.x + U.rand(-.6, .6), z.pos.y, z.pos.z + U.rand(-.6, .6)));
       }
       if (n > 6) this.kromerCoins[this.kromerCoins.length - 1].kromer = n - 5;   // излишек в одну монету
+    }
+    /* КРОМЕР: БРОНЯ ВАМПИРА — +броня за убийство */
+    if (typeof KromerState !== 'undefined' && KromerState.active && typeof kromerStat === 'function') {
+      const ak = kromerStat('armorKill');
+      if (ak > 0) p.armor = Math.min(p.armorMax || 100, (p.armor || 0) + ak);
     }
     /* скоростная цель: сколько убийств уложилось в скользящее окно 5 секунд */
     const now = U.now();
@@ -10541,6 +10644,7 @@ const Game = {
     this.updateFlowerRush(dt);
     this.updateOmega(dt);
     this.updateMechDash(dt);
+    this.updateMantleDash(dt);
     p.tickWeapon(dt, this);
     this.updateShield(dt);
 

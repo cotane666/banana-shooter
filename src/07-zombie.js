@@ -824,6 +824,22 @@ class Zombie {
     this.hitFlash = Math.max(0, this.hitFlash - dt);
     if (this.shootCd > 0) this.shootCd -= dt;
 
+    /* КРОМЕР: ПОДЖОГ — зомби горит и теряет здоровье со временем */
+    if (this.burnT > 0 && !this.dying) {
+      this.burnT -= dt;
+      const bd = (this.burnDps || 0) * dt;
+      if (bd > 0) {
+        this.health -= bd;
+        this._burnAcc = (this._burnAcc || 0) + bd;
+        const gm = this.game || (ctx && ctx.game);
+        if (this._burnAcc >= 25) {
+          this._burnAcc = 0; this.hitFlash = .1;
+          if (gm && gm.effects) gm.effects.particle(this.pos.x, this.pos.y + 1.2, this.pos.z, U.rand(-.4, .4), U.rand(1, 2), U.rand(-.4, .4), .18, 'spark', .3);
+        }
+        if (this.health <= 0) { this.die(false); return; }
+      }
+    }
+
     if (this.frozen) {
       /* АБСОЛЮТНЫЙ НОЛЬ: stay locked in ice until it thaws; banked damage is
          paid out now (shooting a frozen zombie then letting it thaw kills it). */

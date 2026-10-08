@@ -435,7 +435,32 @@ const WEAPONS = {
           flowerDash: true, dashCd: 1.4, dashSpeed: 34, dashDur: .5, dashDmg: 120, dashGrabR: 2.6,
           omegaDashCd: .5, omegaDist: 34,
           ult: true, ultCd: 20, ultR: 10, ultDmg: 1600, ultBreakR: 8, ultBreakDelay: 0, ultDist: 44,
-          flowerUlt: true }
+          flowerUlt: true },
+
+  /* ============================================================
+     BLOOD ART (в духе Pain / Paw Fruit из Blox Fruits).
+     Оружие-фрукт: в руках — кроваво-красная «лапа». ЛКМ — обычный тяжёлый
+     удар лапой. Пять способностей (Z/X/C/V/F), как в оригинале:
+       Z — HEAVY PAW   : быстрый лапо-снаряд, прошивает врагов насквозь;
+       X — PAW BARRAGE : залп множества лапо-снарядов;
+       C — PAIN NUKE   : лапо-снаряд-«ядерка», подбрасывает врагов;
+       V — TORTURE     : красный пульсирующий снаряд, тикающий урон;
+       F — SELF REPEL  : рывок к курсору (мобильность).
+     ============================================================ */
+  bloodArt: { name: 'BLOOD ART', cat: 'melee', slot: 3, price: 99999, dmg: 130, rpm: 90, mag: Infinity, reserve: 0,
+          auto: false, spread: 0, moveSpread: 0, recoil: 3.4, falloff: 1, range: 3.4, headMul: 2.0, sound: 'knife',
+          melee: 'bloodArt', knockback: 14, bloodMelee: true,
+          fruit: 'bloodArt',
+          /* Z — HEAVY PAW */
+          pawCd: 8, pawSpeed: 62, pawDmg: 260, pawPierce: 8,
+          /* X — PAW BARRAGE */
+          barrageCd: 12, barrageCount: 7, barrageDmg: 150, barrageInterval: .07,
+          /* C — PAIN NUKE */
+          nukeCd: 18, nukeDmg: 520, nukeR: 9, nukeBreakR: 7, nukeSpeed: 52,
+          /* V — TORTURE */
+          tortureCd: 24, tortureDmg: 90, tortureTick: 70, tortureTime: 5, tortureSpeed: 46,
+          /* F — SELF REPEL */
+          repelCd: 7, repelDist: 34, repelSpeed: 60 }
 };
 /* ============================================================
    МИНИ-ИЗОБРАЖЕНИЯ ОРУЖИЯ ДЛЯ МАГАЗИНА

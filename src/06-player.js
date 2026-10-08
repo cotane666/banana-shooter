@@ -2179,6 +2179,14 @@ function buildWeaponModel(id) {
       g.userData.spamtonGun = true;
       break;
     }
+
+    /* ---------------- BLOOD ART: кроваво-красная лапа (Pain Fruit) ---------------- */
+    case 'bloodArt': {
+      const claw = buildBloodArtClaw();
+      while (claw.children.length) g.add(claw.children[0]);
+      g.userData.bloodClaw = true;
+      break;
+    }
   }
 
   /* every model gets a muzzle marker at the barrel tip so flashes and
@@ -2204,6 +2212,7 @@ const MUZZLE_Z = {
   rocketgun: -0.94, shield: -0.30,
   banana: -0.92,
   lordOfFlowers: -0.96,
+  bloodArt: -0.32,
   spamtonGun: -0.52,
   acid: -0.76, hive: -0.26, disc: -0.32, freeze: -0.76, tesla: -0.72,
   portal: -0.48, blackhole: -0.54, turretDrone: -0.28, chrono: -0.48,

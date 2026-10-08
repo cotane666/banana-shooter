@@ -2183,7 +2183,32 @@ const WEAPONS = {
           flowerDash: true, dashCd: 1.4, dashSpeed: 34, dashDur: .5, dashDmg: 120, dashGrabR: 2.6,
           omegaDashCd: .5, omegaDist: 34,
           ult: true, ultCd: 20, ultR: 10, ultDmg: 1600, ultBreakR: 8, ultBreakDelay: 0, ultDist: 44,
-          flowerUlt: true }
+          flowerUlt: true },
+
+  /* ============================================================
+     BLOOD ART (в духе Pain / Paw Fruit из Blox Fruits).
+     Оружие-фрукт: в руках — кроваво-красная «лапа». ЛКМ — обычный тяжёлый
+     удар лапой. Пять способностей (Z/X/C/V/F), как в оригинале:
+       Z — HEAVY PAW   : быстрый лапо-снаряд, прошивает врагов насквозь;
+       X — PAW BARRAGE : залп множества лапо-снарядов;
+       C — PAIN NUKE   : лапо-снаряд-«ядерка», подбрасывает врагов;
+       V — TORTURE     : красный пульсирующий снаряд, тикающий урон;
+       F — SELF REPEL  : рывок к курсору (мобильность).
+     ============================================================ */
+  bloodArt: { name: 'BLOOD ART', cat: 'melee', slot: 3, price: 99999, dmg: 130, rpm: 90, mag: Infinity, reserve: 0,
+          auto: false, spread: 0, moveSpread: 0, recoil: 3.4, falloff: 1, range: 3.4, headMul: 2.0, sound: 'knife',
+          melee: 'bloodArt', knockback: 14, bloodMelee: true,
+          fruit: 'bloodArt',
+          /* Z — HEAVY PAW */
+          pawCd: 8, pawSpeed: 62, pawDmg: 260, pawPierce: 8,
+          /* X — PAW BARRAGE */
+          barrageCd: 12, barrageCount: 7, barrageDmg: 150, barrageInterval: .07,
+          /* C — PAIN NUKE */
+          nukeCd: 18, nukeDmg: 520, nukeR: 9, nukeBreakR: 7, nukeSpeed: 52,
+          /* V — TORTURE */
+          tortureCd: 24, tortureDmg: 90, tortureTick: 70, tortureTime: 5, tortureSpeed: 46,
+          /* F — SELF REPEL */
+          repelCd: 7, repelDist: 34, repelSpeed: 60 }
 };
 /* ============================================================
    МИНИ-ИЗОБРАЖЕНИЯ ОРУЖИЯ ДЛЯ МАГАЗИНА
@@ -8275,6 +8300,242 @@ function kromerClearCoins(game) {
 }
 
 
+/* ===== 06d-blood-art.js ===== */
+/* ============================================================
+   06d — BLOOD ART (в духе Pain / Paw Fruit из Blox Fruits)
+   Оружие-фрукт ближнего боя: в руках кроваво-красная «лапа».
+   ЛКМ — тяжёлый удар лапой. Пять способностей, как у Pain Fruit:
+     Z — HEAVY PAW   : быстрый лапо-снаряд, прошивает всех на пути;
+     X — PAW BARRAGE : залп множества лапо-снарядов;
+     C — PAIN NUKE   : лапо-«ядерка», подбрасывает врагов и ломает карту;
+     V — TORTURE     : красный пульсирующий снаряд — тикающий урон;
+     F — SELF REPEL  : рывок к курсору (дальняя мобильность).
+   ============================================================ */
+
+const BLOOD_COL = 0xd41f2a;      // основной кроваво-красный
+const BLOOD_DARK = 0x5a0a12;    // тёмно-бордовый
+const PAW_PINK = 0xff6d8a;      // розовые подушечки
+
+/* ---------- модель лапы в руках (первое лицо) ---------- */
+function buildBloodArtClaw() {
+  const g = new THREE.Group();
+  const flesh = new THREE.MeshLambertMaterial({ color: BLOOD_COL, emissive: 0x2a0408 });
+  const dark = new THREE.MeshLambertMaterial({ color: BLOOD_DARK, emissive: 0x120003 });
+  const pad = new THREE.MeshLambertMaterial({ color: PAW_PINK, emissive: 0x3a0a14 });
+
+  // запястье / рука
+  const wrist = new THREE.Mesh(new THREE.BoxGeometry(.16, .15, .20), dark);
+  wrist.position.set(0, -.02, .10);
+  g.add(wrist);
+
+  // ладонь
+  const palm = new THREE.Mesh(new THREE.BoxGeometry(.20, .10, .18), flesh);
+  palm.position.set(0, 0, -.05);
+  g.add(palm);
+
+  // три «пальца»-когтя спереди
+  for (let i = -1; i <= 1; i++) {
+    const f = new THREE.Mesh(new THREE.BoxGeometry(.045, .07, .16), flesh);
+    f.position.set(i * .06, .015, -.19);
+    f.rotation.x = .12;
+    g.add(f);
+    const claw = new THREE.Mesh(new THREE.ConeGeometry(.028, .10, 6), pad);
+    claw.position.set(i * .06, .0, -.29);
+    claw.rotation.x = Math.PI / 2;
+    g.add(claw);
+  }
+  // большой палец
+  const thumb = new THREE.Mesh(new THREE.BoxGeometry(.05, .07, .12), flesh);
+  thumb.position.set(.12, .0, -.10);
+  thumb.rotation.y = -.5;
+  g.add(thumb);
+
+  // подушечка на ладони (знак лапы Pain Fruit)
+  const padMain = new THREE.Mesh(new THREE.SphereGeometry(.045, 10, 8), pad);
+  padMain.scale.set(1, 1, .4);
+  padMain.position.set(0, .055, -.05);
+  g.add(padMain);
+  for (let i = -1; i <= 1; i++) {
+    const toe = new THREE.Mesh(new THREE.SphereGeometry(.02, 8, 6), pad);
+    toe.scale.set(1, 1, .4);
+    toe.position.set(i * .05, .03, -.16);
+    g.add(toe);
+  }
+
+  // слабое красное свечение вокруг лапы
+  const glow = new THREE.Mesh(new THREE.SphereGeometry(.22, 10, 8),
+    new THREE.MeshBasicMaterial({ color: BLOOD_COL, transparent: true, opacity: .18, blending: THREE.AdditiveBlending, depthWrite: false }));
+  glow.position.set(0, .02, -.10);
+  g.add(glow);
+
+  g.userData.bloodClaw = true;
+  return g;
+}
+
+/* ---------- знак лапы (плоский отпечаток с подушечками) ---------- */
+function _pawTexture() {
+  if (_pawTexture._c) return _pawTexture._c;
+  const S = 128; const c = makeCanvas(S); const x = c.getContext('2d');
+  x.clearRect(0, 0, S, S);
+  const cx = S / 2, cy = S * .58;
+  x.fillStyle = 'rgba(255,255,255,.96)';
+  // центральная подушечка
+  x.beginPath(); x.ellipse(cx, cy, S * .20, S * .16, 0, 0, 7); x.fill();
+  // четыре пальца
+  const toes = [[-.24, -.20, .085], [-.09, -.30, .09], [.09, -.30, .09], [.24, -.20, .085]];
+  for (const t of toes) {
+    x.beginPath(); x.ellipse(cx + t[0] * S, cy + t[1] * S, S * t[2], S * t[2] * 1.15, 0, 0, 7); x.fill();
+  }
+  const tx = new THREE.CanvasTexture(c);
+  tx.colorSpace = THREE.SRGBColorSpace;
+  _pawTexture._c = tx;
+  return tx;
+}
+
+/* ---------- снаряд-лапа ---------- */
+let _pawBodyGeo = null, _pawMat = null, _pawGlowMat = null;
+function buildPawProjectile(kind) {
+  const g = new THREE.Group();
+  if (!_pawBodyGeo) {
+    _pawBodyGeo = new THREE.SphereGeometry(.24, 14, 12);
+  }
+  const coreCol = kind === 'torture' ? 0xff2030 : BLOOD_COL;
+  const body = new THREE.Mesh(_pawBodyGeo,
+    new THREE.MeshBasicMaterial({ color: coreCol, map: _pawTexture(), transparent: true, depthWrite: false, side: THREE.DoubleSide }));
+  body.scale.set(1, 1, .45);
+  g.add(body);
+  // ободок-лапа чуть больше и полупрозрачный (объём)
+  const halo = new THREE.Mesh(_pawBodyGeo,
+    new THREE.MeshBasicMaterial({ color: kind === 'torture' ? 0xff8090 : PAW_PINK, map: _pawTexture(), transparent: true, opacity: .35, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
+  halo.scale.set(1.35, 1.35, .5);
+  halo.position.z = .02;
+  g.add(halo);
+  // тёмное ядро сзади, чтобы читался объём
+  const core = new THREE.Mesh(new THREE.SphereGeometry(.12, 10, 8),
+    new THREE.MeshBasicMaterial({ color: 0x300006, transparent: true, opacity: .8, depthWrite: false }));
+  core.position.z = .10;
+  g.add(core);
+  if (kind === 'nuke') {
+    // у «ядерки» — мигающий красный ореол
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(.34, .05, 8, 20),
+      new THREE.MeshBasicMaterial({ color: 0xff3344, transparent: true, opacity: .7, blending: THREE.AdditiveBlending, depthWrite: false }));
+    g.add(ring);
+    g.userData.ring = ring;
+  }
+  g.userData.pawBody = body;
+  return g;
+}
+
+/* ---------- игровые способности BLOOD ART ---------- */
+const BloodArt = {
+  /* проверка, что в руках именно фрукт Blood Art */
+  _def() {
+    const p = (typeof Game !== 'undefined') ? Game.player : null;
+    return (p && p.def && p.def.fruit === 'bloodArt') ? p.def : null;
+  },
+  isHeld() { return !!this._def(); },
+  /* вызвать способность по клавише; true — обработано */
+  key(code) {
+    const G = (typeof Game !== 'undefined') ? Game : null;
+    if (!G || G.mode === CS.MODE.MENU) return false;
+    const def = this._def();
+    if (!def || G.paused || G.buyOpen) return false;
+    if (!(G.roundState === 'live' || G.mode === CS.MODE.RANGE)) return false;
+    switch (code) {
+      case 'KeyZ': return this.heavyPaw(G, def);
+      case 'KeyX': return this.barrage(G, def);
+      case 'KeyC': return this.nuke(G, def);
+      case 'KeyV': return this.torture(G, def);
+      case 'KeyF': return this.repel(G, def);
+    }
+    return false;
+  },
+
+  _cd(G, key, sec) {
+    const now = U.now();
+    const at = G['_' + key + 'At'];
+    if (at && now - at < sec * 1000) {
+      const left = Math.ceil((sec * 1000 - (now - at)) / 1000);
+      UI.toast('Перезарядка ' + left + 'с', '#f5d33c');
+      Audio3D_SFX.deny(); return false;
+    }
+    G['_' + key + 'At'] = now;
+    return true;
+  },
+
+  /* Z — HEAVY PAW: быстрый снаряд, прошивает всех на пути */
+  heavyPaw(G, def) {
+    if (!this._cd(G, 'paw', def.pawCd || 8)) return false;
+    G._spawnPaw(def, 'paw');
+    Audio3D_SFX.tone(180, .18, 'sawtooth', .12, G.player.pos.x, G.player.pos.y, G.player.pos.z, 600);
+    UI.toast('HEAVY PAW', '#ff4a5a');
+    return true;
+  },
+
+  /* X — PAW BARRAGE: залп лапо-снарядов (серией кадров) */
+  barrage(G, def) {
+    if (!this._cd(G, 'barrage', def.barrageCd || 12)) return false;
+    G._barrageLeft = def.barrageCount || 7;
+    G._barrageT = 0;
+    G._barrageDef = def;
+    Audio3D_SFX.tone(140, .3, 'sawtooth', .14, G.player.pos.x, G.player.pos.y, G.player.pos.z, 500);
+    UI.toast('PAW BARRAGE', '#ff4a5a');
+    return true;
+  },
+
+  /* C — PAIN NUKE: лапо-«ядерка» с подбросом врагов */
+  nuke(G, def) {
+    if (!this._cd(G, 'nuke', def.nukeCd || 18)) return false;
+    G._spawnPaw(def, 'nuke');
+    Audio3D_SFX.tone(90, .35, 'sawtooth', .16, G.player.pos.x, G.player.pos.y, G.player.pos.z, 300);
+    UI.toast('PAIN NUKE', '#ff4a5a');
+    return true;
+  },
+
+  /* V — TORTURE: красный пульсирующий снаряд — тикающий урон */
+  torture(G, def) {
+    if (!this._cd(G, 'torture', def.tortureCd || 24)) return false;
+    G._spawnPaw(def, 'torture');
+    UI.toast('TORTURE', '#ff2030');
+    return true;
+  },
+
+  /* F — SELF REPEL: рывок к курсору */
+  repel(G, def) {
+    if (!this._cd(G, 'repel', def.repelCd || 7)) return false;
+    const p = G.player;
+    const dir = G.cameraDir();
+    const s = def.repelSpeed || 60;
+    p.vel.x = dir.x * s;
+    p.vel.z = dir.z * s;
+    p.vel.y = Math.max(p.vel.y, dir.y * s + 4);
+    p.onGround = false;
+    if (typeof UI !== 'undefined' && UI.dashFx) UI.dashFx(true, false);
+    if (G.effects) {
+      for (let i = 0; i < 14; i++) {
+        G.effects.particle(p.pos.x, p.pos.y + 1, p.pos.z,
+          U.rand(-3, 3), U.rand(0, 4), U.rand(-3, 3), U.rand(.1, .28), 'spark', U.rand(.2, .5));
+      }
+    }
+    Audio3D_SFX.tone(260, .2, 'triangle', .12, p.pos.x, p.pos.y, p.pos.z, 900);
+    UI.toast('SELF REPEL', '#ff4a5a');
+    return true;
+  },
+
+  /* тик залпа (вызывается из игрового цикла) */
+  update(G, dt) {
+    if (G._barrageLeft > 0) {
+      G._barrageT -= dt;
+      if (G._barrageT <= 0) {
+        G._barrageT = (G._barrageDef && G._barrageDef.barrageInterval) || .07;
+        G._barrageLeft--;
+        G._spawnPaw(G._barrageDef, 'barrage');
+      }
+    }
+  }
+};
+
+
 /* ===== 06-player.js ===== */
 /* ============================================================
    06 — PLAYER: physics, inventory, recoil, first-person view model
@@ -10457,6 +10718,14 @@ function buildWeaponModel(id) {
       g.userData.spamtonGun = true;
       break;
     }
+
+    /* ---------------- BLOOD ART: кроваво-красная лапа (Pain Fruit) ---------------- */
+    case 'bloodArt': {
+      const claw = buildBloodArtClaw();
+      while (claw.children.length) g.add(claw.children[0]);
+      g.userData.bloodClaw = true;
+      break;
+    }
   }
 
   /* every model gets a muzzle marker at the barrel tip so flashes and
@@ -10482,6 +10751,7 @@ const MUZZLE_Z = {
   rocketgun: -0.94, shield: -0.30,
   banana: -0.92,
   lordOfFlowers: -0.96,
+  bloodArt: -0.32,
   spamtonGun: -0.52,
   acid: -0.76, hive: -0.26, disc: -0.32, freeze: -0.76, tesla: -0.72,
   portal: -0.48, blackhole: -0.54, turretDrone: -0.28, chrono: -0.48,
@@ -15153,6 +15423,7 @@ const TouchUI = {
       '<button id="tMenu" class="tbtn small">ПАУЗА</button>' +
       '<button id="tClimb" class="tbtn small accent">ЗАЛЕЗТЬ</button>' +
       '<button id="tDash" class="tbtn small accent">РЫВОК</button>' +
+      '<button id="tBlood" class="tbtn small accent">КРОВАВОЕ<br>ИСКУССТВО</button>' +
       /* contextual actions: only the ones that make sense right now are shown */
       '<div id="tActions">' +
         '<button id="tHeal" class="tbtn act accent">АПТЕЧКА</button>' +
@@ -15167,6 +15438,11 @@ const TouchUI = {
         '<button id="tDummy" class="tbtn act accent">МАНЕКЕН</button>' +
         '<button id="tSpawn" class="tbtn act accent">СПАВН</button>' +
         '<button id="tUnstick" class="tbtn act">СБРОС</button>' +
+        '<button id="tBA1" class="tbtn act accent">ЛАПА Z</button>' +
+        '<button id="tBA2" class="tbtn act accent">ЗАЛП X</button>' +
+        '<button id="tBA3" class="tbtn act accent">ЯДЕРКА C</button>' +
+        '<button id="tBA4" class="tbtn act accent">ПЫТКА V</button>' +
+        '<button id="tBA5" class="tbtn act accent">РЫВОК F</button>' +
       '</div>' +
       '<div id="tHint">Слева — ходьба · Справа — обзор · Тап — огонь · АВТО — очередь · Кнопки справа появляются по ситуации</div>';
     document.body.appendChild(wrap);
@@ -15185,6 +15461,7 @@ const TouchUI = {
       menu: document.getElementById('tMenu'),
       climb: document.getElementById('tClimb'),
       dash: document.getElementById('tDash'),
+      blood: document.getElementById('tBlood'),
       actions: document.getElementById('tActions'),
       heal: document.getElementById('tHeal'),
       drone: document.getElementById('tDrone'),
@@ -15198,6 +15475,11 @@ const TouchUI = {
       dummy: document.getElementById('tDummy'),
       spawn: document.getElementById('tSpawn'),
       unstick: document.getElementById('tUnstick'),
+      ba1: document.getElementById('tBA1'),
+      ba2: document.getElementById('tBA2'),
+      ba3: document.getElementById('tBA3'),
+      ba4: document.getElementById('tBA4'),
+      ba5: document.getElementById('tBA5'),
       hint: document.getElementById('tHint')
     };
     // fire/aim must be usable while a match is not running too, so we set the
@@ -15256,6 +15538,9 @@ const TouchUI = {
     E.dummy.addEventListener('touchstart', e => { swallow(e); Bus.emit('touchRangeDummy'); E.dummy.classList.add('down'); setTimeout(() => E.dummy.classList.remove('down'), 160); }, { passive: false });
     E.spawn.addEventListener('touchstart', e => { swallow(e); Bus.emit('touchRangeSpawn'); E.spawn.classList.add('down'); setTimeout(() => E.spawn.classList.remove('down'), 160); }, { passive: false });
     E.unstick.addEventListener('touchstart', e => { swallow(e); Bus.emit('touchUnstick'); E.unstick.classList.add('down'); setTimeout(() => E.unstick.classList.remove('down'), 160); }, { passive: false });
+    E.blood.addEventListener('touchstart', e => { swallow(e); Bus.emit('touchBloodArt'); E.blood.classList.add('down'); setTimeout(() => E.blood.classList.remove('down'), 160); }, { passive: false });
+    const baKey = (el, code) => el.addEventListener('touchstart', e => { swallow(e); if (typeof BloodArt !== 'undefined') BloodArt.key(code); el.classList.add('down'); setTimeout(() => el.classList.remove('down'), 140); }, { passive: false });
+    baKey(E.ba1, 'KeyZ'); baKey(E.ba2, 'KeyX'); baKey(E.ba3, 'KeyC'); baKey(E.ba4, 'KeyV'); baKey(E.ba5, 'KeyF');
     E.buy.addEventListener('touchstart', e => { swallow(e); Bus.emit('touchBuy'); E.buy.classList.add('down'); setTimeout(() => E.buy.classList.remove('down'), 130); }, { passive: false });
     E.menu.addEventListener('touchstart', e => { swallow(e); Bus.emit('touchPause'); E.menu.classList.add('down'); setTimeout(() => E.menu.classList.remove('down'), 130); }, { passive: false });
     // double-tap the stick area toggles auto-run
@@ -15448,6 +15733,12 @@ const TouchUI = {
 
     // --- turret-drone gear: only when a charge is held, or one is deployed ---
     dim(E.turret, p && (p.turretDrone > 0 || (Game && Game.turretDrone)) && !inMech);
+
+    /* BLOOD ART: показываем панель способностей только с этим фруктом в руках */
+    const baHeld = !!(p && p.def && p.def.fruit === 'bloodArt');
+    dim(E.blood, false);   // кнопка-ярлык скрыта, ниже — отдельные способности
+    dim(E.ba1, baHeld && !inMech); dim(E.ba2, baHeld && !inMech);
+    dim(E.ba3, baHeld && !inMech); dim(E.ba4, baHeld && !inMech); dim(E.ba5, baHeld && !inMech);
 
     // --- range-only tools ---
     const onRange = Game && Game.mode === CS.MODE.RANGE;
@@ -18743,6 +19034,7 @@ const UI = {
         if (w.splash) stats.push(['РАДИУС', w.splash + 'м']);
         if (w.bulletSplash) stats.push(['РАДИУС', w.bulletSplash + 'м'], ['ВЗРЫВНЫЕ', 'ДА']);
         if (w.ult) stats.push(['ПКМ', 'УЛЬТА · СЛЕШ'], ['ПЕРЕЗАРЯД', (w.ultCd || 9) + 'с']);
+        if (w.fruit === 'bloodArt') stats.push(['Z', 'ЛАПА'], ['X', 'ЗАЛП'], ['C', 'ЯДЕРКА'], ['V', 'ПЫТКА'], ['F', 'РЫВОК']);
         const cardDesc = needsPrev ? ('СНАЧАЛА: ' + ((WEAPONS[need] && WEAPONS[need].name) || need)) : w.cat.toUpperCase();
         mkCard(id, w.name, cardDesc, w.price, stats, owned || inBag, needsPrev || (!free && player.money < w.price),
           () => Bus.emit('buy', id),
@@ -21694,6 +21986,13 @@ const Game = {
     }
     // F1 = ready up: start the round early once both players agree
     if (code === 'F1' && this.roundState === 'buy') { this.voteSkipBuy(); return; }
+    /* BLOOD ART (фрукт Pain): способности Z/X/C/V/F перехватывают клавиши,
+       пока фрукт в руках — иначе конфликтуют с дроном/гранатой/мехом. */
+    if (typeof BloodArt !== 'undefined' && BloodArt.isHeld()) {
+      if (code === 'KeyZ' || code === 'KeyX' || code === 'KeyC' || code === 'KeyV' || code === 'KeyF') {
+        if (BloodArt.key(code)) { if (e && e.preventDefault) e.preventDefault(); return; }
+      }
+    }
     switch (code) {
       case 'Escape':
         // Releasing the pointer lock (which Esc does natively) already pauses
@@ -26599,6 +26898,27 @@ const Game = {
       if (pr.kind === 'chrono' && pr.mesh.userData.ring) pr.mesh.userData.ring.rotation.z += dt * 2.5;
       if (pr.kind === 'flower') { pr.mesh.rotation.z += dt * 9; pr.mesh.rotation.y += dt * 4; }
       if (pr.kind === 'pipis') { pr.mesh.rotation.z += dt * 10; pr.mesh.rotation.x += dt * 5; }
+      if (pr.kind === 'bloodpaw') {
+        pr.mesh.rotation.z += dt * 3.2;
+        if (pr.mesh.userData.ring) pr.mesh.userData.ring.rotation.z += dt * 6;
+        /* TORTURE: «прилип» — тикающий урон по врагам рядом */
+        if (pr.paw === 'torture' && pr.stuckT > 0) {
+          pr.stuckT -= dt;
+          pr._tickT = (pr._tickT || 0) - dt;
+          if (pr._tickT <= 0) {
+            pr._tickT = .4;
+            if (this.horde) for (const z of this.horde.list) {
+              if (!z.alive || z.dying) continue;
+              const d = Math.hypot(z.pos.x - pr.pos.x, z.pos.z - pr.pos.z);
+              if (d < 3.2) { z.takeDamage(pr.tortureTick, 'body', { x: 0, y: 0, z: 0 }); this.player.damageDealt += pr.tortureTick; }
+            }
+          }
+          if (this.effects) this.effects.particle(pr.pos.x, pr.pos.y, pr.pos.z, U.rand(-1, 1), U.rand(.5, 2), U.rand(-1, 1), U.rand(.1, .24), 'blood', U.rand(.3, .6));
+          if (pr.stuckT <= 0) { this.removeProjectile(i); continue; }
+          pr.mesh.position.set(pr.pos.x, pr.pos.y, pr.pos.z);
+          continue;   // застрявший TORTURE не летит дальше
+        }
+      }
       if (pr.kind === 'hyperpipis') {
         /* ГИПЕР-ПИПИС: тяжёлый, вращается медленно, пульсирует свет и оставляет
            вмятины-кратеры при контакте/полёте над землёй */
@@ -26731,6 +27051,19 @@ const Game = {
             }
           }
           this.removeProjectile(i);
+          continue;
+        }
+        if (pr.kind === 'bloodpaw') {
+          this.pawImpact(pr, impactPoint, impactNormal, dir);
+          if (pr.paw === 'paw') {
+            /* HEAVY PAW: прошивает врагов, но вязнет в стене */
+            if (impactNormal || pr.pierces >= (pr.pierce || 8)) this.removeProjectile(i);
+          } else if (pr.paw === 'torture') {
+            /* TORTURE: во врага «прилипает» (тикает), в стену — исчезает */
+            if (impactNormal) this.removeProjectile(i);
+          } else {
+            this.removeProjectile(i);   // nuke/barrage — одноразовые
+          }
           continue;
         }
         if (pr.kind === 'pipis') {
@@ -27989,6 +28322,101 @@ const Game = {
     this.projectiles.splice(i, 1);
   },
 
+  /* ============================================================
+     BLOOD ART (Pain Fruit): снаряды-лапы
+     ============================================================ */
+  _spawnPaw(def, mode) {
+    const p = this.player;
+    const origin = this.muzzleWorldPos();
+    const baseDir = this.cameraDir();
+    const d = this.spreadDirection(baseDir, mode === 'barrage' ? .05 : .012, false);
+    const speed = mode === 'paw' ? (def.pawSpeed || 62)
+      : mode === 'nuke' ? (def.nukeSpeed || 52)
+      : mode === 'torture' ? (def.tortureSpeed || 46)
+      : 56;
+    const mesh = buildPawProjectile(mode);
+    mesh.position.set(origin.x, origin.y, origin.z);
+    this.scene.add(mesh);
+    const pr = {
+      mesh: mesh, kind: 'bloodpaw', paw: mode,
+      pid: 'pr' + (this._projSeq = (this._projSeq || 0) + 1),
+      alive: true, life: mode === 'torture' ? 6 : 4,
+      prev: { x: origin.x, y: origin.y, z: origin.z },
+      pos: { x: origin.x, y: origin.y, z: origin.z },
+      vel: { x: d.x * speed, y: d.y * speed, z: d.z * speed },
+      grav: mode === 'nuke' ? 6 : 0,
+      dmg: mode === 'paw' ? (def.pawDmg || 260)
+        : mode === 'nuke' ? (def.nukeDmg || 520)
+        : mode === 'torture' ? (def.tortureDmg || 90)
+        : (def.barrageDmg || 150),
+      pierce: def.pawPierce || 8, pierces: 0,
+      nukeR: def.nukeR || 9, nukeBreakR: def.nukeBreakR || 7,
+      tortureTick: def.tortureTick || 70, tortureTime: def.tortureTime || 5,
+      noSelfDamage: true, ownerIsLocal: true
+    };
+    this.projectiles.push(pr);
+    if (this.projectiles.length > 40) { const old = this.projectiles.shift(); if (old.mesh.parent) old.mesh.parent.remove(old.mesh); }
+    return pr;
+  },
+
+  /* попадание снаряда-лапы */
+  pawImpact(pr, point, normal, dir) {
+    const mode = pr.paw;
+    if (mode === 'paw') {
+      /* прошивает врагов; в стене застревает */
+      if (!normal) {
+        pr.pierces = (pr.pierces || 0) + 1;
+        if (this.effects) this.effects.bloodBurst(point, dir, 10);
+        UI.hitmark(true); this._hitmarkT = U.now();
+        return;
+      }
+      if (this.effects) this.effects.impact(point, normal, 'flesh');
+      return;
+    }
+    if (mode === 'barrage') {
+      if (!normal) { if (this.effects) this.effects.bloodBurst(point, dir, 6); UI.hitmark(false); this._hitmarkT = U.now(); return; }
+      if (this.effects) this.effects.impact(point, normal, 'concrete');
+      return;
+    }
+    if (mode === 'torture') {
+      /* TORTURE: при попадании во врага — красный «pain»-оверлей и тик-урон */
+      if (!normal) {
+        pr.stuckT = pr.tortureTime || 5;
+        pr.stuckTo = null;
+        if (this.effects) { this.effects.bloodBurst(point, dir, 16); this.effects.goreBurst && this.effects.goreBurst(point.x, point.y, point.z, 4); }
+        if (typeof UI !== 'undefined' && UI.dmgFlash) UI.dmgFlash();
+        pr.vel.x = pr.vel.y = pr.vel.z = 0;   // «прилипает» и тикает
+        return;
+      }
+      if (this.effects) this.effects.impact(point, normal, 'concrete');
+      return;
+    }
+    if (mode === 'nuke') {
+      /* PAIN NUKE: взрыв + подброс врагов + разрушение карты */
+      const R = pr.nukeR;
+      if (this.effects) { this.effects.explosion(point.x, point.y, point.z, R, [0xd41f2a, 0x2a0308]); this.effects.goreBurst && this.effects.goreBurst(point.x, point.y, point.z, R); }
+      this.breakMapAt(point.x, point.y, point.z, (pr.nukeBreakR || 7), 400);
+      Audio3D_SFX.explosionAt(point.x, point.y, point.z);
+      const push = (list, remote) => {
+        if (!list) return;
+        for (const z of list) {
+          if (!z.alive || z.dying) continue;
+          const dx = z.pos.x - point.x, dz = z.pos.z - point.z, dy = (z.pos.y + 1) - point.y;
+          const dd = Math.hypot(dx, dy, dz);
+          if (dd > R * 1.3) continue;
+          const kk = U.clamp(1 - dd / (R * 1.3), .2, 1);
+          if (remote) this.sendPvpHit(pr.dmg * kk, 'body', true, z, 'bloodpaw');
+          else { z.takeDamage(pr.dmg * (.5 + kk * .5), 'body', { x: dx, y: dy, z: dz }); this.player.damageDealt += pr.dmg * .5; }
+          if (z.alive && !z.dying) { z.vel.y = 13 * kk + 4; z.staggerT = Math.max(z.staggerT || 0, 1.0); }   // подброс
+          else if (z.dying) { z._bloodArtHit = true; }   // при гибели покажем "PAIN!"
+        }
+      };
+      push(this.horde && this.horde.list, false);
+      if (this.mode === CS.MODE.ONLINE) push(this.remotePlayers, true);
+      if (this.mode === CS.MODE.ONLINE) Net.send({ t: 'boom', from: Net.selfId(), x: +point.x.toFixed(2), y: +point.y.toFixed(2), z: +point.z.toFixed(2), r: R, c: [0xd41f2a, 0x2a0308] });
+      return;
+    }
+  },
   clearProjectiles() {
     for (const pr of this.projectiles) { if (pr.mesh.parent) pr.mesh.parent.remove(pr.mesh); }
     this.projectiles.length = 0;
@@ -28936,7 +29364,8 @@ const Game = {
       // ПОЛОСА УДАРА: яркая дуга проносится перед игроком
       if (this.effects) {
         const meleeKind = def.melee || 'knife';
-        const col = meleeKind === 'chainsaw' ? 0xffb347 : meleeKind === 'hammer' || meleeKind === 'axe' ? 0xffe08a : 0xffffff;
+        const col = meleeKind === 'chainsaw' ? 0xffb347 : meleeKind === 'hammer' || meleeKind === 'axe' ? 0xffe08a
+          : meleeKind === 'bloodArt' ? BLOOD_COL : 0xffffff;
         this.effects.slashTrail(origin.x + dir.x * .7, origin.y + dir.y * .7 - .15, origin.z + dir.z * .7,
           dir.x, dir.y, dir.z, def.range + .7, p.swingSide || 1, col);
       }
@@ -29692,6 +30121,10 @@ const Game = {
     Audio3D_SFX.kill();
     UI.hitmark(true);
     this._hitmarkT = U.now();
+    /* BLOOD ART: убитым PAIN NUKE — красный «PAIN!» над телом */
+    if (z._bloodArtHit && this.effects && this.effects.swoon) {
+      this.effects.swoon(z.pos.x, z.pos.y + 2.1 * (z.scale || 1) + .5, z.pos.z, 'PAIN!');
+    }
     /* ДЕЛЯЩИЙСЯ: bursts into a handful of smaller zombies when it dies */
     if (def.splits && this.horde && !z._splitDone) {
       z._splitDone = true;
@@ -30769,6 +31202,8 @@ const Game = {
 
     // ---- effects ----
     if (this.effects) this.effects.update(dt, this.camera);
+    /* BLOOD ART: тик залпа лапо-снарядов */
+    if (typeof BloodArt !== 'undefined') BloodArt.update(this, dt);
     /* РЕДАКТОР КАРТ: обновляем курсор и подсветку */
     if (this.mode === CS.MODE.EDITOR && typeof MapEditor !== 'undefined') MapEditor.update(dt);
     /* ИГРОВЫЕ ЭЛЕМЕНТЫ КАРТ: движущиеся платформы/шипы/телепорты */

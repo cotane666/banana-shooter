@@ -1026,6 +1026,7 @@ const UI = {
         if (w.splash) stats.push(['РАДИУС', w.splash + 'м']);
         if (w.bulletSplash) stats.push(['РАДИУС', w.bulletSplash + 'м'], ['ВЗРЫВНЫЕ', 'ДА']);
         if (w.ult) stats.push(['ПКМ', 'УЛЬТА · СЛЕШ'], ['ПЕРЕЗАРЯД', (w.ultCd || 9) + 'с']);
+        if (w.fruit === 'bloodArt') stats.push(['Z', 'ЛАПА'], ['X', 'ЗАЛП'], ['C', 'ЯДЕРКА'], ['V', 'ПЫТКА'], ['F', 'РЫВОК']);
         const cardDesc = needsPrev ? ('СНАЧАЛА: ' + ((WEAPONS[need] && WEAPONS[need].name) || need)) : w.cat.toUpperCase();
         mkCard(id, w.name, cardDesc, w.price, stats, owned || inBag, needsPrev || (!free && player.money < w.price),
           () => Bus.emit('buy', id),

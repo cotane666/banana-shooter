@@ -1654,6 +1654,13 @@ const Game = {
     }
     // F1 = ready up: start the round early once both players agree
     if (code === 'F1' && this.roundState === 'buy') { this.voteSkipBuy(); return; }
+    /* BLOOD ART (фрукт Pain): способности Z/X/C/V/F перехватывают клавиши,
+       пока фрукт в руках — иначе конфликтуют с дроном/гранатой/мехом. */
+    if (typeof BloodArt !== 'undefined' && BloodArt.isHeld()) {
+      if (code === 'KeyZ' || code === 'KeyX' || code === 'KeyC' || code === 'KeyV' || code === 'KeyF') {
+        if (BloodArt.key(code)) { if (e && e.preventDefault) e.preventDefault(); return; }
+      }
+    }
     switch (code) {
       case 'Escape':
         // Releasing the pointer lock (which Esc does natively) already pauses
@@ -6559,6 +6566,27 @@ const Game = {
       if (pr.kind === 'chrono' && pr.mesh.userData.ring) pr.mesh.userData.ring.rotation.z += dt * 2.5;
       if (pr.kind === 'flower') { pr.mesh.rotation.z += dt * 9; pr.mesh.rotation.y += dt * 4; }
       if (pr.kind === 'pipis') { pr.mesh.rotation.z += dt * 10; pr.mesh.rotation.x += dt * 5; }
+      if (pr.kind === 'bloodpaw') {
+        pr.mesh.rotation.z += dt * 3.2;
+        if (pr.mesh.userData.ring) pr.mesh.userData.ring.rotation.z += dt * 6;
+        /* TORTURE: «прилип» — тикающий урон по врагам рядом */
+        if (pr.paw === 'torture' && pr.stuckT > 0) {
+          pr.stuckT -= dt;
+          pr._tickT = (pr._tickT || 0) - dt;
+          if (pr._tickT <= 0) {
+            pr._tickT = .4;
+            if (this.horde) for (const z of this.horde.list) {
+              if (!z.alive || z.dying) continue;
+              const d = Math.hypot(z.pos.x - pr.pos.x, z.pos.z - pr.pos.z);
+              if (d < 3.2) { z.takeDamage(pr.tortureTick, 'body', { x: 0, y: 0, z: 0 }); this.player.damageDealt += pr.tortureTick; }
+            }
+          }
+          if (this.effects) this.effects.particle(pr.pos.x, pr.pos.y, pr.pos.z, U.rand(-1, 1), U.rand(.5, 2), U.rand(-1, 1), U.rand(.1, .24), 'blood', U.rand(.3, .6));
+          if (pr.stuckT <= 0) { this.removeProjectile(i); continue; }
+          pr.mesh.position.set(pr.pos.x, pr.pos.y, pr.pos.z);
+          continue;   // застрявший TORTURE не летит дальше
+        }
+      }
       if (pr.kind === 'hyperpipis') {
         /* ГИПЕР-ПИПИС: тяжёлый, вращается медленно, пульсирует свет и оставляет
            вмятины-кратеры при контакте/полёте над землёй */
@@ -6691,6 +6719,19 @@ const Game = {
             }
           }
           this.removeProjectile(i);
+          continue;
+        }
+        if (pr.kind === 'bloodpaw') {
+          this.pawImpact(pr, impactPoint, impactNormal, dir);
+          if (pr.paw === 'paw') {
+            /* HEAVY PAW: прошивает врагов, но вязнет в стене */
+            if (impactNormal || pr.pierces >= (pr.pierce || 8)) this.removeProjectile(i);
+          } else if (pr.paw === 'torture') {
+            /* TORTURE: во врага «прилипает» (тикает), в стену — исчезает */
+            if (impactNormal) this.removeProjectile(i);
+          } else {
+            this.removeProjectile(i);   // nuke/barrage — одноразовые
+          }
           continue;
         }
         if (pr.kind === 'pipis') {
@@ -7949,6 +7990,101 @@ const Game = {
     this.projectiles.splice(i, 1);
   },
 
+  /* ============================================================
+     BLOOD ART (Pain Fruit): снаряды-лапы
+     ============================================================ */
+  _spawnPaw(def, mode) {
+    const p = this.player;
+    const origin = this.muzzleWorldPos();
+    const baseDir = this.cameraDir();
+    const d = this.spreadDirection(baseDir, mode === 'barrage' ? .05 : .012, false);
+    const speed = mode === 'paw' ? (def.pawSpeed || 62)
+      : mode === 'nuke' ? (def.nukeSpeed || 52)
+      : mode === 'torture' ? (def.tortureSpeed || 46)
+      : 56;
+    const mesh = buildPawProjectile(mode);
+    mesh.position.set(origin.x, origin.y, origin.z);
+    this.scene.add(mesh);
+    const pr = {
+      mesh: mesh, kind: 'bloodpaw', paw: mode,
+      pid: 'pr' + (this._projSeq = (this._projSeq || 0) + 1),
+      alive: true, life: mode === 'torture' ? 6 : 4,
+      prev: { x: origin.x, y: origin.y, z: origin.z },
+      pos: { x: origin.x, y: origin.y, z: origin.z },
+      vel: { x: d.x * speed, y: d.y * speed, z: d.z * speed },
+      grav: mode === 'nuke' ? 6 : 0,
+      dmg: mode === 'paw' ? (def.pawDmg || 260)
+        : mode === 'nuke' ? (def.nukeDmg || 520)
+        : mode === 'torture' ? (def.tortureDmg || 90)
+        : (def.barrageDmg || 150),
+      pierce: def.pawPierce || 8, pierces: 0,
+      nukeR: def.nukeR || 9, nukeBreakR: def.nukeBreakR || 7,
+      tortureTick: def.tortureTick || 70, tortureTime: def.tortureTime || 5,
+      noSelfDamage: true, ownerIsLocal: true
+    };
+    this.projectiles.push(pr);
+    if (this.projectiles.length > 40) { const old = this.projectiles.shift(); if (old.mesh.parent) old.mesh.parent.remove(old.mesh); }
+    return pr;
+  },
+
+  /* попадание снаряда-лапы */
+  pawImpact(pr, point, normal, dir) {
+    const mode = pr.paw;
+    if (mode === 'paw') {
+      /* прошивает врагов; в стене застревает */
+      if (!normal) {
+        pr.pierces = (pr.pierces || 0) + 1;
+        if (this.effects) this.effects.bloodBurst(point, dir, 10);
+        UI.hitmark(true); this._hitmarkT = U.now();
+        return;
+      }
+      if (this.effects) this.effects.impact(point, normal, 'flesh');
+      return;
+    }
+    if (mode === 'barrage') {
+      if (!normal) { if (this.effects) this.effects.bloodBurst(point, dir, 6); UI.hitmark(false); this._hitmarkT = U.now(); return; }
+      if (this.effects) this.effects.impact(point, normal, 'concrete');
+      return;
+    }
+    if (mode === 'torture') {
+      /* TORTURE: при попадании во врага — красный «pain»-оверлей и тик-урон */
+      if (!normal) {
+        pr.stuckT = pr.tortureTime || 5;
+        pr.stuckTo = null;
+        if (this.effects) { this.effects.bloodBurst(point, dir, 16); this.effects.goreBurst && this.effects.goreBurst(point.x, point.y, point.z, 4); }
+        if (typeof UI !== 'undefined' && UI.dmgFlash) UI.dmgFlash();
+        pr.vel.x = pr.vel.y = pr.vel.z = 0;   // «прилипает» и тикает
+        return;
+      }
+      if (this.effects) this.effects.impact(point, normal, 'concrete');
+      return;
+    }
+    if (mode === 'nuke') {
+      /* PAIN NUKE: взрыв + подброс врагов + разрушение карты */
+      const R = pr.nukeR;
+      if (this.effects) { this.effects.explosion(point.x, point.y, point.z, R, [0xd41f2a, 0x2a0308]); this.effects.goreBurst && this.effects.goreBurst(point.x, point.y, point.z, R); }
+      this.breakMapAt(point.x, point.y, point.z, (pr.nukeBreakR || 7), 400);
+      Audio3D_SFX.explosionAt(point.x, point.y, point.z);
+      const push = (list, remote) => {
+        if (!list) return;
+        for (const z of list) {
+          if (!z.alive || z.dying) continue;
+          const dx = z.pos.x - point.x, dz = z.pos.z - point.z, dy = (z.pos.y + 1) - point.y;
+          const dd = Math.hypot(dx, dy, dz);
+          if (dd > R * 1.3) continue;
+          const kk = U.clamp(1 - dd / (R * 1.3), .2, 1);
+          if (remote) this.sendPvpHit(pr.dmg * kk, 'body', true, z, 'bloodpaw');
+          else { z.takeDamage(pr.dmg * (.5 + kk * .5), 'body', { x: dx, y: dy, z: dz }); this.player.damageDealt += pr.dmg * .5; }
+          if (z.alive && !z.dying) { z.vel.y = 13 * kk + 4; z.staggerT = Math.max(z.staggerT || 0, 1.0); }   // подброс
+          else if (z.dying) { z._bloodArtHit = true; }   // при гибели покажем "PAIN!"
+        }
+      };
+      push(this.horde && this.horde.list, false);
+      if (this.mode === CS.MODE.ONLINE) push(this.remotePlayers, true);
+      if (this.mode === CS.MODE.ONLINE) Net.send({ t: 'boom', from: Net.selfId(), x: +point.x.toFixed(2), y: +point.y.toFixed(2), z: +point.z.toFixed(2), r: R, c: [0xd41f2a, 0x2a0308] });
+      return;
+    }
+  },
   clearProjectiles() {
     for (const pr of this.projectiles) { if (pr.mesh.parent) pr.mesh.parent.remove(pr.mesh); }
     this.projectiles.length = 0;
@@ -8896,7 +9032,8 @@ const Game = {
       // ПОЛОСА УДАРА: яркая дуга проносится перед игроком
       if (this.effects) {
         const meleeKind = def.melee || 'knife';
-        const col = meleeKind === 'chainsaw' ? 0xffb347 : meleeKind === 'hammer' || meleeKind === 'axe' ? 0xffe08a : 0xffffff;
+        const col = meleeKind === 'chainsaw' ? 0xffb347 : meleeKind === 'hammer' || meleeKind === 'axe' ? 0xffe08a
+          : meleeKind === 'bloodArt' ? BLOOD_COL : 0xffffff;
         this.effects.slashTrail(origin.x + dir.x * .7, origin.y + dir.y * .7 - .15, origin.z + dir.z * .7,
           dir.x, dir.y, dir.z, def.range + .7, p.swingSide || 1, col);
       }
@@ -9652,6 +9789,10 @@ const Game = {
     Audio3D_SFX.kill();
     UI.hitmark(true);
     this._hitmarkT = U.now();
+    /* BLOOD ART: убитым PAIN NUKE — красный «PAIN!» над телом */
+    if (z._bloodArtHit && this.effects && this.effects.swoon) {
+      this.effects.swoon(z.pos.x, z.pos.y + 2.1 * (z.scale || 1) + .5, z.pos.z, 'PAIN!');
+    }
     /* ДЕЛЯЩИЙСЯ: bursts into a handful of smaller zombies when it dies */
     if (def.splits && this.horde && !z._splitDone) {
       z._splitDone = true;
@@ -10729,6 +10870,8 @@ const Game = {
 
     // ---- effects ----
     if (this.effects) this.effects.update(dt, this.camera);
+    /* BLOOD ART: тик залпа лапо-снарядов */
+    if (typeof BloodArt !== 'undefined') BloodArt.update(this, dt);
     /* РЕДАКТОР КАРТ: обновляем курсор и подсветку */
     if (this.mode === CS.MODE.EDITOR && typeof MapEditor !== 'undefined') MapEditor.update(dt);
     /* ИГРОВЫЕ ЭЛЕМЕНТЫ КАРТ: движущиеся платформы/шипы/телепорты */

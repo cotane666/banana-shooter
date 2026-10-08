@@ -260,6 +260,7 @@ const TouchUI = {
       '<button id="tMenu" class="tbtn small">ПАУЗА</button>' +
       '<button id="tClimb" class="tbtn small accent">ЗАЛЕЗТЬ</button>' +
       '<button id="tDash" class="tbtn small accent">РЫВОК</button>' +
+      '<button id="tBlood" class="tbtn small accent">КРОВАВОЕ<br>ИСКУССТВО</button>' +
       /* contextual actions: only the ones that make sense right now are shown */
       '<div id="tActions">' +
         '<button id="tHeal" class="tbtn act accent">АПТЕЧКА</button>' +
@@ -274,6 +275,11 @@ const TouchUI = {
         '<button id="tDummy" class="tbtn act accent">МАНЕКЕН</button>' +
         '<button id="tSpawn" class="tbtn act accent">СПАВН</button>' +
         '<button id="tUnstick" class="tbtn act">СБРОС</button>' +
+        '<button id="tBA1" class="tbtn act accent">ЛАПА Z</button>' +
+        '<button id="tBA2" class="tbtn act accent">ЗАЛП X</button>' +
+        '<button id="tBA3" class="tbtn act accent">ЯДЕРКА C</button>' +
+        '<button id="tBA4" class="tbtn act accent">ПЫТКА V</button>' +
+        '<button id="tBA5" class="tbtn act accent">РЫВОК F</button>' +
       '</div>' +
       '<div id="tHint">Слева — ходьба · Справа — обзор · Тап — огонь · АВТО — очередь · Кнопки справа появляются по ситуации</div>';
     document.body.appendChild(wrap);
@@ -292,6 +298,7 @@ const TouchUI = {
       menu: document.getElementById('tMenu'),
       climb: document.getElementById('tClimb'),
       dash: document.getElementById('tDash'),
+      blood: document.getElementById('tBlood'),
       actions: document.getElementById('tActions'),
       heal: document.getElementById('tHeal'),
       drone: document.getElementById('tDrone'),
@@ -305,6 +312,11 @@ const TouchUI = {
       dummy: document.getElementById('tDummy'),
       spawn: document.getElementById('tSpawn'),
       unstick: document.getElementById('tUnstick'),
+      ba1: document.getElementById('tBA1'),
+      ba2: document.getElementById('tBA2'),
+      ba3: document.getElementById('tBA3'),
+      ba4: document.getElementById('tBA4'),
+      ba5: document.getElementById('tBA5'),
       hint: document.getElementById('tHint')
     };
     // fire/aim must be usable while a match is not running too, so we set the
@@ -363,6 +375,9 @@ const TouchUI = {
     E.dummy.addEventListener('touchstart', e => { swallow(e); Bus.emit('touchRangeDummy'); E.dummy.classList.add('down'); setTimeout(() => E.dummy.classList.remove('down'), 160); }, { passive: false });
     E.spawn.addEventListener('touchstart', e => { swallow(e); Bus.emit('touchRangeSpawn'); E.spawn.classList.add('down'); setTimeout(() => E.spawn.classList.remove('down'), 160); }, { passive: false });
     E.unstick.addEventListener('touchstart', e => { swallow(e); Bus.emit('touchUnstick'); E.unstick.classList.add('down'); setTimeout(() => E.unstick.classList.remove('down'), 160); }, { passive: false });
+    E.blood.addEventListener('touchstart', e => { swallow(e); Bus.emit('touchBloodArt'); E.blood.classList.add('down'); setTimeout(() => E.blood.classList.remove('down'), 160); }, { passive: false });
+    const baKey = (el, code) => el.addEventListener('touchstart', e => { swallow(e); if (typeof BloodArt !== 'undefined') BloodArt.key(code); el.classList.add('down'); setTimeout(() => el.classList.remove('down'), 140); }, { passive: false });
+    baKey(E.ba1, 'KeyZ'); baKey(E.ba2, 'KeyX'); baKey(E.ba3, 'KeyC'); baKey(E.ba4, 'KeyV'); baKey(E.ba5, 'KeyF');
     E.buy.addEventListener('touchstart', e => { swallow(e); Bus.emit('touchBuy'); E.buy.classList.add('down'); setTimeout(() => E.buy.classList.remove('down'), 130); }, { passive: false });
     E.menu.addEventListener('touchstart', e => { swallow(e); Bus.emit('touchPause'); E.menu.classList.add('down'); setTimeout(() => E.menu.classList.remove('down'), 130); }, { passive: false });
     // double-tap the stick area toggles auto-run
@@ -555,6 +570,12 @@ const TouchUI = {
 
     // --- turret-drone gear: only when a charge is held, or one is deployed ---
     dim(E.turret, p && (p.turretDrone > 0 || (Game && Game.turretDrone)) && !inMech);
+
+    /* BLOOD ART: показываем панель способностей только с этим фруктом в руках */
+    const baHeld = !!(p && p.def && p.def.fruit === 'bloodArt');
+    dim(E.blood, false);   // кнопка-ярлык скрыта, ниже — отдельные способности
+    dim(E.ba1, baHeld && !inMech); dim(E.ba2, baHeld && !inMech);
+    dim(E.ba3, baHeld && !inMech); dim(E.ba4, baHeld && !inMech); dim(E.ba5, baHeld && !inMech);
 
     // --- range-only tools ---
     const onRange = Game && Game.mode === CS.MODE.RANGE;

@@ -518,7 +518,24 @@ class Effects {
     if (!e) return;
     this._bloodScreenEl = e;
     e.classList.toggle('on', !!on);
-    if (on) e.style.opacity = String(U.clamp(.35 + (k || 0) * .65, 0, 1));
+    /* ВАЖНО: при выключении обязательно сбрасываем inline-прозрачность,
+       иначе она переопределяет CSS и пелена зависает на экране навсегда. */
+    e.style.opacity = on ? String(U.clamp(.35 + (k || 0) * .65, 0, 1)) : '0';
+  }
+
+  /* принудительно погасить ВСЕ экранные оверлеи (смена оружия, смерть,
+     перезапуск, выход в меню) — страховка от «залипших» эффектов */
+  clearScreenFx() {
+    const be = this._bloodScreenEl || (typeof document !== 'undefined' ? document.getElementById('bloodScreen') : null);
+    if (be) { this._bloodScreenEl = be; be.classList.remove('on'); be.style.opacity = '0'; }
+    if (this._bloodAura) {
+      if (this._bloodAura.parent) this._bloodAura.parent.remove(this._bloodAura);
+      this._bloodAura.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material && o.material.dispose) o.material.dispose(); });
+      this._bloodAura = null;
+    }
+    if (this._preview) this._preview.visible = false;
+    if (typeof UI !== 'undefined' && UI.dashFx) UI.dashFx(false, false);
+    if (typeof UI !== 'undefined' && UI.el && UI.el.lowhp) UI.el.lowhp.style.display = 'none';
   }
 
   /* кровавые потёки: несколько «капель» стекают по экрану */

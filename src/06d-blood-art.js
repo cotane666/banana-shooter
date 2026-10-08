@@ -466,7 +466,9 @@ const BloodArt = {
     const k = U.clamp((p._bigChargeT || 0) / (def.bigChargeTime || 2), 0, 1);
     p._bigChargeT = 0;
     if (G.effects && G.effects.bloodAura) G.effects.bloodAura(p.pos.x, p.pos.y, p.pos.z, k, false);
-    if (k < .15) { UI.toast('Слабый заряд — шар рассеялся', '#f5d33c'); if (G.effects && G.effects.bloodScreen) G.effects.bloodScreen(false); return; }
+    /* ГАСИМ кровавый экран заряда ВСЕГДА (иначе пелена зависает навсегда) */
+    if (G.effects && G.effects.bloodScreen) G.effects.bloodScreen(false);
+    if (k < .15) { UI.toast('Слабый заряд — шар рассеялся', '#f5d33c'); return; }
     G._bigAt = U.now();
     G._spawnPaw(def, 'big', k);
     if (G.effects) {

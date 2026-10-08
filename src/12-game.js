@@ -2408,6 +2408,8 @@ const Game = {
   startOffline(horde, free, custom, forcePreset) {
     this.stopToMenu(true);
     this.mode = CS.MODE.OFFLINE;
+    /* страховка: погасить все экранные эффекты от прошлого забега */
+    if (this.effects && this.effects.clearScreenFx) this.effects.clearScreenFx();
     /* [BIG SHOT] КРОМЕР: сбрасываем прогресс улучшений на новую игру */
     if (typeof kromerReset === 'function') { kromerReset(); this.kromerCoins = []; if (typeof kromerClearFamiliars === 'function') kromerClearFamiliars(this); }
     this.kromerOpen = false;
@@ -4185,6 +4187,15 @@ const Game = {
     const w = WEAPONS[id];
     if (!w || !this.player) return;
     const p = this.player;
+    /* СМЕНА ОРУЖИЯ: если идёт заряд КРОВАВОГО ШАРА — отменяем его и гасим
+       эффекты (иначе пелена/аура зависнут, а шар вылетит уже из другого оружия) */
+    if (p._bigCharging) {
+      p._bigCharging = false; p._bigChargeT = 0;
+      if (typeof Audio3D_SFX !== 'undefined' && Audio3D_SFX.spamtonChargeStop) Audio3D_SFX.spamtonChargeStop();
+      if (this.effects && this.effects.clearScreenFx) this.effects.clearScreenFx();
+    } else if (this.effects && this.effects.clearScreenFx) {
+      this.effects.clearScreenFx();
+    }
     const inSlot = p.inv[w.slot] && p.inv[w.slot].id === id;
     /* из сумки — вернуть в руки (проверяем реальный слот, а не has(), который
        включает и сумку) */
@@ -9790,6 +9801,8 @@ const Game = {
       Audio3D_SFX.flowerVoice(FLOWER_VOICE_FALLING, 1.0, true);
     }
     if (this._omega) this.endOmega();
+    /* ЭФФЕКТЫ ЭКРАНА: гасим всё, что могло остаться после смерти/рывка/заряда */
+    if (this.effects && this.effects.clearScreenFx) this.effects.clearScreenFx();
     // a drone still in the air is lost with its pilot
     if (this.drone) this.detonateDrone(false);
     if (this.mode === CS.MODE.OFFLINE) {

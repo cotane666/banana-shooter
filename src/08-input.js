@@ -129,6 +129,37 @@ const Input = {
       }, opts);
       document.addEventListener('touchend', e => { if (TouchUI.active) TouchUI.onEnd(e); }, opts);
       document.addEventListener('touchcancel', e => { if (TouchUI.active) TouchUI.onEnd(e); }, opts);
+      /* ---- УДЕРЖАНИЕ КНОПКИ + ПОВОРОТ КАМЕРЫ ----
+         Ведёшь пальцем по нажатой кнопке (в т.ч. способности) — камера
+         поворачивается, а сама кнопка остаётся зажатой. Работает в capture-
+         фазе, поэтому не мешает собственным обработчикам кнопок. */
+      const btnDrag = {};
+      document.addEventListener('touchstart', e => {
+        if (!TouchUI.active || !Game.running || Game.mode === CS.MODE.MENU) return;
+        if (UI.overlayOpen()) return;
+        const onBtn = e.target && e.target.closest && e.target.closest('#touchui button');
+        if (!onBtn) return;
+        for (const t of e.changedTouches) btnDrag[t.identifier] = { x: t.clientX, y: t.clientY, moved: false };
+      }, { passive: true, capture: true });
+      document.addEventListener('touchmove', e => {
+        if (!TouchUI.active) return;
+        for (const t of e.changedTouches) {
+          const s = btnDrag[t.identifier];
+          if (!s) continue;
+          const dx = t.clientX - s.x, dy = t.clientY - s.y;
+          if (!s.moved) {
+            if (Math.abs(dx) + Math.abs(dy) < 6) continue;   // мёртвая зона тапа
+            s.moved = true; s.x = t.clientX; s.y = t.clientY; continue;
+          }
+          s.x = t.clientX; s.y = t.clientY;
+          const k = TouchUI.sens * 0.0026;
+          TouchUI.look.dx += U.clamp(dx, -MAX_MOUSE_STEP, MAX_MOUSE_STEP) * k;
+          TouchUI.look.dy += U.clamp(dy, -MAX_MOUSE_STEP, MAX_MOUSE_STEP) * k;
+        }
+      }, { passive: true, capture: true });
+      const btnDragEnd = e => { for (const t of e.changedTouches) delete btnDrag[t.identifier]; };
+      document.addEventListener('touchend', btnDragEnd, { passive: true, capture: true });
+      document.addEventListener('touchcancel', btnDragEnd, { passive: true, capture: true });
       // no pinch-zoom / double-tap-zoom while playing
       document.addEventListener('gesturestart', e => e.preventDefault());
     }

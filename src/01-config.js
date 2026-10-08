@@ -53,7 +53,7 @@ const CFG = {
   gearDashSpeed: 24,        // начальная скорость рывка-перка (м/с)
   gearDashTime: 0.28,       // длительность рывка (с)
   gearDashCd: 3.0,          // перезарядка рывка (с)
-  /* ---- ПРЕСЕТЫ ГРАФИКИ: 0 авто · 1 низкая · 2 средняя · 3 высокая ---- */
+  /* ---- ПРЕСЕТЫ ГРАФИКИ: 0 авто · 1 низкая · 2 средняя · 3 высокая · 4 ультра ---- */
   gfxPresets: [
     /* АВТО (выбирается по устройству при загрузке) */
     { fog: 0.0075, cull: 70, near: 34, farInterval: 0.16, particleMul: 0.45, decalMul: 0.5, pixelCap: 1.0, shadow: 512, aa: false },
@@ -62,7 +62,9 @@ const CFG = {
     /* СРЕДНЯЯ */
     { fog: 0.0055, cull: 85, near: 42, farInterval: 0.12, particleMul: 1.0, decalMul: 1.0, pixelCap: 1.4, shadow: 2048, aa: true },
     /* ВЫСОКАЯ */
-    { fog: 0.0042, cull: 130, near: 60, farInterval: 0.08, particleMul: 1.4, decalMul: 1.4, pixelCap: 2.0, shadow: 4096, aa: true }
+    { fog: 0.0042, cull: 130, near: 60, farInterval: 0.08, particleMul: 1.4, decalMul: 1.4, pixelCap: 2.0, shadow: 4096, aa: true },
+    /* УЛЬТРА — для мощных устройств: максимум дальности, частиц, мягкие тени */
+    { fog: 0.0030, cull: 200, near: 90, farInterval: 0.05, particleMul: 2.0, decalMul: 1.8, pixelCap: 2.5, shadow: 4096, aa: true }
   ],
   maxHP: 100,
   maxAP: 100,

@@ -646,7 +646,7 @@ function initSettings() {
 
   /* графика / производительность: автопресет под устройство или вручную */
   const gfx = document.getElementById('sGfx'), ogfx = document.getElementById('oGfx');
-  const gfxNames = ['АВТО', 'НИЗКАЯ', 'СРЕДНЯЯ', 'ВЫСОКАЯ'];
+  const gfxNames = ['АВТО', 'НИЗКАЯ', 'СРЕДНЯЯ', 'ВЫСОКАЯ', 'УЛЬТРА'];
   if (gfx) {
     gfx.value = (S.gfx === undefined ? 0 : S.gfx);
     if (ogfx) ogfx.textContent = gfxNames[parseInt(gfx.value, 10)] || 'АВТО';

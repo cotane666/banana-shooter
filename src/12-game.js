@@ -1228,15 +1228,17 @@ const Game = {
         if (sun.shadow.map) { sun.shadow.map.dispose(); sun.shadow.map = null; }
       }
     }
+    /* новые материалы (после buildMap) тоже получают анизотропию пресета */
+    this.syncTextureAniso();
   },
 
-  /* ---- ПРЕСЕТ ГРАФИКИ: 0 авто · 1 низкая · 2 средняя · 3 высокая ----
+  /* ---- ПРЕСЕТ ГРАФИКИ: 0 авто · 1 низкая · 2 средняя · 3 высокая · 4 ультра ----
      Управляет туманом, дальностью LOD зомби, частицами, тенями и разрешением.
      Это и есть «настройка графики для телефона». */
   activeGfxPreset() {
     let g = Store.data.gfx;
     if (g === 0 || g === undefined || g === null) return this.autoGfxPreset();
-    return U.clamp(g | 0, 1, 3);
+    return U.clamp(g | 0, 1, 4);
   },
 
   /* Авто-выбор графики ПО ЖЕЛЕЗУ: слабый телефон сразу получает «низкую»,
@@ -1263,7 +1265,8 @@ const Game = {
   },
 
   applyGfxPreset() {
-    const preset = CFG.gfxPresets[this.activeGfxPreset()] || CFG.gfxPresets[1];
+    const idx = this.activeGfxPreset();
+    const preset = CFG.gfxPresets[idx] || CFG.gfxPresets[1];
     CFG.zombieCullDist = preset.cull;
     CFG.zombieNearDist = preset.near;
     CFG.zombieFarInterval = preset.farInterval;
@@ -1271,6 +1274,23 @@ const Game = {
     CFG.decalMul = preset.decalMul;
     this._gfxPixelCap = preset.pixelCap;
     this._gfxShadow = preset.shadow;
+    /* УЛЬТРА: анизотропная фильтрация текстур (резкая «плитка» под углом)
+       и более мягкие тени. */
+    this._gfxUltra = idx === 4;
+    this._gfxAniso = idx === 4 ? 16 : idx === 3 ? 8 : idx === 2 ? 4 : 1;
+    this.syncTextureAniso();
+    if (this.renderer && this.renderer.shadowMap) {
+      const want = (idx >= 3 || Store.data.quality === 2) ? THREE.PCFSoftShadowMap : THREE.PCFShadowMap;
+      if (this.renderer.shadowMap.type !== want) {
+        this.renderer.shadowMap.type = want;
+        this.renderer.shadowMap.needsUpdate = true;
+      }
+    }
+    /* ультра: мягче граница тени (radius) и чуть больше контраст света */
+    const sun = MAP.group && MAP.group.userData ? MAP.group.userData.sun : null;
+    if (sun && sun.shadow) { sun.shadow.radius = idx === 4 ? 4 : idx === 3 ? 2.5 : 1; }
+    /* ультра: чуть более «сочная» картинка (экспозиция) */
+    if (this.renderer) this.renderer.toneMappingExposure = idx === 4 ? 1.20 : 1.12;
     // туман: не трогаем, если окружение управляет им (авто/погода), иначе задаём
     if (this.scene && this.scene.fog && !Store.data.envAuto && !Store.data.envOff) {
       this.scene.fog.density = preset.fog;
@@ -1279,6 +1299,36 @@ const Game = {
       // antialias нельзя переключить без пересоздания контекста; при низкой
       // графике уменьшаем pixelRatio, что и даёт основной выигрыш
       this.applyQuality();
+    }
+  },
+
+  /* Применить анизотропию ко всем уже созданным текстурам сцены (материалы карты,
+     зомби, оружие и т.д.). На ультре — максимум доступного (до 16). */
+  syncTextureAniso() {
+    if (!this.renderer) return;
+    let maxA = 1;
+    try { maxA = this.renderer.capabilities.getMaxAnisotropy() || 1; } catch (e) { maxA = 1; }
+    const want = Math.min(this._gfxAniso || 4, maxA);
+    this._gfxAnisoMax = maxA;
+    const seen = typeof WeakSet !== 'undefined' ? new WeakSet() : null;
+    const apply = (mat) => {
+      if (!mat || (seen && seen.has(mat))) return;
+      if (seen) seen.add(mat);
+      for (const k of ['map', 'normalMap', 'roughnessMap', 'emissiveMap', 'bumpMap', 'specularMap']) {
+        const t = mat[k];
+        if (t && t.isTexture && t.anisotropy !== want) { t.anisotropy = want; t.needsUpdate = true; }
+      }
+    };
+    try {
+      this.scene.traverse(o => {
+        if (o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach(apply);
+      });
+      if (this.vmScene) this.vmScene.traverse(o => {
+        if (o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach(apply);
+      });
+    } catch (e) { }
+    if (typeof MAT !== 'undefined' && MAT) {
+      for (const k in MAT) { const m = MAT[k]; if (m && m.isMaterial) apply(m); }
     }
   },
 

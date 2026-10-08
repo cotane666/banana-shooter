@@ -241,6 +241,62 @@ const BloodArt = {
     return (p && p.def && p.def.fruit === 'bloodArt') ? p.def : null;
   },
   isHeld() { return !!this._def(); },
+  /* усиление «после второй жизни» доступно, только пока игрок держит фрукт */
+  buffActive() { const p = (typeof Game !== 'undefined') ? Game.player : null; return !!(p && p._baReviveBuff > 0); },
+
+  /* ============================================================
+     ВТОРАЯ ЖИЗНЬ (как у Pain Fruit в Blox Fruits).
+     Один раз за забег, если в руках BLOOD ART: при смерти игрок
+     воскресает, а врагов вокруг отбрасывает и рвёт ударной волной боли.
+     После воскрешения на время даются УСИЛЕНИЯ (урон/скорость/бессмертие).
+     ============================================================ */
+  tryRevive(G) {
+    const p = G.player;
+    if (!p || !this.isHeld()) return false;
+    if (p._baReviveUsed) return false;       // один раз за забег
+    p._baReviveUsed = true;
+    p.alive = true;
+    p.health = Math.round((p.maxHealth || 100) * (G.mode === 'online' ? .5 : .9));
+    p.armor = Math.max(p.armor || 0, 60);
+    p._baReviveBuff = 12;                     // секунд усиления
+    p._baInvuln = 2.5;                        // секунд неуязвимости
+    /* взрыв боли: рвём и отбрасываем врагов вокруг */
+    if (G.effects) {
+      G.effects.bloodNova(p.pos.x, p.pos.y + 1, p.pos.z, 11, 2.2);
+      if (G.effects.bloodShock) G.effects.bloodShock(p.pos.x, p.pos.y, p.pos.z, 9, 1.8);
+      if (G.effects.pawSlash) G.effects.pawSlash(p.pos.x, p.pos.y + 1.2, p.pos.z, p.yaw + Math.PI, 12, 0xff1030, .7);
+      G.effects.bloodScreen(true, 1);
+      if (G.effects.bloodDrip) for (let i = 0; i < 14; i++) G.effects.bloodDrip();
+      setTimeout(() => { if (G.effects && G.effects.bloodScreen) G.effects.bloodScreen(false); }, 1200);
+    }
+    const R = 11;
+    if (G.horde) for (const z of G.horde.list) {
+      if (!z.alive || z.dying) continue;
+      const d = Math.hypot(z.pos.x - p.pos.x, z.pos.z - p.pos.z);
+      if (d > R) continue;
+      const kk = 1 - d / R;
+      z.takeDamage(300 * (0.5 + kk), 'body', { x: z.pos.x - p.pos.x, y: 0, z: z.pos.z - p.pos.z });
+      if (z.alive && !z.dying) { z.vel.y = 12 * kk + 4; const l = Math.hypot(z.pos.x - p.pos.x, z.pos.z - p.pos.z) || 1; z.vel.x += (z.pos.x - p.pos.x) / l * 30 * kk; z.vel.z += (z.pos.z - p.pos.z) / l * 30 * kk; }
+    }
+    Audio3D_SFX.roundEnd && Audio3D_SFX.roundEnd(true);
+    Audio3D_SFX.tone && Audio3D_SFX.tone(70, .5, 'sawtooth', .2, p.pos.x, p.pos.y, p.pos.z, 200);
+    UI.center('ВТОРАЯ ЖИЗНЬ', 'BLOOD ART · УСИЛЕНИЕ', 3.0);
+    UI.toast('Вторая жизнь! Усиления на 12с', '#ff2040');
+    return true;
+  },
+
+  /* множитель урона от второй жизни (усиление «после второго шанса») */
+  reviveDmgMul() { return this.buffActive() ? 1.5 : 1; },
+  reviveSpeedMul() { return this.buffActive() ? 1.4 : 1; },
+
+  /* тик усилений второй жизни (вызывается из игрового цикла) */
+  updateRevive(G, dt) {
+    const p = G.player;
+    if (!p) return;
+    if (p._baReviveBuff > 0) p._baReviveBuff -= dt;
+    if (p._baInvuln > 0) p._baInvuln -= dt;
+  },
+
   /* вызвать способность по клавише; true — обработано */
   key(code) {
     const G = (typeof Game !== 'undefined') ? Game : null;
@@ -436,7 +492,12 @@ const BloodArt = {
     p.vel.z = dir.z * s;
     p.vel.y = Math.max(p.vel.y, dir.y * s + 4);
     p.onGround = false;
-    if (typeof UI !== 'undefined' && UI.dashFx) UI.dashFx(true, false);
+    if (typeof UI !== 'undefined' && UI.dashFx) {
+      UI.dashFx(true, false);
+      /* эффект рывка гаснет через короткое время (раньше оставался навсегда) */
+      clearTimeout(this._repelFxT);
+      this._repelFxT = setTimeout(() => { if (UI && UI.dashFx) UI.dashFx(false, false); }, 320);
+    }
     if (G.effects) {
       /* стартовая ударная волна боли + росчерк-лапа */
       const yaw = Math.atan2(dir.x, dir.z) + Math.PI;
@@ -466,5 +527,6 @@ const BloodArt = {
       }
     }
     this.updateTorture(G, dt);
+    this.updateRevive(G, dt);
   }
 };

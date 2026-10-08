@@ -187,6 +187,19 @@ const MapEditor = {
   },
 
   /* ---------- управление в кадре ---------- */
+  /* поворот свободной камеры жестом (телефон). Вызывается из обработчиков
+     панели редактора: держишь кнопку/панель и ведёшь пальцем — камера
+     вращается. Тап (без движения) по-прежнему срабатывает как кнопка. */
+  touchLookDelta(dx, dy) {
+    if (!this.freeCam) return;
+    const sens = (typeof Store !== 'undefined' && Store.data.touchSens) ? Store.data.touchSens : 1.5;
+    const k = .0026 * sens;
+    this.camYaw -= dx * k;
+    this.camPitch -= dy * k;
+    this.camPitch = U.clamp(this.camPitch, -1.4, 1.4);
+    this.camYaw = ((this.camYaw + Math.PI) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2) - Math.PI;
+  },
+
   update(dt) {
     if (!this.active) return;
     /* СВОБОДНАЯ КАМЕРА: WASD — полёт, мышь — обзор (см. cameraUpdate) */

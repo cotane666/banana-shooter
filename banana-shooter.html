@@ -929,6 +929,12 @@ html.touch .fld input{padding:10px;font-size:15px}
   background:rgba(255,255,255,.06);color:#fff;font-size:16px;font-weight:800;line-height:1;cursor:pointer;
   display:flex;align-items:center;justify-content:center;padding:0}
 #edPanel.folded .ed-body{display:none}
+#edPanel .ed-look{display:flex;align-items:center;justify-content:center;gap:6px;
+  padding:12px 8px;margin:2px 0 6px;border-radius:10px;font-size:11px;font-weight:800;
+  letter-spacing:.06em;color:#cfe8b8;cursor:grab;touch-action:none;
+  background:linear-gradient(180deg,rgba(155,229,100,.18),rgba(155,229,100,.06));
+  border:1px dashed rgba(155,229,100,.55)}
+#edPanel .ed-look:active{background:rgba(155,229,100,.3)}
 #edPanel .ed-sec{font-size:9.5px;letter-spacing:1.6px;color:#8b98a5;margin:8px 0 4px;font-weight:700}
 #edPanel .ed-chips{display:flex;flex-wrap:wrap;gap:4px}
 #edPanel .ed-chip{border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.05);
@@ -1415,6 +1421,9 @@ html.touch #edPanel .ed-btn{padding:9px 6px;font-size:11px}
       <button class="ed-fold" id="edFold" title="Свернуть">−</button>
     </div>
     <div class="ed-body">
+      <div class="ed-look" id="edLook">
+        <span>✦ ОБЗОР — веди пальцем</span>
+      </div>
       <div class="ed-sec">РЕЖИМ</div>
       <div class="ed-chips">
         <button class="ed-chip on" id="edPlace">ПОСТАВИТЬ</button>
@@ -3925,6 +3934,19 @@ const MapEditor = {
   },
 
   /* ---------- управление в кадре ---------- */
+  /* поворот свободной камеры жестом (телефон). Вызывается из обработчиков
+     панели редактора: держишь кнопку/панель и ведёшь пальцем — камера
+     вращается. Тап (без движения) по-прежнему срабатывает как кнопка. */
+  touchLookDelta(dx, dy) {
+    if (!this.freeCam) return;
+    const sens = (typeof Store !== 'undefined' && Store.data.touchSens) ? Store.data.touchSens : 1.5;
+    const k = .0026 * sens;
+    this.camYaw -= dx * k;
+    this.camPitch -= dy * k;
+    this.camPitch = U.clamp(this.camPitch, -1.4, 1.4);
+    this.camYaw = ((this.camYaw + Math.PI) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2) - Math.PI;
+  },
+
   update(dt) {
     if (!this.active) return;
     /* СВОБОДНАЯ КАМЕРА: WASD — полёт, мышь — обзор (см. cameraUpdate) */
@@ -9068,6 +9090,62 @@ const BloodArt = {
     return (p && p.def && p.def.fruit === 'bloodArt') ? p.def : null;
   },
   isHeld() { return !!this._def(); },
+  /* усиление «после второй жизни» доступно, только пока игрок держит фрукт */
+  buffActive() { const p = (typeof Game !== 'undefined') ? Game.player : null; return !!(p && p._baReviveBuff > 0); },
+
+  /* ============================================================
+     ВТОРАЯ ЖИЗНЬ (как у Pain Fruit в Blox Fruits).
+     Один раз за забег, если в руках BLOOD ART: при смерти игрок
+     воскресает, а врагов вокруг отбрасывает и рвёт ударной волной боли.
+     После воскрешения на время даются УСИЛЕНИЯ (урон/скорость/бессмертие).
+     ============================================================ */
+  tryRevive(G) {
+    const p = G.player;
+    if (!p || !this.isHeld()) return false;
+    if (p._baReviveUsed) return false;       // один раз за забег
+    p._baReviveUsed = true;
+    p.alive = true;
+    p.health = Math.round((p.maxHealth || 100) * (G.mode === 'online' ? .5 : .9));
+    p.armor = Math.max(p.armor || 0, 60);
+    p._baReviveBuff = 12;                     // секунд усиления
+    p._baInvuln = 2.5;                        // секунд неуязвимости
+    /* взрыв боли: рвём и отбрасываем врагов вокруг */
+    if (G.effects) {
+      G.effects.bloodNova(p.pos.x, p.pos.y + 1, p.pos.z, 11, 2.2);
+      if (G.effects.bloodShock) G.effects.bloodShock(p.pos.x, p.pos.y, p.pos.z, 9, 1.8);
+      if (G.effects.pawSlash) G.effects.pawSlash(p.pos.x, p.pos.y + 1.2, p.pos.z, p.yaw + Math.PI, 12, 0xff1030, .7);
+      G.effects.bloodScreen(true, 1);
+      if (G.effects.bloodDrip) for (let i = 0; i < 14; i++) G.effects.bloodDrip();
+      setTimeout(() => { if (G.effects && G.effects.bloodScreen) G.effects.bloodScreen(false); }, 1200);
+    }
+    const R = 11;
+    if (G.horde) for (const z of G.horde.list) {
+      if (!z.alive || z.dying) continue;
+      const d = Math.hypot(z.pos.x - p.pos.x, z.pos.z - p.pos.z);
+      if (d > R) continue;
+      const kk = 1 - d / R;
+      z.takeDamage(300 * (0.5 + kk), 'body', { x: z.pos.x - p.pos.x, y: 0, z: z.pos.z - p.pos.z });
+      if (z.alive && !z.dying) { z.vel.y = 12 * kk + 4; const l = Math.hypot(z.pos.x - p.pos.x, z.pos.z - p.pos.z) || 1; z.vel.x += (z.pos.x - p.pos.x) / l * 30 * kk; z.vel.z += (z.pos.z - p.pos.z) / l * 30 * kk; }
+    }
+    Audio3D_SFX.roundEnd && Audio3D_SFX.roundEnd(true);
+    Audio3D_SFX.tone && Audio3D_SFX.tone(70, .5, 'sawtooth', .2, p.pos.x, p.pos.y, p.pos.z, 200);
+    UI.center('ВТОРАЯ ЖИЗНЬ', 'BLOOD ART · УСИЛЕНИЕ', 3.0);
+    UI.toast('Вторая жизнь! Усиления на 12с', '#ff2040');
+    return true;
+  },
+
+  /* множитель урона от второй жизни (усиление «после второго шанса») */
+  reviveDmgMul() { return this.buffActive() ? 1.5 : 1; },
+  reviveSpeedMul() { return this.buffActive() ? 1.4 : 1; },
+
+  /* тик усилений второй жизни (вызывается из игрового цикла) */
+  updateRevive(G, dt) {
+    const p = G.player;
+    if (!p) return;
+    if (p._baReviveBuff > 0) p._baReviveBuff -= dt;
+    if (p._baInvuln > 0) p._baInvuln -= dt;
+  },
+
   /* вызвать способность по клавише; true — обработано */
   key(code) {
     const G = (typeof Game !== 'undefined') ? Game : null;
@@ -9263,7 +9341,12 @@ const BloodArt = {
     p.vel.z = dir.z * s;
     p.vel.y = Math.max(p.vel.y, dir.y * s + 4);
     p.onGround = false;
-    if (typeof UI !== 'undefined' && UI.dashFx) UI.dashFx(true, false);
+    if (typeof UI !== 'undefined' && UI.dashFx) {
+      UI.dashFx(true, false);
+      /* эффект рывка гаснет через короткое время (раньше оставался навсегда) */
+      clearTimeout(this._repelFxT);
+      this._repelFxT = setTimeout(() => { if (UI && UI.dashFx) UI.dashFx(false, false); }, 320);
+    }
     if (G.effects) {
       /* стартовая ударная волна боли + росчерк-лапа */
       const yaw = Math.atan2(dir.x, dir.z) + Math.PI;
@@ -9293,6 +9376,7 @@ const BloodArt = {
       }
     }
     this.updateTorture(G, dt);
+    this.updateRevive(G, dt);
   }
 };
 
@@ -13005,6 +13089,8 @@ class Player {
     let maxSpeed = input.run && !this.crouching ? CFG.runSpeed : CFG.walkSpeed;
     if (this.crouching) maxSpeed = CFG.crouchSpeed;
     maxSpeed *= this.runMul || 1;
+    /* BLOOD ART: усиление скорости после ВТОРОЙ ЖИЗНИ */
+    if (this._baReviveBuff > 0) maxSpeed *= 1.4;
     if (this.isAiming && def.zoom) maxSpeed *= .35;
     maxSpeed *= (1 - U.clamp(this.reloadT > 0 ? .16 : 0, 0, 1));
 
@@ -19058,7 +19144,7 @@ const UI = {
       'btnAccCloud', 'btnAccCloudSave', 'btnAccCopyHash',
       'btnEditor', 'edPanel', 'edCount', 'edSpawn', 'edName', 'edSaveBtn', 'myMaps', 'lobbyMyMaps', 'dashFx',
       'edMats', 'edSizes', 'edElems', 'edPlace', 'edEraseM', 'edSpawnBtn', 'edUndoBtn', 'edFreeCam',
-      'edUp', 'edDown', 'edExitBtn', 'edFold'];
+      'edUp', 'edDown', 'edExitBtn', 'edFold', 'edLook'];
     ids.forEach(i => this.el[i] = $(i));
     this.buildBuyCats();
     this.buildChips();
@@ -19421,6 +19507,45 @@ const UI = {
         p.classList.toggle('folded');
         E.edFold.textContent = p.classList.contains('folded') ? '+' : '−';
       });
+    }
+    /* ОБЗОР: ведёшь пальцем по панели (в т.ч. УДЕРЖИВАЯ кнопку) — камера
+       редактора вращается. Если палец не двигался — срабатывает кнопка. */
+    const lookZones = [E.edLook, E.edPanel];
+    const _touches = {};
+    const rot = (dx, dy) => { if (typeof MapEditor !== 'undefined' && MapEditor.active) MapEditor.touchLookDelta(dx, dy); };
+    lookZones.forEach(zone => {
+      if (!zone) return;
+      zone.addEventListener('touchstart', e => {
+        for (const t of e.changedTouches) _touches[t.identifier] = { x: t.clientX, y: t.clientY, moved: 0 };
+      }, { passive: true });
+      zone.addEventListener('touchmove', e => {
+        for (const t of e.changedTouches) {
+          const s = _touches[t.identifier];
+          if (!s) continue;
+          const dx = t.clientX - s.x, dy = t.clientY - s.y;
+          s.x = t.clientX; s.y = t.clientY; s.moved += Math.abs(dx) + Math.abs(dy);
+          s.hx = (s.hx || 0) + Math.abs(dx); s.vy = (s.vy || 0) + Math.abs(dy);
+          rot(dx, dy);
+        }
+        /* на ЗОНЕ ОБЗОРА всегда перехватываем; на панели — только если жест
+           явно горизонтальный (поворот), иначе отдаём вертикальный скролл */
+        if (zone === E.edLook) { if (e.cancelable) e.preventDefault(); }
+        else {
+          let hx = 0, vy = 0;
+          for (const id in _touches) { hx += _touches[id].hx || 0; vy += _touches[id].vy || 0; }
+          if (hx > vy * 1.2 && e.cancelable) e.preventDefault();
+        }
+      }, { passive: false });
+      const end = e => { for (const t of e.changedTouches) delete _touches[t.identifier]; };
+      zone.addEventListener('touchend', end, { passive: true });
+      zone.addEventListener('touchcancel', end, { passive: true });
+    });
+    /* если палец сдвинулся по кнопке — это был обзор, а не нажатие: гасим click */
+    if (E.edPanel) {
+      E.edPanel.addEventListener('click', e => {
+        const last = Object.values(_touches).reduce((m, s) => Math.max(m, s.moved || 0), 0);
+        if (last > 14) { e.stopPropagation(); e.preventDefault(); }
+      }, true);
     }
   },
   /* после правки в панели — подсветить активное */
@@ -23761,6 +23886,8 @@ const Game = {
     this._campaignWon = false;
     this._offeredRestart = false;
     this._restartPending = false;
+    /* BLOOD ART: сброс второй жизни на новую игру */
+    if (this.player) { this.player._baReviveUsed = false; this.player._baReviveBuff = 0; this.player._baInvuln = 0; }
     this.offlineDead = false;
     this.offlineDeadT = 0;
     this._creditsOpen = false;
@@ -29398,10 +29525,10 @@ const Game = {
       pos: { x: mesh.position.x, y: mesh.position.y, z: mesh.position.z },
       vel: { x: d.x * speed, y: d.y * speed, z: d.z * speed },
       grav: mode === 'nuke' ? 6 : 0,
-      dmg: mode === 'paw' ? (def.pawDmg || 260)
+      dmg: (mode === 'paw' ? (def.pawDmg || 260)
         : mode === 'nuke' ? (def.nukeDmg || 520)
         : mode === 'big' ? (def.bigDmg || 420) * (.5 + k)
-        : (def.barrageDmg || 150),
+        : (def.barrageDmg || 150)) * ((typeof BloodArt !== 'undefined' && BloodArt.reviveDmgMul) ? BloodArt.reviveDmgMul() : 1),
       pierce: def.pawPierce || 8, pierces: 0,
       nukeR: def.nukeR || 9, nukeBreakR: def.nukeBreakR || 7,
       bigR: (def.bigR || 9) * (.7 + k * .6), bigTick: def.bigTick || 90, bigTime: def.bigTime || 6,
@@ -31053,6 +31180,9 @@ const Game = {
   applyDamageToSelf(dmg, fromPos) {
     const p = this.player;
     if (!p.alive) return;
+    /* HОЧНОЙ РЕЖИМ/НЕУЯЗВИМОСТЬ: короткая неуязвимость после ВТОРОЙ ЖИЗНИ
+       BLOOD ART — пока висит _baInvuln, урон не проходит. */
+    if (p._baInvuln > 0) return;
     /* НЕУЯЗВИМОСТЬ ВО ВРЕМЯ ТАРАННОГО РЫВКА «Господина цветов»: пока игрок
        летит вперёд, он не получает урона (кроме собственного урона захвата). */
     if (this._flowerRush && !this._flowerRushDmg) return;
@@ -31108,6 +31238,9 @@ const Game = {
     }
     if (p.health <= 0) {
       p.health = 0;
+      /* BLOOD ART: ВТОРАЯ ЖИЗНЬ (как у фрукта Pain) — смерть с фруктом в руках
+         даёт возрождение с усилениями. */
+      if (typeof BloodArt !== 'undefined' && BloodArt.tryRevive && BloodArt.tryRevive(this)) return;
       /* КРОМЕР: REVIVEMINT — воскрешение после смерти */
       if (typeof kromerTryRevive === 'function' && KromerState.active && KromerState.kromer >= 0 && kromerCount('revivemint') > 0 && !KromerState.reviveUsed) {
         if (kromerTryRevive(this)) return;

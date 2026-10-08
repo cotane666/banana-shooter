@@ -2415,6 +2415,8 @@ const Game = {
     this._campaignWon = false;
     this._offeredRestart = false;
     this._restartPending = false;
+    /* BLOOD ART: сброс второй жизни на новую игру */
+    if (this.player) { this.player._baReviveUsed = false; this.player._baReviveBuff = 0; this.player._baInvuln = 0; }
     this.offlineDead = false;
     this.offlineDeadT = 0;
     this._creditsOpen = false;
@@ -8052,10 +8054,10 @@ const Game = {
       pos: { x: mesh.position.x, y: mesh.position.y, z: mesh.position.z },
       vel: { x: d.x * speed, y: d.y * speed, z: d.z * speed },
       grav: mode === 'nuke' ? 6 : 0,
-      dmg: mode === 'paw' ? (def.pawDmg || 260)
+      dmg: (mode === 'paw' ? (def.pawDmg || 260)
         : mode === 'nuke' ? (def.nukeDmg || 520)
         : mode === 'big' ? (def.bigDmg || 420) * (.5 + k)
-        : (def.barrageDmg || 150),
+        : (def.barrageDmg || 150)) * ((typeof BloodArt !== 'undefined' && BloodArt.reviveDmgMul) ? BloodArt.reviveDmgMul() : 1),
       pierce: def.pawPierce || 8, pierces: 0,
       nukeR: def.nukeR || 9, nukeBreakR: def.nukeBreakR || 7,
       bigR: (def.bigR || 9) * (.7 + k * .6), bigTick: def.bigTick || 90, bigTime: def.bigTime || 6,
@@ -9707,6 +9709,9 @@ const Game = {
   applyDamageToSelf(dmg, fromPos) {
     const p = this.player;
     if (!p.alive) return;
+    /* HОЧНОЙ РЕЖИМ/НЕУЯЗВИМОСТЬ: короткая неуязвимость после ВТОРОЙ ЖИЗНИ
+       BLOOD ART — пока висит _baInvuln, урон не проходит. */
+    if (p._baInvuln > 0) return;
     /* НЕУЯЗВИМОСТЬ ВО ВРЕМЯ ТАРАННОГО РЫВКА «Господина цветов»: пока игрок
        летит вперёд, он не получает урона (кроме собственного урона захвата). */
     if (this._flowerRush && !this._flowerRushDmg) return;
@@ -9762,6 +9767,9 @@ const Game = {
     }
     if (p.health <= 0) {
       p.health = 0;
+      /* BLOOD ART: ВТОРАЯ ЖИЗНЬ (как у фрукта Pain) — смерть с фруктом в руках
+         даёт возрождение с усилениями. */
+      if (typeof BloodArt !== 'undefined' && BloodArt.tryRevive && BloodArt.tryRevive(this)) return;
       /* КРОМЕР: REVIVEMINT — воскрешение после смерти */
       if (typeof kromerTryRevive === 'function' && KromerState.active && KromerState.kromer >= 0 && kromerCount('revivemint') > 0 && !KromerState.reviveUsed) {
         if (kromerTryRevive(this)) return;

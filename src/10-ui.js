@@ -36,7 +36,7 @@ const UI = {
       'btnAccCloud', 'btnAccCloudSave', 'btnAccCopyHash',
       'btnEditor', 'edPanel', 'edCount', 'edSpawn', 'edName', 'edSaveBtn', 'myMaps', 'lobbyMyMaps', 'dashFx',
       'edMats', 'edSizes', 'edElems', 'edPlace', 'edEraseM', 'edSpawnBtn', 'edUndoBtn', 'edFreeCam',
-      'edUp', 'edDown', 'edExitBtn', 'edFold'];
+      'edUp', 'edDown', 'edExitBtn', 'edFold', 'edLook'];
     ids.forEach(i => this.el[i] = $(i));
     this.buildBuyCats();
     this.buildChips();
@@ -399,6 +399,45 @@ const UI = {
         p.classList.toggle('folded');
         E.edFold.textContent = p.classList.contains('folded') ? '+' : '−';
       });
+    }
+    /* ОБЗОР: ведёшь пальцем по панели (в т.ч. УДЕРЖИВАЯ кнопку) — камера
+       редактора вращается. Если палец не двигался — срабатывает кнопка. */
+    const lookZones = [E.edLook, E.edPanel];
+    const _touches = {};
+    const rot = (dx, dy) => { if (typeof MapEditor !== 'undefined' && MapEditor.active) MapEditor.touchLookDelta(dx, dy); };
+    lookZones.forEach(zone => {
+      if (!zone) return;
+      zone.addEventListener('touchstart', e => {
+        for (const t of e.changedTouches) _touches[t.identifier] = { x: t.clientX, y: t.clientY, moved: 0 };
+      }, { passive: true });
+      zone.addEventListener('touchmove', e => {
+        for (const t of e.changedTouches) {
+          const s = _touches[t.identifier];
+          if (!s) continue;
+          const dx = t.clientX - s.x, dy = t.clientY - s.y;
+          s.x = t.clientX; s.y = t.clientY; s.moved += Math.abs(dx) + Math.abs(dy);
+          s.hx = (s.hx || 0) + Math.abs(dx); s.vy = (s.vy || 0) + Math.abs(dy);
+          rot(dx, dy);
+        }
+        /* на ЗОНЕ ОБЗОРА всегда перехватываем; на панели — только если жест
+           явно горизонтальный (поворот), иначе отдаём вертикальный скролл */
+        if (zone === E.edLook) { if (e.cancelable) e.preventDefault(); }
+        else {
+          let hx = 0, vy = 0;
+          for (const id in _touches) { hx += _touches[id].hx || 0; vy += _touches[id].vy || 0; }
+          if (hx > vy * 1.2 && e.cancelable) e.preventDefault();
+        }
+      }, { passive: false });
+      const end = e => { for (const t of e.changedTouches) delete _touches[t.identifier]; };
+      zone.addEventListener('touchend', end, { passive: true });
+      zone.addEventListener('touchcancel', end, { passive: true });
+    });
+    /* если палец сдвинулся по кнопке — это был обзор, а не нажатие: гасим click */
+    if (E.edPanel) {
+      E.edPanel.addEventListener('click', e => {
+        const last = Object.values(_touches).reduce((m, s) => Math.max(m, s.moved || 0), 0);
+        if (last > 14) { e.stopPropagation(); e.preventDefault(); }
+      }, true);
     }
   },
   /* после правки в панели — подсветить активное */

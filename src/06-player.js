@@ -3705,6 +3705,8 @@ class Player {
     let maxSpeed = input.run && !this.crouching ? CFG.runSpeed : CFG.walkSpeed;
     if (this.crouching) maxSpeed = CFG.crouchSpeed;
     maxSpeed *= this.runMul || 1;
+    /* BLOOD ART: усиление скорости после ВТОРОЙ ЖИЗНИ */
+    if (this._baReviveBuff > 0) maxSpeed *= 1.4;
     if (this.isAiming && def.zoom) maxSpeed *= .35;
     maxSpeed *= (1 - U.clamp(this.reloadT > 0 ? .16 : 0, 0, 1));
 

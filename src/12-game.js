@@ -1176,6 +1176,7 @@ const Game = {
     this.renderer.shadowMap.enabled = Store.data.quality > 0;
     this.renderer.shadowMap.type = Store.data.quality === 2 ? THREE.PCFSoftShadowMap : THREE.PCFShadowMap;
     this.renderer.autoClear = false;
+    this.renderer.shadowMap.autoUpdate = false;   // обновляем тени вручную (см. renderFrame)
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.12;
 
@@ -1214,6 +1215,9 @@ const Game = {
   applyQuality() {
     const q = Store.data.quality;
     this.renderer.shadowMap.enabled = q > 0;
+    this._shadowFrame = 0;
+    this._menuShadowFrame = 0;
+    if (this.renderer.shadowMap) this.renderer.shadowMap.needsUpdate = true;
     const prCap = this._gfxPixelCap || (IS_TOUCH ? (q === 2 ? 1.5 : 1) : (q === 2 ? 2 : q === 1 ? 1.4 : 1));
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, prCap));
     const sun = MAP.group && MAP.group.userData ? MAP.group.userData.sun : null;
@@ -11172,12 +11176,27 @@ const Game = {
     this.camera.position.set(Math.cos(ang) * R, y, Math.sin(ang) * R);
     this.camera.lookAt(0, 3, 0);
     this.camera.rotation.z = 0;
+    /* в меню сцена меняется редко — пересчитываем тени через кадр */
+    if (this.renderer && this.renderer.shadowMap && this.renderer.shadowMap.enabled) {
+      this._menuShadowFrame = ((this._menuShadowFrame || 0) + 1) % 3;
+      this.renderer.shadowMap.needsUpdate = this._menuShadowFrame === 0;
+    }
     this.renderer.clear();
     this.renderer.render(this.scene, this.camera);
   },
 
   renderFrame(dt) {
     if (this.headless) return;
+    /* ОПТИМИЗАЦИЯ ТЕНЕЙ: пересчёт карты теней — одна из самых дорогих операций.
+       На телефоне/низкой графике обновляем её через кадр (глазом не заметно),
+       на высокой — каждый кадр. */
+    const shadows = !!(this.renderer && this.renderer.shadowMap && this.renderer.shadowMap.enabled);
+    if (shadows) {
+      const q = Store.data.quality;
+      const every = (IS_TOUCH && q < 2) ? 2 : (q === 0 ? 2 : 1);
+      this._shadowFrame = ((this._shadowFrame || 0) + 1) % every;
+      this.renderer.shadowMap.needsUpdate = this._shadowFrame === 0;
+    }
     this.renderer.clear();
     this.renderer.render(this.scene, this.camera);
     // first-person weapon on top, in its own scene → never clips through walls
@@ -11281,8 +11300,13 @@ const Game = {
     }
   },
 
-  /* Show the health of the nearest living boss in the offline mode. */
+  /* Show the health of the nearest living boss in the offline mode.
+     ОПТИМИЗАЦИЯ: перебор ВСЕХ зомби на каждый кадр дорогой при большой орде —
+     обновляем панель не чаще ~5 раз/сек. */
   updateBossBar() {
+    const now = U.now();
+    if (this._bossBarT && now - this._bossBarT < 200) return;
+    this._bossBarT = now;
     const el = UI.el.bossBar;
     if (!el) return;
     let boss = null;

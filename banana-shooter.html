@@ -7829,21 +7829,32 @@ function kromerReset() {
   KromerState.total = 0;
   KromerState.shield = 0;
   KromerState.reviveUsed = false;
+  if (typeof _kromerInvalidateStats === 'function') _kromerInvalidateStats();
 }
 
 /* Цена следующего уровня предмета (растёт с уровнем) */
 function kromerCost(it) { return Math.round(it.cost * (kromerCount(it.id) + 1)); }
 
-/* Суммарный аддитивный бонус по ключу `stat` среди всех купленных предметов */
+/* Суммарный аддитивный бонус по ключу `stat` среди всех купленных предметов.
+   ОПТИМИЗАЦИЯ: результат кэшируется и пересчитывается только при изменении
+   набора предметов (покупка/сброс) — раньше перебирались все 58 предметов
+   на каждый вызов, а он бывает по нескольку раз за кадр. */
+const _kromerStatCache = {};
+function _kromerInvalidateStats() { for (const k in _kromerStatCache) delete _kromerStatCache[k]; }
+
 function kromerStat(key) {
   if (!KromerState.active) return 0;
-  let s = 0;
-  for (let i = 0; i < KROMER_ITEMS.length; i++) {
-    const it = KROMER_ITEMS[i];
-    const n = KromerState.owned[it.id] || 0;
-    if (n && it.stat === key) s += it.amt * n;
+  let s = _kromerStatCache[key];
+  if (s === undefined) {
+    s = 0;
+    for (let i = 0; i < KROMER_ITEMS.length; i++) {
+      const it = KROMER_ITEMS[i];
+      const n = KromerState.owned[it.id] || 0;
+      if (n && it.stat === key) s += it.amt * n;
+    }
+    _kromerStatCache[key] = s;
   }
-  /* последний шанс: при низком HP урон выше */
+  /* последний шанс: при низком HP урон выше (динамическая часть, не кэшируем) */
   if (key === 'dmg' && KromerState.owned.laststand) {
     const p = (typeof Game !== 'undefined') ? Game.player : null;
     if (p && p.maxHealth && p.health / p.maxHealth < 0.25) s += 0.30;
@@ -7887,21 +7898,46 @@ function kromerPerKill(z) {
   return Math.max(1, Math.round(base * KromerMul('kromer')));
 }
 
-/* ---------- сбор монеток-кромеров ---------- */
+/* ---------- сбор монеток-кромеров ----------
+   ОПТИМИЗАЦИЯ: у каждой монеты была своя PointLight + геометрии/материалы —
+   при десятках монет это убивало FPS на телефоне. Теперь:
+     • ОБЩИЕ геометрия и материал (создаются один раз);
+     • пул мешей (переиспользуем, а не создаём/уничтожаем);
+     • НИ ОДНОГО источника света на монету (яркий unlit-материал и так светится);
+     • жёсткий лимит числа монет (старые исчезают);
+     • магнит и расстояния считаются по квадрату (без Math.hypot). */
+const KROMER_COIN_CAP = 48;          // максимум монет на сцене
+let _kromerCoinGeo = null, _kromerCoinMat = null, _kromerCoinInnerGeo = null, _kromerCoinInnerMat = null;
+let _kromerCoinPool = [];            // переиспользуемые группы
+
+function _kromerCoinAssets() {
+  if (_kromerCoinGeo) return;
+  _kromerCoinGeo = new THREE.CylinderGeometry(.16, .16, .04, 10);
+  _kromerCoinMat = new THREE.MeshBasicMaterial({ color: 0xffd21e });
+  _kromerCoinInnerGeo = new THREE.BoxGeometry(.10, .10, .03);
+  _kromerCoinInnerMat = new THREE.MeshBasicMaterial({ color: 0x1a2a10 });
+}
+
 function kromerSpawnCoin(scene, x, y, z) {
-  const g = new THREE.Group();
-  const mat = new THREE.MeshBasicMaterial({ color: 0xffd21e });
-  const coin = new THREE.Mesh(new THREE.CylinderGeometry(.16, .16, .04, 12), mat);
-  coin.rotation.x = Math.PI / 2;
-  g.add(coin);
-  /* зелёная «к» / символ кромера */
-  const inner = new THREE.Mesh(new THREE.BoxGeometry(.10, .10, .03), new THREE.MeshBasicMaterial({ color: 0x1a2a10 }));
-  inner.position.z = .03; g.add(inner);
-  const glow = new THREE.PointLight(0xffd21e, 3, 4, 2);
-  g.add(glow);
+  _kromerCoinAssets();
+  let g = _kromerCoinPool.pop();
+  if (!g) {
+    g = new THREE.Group();
+    const coin = new THREE.Mesh(_kromerCoinGeo, _kromerCoinMat);
+    coin.rotation.x = Math.PI / 2;
+    g.add(coin);
+    const inner = new THREE.Mesh(_kromerCoinInnerGeo, _kromerCoinInnerMat);
+    inner.position.z = .03; g.add(inner);
+  }
   g.position.set(x, y + .5, z);
   scene.add(g);
   return { mesh: g, x, y, z, t: 0, life: 22 };
+}
+
+/* вернуть меш монеты в пул (вместо уничтожения) */
+function _kromerRecycleCoin(game, c) {
+  if (c.mesh && c.mesh.parent) c.mesh.parent.remove(c.mesh);
+  if (_kromerCoinPool.length < KROMER_COIN_CAP + 8) _kromerCoinPool.push(c.mesh);
 }
 
 /* ============================================================
@@ -8012,6 +8048,7 @@ function kromerBuy(game, id) {
   KromerState.total++;
 
   if (it.special === 'shield') KromerState.shield = 150;
+  if (typeof _kromerInvalidateStats === 'function') _kromerInvalidateStats();
   kromerApplyPassive(game);
   Audio3D_SFX.buy();
   UI.toast('[[КУПЛЕНО!]] ' + it.name, it.col);
@@ -8152,38 +8189,47 @@ function kromerUpdate(game, dt) {
   const list = game.kromerCoins;
   /* магнит: базовый радиус + бонус от улучшений */
   const magnetR = 6 + (KromerState.active ? KromerMul('magnet') : 0);
+  const magnetR2 = magnetR * magnetR;
+  const collectR2 = 1.4 * 1.4;
+  /* ОГРАНИЧЕНИЕ: если монет слишком много — старые исчезают (пул, без утечек) */
+  while (list.length > KROMER_COIN_CAP) { _kromerRecycleCoin(game, list[0]); list.shift(); }
   for (let i = list.length - 1; i >= 0; i--) {
     const c = list[i];
     c.t += dt; c.life -= dt;
     c.mesh.rotation.y += dt * 4;
     c.mesh.position.y = c.y + .5 + Math.sin(c.t * 3) * .12;
     const dx = p.pos.x - c.x, dz = p.pos.z - c.z;
-    const d = Math.hypot(dx, dz);
-    /* магнит: подтягивается к игроку, когда рядом */
-    if (d < magnetR && d > .4) {
-      c.x += (dx / d) * Math.min(16, 8 + (magnetR - d) * 3) * dt;
-      c.z += (dz / d) * Math.min(16, 8 + (magnetR - d) * 3) * dt;
+    const d2 = dx * dx + dz * dz;
+    /* магнит: подтягивается к игроку, когда рядом (по квадрату расстояния) */
+    if (d2 < magnetR2 && d2 > .16) {
+      const d = Math.sqrt(d2);
+      const pull = Math.min(16, 8 + (magnetR - d) * 3) * dt;
+      c.x += (dx / d) * pull;
+      c.z += (dz / d) * pull;
       c.mesh.position.x = c.x; c.mesh.position.z = c.z;
     }
-    if (d <= 1.4) {
+    if (d2 <= collectR2) {
       KromerState.kromer += c.kromer || 1;
       Audio3D_SFX.pickup && Audio3D_SFX.pickup();
-      if (game.effects) game.effects.particle(c.x, c.y + .5, c.z, 0, 2, 0, .18, 'vspark', .3);
-      if (c.mesh.parent) c.mesh.parent.remove(c.mesh);
+      if (game.effects && list.length < 24) game.effects.particle(c.x, c.y + .5, c.z, 0, 2, 0, .18, 'vspark', .3);
+      _kromerRecycleCoin(game, c);
       list.splice(i, 1);
       continue;
     }
     if (c.life <= 0) {
-      if (c.mesh.parent) c.mesh.parent.remove(c.mesh);
+      _kromerRecycleCoin(game, c);
       list.splice(i, 1);
     }
   }
 
   if (!KromerState.active) { kromerClearFamiliars(game); return; }
-
-  /* компаньоны */
-  kromerUpdateFamiliars(game, dt);
-
+  /* фамильяры и пассивки обновляем реже (раз в ~3 кадра) — дешевле, заметно не глазами */
+  game._kromerSlowT = (game._kromerSlowT || 0) + dt;
+  if (game._kromerSlowT >= .05) {
+    game._kromerSlowT = 0;
+    /* компаньоны */
+    kromerUpdateFamiliars(game, .05);
+  }
   /* восстановление щита Lightner's Shield */
   if (kromerCount('shield') > 0) {
     const regen = 12 + kromerStat('shieldRegen') * 18;   // ед./сек
@@ -8199,7 +8245,7 @@ function kromerUpdate(game, dt) {
 /* сброс монеток со сцены (при выходе в меню) */
 function kromerClearCoins(game) {
   if (!game.kromerCoins) { game.kromerCoins = []; return; }
-  for (const c of game.kromerCoins) { if (c.mesh.parent) c.mesh.parent.remove(c.mesh); }
+  for (const c of game.kromerCoins) { if (c.mesh && c.mesh.parent) c.mesh.parent.remove(c.mesh); }
   game.kromerCoins.length = 0;
 }
 
@@ -18108,20 +18154,32 @@ const UI = {
     const tx = (x) => (x + size) / (size * 2) * W;
     const tz = (z) => (z + size) / (size * 2) * H;
 
-    // buildings/cover summary: use nav obstacles (coarse)
+    /* ОПТИМИЗАЦИЯ: статичная сетка укрытий (nav-препятствия) рисуется ОДИН РАЗ
+       в offscreen-canvas и потом просто копируется. Раньше каждый кадр
+       перебирались сотни клеток навигационной сетки — это било по FPS. */
     const nav = MAP.nav;
     if (nav) {
-      const cw = W / nav.W, ch = H / nav.H;
-      ctx.fillStyle = 'rgba(120,140,160,.16)';
-      const step = 2;
-      for (let gz = 0; gz < nav.H; gz += step) {
-        for (let gx = 0; gx < nav.W; gx += step) {
-          const i = gz * nav.W + gx;
-          if (nav.walk[i]) continue;
-          ctx.fillRect(gx * (W / nav.W), gz * (H / nav.H), (W / nav.W) * step, (H / nav.H) * step);
+      if (!this._miniNav || this._miniNavKey !== (MAP.id + ':' + nav.W)) {
+        const oc = document.createElement('canvas');
+        oc.width = W; oc.height = H;
+        const octx = oc.getContext('2d');
+        octx.fillStyle = 'rgba(120,140,160,.16)';
+        const cw = W / nav.W, ch = H / nav.H;
+        const step = 2;
+        for (let gz = 0; gz < nav.H; gz += step) {
+          for (let gx = 0; gx < nav.W; gx += step) {
+            const i = gz * nav.W + gx;
+            if (nav.walk[i]) continue;
+            octx.fillRect(gx * cw, gz * ch, cw * step, ch * step);
+          }
         }
+        this._miniNav = oc;
+        this._miniNavKey = MAP.id + ':' + nav.W;
       }
+      ctx.drawImage(this._miniNav, 0, 0);
     }
+    /* один расчёт времени на весь кадр (Date.now() в цикле по эффектам дорогой) */
+    const nowMs = Date.now();
     // sites
     ctx.strokeStyle = 'rgba(255,90,60,.55)'; ctx.lineWidth = 2;
     Object.keys(MAP.sites || {}).forEach(k => {
@@ -18150,7 +18208,7 @@ const UI = {
     }
     // field medkits (offline): a green health marker
     if (game.medboxes && game.medboxes.length) {
-      const pulse3 = .5 + .5 * Math.sin(Date.now() / 220);
+      const pulse3 = .5 + .5 * Math.sin(nowMs / 220);
       game.medboxes.forEach(m => {
         const px = tx(m.x), pz = tz(m.z);
         ctx.save();
@@ -18173,7 +18231,7 @@ const UI = {
         if (!g.sticky || !g.stuck || !g.ownerLocal) return;
         const px = tx(g.pos.x), pz = tz(g.pos.z);
         ctx.save();
-        const bl = .5 + .5 * Math.sin(Date.now() / 180);
+        const bl = .5 + .5 * Math.sin(nowMs / 180);
         ctx.strokeStyle = 'rgba(255,60,40,' + (.5 + bl * .5) + ')';
         ctx.lineWidth = 2;
         ctx.beginPath(); ctx.arc(px, pz, 6 + bl * 3, 0, 7); ctx.stroke();
@@ -18186,7 +18244,7 @@ const UI = {
       });
     }
     if (game.crates && game.crates.length) {
-      const pulse2 = .5 + .5 * Math.sin(Date.now() / 200);
+      const pulse2 = .5 + .5 * Math.sin(nowMs / 200);
       game.crates.forEach(c => {
         const px = tx(c.x), pz = tz(c.z);
         ctx.save();
@@ -18204,7 +18262,7 @@ const UI = {
     }
     // drones: the local one and every enemy drone in the air (a loud, visible
     // threat — that is the point of the kamikaze drone)
-    const pulse = .5 + .5 * Math.sin(Date.now() / 160);
+    const pulse = .5 + .5 * Math.sin(nowMs / 160);
     const drawDrone = (x, z, enemy) => {
       ctx.save();
       ctx.strokeStyle = enemy ? 'rgba(255,80,80,.95)' : 'rgba(90,200,255,.95)';
@@ -20482,6 +20540,7 @@ const Game = {
     this.renderer.shadowMap.enabled = Store.data.quality > 0;
     this.renderer.shadowMap.type = Store.data.quality === 2 ? THREE.PCFSoftShadowMap : THREE.PCFShadowMap;
     this.renderer.autoClear = false;
+    this.renderer.shadowMap.autoUpdate = false;   // обновляем тени вручную (см. renderFrame)
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.12;
 
@@ -20520,6 +20579,9 @@ const Game = {
   applyQuality() {
     const q = Store.data.quality;
     this.renderer.shadowMap.enabled = q > 0;
+    this._shadowFrame = 0;
+    this._menuShadowFrame = 0;
+    if (this.renderer.shadowMap) this.renderer.shadowMap.needsUpdate = true;
     const prCap = this._gfxPixelCap || (IS_TOUCH ? (q === 2 ? 1.5 : 1) : (q === 2 ? 2 : q === 1 ? 1.4 : 1));
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, prCap));
     const sun = MAP.group && MAP.group.userData ? MAP.group.userData.sun : null;
@@ -30478,12 +30540,27 @@ const Game = {
     this.camera.position.set(Math.cos(ang) * R, y, Math.sin(ang) * R);
     this.camera.lookAt(0, 3, 0);
     this.camera.rotation.z = 0;
+    /* в меню сцена меняется редко — пересчитываем тени через кадр */
+    if (this.renderer && this.renderer.shadowMap && this.renderer.shadowMap.enabled) {
+      this._menuShadowFrame = ((this._menuShadowFrame || 0) + 1) % 3;
+      this.renderer.shadowMap.needsUpdate = this._menuShadowFrame === 0;
+    }
     this.renderer.clear();
     this.renderer.render(this.scene, this.camera);
   },
 
   renderFrame(dt) {
     if (this.headless) return;
+    /* ОПТИМИЗАЦИЯ ТЕНЕЙ: пересчёт карты теней — одна из самых дорогих операций.
+       На телефоне/низкой графике обновляем её через кадр (глазом не заметно),
+       на высокой — каждый кадр. */
+    const shadows = !!(this.renderer && this.renderer.shadowMap && this.renderer.shadowMap.enabled);
+    if (shadows) {
+      const q = Store.data.quality;
+      const every = (IS_TOUCH && q < 2) ? 2 : (q === 0 ? 2 : 1);
+      this._shadowFrame = ((this._shadowFrame || 0) + 1) % every;
+      this.renderer.shadowMap.needsUpdate = this._shadowFrame === 0;
+    }
     this.renderer.clear();
     this.renderer.render(this.scene, this.camera);
     // first-person weapon on top, in its own scene → never clips through walls
@@ -30587,8 +30664,13 @@ const Game = {
     }
   },
 
-  /* Show the health of the nearest living boss in the offline mode. */
+  /* Show the health of the nearest living boss in the offline mode.
+     ОПТИМИЗАЦИЯ: перебор ВСЕХ зомби на каждый кадр дорогой при большой орде —
+     обновляем панель не чаще ~5 раз/сек. */
   updateBossBar() {
+    const now = U.now();
+    if (this._bossBarT && now - this._bossBarT < 200) return;
+    this._bossBarT = now;
     const el = UI.el.bossBar;
     if (!el) return;
     let boss = null;

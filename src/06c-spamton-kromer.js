@@ -114,21 +114,32 @@ function kromerReset() {
   KromerState.total = 0;
   KromerState.shield = 0;
   KromerState.reviveUsed = false;
+  if (typeof _kromerInvalidateStats === 'function') _kromerInvalidateStats();
 }
 
 /* Цена следующего уровня предмета (растёт с уровнем) */
 function kromerCost(it) { return Math.round(it.cost * (kromerCount(it.id) + 1)); }
 
-/* Суммарный аддитивный бонус по ключу `stat` среди всех купленных предметов */
+/* Суммарный аддитивный бонус по ключу `stat` среди всех купленных предметов.
+   ОПТИМИЗАЦИЯ: результат кэшируется и пересчитывается только при изменении
+   набора предметов (покупка/сброс) — раньше перебирались все 58 предметов
+   на каждый вызов, а он бывает по нескольку раз за кадр. */
+const _kromerStatCache = {};
+function _kromerInvalidateStats() { for (const k in _kromerStatCache) delete _kromerStatCache[k]; }
+
 function kromerStat(key) {
   if (!KromerState.active) return 0;
-  let s = 0;
-  for (let i = 0; i < KROMER_ITEMS.length; i++) {
-    const it = KROMER_ITEMS[i];
-    const n = KromerState.owned[it.id] || 0;
-    if (n && it.stat === key) s += it.amt * n;
+  let s = _kromerStatCache[key];
+  if (s === undefined) {
+    s = 0;
+    for (let i = 0; i < KROMER_ITEMS.length; i++) {
+      const it = KROMER_ITEMS[i];
+      const n = KromerState.owned[it.id] || 0;
+      if (n && it.stat === key) s += it.amt * n;
+    }
+    _kromerStatCache[key] = s;
   }
-  /* последний шанс: при низком HP урон выше */
+  /* последний шанс: при низком HP урон выше (динамическая часть, не кэшируем) */
   if (key === 'dmg' && KromerState.owned.laststand) {
     const p = (typeof Game !== 'undefined') ? Game.player : null;
     if (p && p.maxHealth && p.health / p.maxHealth < 0.25) s += 0.30;
@@ -172,21 +183,46 @@ function kromerPerKill(z) {
   return Math.max(1, Math.round(base * KromerMul('kromer')));
 }
 
-/* ---------- сбор монеток-кромеров ---------- */
+/* ---------- сбор монеток-кромеров ----------
+   ОПТИМИЗАЦИЯ: у каждой монеты была своя PointLight + геометрии/материалы —
+   при десятках монет это убивало FPS на телефоне. Теперь:
+     • ОБЩИЕ геометрия и материал (создаются один раз);
+     • пул мешей (переиспользуем, а не создаём/уничтожаем);
+     • НИ ОДНОГО источника света на монету (яркий unlit-материал и так светится);
+     • жёсткий лимит числа монет (старые исчезают);
+     • магнит и расстояния считаются по квадрату (без Math.hypot). */
+const KROMER_COIN_CAP = 48;          // максимум монет на сцене
+let _kromerCoinGeo = null, _kromerCoinMat = null, _kromerCoinInnerGeo = null, _kromerCoinInnerMat = null;
+let _kromerCoinPool = [];            // переиспользуемые группы
+
+function _kromerCoinAssets() {
+  if (_kromerCoinGeo) return;
+  _kromerCoinGeo = new THREE.CylinderGeometry(.16, .16, .04, 10);
+  _kromerCoinMat = new THREE.MeshBasicMaterial({ color: 0xffd21e });
+  _kromerCoinInnerGeo = new THREE.BoxGeometry(.10, .10, .03);
+  _kromerCoinInnerMat = new THREE.MeshBasicMaterial({ color: 0x1a2a10 });
+}
+
 function kromerSpawnCoin(scene, x, y, z) {
-  const g = new THREE.Group();
-  const mat = new THREE.MeshBasicMaterial({ color: 0xffd21e });
-  const coin = new THREE.Mesh(new THREE.CylinderGeometry(.16, .16, .04, 12), mat);
-  coin.rotation.x = Math.PI / 2;
-  g.add(coin);
-  /* зелёная «к» / символ кромера */
-  const inner = new THREE.Mesh(new THREE.BoxGeometry(.10, .10, .03), new THREE.MeshBasicMaterial({ color: 0x1a2a10 }));
-  inner.position.z = .03; g.add(inner);
-  const glow = new THREE.PointLight(0xffd21e, 3, 4, 2);
-  g.add(glow);
+  _kromerCoinAssets();
+  let g = _kromerCoinPool.pop();
+  if (!g) {
+    g = new THREE.Group();
+    const coin = new THREE.Mesh(_kromerCoinGeo, _kromerCoinMat);
+    coin.rotation.x = Math.PI / 2;
+    g.add(coin);
+    const inner = new THREE.Mesh(_kromerCoinInnerGeo, _kromerCoinInnerMat);
+    inner.position.z = .03; g.add(inner);
+  }
   g.position.set(x, y + .5, z);
   scene.add(g);
   return { mesh: g, x, y, z, t: 0, life: 22 };
+}
+
+/* вернуть меш монеты в пул (вместо уничтожения) */
+function _kromerRecycleCoin(game, c) {
+  if (c.mesh && c.mesh.parent) c.mesh.parent.remove(c.mesh);
+  if (_kromerCoinPool.length < KROMER_COIN_CAP + 8) _kromerCoinPool.push(c.mesh);
 }
 
 /* ============================================================
@@ -297,6 +333,7 @@ function kromerBuy(game, id) {
   KromerState.total++;
 
   if (it.special === 'shield') KromerState.shield = 150;
+  if (typeof _kromerInvalidateStats === 'function') _kromerInvalidateStats();
   kromerApplyPassive(game);
   Audio3D_SFX.buy();
   UI.toast('[[КУПЛЕНО!]] ' + it.name, it.col);
@@ -437,38 +474,47 @@ function kromerUpdate(game, dt) {
   const list = game.kromerCoins;
   /* магнит: базовый радиус + бонус от улучшений */
   const magnetR = 6 + (KromerState.active ? KromerMul('magnet') : 0);
+  const magnetR2 = magnetR * magnetR;
+  const collectR2 = 1.4 * 1.4;
+  /* ОГРАНИЧЕНИЕ: если монет слишком много — старые исчезают (пул, без утечек) */
+  while (list.length > KROMER_COIN_CAP) { _kromerRecycleCoin(game, list[0]); list.shift(); }
   for (let i = list.length - 1; i >= 0; i--) {
     const c = list[i];
     c.t += dt; c.life -= dt;
     c.mesh.rotation.y += dt * 4;
     c.mesh.position.y = c.y + .5 + Math.sin(c.t * 3) * .12;
     const dx = p.pos.x - c.x, dz = p.pos.z - c.z;
-    const d = Math.hypot(dx, dz);
-    /* магнит: подтягивается к игроку, когда рядом */
-    if (d < magnetR && d > .4) {
-      c.x += (dx / d) * Math.min(16, 8 + (magnetR - d) * 3) * dt;
-      c.z += (dz / d) * Math.min(16, 8 + (magnetR - d) * 3) * dt;
+    const d2 = dx * dx + dz * dz;
+    /* магнит: подтягивается к игроку, когда рядом (по квадрату расстояния) */
+    if (d2 < magnetR2 && d2 > .16) {
+      const d = Math.sqrt(d2);
+      const pull = Math.min(16, 8 + (magnetR - d) * 3) * dt;
+      c.x += (dx / d) * pull;
+      c.z += (dz / d) * pull;
       c.mesh.position.x = c.x; c.mesh.position.z = c.z;
     }
-    if (d <= 1.4) {
+    if (d2 <= collectR2) {
       KromerState.kromer += c.kromer || 1;
       Audio3D_SFX.pickup && Audio3D_SFX.pickup();
-      if (game.effects) game.effects.particle(c.x, c.y + .5, c.z, 0, 2, 0, .18, 'vspark', .3);
-      if (c.mesh.parent) c.mesh.parent.remove(c.mesh);
+      if (game.effects && list.length < 24) game.effects.particle(c.x, c.y + .5, c.z, 0, 2, 0, .18, 'vspark', .3);
+      _kromerRecycleCoin(game, c);
       list.splice(i, 1);
       continue;
     }
     if (c.life <= 0) {
-      if (c.mesh.parent) c.mesh.parent.remove(c.mesh);
+      _kromerRecycleCoin(game, c);
       list.splice(i, 1);
     }
   }
 
   if (!KromerState.active) { kromerClearFamiliars(game); return; }
-
-  /* компаньоны */
-  kromerUpdateFamiliars(game, dt);
-
+  /* фамильяры и пассивки обновляем реже (раз в ~3 кадра) — дешевле, заметно не глазами */
+  game._kromerSlowT = (game._kromerSlowT || 0) + dt;
+  if (game._kromerSlowT >= .05) {
+    game._kromerSlowT = 0;
+    /* компаньоны */
+    kromerUpdateFamiliars(game, .05);
+  }
   /* восстановление щита Lightner's Shield */
   if (kromerCount('shield') > 0) {
     const regen = 12 + kromerStat('shieldRegen') * 18;   // ед./сек
@@ -484,6 +530,6 @@ function kromerUpdate(game, dt) {
 /* сброс монеток со сцены (при выходе в меню) */
 function kromerClearCoins(game) {
   if (!game.kromerCoins) { game.kromerCoins = []; return; }
-  for (const c of game.kromerCoins) { if (c.mesh.parent) c.mesh.parent.remove(c.mesh); }
+  for (const c of game.kromerCoins) { if (c.mesh && c.mesh.parent) c.mesh.parent.remove(c.mesh); }
   game.kromerCoins.length = 0;
 }

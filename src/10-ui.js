@@ -1113,20 +1113,32 @@ const UI = {
     const tx = (x) => (x + size) / (size * 2) * W;
     const tz = (z) => (z + size) / (size * 2) * H;
 
-    // buildings/cover summary: use nav obstacles (coarse)
+    /* ОПТИМИЗАЦИЯ: статичная сетка укрытий (nav-препятствия) рисуется ОДИН РАЗ
+       в offscreen-canvas и потом просто копируется. Раньше каждый кадр
+       перебирались сотни клеток навигационной сетки — это било по FPS. */
     const nav = MAP.nav;
     if (nav) {
-      const cw = W / nav.W, ch = H / nav.H;
-      ctx.fillStyle = 'rgba(120,140,160,.16)';
-      const step = 2;
-      for (let gz = 0; gz < nav.H; gz += step) {
-        for (let gx = 0; gx < nav.W; gx += step) {
-          const i = gz * nav.W + gx;
-          if (nav.walk[i]) continue;
-          ctx.fillRect(gx * (W / nav.W), gz * (H / nav.H), (W / nav.W) * step, (H / nav.H) * step);
+      if (!this._miniNav || this._miniNavKey !== (MAP.id + ':' + nav.W)) {
+        const oc = document.createElement('canvas');
+        oc.width = W; oc.height = H;
+        const octx = oc.getContext('2d');
+        octx.fillStyle = 'rgba(120,140,160,.16)';
+        const cw = W / nav.W, ch = H / nav.H;
+        const step = 2;
+        for (let gz = 0; gz < nav.H; gz += step) {
+          for (let gx = 0; gx < nav.W; gx += step) {
+            const i = gz * nav.W + gx;
+            if (nav.walk[i]) continue;
+            octx.fillRect(gx * cw, gz * ch, cw * step, ch * step);
+          }
         }
+        this._miniNav = oc;
+        this._miniNavKey = MAP.id + ':' + nav.W;
       }
+      ctx.drawImage(this._miniNav, 0, 0);
     }
+    /* один расчёт времени на весь кадр (Date.now() в цикле по эффектам дорогой) */
+    const nowMs = Date.now();
     // sites
     ctx.strokeStyle = 'rgba(255,90,60,.55)'; ctx.lineWidth = 2;
     Object.keys(MAP.sites || {}).forEach(k => {
@@ -1155,7 +1167,7 @@ const UI = {
     }
     // field medkits (offline): a green health marker
     if (game.medboxes && game.medboxes.length) {
-      const pulse3 = .5 + .5 * Math.sin(Date.now() / 220);
+      const pulse3 = .5 + .5 * Math.sin(nowMs / 220);
       game.medboxes.forEach(m => {
         const px = tx(m.x), pz = tz(m.z);
         ctx.save();
@@ -1178,7 +1190,7 @@ const UI = {
         if (!g.sticky || !g.stuck || !g.ownerLocal) return;
         const px = tx(g.pos.x), pz = tz(g.pos.z);
         ctx.save();
-        const bl = .5 + .5 * Math.sin(Date.now() / 180);
+        const bl = .5 + .5 * Math.sin(nowMs / 180);
         ctx.strokeStyle = 'rgba(255,60,40,' + (.5 + bl * .5) + ')';
         ctx.lineWidth = 2;
         ctx.beginPath(); ctx.arc(px, pz, 6 + bl * 3, 0, 7); ctx.stroke();
@@ -1191,7 +1203,7 @@ const UI = {
       });
     }
     if (game.crates && game.crates.length) {
-      const pulse2 = .5 + .5 * Math.sin(Date.now() / 200);
+      const pulse2 = .5 + .5 * Math.sin(nowMs / 200);
       game.crates.forEach(c => {
         const px = tx(c.x), pz = tz(c.z);
         ctx.save();
@@ -1209,7 +1221,7 @@ const UI = {
     }
     // drones: the local one and every enemy drone in the air (a loud, visible
     // threat — that is the point of the kamikaze drone)
-    const pulse = .5 + .5 * Math.sin(Date.now() / 160);
+    const pulse = .5 + .5 * Math.sin(nowMs / 160);
     const drawDrone = (x, z, enemy) => {
       ctx.save();
       ctx.strokeStyle = enemy ? 'rgba(255,80,80,.95)' : 'rgba(90,200,255,.95)';

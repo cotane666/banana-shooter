@@ -14802,6 +14802,16 @@ class Horde {
       const visible = d2 <= cullD2 || z.isTarget || (z.isBoss || z.isMiniBoss);
       /* В РЭГДОЛЛЕ исходная модель скрыта (её заменили куски) — не показываем */
       if (z.group && !z.ragdollBodies) z.group.visible = visible;
+      /* УМИРАЮЩИХ обновляем ВСЕГДА (вне цензуры и троттлинга): иначе куски
+         рэгдолла «замерзают» в воздухе, а таймер смерти не идёт — труп висит
+         на месте пока игрок не подойдёт. */
+      if (z.dying) {
+        ctx.player = player; z.targetRemote = false;
+        ctx.neighbors = null;
+        ctx.game = this.game;
+        z.update(dt, ctx);
+        continue;
+      }
       if (!visible) continue;                 // hidden: skip simulation entirely
       if (d2 > nearD2 && !farTick) continue;  // distant: update only every few frames
       /* В КООПЕ зомби охотятся на БЛИЖАЙШЕГО игрока (хост или клиента) */

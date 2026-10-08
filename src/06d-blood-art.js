@@ -245,6 +245,64 @@ const BloodArt = {
   buffActive() { const p = (typeof Game !== 'undefined') ? Game.player : null; return !!(p && p._baReviveBuff > 0); },
 
   /* ============================================================
+     ПРОКАЧКА ОТ УРОНА: способности BLOOD ART открываются по мере
+     урона, ПОЛУЧЕННОГО игроком с этим фруктом в руках. Прогресс
+     сохраняется между забегами (как мастерство фрукта в Blox Fruits).
+     ============================================================ */
+  SKILLS: [
+    { code: 'KeyZ', name: 'HEAVY PAW' },
+    { code: 'KeyX', name: 'PAW BARRAGE' },
+    { code: 'KeyC', name: 'PAIN NUKE' },
+    { code: 'KeyV', name: 'КРОВАВЫЙ ШАР' },
+    { code: 'KeyF', name: 'SELF REPEL' }
+  ],
+  /* сколько суммарного полученного урона нужно, чтобы открыть способность */
+  UNLOCK: { KeyZ: 0, KeyX: 75, KeyC: 200, KeyV: 400, KeyF: 650 },
+
+  _dmg() { return (typeof Store !== 'undefined' && Store.data && Store.data.baDmg) || 0; },
+  isUnlocked(code) { return this._dmg() >= (this.UNLOCK[code] || 0); },
+  unlockedCount() { let n = 0; for (const s of this.SKILLS) if (this.isUnlocked(s.code)) n++; return n; },
+  /* текущий прогресс: сколько открыто и сколько осталось до следующего */
+  progress() {
+    const dmg = this._dmg();
+    let unlocked = 0, next = null;
+    for (const s of this.SKILLS) {
+      const th = this.UNLOCK[s.code] || 0;
+      if (dmg >= th) unlocked++;
+      else if (!next || th < next.need) next = { code: s.code, name: s.name, need: th, remain: Math.ceil(th - dmg) };
+    }
+    return { dmg: Math.round(dmg), unlocked, total: this.SKILLS.length, next };
+  },
+  /* накопить полученный урон (вызывается из applyDamageToSelf) */
+  addDamage(n) {
+    if (!(n > 0)) return;
+    const before = this._dmg();
+    const after = before + n;
+    if (typeof Store !== 'undefined' && Store.data) {
+      Store.data.baDmg = after;
+      /* сохраняем с задержкой — не пишем в localStorage на каждый удар */
+      const now = U.now();
+      if (!this._saveT || now - this._saveT > 2500) { this._saveT = now; Store.save(); }
+    }
+    for (const s of this.SKILLS) {
+      const th = this.UNLOCK[s.code] || 0;
+      if (th > 0 && before < th && after >= th) this._announce(s);
+    }
+  },
+  /* торжественное объявление об открытии способности */
+  _announce(s) {
+    if (typeof UI !== 'undefined') {
+      if (UI.center) UI.center('ОТКРЫТ СКИЛЛ', 'BLOOD ART · ' + s.name, 2.6);
+      if (UI.toast) UI.toast('BLOOD ART: открыт скилл ' + s.name, '#ff2040');
+    }
+    if (typeof Audio3D_SFX !== 'undefined' && Audio3D_SFX.tone) {
+      Audio3D_SFX.tone(520, .12, 'square', .12);
+      setTimeout(() => Audio3D_SFX.tone(780, .12, 'square', .12), 110);
+      setTimeout(() => Audio3D_SFX.tone(1040, .18, 'square', .12), 220);
+    }
+  },
+
+  /* ============================================================
      ВТОРАЯ ЖИЗНЬ (как у Pain Fruit в Blox Fruits).
      Один раз за забег, если в руках BLOOD ART: при смерти игрок
      воскресает, а врагов вокруг отбрасывает и рвёт ударной волной боли.
@@ -304,6 +362,15 @@ const BloodArt = {
     const def = this._def();
     if (!def || G.paused || G.buyOpen) return false;
     if (!(G.roundState === 'live' || G.mode === CS.MODE.RANGE)) return false;
+    /* способность открывается по мере полученного урона — неоткрытые заблокированы */
+    if ((code === 'KeyZ' || code === 'KeyX' || code === 'KeyC' || code === 'KeyV' || code === 'KeyF')
+        && !this.isUnlocked(code)) {
+      const th = this.UNLOCK[code] || 0;
+      const remain = Math.max(0, Math.ceil(th - this._dmg()));
+      UI.toast('Скилл закрыт · получите ещё ' + remain + ' урона с BLOOD ART', '#f5d33c');
+      Audio3D_SFX.deny();
+      return true;
+    }
     switch (code) {
       case 'KeyZ': return this.heavyPaw(G, def);
       case 'KeyX': return this.barrage(G, def);

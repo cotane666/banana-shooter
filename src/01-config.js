@@ -1226,6 +1226,8 @@ const Store = {
           grenade: 'frag', buildable: 'turret', weather: 'day', trapsEnabled: 1, offCountExact: 10, offCountFixed: 0,
           timeOfDay: 'day', skyWeather: 'clear', envAuto: 0, envOff: 0, envAutoSpeed: 1, menuTour: 1,
           ach: {}, runs: [], skinOn: {}, skinChar: '', mechSkin: '',
+          /* BLOOD ART: накопленный полученный урон → открытые скиллы фрукта */
+          baDmg: 0,
           /* КАСТОМНЫЕ КАРТЫ из редактора: [{ id, name, blocks:[...], spawn:{x,z} }] */
           customMaps: [],
           /* галактический скин персонажа открыт вместе с платиновым достижением */

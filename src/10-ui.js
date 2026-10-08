@@ -28,6 +28,7 @@ const UI = {
       'extras', 'achGrid', 'recTable', 'btnExtrasBack', 'weaponWheel', 'wwInner',
       'skins', 'skinCanvas', 'skinGrid', 'skinStatus', 'skinWeaponSel', 'skinTargetChips', 'btnSkinsBack', 'btnSkins', 'skinRarityBar',
       'medkitTag', 'droneTag', 'grenadeTag', 'zResetTag', 'jetTag', 'dashTag', 'shieldTag', 'heatTag', 'missileHud', 'mhTime', 'mhReadout', 'knightUlt',
+      'baProgTag', 'baProgFill', 'baProgText',
       'sdScreen', 'sdGrid', 'sdSearch', 'sdToggle2', 'sdClose', 'sdConfig',
       'esScreen', 'esGrid', 'esSearch', 'esCount', 'esCountNum', 'esCountChips', 'esClear', 'esClose', 'esConfig',
       'account', 'accAuthBox', 'accInBox', 'accWho', 'accStatus', 'accNick', 'accEmail', 'accPass',
@@ -806,6 +807,22 @@ const UI = {
       const ready = !!p.drone;
       e.droneTag.classList.toggle('hidden', !ready);
       e.droneTag.classList.toggle('usable', ready);
+    }
+    /* BLOOD ART: прогресс открытия скиллов по полученному урону */
+    if (e.baProgTag) {
+      const held = !!(p.def && p.def.fruit === 'bloodArt');
+      e.baProgTag.classList.toggle('hidden', !held);
+      if (held && typeof BloodArt !== 'undefined' && BloodArt.progress) {
+        const pr = BloodArt.progress();
+        e.baProgText.textContent = pr.unlocked + '/' + pr.total;
+        /* прогресс до следующего скилла: от предыдущего порога к следующему */
+        let prevTh = 0;
+        for (const s of BloodArt.SKILLS) { const th = BloodArt.UNLOCK[s.code] || 0; if (th <= pr.dmg && th > prevTh) prevTh = th; }
+        const nextTh = pr.next ? BloodArt.UNLOCK[pr.next.code] : pr.dmg;
+        const f2 = pr.next ? U.clamp((pr.dmg - prevTh) / Math.max(1, nextTh - prevTh), 0, 1) : 1;
+        e.baProgFill.style.transform = 'scaleX(' + f2 + ')';
+        e.baProgTag.classList.toggle('full', !pr.next);
+      }
     }
     // grenades: current kind and how many are left
     if (e.grenadeTag) {

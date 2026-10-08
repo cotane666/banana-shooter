@@ -230,6 +230,18 @@ kbd{background:#0c0f12;border:1px solid var(--line);border-bottom:2px solid #333
 #shieldTag.usable{background:var(--blue);border-color:var(--blue)}
 #heatTag.usable{background:var(--or);border-color:var(--or)}
 #heatTag.hot{background:var(--red);border-color:var(--red);color:#fff;animation:pulse .5s infinite}
+/* BLOOD ART: прогресс открытия скиллов по полученному урону */
+#baProgTag{display:inline-flex;align-items:center;gap:6px;color:#e58f9b;border-color:#6e1a24}
+#baProgTag b{color:#ff5266}
+#baProgTag .baprog{display:inline-block;width:56px;height:6px;border-radius:3px;overflow:hidden;
+  background:rgba(120,10,20,.5);border:1px solid rgba(255,60,80,.4)}
+#baProgTag .baprog u{display:block;height:100%;width:100%;transform-origin:left center;
+  transform:scaleX(0);background:linear-gradient(90deg,#ff2030,#ff7a90);transition:transform .25s linear}
+#baProgTag.full{background:rgba(255,40,60,.22);border-color:#ff3050}
+/* заблокированный скилл: серый, перечёркнутый (opacity задаёт dim(), поэтому
+   затемняем через filter, который inline-стиль не перебивает) */
+.tbtn.baLocked{filter:grayscale(.9) brightness(.55) !important}
+.tbtn.baLocked::after{content:'🔒';position:absolute;top:-5px;right:-4px;font-size:12px;filter:none}
 
 .hud-tr{position:absolute;right:22px;top:18px;text-align:right}
 .money{font-size:26px;font-weight:900;color:var(--green);text-shadow:0 2px 10px #000;letter-spacing:1px}
@@ -1364,6 +1376,7 @@ html.touch #edPanel .ed-btn{padding:9px 6px;font-size:11px}
       <span id="dashTag" class="geartag hidden">РЫВОК</span>
       <span id="shieldTag" class="geartag hidden">ЩИТ</span>
       <span id="heatTag" class="geartag hidden">ЛАЗЕР</span>
+      <span id="baProgTag" class="geartag hidden">BLOOD ART <b id="baProgText">0/5</b><i class="baprog"><u id="baProgFill"></u></i></span>
     </div>
   </div>
 
@@ -3010,6 +3023,8 @@ const Store = {
           grenade: 'frag', buildable: 'turret', weather: 'day', trapsEnabled: 1, offCountExact: 10, offCountFixed: 0,
           timeOfDay: 'day', skyWeather: 'clear', envAuto: 0, envOff: 0, envAutoSpeed: 1, menuTour: 1,
           ach: {}, runs: [], skinOn: {}, skinChar: '', mechSkin: '',
+          /* BLOOD ART: накопленный полученный урон → открытые скиллы фрукта */
+          baDmg: 0,
           /* КАСТОМНЫЕ КАРТЫ из редактора: [{ id, name, blocks:[...], spawn:{x,z} }] */
           customMaps: [],
           /* галактический скин персонажа открыт вместе с платиновым достижением */
@@ -9094,6 +9109,64 @@ const BloodArt = {
   buffActive() { const p = (typeof Game !== 'undefined') ? Game.player : null; return !!(p && p._baReviveBuff > 0); },
 
   /* ============================================================
+     ПРОКАЧКА ОТ УРОНА: способности BLOOD ART открываются по мере
+     урона, ПОЛУЧЕННОГО игроком с этим фруктом в руках. Прогресс
+     сохраняется между забегами (как мастерство фрукта в Blox Fruits).
+     ============================================================ */
+  SKILLS: [
+    { code: 'KeyZ', name: 'HEAVY PAW' },
+    { code: 'KeyX', name: 'PAW BARRAGE' },
+    { code: 'KeyC', name: 'PAIN NUKE' },
+    { code: 'KeyV', name: 'КРОВАВЫЙ ШАР' },
+    { code: 'KeyF', name: 'SELF REPEL' }
+  ],
+  /* сколько суммарного полученного урона нужно, чтобы открыть способность */
+  UNLOCK: { KeyZ: 0, KeyX: 75, KeyC: 200, KeyV: 400, KeyF: 650 },
+
+  _dmg() { return (typeof Store !== 'undefined' && Store.data && Store.data.baDmg) || 0; },
+  isUnlocked(code) { return this._dmg() >= (this.UNLOCK[code] || 0); },
+  unlockedCount() { let n = 0; for (const s of this.SKILLS) if (this.isUnlocked(s.code)) n++; return n; },
+  /* текущий прогресс: сколько открыто и сколько осталось до следующего */
+  progress() {
+    const dmg = this._dmg();
+    let unlocked = 0, next = null;
+    for (const s of this.SKILLS) {
+      const th = this.UNLOCK[s.code] || 0;
+      if (dmg >= th) unlocked++;
+      else if (!next || th < next.need) next = { code: s.code, name: s.name, need: th, remain: Math.ceil(th - dmg) };
+    }
+    return { dmg: Math.round(dmg), unlocked, total: this.SKILLS.length, next };
+  },
+  /* накопить полученный урон (вызывается из applyDamageToSelf) */
+  addDamage(n) {
+    if (!(n > 0)) return;
+    const before = this._dmg();
+    const after = before + n;
+    if (typeof Store !== 'undefined' && Store.data) {
+      Store.data.baDmg = after;
+      /* сохраняем с задержкой — не пишем в localStorage на каждый удар */
+      const now = U.now();
+      if (!this._saveT || now - this._saveT > 2500) { this._saveT = now; Store.save(); }
+    }
+    for (const s of this.SKILLS) {
+      const th = this.UNLOCK[s.code] || 0;
+      if (th > 0 && before < th && after >= th) this._announce(s);
+    }
+  },
+  /* торжественное объявление об открытии способности */
+  _announce(s) {
+    if (typeof UI !== 'undefined') {
+      if (UI.center) UI.center('ОТКРЫТ СКИЛЛ', 'BLOOD ART · ' + s.name, 2.6);
+      if (UI.toast) UI.toast('BLOOD ART: открыт скилл ' + s.name, '#ff2040');
+    }
+    if (typeof Audio3D_SFX !== 'undefined' && Audio3D_SFX.tone) {
+      Audio3D_SFX.tone(520, .12, 'square', .12);
+      setTimeout(() => Audio3D_SFX.tone(780, .12, 'square', .12), 110);
+      setTimeout(() => Audio3D_SFX.tone(1040, .18, 'square', .12), 220);
+    }
+  },
+
+  /* ============================================================
      ВТОРАЯ ЖИЗНЬ (как у Pain Fruit в Blox Fruits).
      Один раз за забег, если в руках BLOOD ART: при смерти игрок
      воскресает, а врагов вокруг отбрасывает и рвёт ударной волной боли.
@@ -9153,6 +9226,15 @@ const BloodArt = {
     const def = this._def();
     if (!def || G.paused || G.buyOpen) return false;
     if (!(G.roundState === 'live' || G.mode === CS.MODE.RANGE)) return false;
+    /* способность открывается по мере полученного урона — неоткрытые заблокированы */
+    if ((code === 'KeyZ' || code === 'KeyX' || code === 'KeyC' || code === 'KeyV' || code === 'KeyF')
+        && !this.isUnlocked(code)) {
+      const th = this.UNLOCK[code] || 0;
+      const remain = Math.max(0, Math.ceil(th - this._dmg()));
+      UI.toast('Скилл закрыт · получите ещё ' + remain + ' урона с BLOOD ART', '#f5d33c');
+      Audio3D_SFX.deny();
+      return true;
+    }
     switch (code) {
       case 'KeyZ': return this.heavyPaw(G, def);
       case 'KeyX': return this.barrage(G, def);
@@ -16623,11 +16705,20 @@ const TouchUI = {
     // --- turret-drone gear: only when a charge is held, or one is deployed ---
     dim(E.turret, p && (p.turretDrone > 0 || (Game && Game.turretDrone)) && !inMech);
 
-    /* BLOOD ART: показываем панель способностей только с этим фруктом в руках */
+    /* BLOOD ART: показываем панель способностей только с этим фруктом в руках.
+       Неоткрытые скиллы (мало полученного урона) — заблокированы и подсвечены. */
     const baHeld = !!(p && p.def && p.def.fruit === 'bloodArt');
     dim(E.blood, false);   // кнопка-ярлык скрыта, ниже — отдельные способности
-    dim(E.ba1, baHeld && !inMech); dim(E.ba2, baHeld && !inMech);
-    dim(E.ba3, baHeld && !inMech); dim(E.ba4, baHeld && !inMech); dim(E.ba5, baHeld && !inMech);
+    const baCodes = [['ba1', 'KeyZ'], ['ba2', 'KeyX'], ['ba3', 'KeyC'], ['ba4', 'KeyV'], ['ba5', 'KeyF']];
+    const baCanCheck = typeof BloodArt !== 'undefined' && BloodArt.UNLOCK;
+    for (const pair of baCodes) {
+      const el = E[pair[0]];
+      if (!el) continue;
+      const unlocked = !baCanCheck || BloodArt.isUnlocked(pair[1]);
+      /* заблокированные скиллы показываем СЕРЫМИ (видно, что есть что открывать) */
+      dim(el, baHeld && !inMech);
+      el.classList.toggle('baLocked', baHeld && !inMech && !unlocked);
+    }
 
     // --- range-only tools ---
     const onRange = Game && Game.mode === CS.MODE.RANGE;
@@ -19186,6 +19277,7 @@ const UI = {
       'extras', 'achGrid', 'recTable', 'btnExtrasBack', 'weaponWheel', 'wwInner',
       'skins', 'skinCanvas', 'skinGrid', 'skinStatus', 'skinWeaponSel', 'skinTargetChips', 'btnSkinsBack', 'btnSkins', 'skinRarityBar',
       'medkitTag', 'droneTag', 'grenadeTag', 'zResetTag', 'jetTag', 'dashTag', 'shieldTag', 'heatTag', 'missileHud', 'mhTime', 'mhReadout', 'knightUlt',
+      'baProgTag', 'baProgFill', 'baProgText',
       'sdScreen', 'sdGrid', 'sdSearch', 'sdToggle2', 'sdClose', 'sdConfig',
       'esScreen', 'esGrid', 'esSearch', 'esCount', 'esCountNum', 'esCountChips', 'esClear', 'esClose', 'esConfig',
       'account', 'accAuthBox', 'accInBox', 'accWho', 'accStatus', 'accNick', 'accEmail', 'accPass',
@@ -19964,6 +20056,22 @@ const UI = {
       const ready = !!p.drone;
       e.droneTag.classList.toggle('hidden', !ready);
       e.droneTag.classList.toggle('usable', ready);
+    }
+    /* BLOOD ART: прогресс открытия скиллов по полученному урону */
+    if (e.baProgTag) {
+      const held = !!(p.def && p.def.fruit === 'bloodArt');
+      e.baProgTag.classList.toggle('hidden', !held);
+      if (held && typeof BloodArt !== 'undefined' && BloodArt.progress) {
+        const pr = BloodArt.progress();
+        e.baProgText.textContent = pr.unlocked + '/' + pr.total;
+        /* прогресс до следующего скилла: от предыдущего порога к следующему */
+        let prevTh = 0;
+        for (const s of BloodArt.SKILLS) { const th = BloodArt.UNLOCK[s.code] || 0; if (th <= pr.dmg && th > prevTh) prevTh = th; }
+        const nextTh = pr.next ? BloodArt.UNLOCK[pr.next.code] : pr.dmg;
+        const f2 = pr.next ? U.clamp((pr.dmg - prevTh) / Math.max(1, nextTh - prevTh), 0, 1) : 1;
+        e.baProgFill.style.transform = 'scaleX(' + f2 + ')';
+        e.baProgTag.classList.toggle('full', !pr.next);
+      }
     }
     // grenades: current kind and how many are left
     if (e.grenadeTag) {
@@ -22965,7 +23073,7 @@ const Game = {
     bindClick('btnLeave', () => this.stopToMenu());
     bindClick('btnReset', () => {
       if (confirm('Сбросить весь прогресс и настройки?')) {
-        Store.data = { sens: 2.2, fov: 80, vol: 60, quality: 1, gfx: 0, touchSens: 1.5, name: '', best: 0, bestWave: 0, killsTotal: 0, matches: 0, wins: 0, signalSrv: 0, aimBest: 0, aimAutoFire: 1, map: 'arena', players: 2, maxHP: 100, aimAssist: 1, horde: 0, clears: 0, freeplay: 0, rounds: 3, playTime: 0, offCount: 1, offHp: 1, offFree: 0, offMode: 'normal', offMods: {}, offModsRun: 0, offModPick: 0, checkpoint: null, shopAllow: {}, shopItems: {}, music: 1, sfxVol: 100, musicVol: 70, grenade: 'frag', buildable: 'turret', weather: 'day', trapsEnabled: 1, ach: {}, runs: [], checkpoints: {} };
+        Store.data = { sens: 2.2, fov: 80, vol: 60, quality: 1, gfx: 0, touchSens: 1.5, name: '', best: 0, bestWave: 0, killsTotal: 0, matches: 0, wins: 0, signalSrv: 0, aimBest: 0, aimAutoFire: 1, map: 'arena', players: 2, maxHP: 100, aimAssist: 1, horde: 0, clears: 0, freeplay: 0, rounds: 3, playTime: 0, offCount: 1, offHp: 1, offFree: 0, offMode: 'normal', offMods: {}, offModsRun: 0, offModPick: 0, checkpoint: null, shopAllow: {}, shopItems: {}, music: 1, sfxVol: 100, musicVol: 70, grenade: 'frag', buildable: 'turret', weather: 'day', trapsEnabled: 1, ach: {}, runs: [], checkpoints: {}, baDmg: 0 };
         this.shopAllow = MATCH.defaultShopAllow();
         Store.save();
         UI.refreshChips(); UI.renderMenuStats(); UI.toast('Прогресс сброшен');
@@ -31280,6 +31388,12 @@ const Game = {
     }
     p.health -= actual;
     if (actual > 0) this._waveHurt = true;
+    /* BLOOD ART: накапливаем полученный урон для прокачки скиллов
+       (только с этим фруктом в руках и только реально прошедший урон) */
+    if (actual > 0 && p.def && p.def.fruit === 'bloodArt'
+        && typeof BloodArt !== 'undefined' && BloodArt.addDamage) {
+      BloodArt.addDamage(actual);
+    }
     Audio3D_SFX.hurt();
     UI.dmgFlash();
     if (fromPos) {

@@ -215,6 +215,18 @@ kbd{background:#0c0f12;border:1px solid var(--line);border-bottom:2px solid #333
 #shieldTag.usable{background:var(--blue);border-color:var(--blue)}
 #heatTag.usable{background:var(--or);border-color:var(--or)}
 #heatTag.hot{background:var(--red);border-color:var(--red);color:#fff;animation:pulse .5s infinite}
+/* BLOOD ART: прогресс открытия скиллов по полученному урону */
+#baProgTag{display:inline-flex;align-items:center;gap:6px;color:#e58f9b;border-color:#6e1a24}
+#baProgTag b{color:#ff5266}
+#baProgTag .baprog{display:inline-block;width:56px;height:6px;border-radius:3px;overflow:hidden;
+  background:rgba(120,10,20,.5);border:1px solid rgba(255,60,80,.4)}
+#baProgTag .baprog u{display:block;height:100%;width:100%;transform-origin:left center;
+  transform:scaleX(0);background:linear-gradient(90deg,#ff2030,#ff7a90);transition:transform .25s linear}
+#baProgTag.full{background:rgba(255,40,60,.22);border-color:#ff3050}
+/* заблокированный скилл: серый, перечёркнутый (opacity задаёт dim(), поэтому
+   затемняем через filter, который inline-стиль не перебивает) */
+.tbtn.baLocked{filter:grayscale(.9) brightness(.55) !important}
+.tbtn.baLocked::after{content:'🔒';position:absolute;top:-5px;right:-4px;font-size:12px;filter:none}
 
 .hud-tr{position:absolute;right:22px;top:18px;text-align:right}
 .money{font-size:26px;font-weight:900;color:var(--green);text-shadow:0 2px 10px #000;letter-spacing:1px}

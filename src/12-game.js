@@ -1444,7 +1444,7 @@ const Game = {
     bindClick('btnLeave', () => this.stopToMenu());
     bindClick('btnReset', () => {
       if (confirm('Сбросить весь прогресс и настройки?')) {
-        Store.data = { sens: 2.2, fov: 80, vol: 60, quality: 1, gfx: 0, touchSens: 1.5, name: '', best: 0, bestWave: 0, killsTotal: 0, matches: 0, wins: 0, signalSrv: 0, aimBest: 0, aimAutoFire: 1, map: 'arena', players: 2, maxHP: 100, aimAssist: 1, horde: 0, clears: 0, freeplay: 0, rounds: 3, playTime: 0, offCount: 1, offHp: 1, offFree: 0, offMode: 'normal', offMods: {}, offModsRun: 0, offModPick: 0, checkpoint: null, shopAllow: {}, shopItems: {}, music: 1, sfxVol: 100, musicVol: 70, grenade: 'frag', buildable: 'turret', weather: 'day', trapsEnabled: 1, ach: {}, runs: [], checkpoints: {} };
+        Store.data = { sens: 2.2, fov: 80, vol: 60, quality: 1, gfx: 0, touchSens: 1.5, name: '', best: 0, bestWave: 0, killsTotal: 0, matches: 0, wins: 0, signalSrv: 0, aimBest: 0, aimAutoFire: 1, map: 'arena', players: 2, maxHP: 100, aimAssist: 1, horde: 0, clears: 0, freeplay: 0, rounds: 3, playTime: 0, offCount: 1, offHp: 1, offFree: 0, offMode: 'normal', offMods: {}, offModsRun: 0, offModPick: 0, checkpoint: null, shopAllow: {}, shopItems: {}, music: 1, sfxVol: 100, musicVol: 70, grenade: 'frag', buildable: 'turret', weather: 'day', trapsEnabled: 1, ach: {}, runs: [], checkpoints: {}, baDmg: 0 };
         this.shopAllow = MATCH.defaultShopAllow();
         Store.save();
         UI.refreshChips(); UI.renderMenuStats(); UI.toast('Прогресс сброшен');
@@ -9759,6 +9759,12 @@ const Game = {
     }
     p.health -= actual;
     if (actual > 0) this._waveHurt = true;
+    /* BLOOD ART: накапливаем полученный урон для прокачки скиллов
+       (только с этим фруктом в руках и только реально прошедший урон) */
+    if (actual > 0 && p.def && p.def.fruit === 'bloodArt'
+        && typeof BloodArt !== 'undefined' && BloodArt.addDamage) {
+      BloodArt.addDamage(actual);
+    }
     Audio3D_SFX.hurt();
     UI.dmgFlash();
     if (fromPos) {

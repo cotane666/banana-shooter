@@ -608,11 +608,20 @@ const TouchUI = {
     // --- turret-drone gear: only when a charge is held, or one is deployed ---
     dim(E.turret, p && (p.turretDrone > 0 || (Game && Game.turretDrone)) && !inMech);
 
-    /* BLOOD ART: показываем панель способностей только с этим фруктом в руках */
+    /* BLOOD ART: показываем панель способностей только с этим фруктом в руках.
+       Неоткрытые скиллы (мало полученного урона) — заблокированы и подсвечены. */
     const baHeld = !!(p && p.def && p.def.fruit === 'bloodArt');
     dim(E.blood, false);   // кнопка-ярлык скрыта, ниже — отдельные способности
-    dim(E.ba1, baHeld && !inMech); dim(E.ba2, baHeld && !inMech);
-    dim(E.ba3, baHeld && !inMech); dim(E.ba4, baHeld && !inMech); dim(E.ba5, baHeld && !inMech);
+    const baCodes = [['ba1', 'KeyZ'], ['ba2', 'KeyX'], ['ba3', 'KeyC'], ['ba4', 'KeyV'], ['ba5', 'KeyF']];
+    const baCanCheck = typeof BloodArt !== 'undefined' && BloodArt.UNLOCK;
+    for (const pair of baCodes) {
+      const el = E[pair[0]];
+      if (!el) continue;
+      const unlocked = !baCanCheck || BloodArt.isUnlocked(pair[1]);
+      /* заблокированные скиллы показываем СЕРЫМИ (видно, что есть что открывать) */
+      dim(el, baHeld && !inMech);
+      el.classList.toggle('baLocked', baHeld && !inMech && !unlocked);
+    }
 
     // --- range-only tools ---
     const onRange = Game && Game.mode === CS.MODE.RANGE;

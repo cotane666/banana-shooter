@@ -1889,7 +1889,8 @@ class Horde {
       const dx = z.pos.x - p.x, dz = z.pos.z - p.z;
       const d2 = dx * dx + dz * dz;
       const visible = d2 <= cullD2 || z.isTarget || (z.isBoss || z.isMiniBoss);
-      if (z.group) z.group.visible = visible;
+      /* В РЭГДОЛЛЕ исходная модель скрыта (её заменили куски) — не показываем */
+      if (z.group && !z.ragdollBodies) z.group.visible = visible;
       if (!visible) continue;                 // hidden: skip simulation entirely
       if (d2 > nearD2 && !farTick) continue;  // distant: update only every few frames
       /* В КООПЕ зомби охотятся на БЛИЖАЙШЕГО игрока (хост или клиента) */

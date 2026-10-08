@@ -6575,18 +6575,19 @@ const Game = {
         const ud = pr.mesh.userData;
         if (ud.ring) ud.ring.rotation.z += dt * 6;
         if (ud.ring2) ud.ring2.rotation.z -= dt * 4;
+        if (ud.ring3) ud.ring3.rotation.z += dt * 5;
         if (ud.spikes) ud.spikes.rotation.z += dt * 2.5;
         if (ud.core) ud.core.scale.setScalar(1 + Math.sin(U.now() * .012) * .12);
         if (ud.aura) ud.aura.scale.setScalar(1 + Math.sin(U.now() * .008) * .12);
         if (ud.trail) ud.trail.scale.setScalar(.8 + Math.sin(U.now() * .01) * .2);
         /* КРОВАВЫЙ ШЛЕЙФ: пока снаряд летит — капли и искры позади */
-        if (!pr._stuck && (pr.paw === 'big' || pr.paw === 'nuke') && this.effects) {
+        if (!pr._stuck && this.effects) {
           pr._trailT = (pr._trailT || 0) - dt;
           if (pr._trailT <= 0) {
-            pr._trailT = .03;
-            const big = pr.paw === 'big';
-            this.effects.particle(pr.pos.x, pr.pos.y, pr.pos.z, U.rand(-2, 2), U.rand(-1, 1), U.rand(-2, 2), U.rand(.1, .28), 'blood', U.rand(.3, .7));
-            if (big && Math.random() < .6) this.effects.particle(pr.pos.x, pr.pos.y, pr.pos.z, U.rand(-3, 3), U.rand(0, 3), U.rand(-3, 3), U.rand(.06, .16), 'spark', U.rand(.3, .6));
+            pr._trailT = pr.paw === 'barrage' ? .05 : .03;
+            const big = pr.paw === 'big' || pr.paw === 'nuke';
+            this.effects.particle(pr.pos.x, pr.pos.y, pr.pos.z, U.rand(-2, 2), U.rand(-1, 1), U.rand(-2, 2), U.rand(.08, .24), 'blood', U.rand(.3, .7));
+            if (big && Math.random() < .7) this.effects.particle(pr.pos.x, pr.pos.y, pr.pos.z, U.rand(-3, 3), U.rand(0, 3), U.rand(-3, 3), U.rand(.06, .18), 'spark', U.rand(.3, .6));
           }
         }
         /* TORTURE / КРОВАВЫЙ ШАР: «прилип» — тикающий урон по врагам рядом */
@@ -8037,8 +8038,11 @@ const Game = {
       : 56;
     const mesh = buildPawProjectile(mode);
     mesh.position.set(origin.x + d.x * 1.2, origin.y + d.y * 1.2, origin.z + d.z * 1.2);
-    const scale = mode === 'big' ? (def.bigMinMul || .55) * 1 + k * ((def.bigMaxMul || 2.6) - (def.bigMinMul || .55)) : 1;
-    if (mode === 'big') mesh.scale.setScalar(scale);
+    const scale = mode === 'big' ? ((def.bigMinMul || .55) + k * ((def.bigMaxMul || 2.6) - (def.bigMinMul || .55)))
+      : mode === 'nuke' ? 1.5
+      : mode === 'paw' ? 1.35
+      : 1.15;
+    mesh.scale.setScalar(scale);
     this.scene.add(mesh);
     const pr = {
       mesh: mesh, kind: 'bloodpaw', paw: mode,
@@ -8070,18 +8074,24 @@ const Game = {
       if (!normal) {
         pr.pierces = (pr.pierces || 0) + 1;
         if (this.effects) {
-          this.effects.bloodBurst(point, dir, 14);
-          this.effects.bloodNova(point.x, point.y, point.z, 3.2, .6);
+          this.effects.bloodBurst(point, dir, 16);
+          this.effects.bloodNova(point.x, point.y, point.z, 3.6, .7);
+          if (this.effects.bloodShock) this.effects.bloodShock(point.x, point.y, point.z, 2.4, .5);
         }
         UI.hitmark(true); this._hitmarkT = U.now();
         return;
       }
-      if (this.effects) { this.effects.impact(point, normal, 'flesh'); this.effects.bloodBurst(point, dir, 10); }
+      if (this.effects) {
+        this.effects.impact(point, normal, 'flesh');
+        this.effects.bloodBurst(point, dir, 12);
+        const yaw = Math.atan2(-dir.x, -dir.z);
+        if (this.effects.pawSlash) this.effects.pawSlash(point.x, point.y, point.z, yaw, 3.4, 0xff2040, .35);
+      }
       return;
     }
     if (mode === 'barrage') {
-      if (!normal) { if (this.effects) this.effects.bloodBurst(point, dir, 8); UI.hitmark(false); this._hitmarkT = U.now(); return; }
-      if (this.effects) { this.effects.impact(point, normal, 'concrete'); this.effects.bloodBurst(point, dir, 5); }
+      if (!normal) { if (this.effects) { this.effects.bloodBurst(point, dir, 9); if (this.effects.bloodShock) this.effects.bloodShock(point.x, point.y, point.z, 1.6, .35); } UI.hitmark(false); this._hitmarkT = U.now(); return; }
+      if (this.effects) { this.effects.impact(point, normal, 'concrete'); this.effects.bloodBurst(point, dir, 6); }
       return;
     }
     if (mode === 'torture') {
@@ -8089,7 +8099,7 @@ const Game = {
       if (!normal) {
         pr.stuckT = pr.tortureTime || 5;
         pr.stuckTo = null;
-        if (this.effects) { this.effects.bloodBurst(point, dir, 16); this.effects.goreBurst && this.effects.goreBurst(point.x, point.y, point.z, 4); this.effects.bloodNova(point.x, point.y, point.z, 4, .8); }
+        if (this.effects) { this.effects.bloodBurst(point, dir, 16); this.effects.goreBurst && this.effects.goreBurst(point.x, point.y, point.z, 4); this.effects.bloodNova(point.x, point.y, point.z, 4, .8); if (this.effects.bloodShock) this.effects.bloodShock(point.x, point.y, point.z, 2.4, .6); }
         if (typeof UI !== 'undefined' && UI.dmgFlash) UI.dmgFlash();
         pr.vel.x = pr.vel.y = pr.vel.z = 0;   // «прилипает» и тикает
         return;
@@ -8103,9 +8113,12 @@ const Game = {
       if (this.effects) {
         this.effects.explosion(point.x, point.y, point.z, R, [0xd41f2a, 0x2a0308]);
         this.effects.goreBurst && this.effects.goreBurst(point.x, point.y, point.z, R);
-        this.effects.bloodNova(point.x, point.y, point.z, R, 1.6);
-        if (this.effects.bloodScreen) this.effects.bloodScreen(true, .8);
-        if (this.effects.bloodDrip) for (let q = 0; q < 8; q++) this.effects.bloodDrip();
+        this.effects.bloodNova(point.x, point.y, point.z, R, 1.8);
+        if (this.effects.bloodShock) this.effects.bloodShock(point.x, point.y, point.z, R * .7, 1.4);
+        const yaw = Math.atan2(-dir.x, -dir.z);
+        if (this.effects.pawSlash) this.effects.pawSlash(point.x, point.y + .6, point.z, yaw, R * 1.1, 0xff1030, .6);
+        if (this.effects.bloodScreen) this.effects.bloodScreen(true, .9);
+        if (this.effects.bloodDrip) for (let q = 0; q < 10; q++) this.effects.bloodDrip();
         setTimeout(() => { if (this.effects && this.effects.bloodScreen) this.effects.bloodScreen(false); }, 900);
       }
       this.breakMapAt(point.x, point.y, point.z, R * .8, 500);
@@ -8136,7 +8149,16 @@ const Game = {
     if (mode === 'nuke') {
       /* PAIN NUKE: взрыв + подброс врагов + разрушение карты */
       const R = pr.nukeR;
-      if (this.effects) { this.effects.explosion(point.x, point.y, point.z, R, [0xd41f2a, 0x2a0308]); this.effects.goreBurst && this.effects.goreBurst(point.x, point.y, point.z, R); }
+      if (this.effects) {
+        this.effects.explosion(point.x, point.y, point.z, R, [0xd41f2a, 0x2a0308]);
+        this.effects.goreBurst && this.effects.goreBurst(point.x, point.y, point.z, R);
+        this.effects.bloodNova(point.x, point.y, point.z, R, 1.4);
+        if (this.effects.bloodShock) this.effects.bloodShock(point.x, point.y, point.z, R * .7, 1.2);
+        const yaw = Math.atan2(-dir.x, -dir.z);
+        if (this.effects.pawSlash) this.effects.pawSlash(point.x, point.y + .6, point.z, yaw, R * 1.05, 0xff1030, .55);
+        if (this.effects.bloodScreen) { this.effects.bloodScreen(true, .8); setTimeout(() => { if (this.effects && this.effects.bloodScreen) this.effects.bloodScreen(false); }, 700); }
+        if (this.effects.bloodDrip) for (let q = 0; q < 7; q++) this.effects.bloodDrip();
+      }
       this.breakMapAt(point.x, point.y, point.z, (pr.nukeBreakR || 7), 400);
       Audio3D_SFX.explosionAt(point.x, point.y, point.z);
       const push = (list, remote) => {

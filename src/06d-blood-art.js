@@ -154,18 +154,19 @@ let _pawBodyGeo = null, _pawMat = null, _pawGlowMat = null;
 function buildPawProjectile(kind) {
   const g = new THREE.Group();
   if (!_pawBodyGeo) {
-    _pawBodyGeo = new THREE.SphereGeometry(.26, 18, 14);
+    _pawBodyGeo = new THREE.SphereGeometry(.32, 18, 14);
   }
   const big = kind === 'big';
-  const coreCol = big ? 0xff1030 : BLOOD_COL;
+  const nuke = kind === 'nuke';
+  const coreCol = big ? 0xff1030 : nuke ? 0xff2010 : BLOOD_COL;
 
   /* ядро — светящаяся сфера */
-  const core = new THREE.Mesh(new THREE.SphereGeometry(.14, 14, 10),
-    new THREE.MeshBasicMaterial({ color: big ? 0xff5060 : 0xff4050, transparent: true, opacity: .95, blending: THREE.AdditiveBlending, depthWrite: false }));
+  const core = new THREE.Mesh(new THREE.SphereGeometry(big ? .26 : .18, 14, 12),
+    new THREE.MeshBasicMaterial({ color: big ? 0xff6070 : 0xff4050, transparent: true, opacity: .95, blending: THREE.AdditiveBlending, depthWrite: false }));
   core.position.z = .06;
   g.add(core);
 
-  /* основной объём — отпечаток лапы (билборд-сфера, смотрит по курсу) */
+  /* основной объём — отпечаток лапы */
   const body = new THREE.Mesh(_pawBodyGeo,
     new THREE.MeshBasicMaterial({ color: coreCol, map: _pawTexture(), transparent: true, depthWrite: false, side: THREE.DoubleSide }));
   body.scale.set(1, 1, .42);
@@ -174,36 +175,40 @@ function buildPawProjectile(kind) {
   /* задний ободок-лапа (объём) */
   const halo = new THREE.Mesh(_pawBodyGeo,
     new THREE.MeshBasicMaterial({ color: big ? 0xff6070 : PAW_PINK, map: _pawTexture(), transparent: true, opacity: .32, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
-  halo.scale.set(1.4, 1.4, .48);
-  halo.position.z = -.06;
+  halo.scale.set(1.45, 1.45, .5);
+  halo.position.z = -.08;
   g.add(halo);
 
   /* кровавый «хвост»-шлейф позади */
-  const trailMat = new THREE.MeshBasicMaterial({ color: 0xff2030, transparent: true, opacity: .45, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
-  const trail = new THREE.Mesh(new THREE.ConeGeometry(.22, .7, 10, 1, true), trailMat);
-  trail.rotation.x = -Math.PI / 2;      // острие назад
-  trail.position.z = .5;
+  const trailMat = new THREE.MeshBasicMaterial({ color: 0xff2030, transparent: true, opacity: .5, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
+  const trail = new THREE.Mesh(new THREE.ConeGeometry(big ? .3 : .24, big ? 1.1 : .85, 10, 1, true), trailMat);
+  trail.rotation.x = -Math.PI / 2;
+  trail.position.z = big ? .75 : .58;
   g.add(trail);
   g.userData.trail = trail;
 
-  /* два вращающихся кольца-вихря (боль) */
-  const ringMat = new THREE.MeshBasicMaterial({ color: big ? 0xff2030 : 0xff4050, transparent: true, opacity: .7, blending: THREE.AdditiveBlending, depthWrite: false });
-  const ring = new THREE.Mesh(new THREE.TorusGeometry(big ? .5 : .30, big ? .06 : .035, 8, 24), ringMat);
+  /* вращающиеся кольца-вихря (боль) */
+  const ringMat = new THREE.MeshBasicMaterial({ color: big ? 0xff2030 : 0xff4050, transparent: true, opacity: .75, blending: THREE.AdditiveBlending, depthWrite: false });
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(big ? .58 : .36, big ? .07 : .04, 8, 26), ringMat);
   g.add(ring);
   g.userData.ring = ring;
-  const ring2 = new THREE.Mesh(new THREE.TorusGeometry(big ? .38 : .22, big ? .04 : .022, 8, 20), ringMat.clone());
+  const ring2 = new THREE.Mesh(new THREE.TorusGeometry(big ? .44 : .26, big ? .045 : .026, 8, 22), ringMat.clone());
   ring2.rotation.x = Math.PI / 2;
   g.add(ring2);
   g.userData.ring2 = ring2;
+  const ring3 = new THREE.Mesh(new THREE.TorusGeometry(big ? .72 : .46, big ? .03 : .02, 8, 26), ringMat.clone());
+  ring3.rotation.x = Math.PI / 3;
+  g.add(ring3);
+  g.userData.ring3 = ring3;
 
   /* искры-«шипы боли» по кругу */
-  const sparkMat = new THREE.MeshBasicMaterial({ color: 0xff8090, transparent: true, opacity: .8, blending: THREE.AdditiveBlending, depthWrite: false });
+  const sparkMat = new THREE.MeshBasicMaterial({ color: 0xff8090, transparent: true, opacity: .85, blending: THREE.AdditiveBlending, depthWrite: false });
   const spikes = new THREE.Group();
-  const ns = big ? 14 : 8;
+  const ns = big ? 18 : 10;
   for (let i = 0; i < ns; i++) {
     const a = i / ns * Math.PI * 2;
-    const sp = new THREE.Mesh(new THREE.ConeGeometry(.02, big ? .16 : .10, 4), sparkMat);
-    sp.position.set(Math.cos(a) * (big ? .5 : .3), Math.sin(a) * (big ? .5 : .3), 0);
+    const sp = new THREE.Mesh(new THREE.ConeGeometry(.022, big ? .2 : .12, 4), sparkMat);
+    sp.position.set(Math.cos(a) * (big ? .58 : .36), Math.sin(a) * (big ? .58 : .36), 0);
     sp.rotation.z = a - Math.PI / 2;
     spikes.add(sp);
   }
@@ -211,9 +216,15 @@ function buildPawProjectile(kind) {
   g.userData.spikes = spikes;
 
   if (big) {
-    /* у гигантского шара — мощный пульсирующий ореол */
-    const auraMat = new THREE.MeshBasicMaterial({ color: 0xff3344, transparent: true, opacity: .3, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.BackSide });
-    const aura = new THREE.Mesh(new THREE.SphereGeometry(1.15, 18, 14), auraMat);
+    const auraMat = new THREE.MeshBasicMaterial({ color: 0xff3344, transparent: true, opacity: .32, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.BackSide });
+    const aura = new THREE.Mesh(new THREE.SphereGeometry(1.35, 20, 16), auraMat);
+    g.add(aura);
+    g.userData.aura = aura;
+  }
+  if (nuke) {
+    /* у «ядерки» — мигающий ореол-детонатор */
+    const aMat = new THREE.MeshBasicMaterial({ color: 0xff3010, transparent: true, opacity: .5, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.BackSide });
+    const aura = new THREE.Mesh(new THREE.SphereGeometry(.6, 16, 12), aMat);
     g.add(aura);
     g.userData.aura = aura;
   }
@@ -259,12 +270,20 @@ const BloodArt = {
     return true;
   },
 
-  /* Z — HEAVY PAW: быстрый снаряд, прошивает всех на пути */
+  /* Z — HEAVY PAW: быстрый снаряд, прошивает всех на пути. Плюс
+     гигантский росчерк-лапа перед игроком. */
   heavyPaw(G, def) {
     if (!this._cd(G, 'paw', def.pawCd || 8)) return false;
+    const p = G.player;
+    const dir = G.cameraDir();
     G._spawnPaw(def, 'paw');
+    if (G.effects) {
+      const yaw = Math.atan2(dir.x, dir.z) + Math.PI;
+      if (G.effects.pawSlash) G.effects.pawSlash(p.pos.x + dir.x * 3.2, p.pos.y + 1.1, p.pos.z + dir.z * 3.2, yaw, 4.4, 0xff2040);
+      if (G.effects.bloodShock) G.effects.bloodShock(p.pos.x + dir.x * 2, p.pos.y, p.pos.z + dir.z * 2, 2.2, .6);
+    }
     this._bloodCast(G, .35);
-    Audio3D_SFX.tone(180, .18, 'sawtooth', .12, G.player.pos.x, G.player.pos.y, G.player.pos.z, 600);
+    Audio3D_SFX.tone(180, .18, 'sawtooth', .12, p.pos.x, p.pos.y, p.pos.z, 600);
     UI.center('HEAVY PAW', '', 1.0);
     return true;
   },
@@ -281,12 +300,19 @@ const BloodArt = {
     return true;
   },
 
-  /* C — PAIN NUKE: лапо-«ядерка» с подбросом врагов */
+  /* C — PAIN NUKE: лапо-«ядерка» с подбросом врагов + мощная ударная волна */
   nuke(G, def) {
     if (!this._cd(G, 'nuke', def.nukeCd || 18)) return false;
+    const p = G.player;
+    const dir = G.cameraDir();
     G._spawnPaw(def, 'nuke');
-    this._bloodCast(G, .7);
-    Audio3D_SFX.tone(90, .35, 'sawtooth', .16, G.player.pos.x, G.player.pos.y, G.player.pos.z, 300);
+    if (G.effects) {
+      const yaw = Math.atan2(dir.x, dir.z) + Math.PI;
+      if (G.effects.pawSlash) G.effects.pawSlash(p.pos.x + dir.x * 3.6, p.pos.y + 1.2, p.pos.z + dir.z * 3.6, yaw, 6, 0xff1030, .5);
+      if (G.effects.bloodShock) G.effects.bloodShock(p.pos.x + dir.x * 2.5, p.pos.y, p.pos.z + dir.z * 2.5, 3.4, .9);
+    }
+    this._bloodCast(G, .8);
+    Audio3D_SFX.tone(90, .35, 'sawtooth', .16, p.pos.x, p.pos.y, p.pos.z, 300);
     UI.center('PAIN NUKE', '', 1.0);
     return true;
   },
@@ -359,10 +385,16 @@ const BloodArt = {
     /* кровавый вихрь-аура под игроком + кровавый экран нарастает */
     if (G.effects) {
       if (G.effects.bloodAura) G.effects.bloodAura(p.pos.x, p.pos.y, p.pos.z, k, true);
+      /* кольца боли пульсируют вокруг игрока по мере заряда */
+      this._chargeRingT = (this._chargeRingT || 0) - dt;
+      if (k > .35 && this._chargeRingT <= 0 && G.effects.bloodShock) {
+        this._chargeRingT = .28 - k * .12;
+        G.effects.bloodShock(p.pos.x, p.pos.y, p.pos.z, 1.2 + k * 2.2, .35 + k * .3);
+      }
       if (G.effects.particle && Math.random() < .5 + k * .5) {
-        const a = U.rand(0, 6.28), rr = 1.2 + k * 1.2;
-        G.effects.particle(p.pos.x + Math.cos(a) * rr, p.pos.y + .2 + U.rand(0, 1.6), p.pos.z + Math.sin(a) * rr,
-          -Math.cos(a) * U.rand(1, 3), U.rand(1, 3), -Math.sin(a) * U.rand(1, 3), U.rand(.06, .17), 'blood', U.rand(.3, .6));
+        const a = U.rand(0, 6.28), rr = 1.2 + k * 1.6;
+        G.effects.particle(p.pos.x + Math.cos(a) * rr, p.pos.y + .2 + U.rand(0, 1.8), p.pos.z + Math.sin(a) * rr,
+          -Math.cos(a) * U.rand(2, 5), U.rand(1, 4), -Math.sin(a) * U.rand(2, 5), U.rand(.08, .2), 'blood', U.rand(.3, .7));
       }
       if (G.effects.bloodScreen) G.effects.bloodScreen(true, k * .5);
     }
@@ -382,14 +414,19 @@ const BloodArt = {
     G._bigAt = U.now();
     G._spawnPaw(def, 'big', k);
     if (G.effects) {
-      G.effects.bloodNova(p.pos.x + G.cameraDir().x, p.pos.y + 1, p.pos.z + G.cameraDir().z, 5, .8 + k);
-      if (G.effects.bloodDrip) for (let q = 0; q < 6; q++) G.effects.bloodDrip();
+      const dir = G.cameraDir();
+      const yaw = Math.atan2(dir.x, dir.z) + Math.PI;
+      if (G.effects.pawSlash) G.effects.pawSlash(p.pos.x + dir.x * 4, p.pos.y + 1.3, p.pos.z + dir.z * 4, yaw, 9, 0xff1030, .55);
+      const bx = p.pos.x + dir.x * 2.4, bz = p.pos.z + dir.z * 2.4;
+      G.effects.bloodShock(bx, p.pos.y, bz, 5 + k * 4, 1 + k);
+      G.effects.bloodNova(bx, p.pos.y + 1, bz, 6, 1 + k);
+      if (G.effects.bloodDrip) for (let q = 0; q < 10; q++) G.effects.bloodDrip();
       Audio3D_SFX.explosionAt && Audio3D_SFX.explosionAt(p.pos.x, p.pos.y, p.pos.z);
     }
     UI.center('КРОВАВЫЙ ШАР ' + Math.round(k * 100) + '%', '', 1.2);
   },
 
-  /* F — SELF REPEL: рывок к курсору */
+  /* F — SELF REPEL: рывок к курсору с кровавым следом */
   repel(G, def) {
     if (!this._cd(G, 'repel', def.repelCd || 7)) return false;
     const p = G.player;
@@ -401,13 +438,20 @@ const BloodArt = {
     p.onGround = false;
     if (typeof UI !== 'undefined' && UI.dashFx) UI.dashFx(true, false);
     if (G.effects) {
-      for (let i = 0; i < 14; i++) {
-        G.effects.particle(p.pos.x, p.pos.y + 1, p.pos.z,
-          U.rand(-3, 3), U.rand(0, 4), U.rand(-3, 3), U.rand(.1, .28), 'spark', U.rand(.2, .5));
+      /* стартовая ударная волна боли + росчерк-лапа */
+      const yaw = Math.atan2(dir.x, dir.z) + Math.PI;
+      if (G.effects.bloodShock) G.effects.bloodShock(p.pos.x, p.pos.y, p.pos.z, 3, .8);
+      if (G.effects.pawSlash) G.effects.pawSlash(p.pos.x + dir.x * 2.5, p.pos.y + 1, p.pos.z + dir.z * 2.5, yaw, 5, 0xff2040, .45);
+      if (G.effects.bloodScreen) G.effects.bloodScreen(true, .5);
+      setTimeout(() => { if (G.effects && G.effects.bloodScreen) G.effects.bloodScreen(false); }, 350);
+      for (let i = 0; i < 22; i++) {
+        G.effects.particle(p.pos.x + U.rand(-.4, .4), p.pos.y + U.rand(.2, 1.6), p.pos.z + U.rand(-.4, .4),
+          -dir.x * U.rand(3, 9) + U.rand(-2, 2), U.rand(0, 3), -dir.z * U.rand(3, 9) + U.rand(-2, 2),
+          U.rand(.08, .22), 'blood', U.rand(.3, .7));
       }
     }
     Audio3D_SFX.tone(260, .2, 'triangle', .12, p.pos.x, p.pos.y, p.pos.z, 900);
-    UI.toast('SELF REPEL', '#ff4a5a');
+    UI.center('SELF REPEL', '', 1.0);
     return true;
   },
 

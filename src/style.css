@@ -842,14 +842,15 @@ html.touch .fld input{padding:10px;font-size:15px}
   .tbtn.small{width:52px;height:52px;font-size:9.5px}
   #tAim{right:16px;bottom:96px}
   #tAuto{right:16px;bottom:154px}
-  /* landscape phones are very short: the contextual stack stays on the RIGHT
-     (не под миникартой!) компактной сеткой 2 колонки, чтобы не наезжать
-     на кнопки огня снизу и не упираться в потолок */
-  #tActions{right:12px;left:auto;top:calc(96px + env(safe-area-inset-top,0px));bottom:auto;
-    max-height:calc(100vh - 300px);gap:4px;align-items:flex-end;overflow-y:auto;
-    display:grid;grid-template-columns:auto auto;justify-content:end}
-  .tbtn.act{min-width:70px;height:30px;font-size:9px;padding:0 8px}
-  .tbtn.act.ba{min-width:52px;height:28px;font-size:8.5px;padding:0 5px}
+  /* Landscape phones: МАЛО вертикали. Действия/способности кладём в КОМПАКТНУЮ
+     СЕТКУ У ВЕРХА, во всю ширину, выравнивая по правому краю. 3 строки, дальше
+     колонки растут ВЛЕВО — поэтому кнопки ВСЕГДА в экране и не уезжают. */
+  #tActions{right:8px;left:8px;top:calc(56px + env(safe-area-inset-top,0px));bottom:auto;
+    max-height:none;overflow:visible;
+    display:grid;grid-auto-flow:column;grid-template-rows:repeat(3,max-content);
+    grid-auto-columns:max-content;gap:4px;justify-content:end;align-content:start}
+  .tbtn.act{min-width:62px;height:28px;font-size:8.5px;padding:0 7px;border-radius:9px}
+  .tbtn.act.ba{min-width:46px;height:26px;font-size:8px;padding:0 5px}
   #tJump{right:18px;bottom:20px}
   #tCrouch{right:80px;bottom:24px}
   #tReload{left:calc(50% - 84px);top:calc(6px + env(safe-area-inset-top,0px))}

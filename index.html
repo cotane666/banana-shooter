@@ -857,14 +857,15 @@ html.touch .fld input{padding:10px;font-size:15px}
   .tbtn.small{width:52px;height:52px;font-size:9.5px}
   #tAim{right:16px;bottom:96px}
   #tAuto{right:16px;bottom:154px}
-  /* landscape phones are very short: the contextual stack stays on the RIGHT
-     (не под миникартой!) компактной сеткой 2 колонки, чтобы не наезжать
-     на кнопки огня снизу и не упираться в потолок */
-  #tActions{right:12px;left:auto;top:calc(96px + env(safe-area-inset-top,0px));bottom:auto;
-    max-height:calc(100vh - 300px);gap:4px;align-items:flex-end;overflow-y:auto;
-    display:grid;grid-template-columns:auto auto;justify-content:end}
-  .tbtn.act{min-width:70px;height:30px;font-size:9px;padding:0 8px}
-  .tbtn.act.ba{min-width:52px;height:28px;font-size:8.5px;padding:0 5px}
+  /* Landscape phones: МАЛО вертикали. Действия/способности кладём в КОМПАКТНУЮ
+     СЕТКУ У ВЕРХА, во всю ширину, выравнивая по правому краю. 3 строки, дальше
+     колонки растут ВЛЕВО — поэтому кнопки ВСЕГДА в экране и не уезжают. */
+  #tActions{right:8px;left:8px;top:calc(56px + env(safe-area-inset-top,0px));bottom:auto;
+    max-height:none;overflow:visible;
+    display:grid;grid-auto-flow:column;grid-template-rows:repeat(3,max-content);
+    grid-auto-columns:max-content;gap:4px;justify-content:end;align-content:start}
+  .tbtn.act{min-width:62px;height:28px;font-size:8.5px;padding:0 7px;border-radius:9px}
+  .tbtn.act.ba{min-width:46px;height:26px;font-size:8px;padding:0 5px}
   #tJump{right:18px;bottom:20px}
   #tCrouch{right:80px;bottom:24px}
   #tReload{left:calc(50% - 84px);top:calc(6px + env(safe-area-inset-top,0px))}
@@ -8980,18 +8981,19 @@ let _pawBodyGeo = null, _pawMat = null, _pawGlowMat = null;
 function buildPawProjectile(kind) {
   const g = new THREE.Group();
   if (!_pawBodyGeo) {
-    _pawBodyGeo = new THREE.SphereGeometry(.26, 18, 14);
+    _pawBodyGeo = new THREE.SphereGeometry(.32, 18, 14);
   }
   const big = kind === 'big';
-  const coreCol = big ? 0xff1030 : BLOOD_COL;
+  const nuke = kind === 'nuke';
+  const coreCol = big ? 0xff1030 : nuke ? 0xff2010 : BLOOD_COL;
 
   /* ядро — светящаяся сфера */
-  const core = new THREE.Mesh(new THREE.SphereGeometry(.14, 14, 10),
-    new THREE.MeshBasicMaterial({ color: big ? 0xff5060 : 0xff4050, transparent: true, opacity: .95, blending: THREE.AdditiveBlending, depthWrite: false }));
+  const core = new THREE.Mesh(new THREE.SphereGeometry(big ? .26 : .18, 14, 12),
+    new THREE.MeshBasicMaterial({ color: big ? 0xff6070 : 0xff4050, transparent: true, opacity: .95, blending: THREE.AdditiveBlending, depthWrite: false }));
   core.position.z = .06;
   g.add(core);
 
-  /* основной объём — отпечаток лапы (билборд-сфера, смотрит по курсу) */
+  /* основной объём — отпечаток лапы */
   const body = new THREE.Mesh(_pawBodyGeo,
     new THREE.MeshBasicMaterial({ color: coreCol, map: _pawTexture(), transparent: true, depthWrite: false, side: THREE.DoubleSide }));
   body.scale.set(1, 1, .42);
@@ -9000,36 +9002,40 @@ function buildPawProjectile(kind) {
   /* задний ободок-лапа (объём) */
   const halo = new THREE.Mesh(_pawBodyGeo,
     new THREE.MeshBasicMaterial({ color: big ? 0xff6070 : PAW_PINK, map: _pawTexture(), transparent: true, opacity: .32, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
-  halo.scale.set(1.4, 1.4, .48);
-  halo.position.z = -.06;
+  halo.scale.set(1.45, 1.45, .5);
+  halo.position.z = -.08;
   g.add(halo);
 
   /* кровавый «хвост»-шлейф позади */
-  const trailMat = new THREE.MeshBasicMaterial({ color: 0xff2030, transparent: true, opacity: .45, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
-  const trail = new THREE.Mesh(new THREE.ConeGeometry(.22, .7, 10, 1, true), trailMat);
-  trail.rotation.x = -Math.PI / 2;      // острие назад
-  trail.position.z = .5;
+  const trailMat = new THREE.MeshBasicMaterial({ color: 0xff2030, transparent: true, opacity: .5, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
+  const trail = new THREE.Mesh(new THREE.ConeGeometry(big ? .3 : .24, big ? 1.1 : .85, 10, 1, true), trailMat);
+  trail.rotation.x = -Math.PI / 2;
+  trail.position.z = big ? .75 : .58;
   g.add(trail);
   g.userData.trail = trail;
 
-  /* два вращающихся кольца-вихря (боль) */
-  const ringMat = new THREE.MeshBasicMaterial({ color: big ? 0xff2030 : 0xff4050, transparent: true, opacity: .7, blending: THREE.AdditiveBlending, depthWrite: false });
-  const ring = new THREE.Mesh(new THREE.TorusGeometry(big ? .5 : .30, big ? .06 : .035, 8, 24), ringMat);
+  /* вращающиеся кольца-вихря (боль) */
+  const ringMat = new THREE.MeshBasicMaterial({ color: big ? 0xff2030 : 0xff4050, transparent: true, opacity: .75, blending: THREE.AdditiveBlending, depthWrite: false });
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(big ? .58 : .36, big ? .07 : .04, 8, 26), ringMat);
   g.add(ring);
   g.userData.ring = ring;
-  const ring2 = new THREE.Mesh(new THREE.TorusGeometry(big ? .38 : .22, big ? .04 : .022, 8, 20), ringMat.clone());
+  const ring2 = new THREE.Mesh(new THREE.TorusGeometry(big ? .44 : .26, big ? .045 : .026, 8, 22), ringMat.clone());
   ring2.rotation.x = Math.PI / 2;
   g.add(ring2);
   g.userData.ring2 = ring2;
+  const ring3 = new THREE.Mesh(new THREE.TorusGeometry(big ? .72 : .46, big ? .03 : .02, 8, 26), ringMat.clone());
+  ring3.rotation.x = Math.PI / 3;
+  g.add(ring3);
+  g.userData.ring3 = ring3;
 
   /* искры-«шипы боли» по кругу */
-  const sparkMat = new THREE.MeshBasicMaterial({ color: 0xff8090, transparent: true, opacity: .8, blending: THREE.AdditiveBlending, depthWrite: false });
+  const sparkMat = new THREE.MeshBasicMaterial({ color: 0xff8090, transparent: true, opacity: .85, blending: THREE.AdditiveBlending, depthWrite: false });
   const spikes = new THREE.Group();
-  const ns = big ? 14 : 8;
+  const ns = big ? 18 : 10;
   for (let i = 0; i < ns; i++) {
     const a = i / ns * Math.PI * 2;
-    const sp = new THREE.Mesh(new THREE.ConeGeometry(.02, big ? .16 : .10, 4), sparkMat);
-    sp.position.set(Math.cos(a) * (big ? .5 : .3), Math.sin(a) * (big ? .5 : .3), 0);
+    const sp = new THREE.Mesh(new THREE.ConeGeometry(.022, big ? .2 : .12, 4), sparkMat);
+    sp.position.set(Math.cos(a) * (big ? .58 : .36), Math.sin(a) * (big ? .58 : .36), 0);
     sp.rotation.z = a - Math.PI / 2;
     spikes.add(sp);
   }
@@ -9037,9 +9043,15 @@ function buildPawProjectile(kind) {
   g.userData.spikes = spikes;
 
   if (big) {
-    /* у гигантского шара — мощный пульсирующий ореол */
-    const auraMat = new THREE.MeshBasicMaterial({ color: 0xff3344, transparent: true, opacity: .3, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.BackSide });
-    const aura = new THREE.Mesh(new THREE.SphereGeometry(1.15, 18, 14), auraMat);
+    const auraMat = new THREE.MeshBasicMaterial({ color: 0xff3344, transparent: true, opacity: .32, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.BackSide });
+    const aura = new THREE.Mesh(new THREE.SphereGeometry(1.35, 20, 16), auraMat);
+    g.add(aura);
+    g.userData.aura = aura;
+  }
+  if (nuke) {
+    /* у «ядерки» — мигающий ореол-детонатор */
+    const aMat = new THREE.MeshBasicMaterial({ color: 0xff3010, transparent: true, opacity: .5, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.BackSide });
+    const aura = new THREE.Mesh(new THREE.SphereGeometry(.6, 16, 12), aMat);
     g.add(aura);
     g.userData.aura = aura;
   }
@@ -9085,12 +9097,20 @@ const BloodArt = {
     return true;
   },
 
-  /* Z — HEAVY PAW: быстрый снаряд, прошивает всех на пути */
+  /* Z — HEAVY PAW: быстрый снаряд, прошивает всех на пути. Плюс
+     гигантский росчерк-лапа перед игроком. */
   heavyPaw(G, def) {
     if (!this._cd(G, 'paw', def.pawCd || 8)) return false;
+    const p = G.player;
+    const dir = G.cameraDir();
     G._spawnPaw(def, 'paw');
+    if (G.effects) {
+      const yaw = Math.atan2(dir.x, dir.z) + Math.PI;
+      if (G.effects.pawSlash) G.effects.pawSlash(p.pos.x + dir.x * 3.2, p.pos.y + 1.1, p.pos.z + dir.z * 3.2, yaw, 4.4, 0xff2040);
+      if (G.effects.bloodShock) G.effects.bloodShock(p.pos.x + dir.x * 2, p.pos.y, p.pos.z + dir.z * 2, 2.2, .6);
+    }
     this._bloodCast(G, .35);
-    Audio3D_SFX.tone(180, .18, 'sawtooth', .12, G.player.pos.x, G.player.pos.y, G.player.pos.z, 600);
+    Audio3D_SFX.tone(180, .18, 'sawtooth', .12, p.pos.x, p.pos.y, p.pos.z, 600);
     UI.center('HEAVY PAW', '', 1.0);
     return true;
   },
@@ -9107,12 +9127,19 @@ const BloodArt = {
     return true;
   },
 
-  /* C — PAIN NUKE: лапо-«ядерка» с подбросом врагов */
+  /* C — PAIN NUKE: лапо-«ядерка» с подбросом врагов + мощная ударная волна */
   nuke(G, def) {
     if (!this._cd(G, 'nuke', def.nukeCd || 18)) return false;
+    const p = G.player;
+    const dir = G.cameraDir();
     G._spawnPaw(def, 'nuke');
-    this._bloodCast(G, .7);
-    Audio3D_SFX.tone(90, .35, 'sawtooth', .16, G.player.pos.x, G.player.pos.y, G.player.pos.z, 300);
+    if (G.effects) {
+      const yaw = Math.atan2(dir.x, dir.z) + Math.PI;
+      if (G.effects.pawSlash) G.effects.pawSlash(p.pos.x + dir.x * 3.6, p.pos.y + 1.2, p.pos.z + dir.z * 3.6, yaw, 6, 0xff1030, .5);
+      if (G.effects.bloodShock) G.effects.bloodShock(p.pos.x + dir.x * 2.5, p.pos.y, p.pos.z + dir.z * 2.5, 3.4, .9);
+    }
+    this._bloodCast(G, .8);
+    Audio3D_SFX.tone(90, .35, 'sawtooth', .16, p.pos.x, p.pos.y, p.pos.z, 300);
     UI.center('PAIN NUKE', '', 1.0);
     return true;
   },
@@ -9185,10 +9212,16 @@ const BloodArt = {
     /* кровавый вихрь-аура под игроком + кровавый экран нарастает */
     if (G.effects) {
       if (G.effects.bloodAura) G.effects.bloodAura(p.pos.x, p.pos.y, p.pos.z, k, true);
+      /* кольца боли пульсируют вокруг игрока по мере заряда */
+      this._chargeRingT = (this._chargeRingT || 0) - dt;
+      if (k > .35 && this._chargeRingT <= 0 && G.effects.bloodShock) {
+        this._chargeRingT = .28 - k * .12;
+        G.effects.bloodShock(p.pos.x, p.pos.y, p.pos.z, 1.2 + k * 2.2, .35 + k * .3);
+      }
       if (G.effects.particle && Math.random() < .5 + k * .5) {
-        const a = U.rand(0, 6.28), rr = 1.2 + k * 1.2;
-        G.effects.particle(p.pos.x + Math.cos(a) * rr, p.pos.y + .2 + U.rand(0, 1.6), p.pos.z + Math.sin(a) * rr,
-          -Math.cos(a) * U.rand(1, 3), U.rand(1, 3), -Math.sin(a) * U.rand(1, 3), U.rand(.06, .17), 'blood', U.rand(.3, .6));
+        const a = U.rand(0, 6.28), rr = 1.2 + k * 1.6;
+        G.effects.particle(p.pos.x + Math.cos(a) * rr, p.pos.y + .2 + U.rand(0, 1.8), p.pos.z + Math.sin(a) * rr,
+          -Math.cos(a) * U.rand(2, 5), U.rand(1, 4), -Math.sin(a) * U.rand(2, 5), U.rand(.08, .2), 'blood', U.rand(.3, .7));
       }
       if (G.effects.bloodScreen) G.effects.bloodScreen(true, k * .5);
     }
@@ -9208,14 +9241,19 @@ const BloodArt = {
     G._bigAt = U.now();
     G._spawnPaw(def, 'big', k);
     if (G.effects) {
-      G.effects.bloodNova(p.pos.x + G.cameraDir().x, p.pos.y + 1, p.pos.z + G.cameraDir().z, 5, .8 + k);
-      if (G.effects.bloodDrip) for (let q = 0; q < 6; q++) G.effects.bloodDrip();
+      const dir = G.cameraDir();
+      const yaw = Math.atan2(dir.x, dir.z) + Math.PI;
+      if (G.effects.pawSlash) G.effects.pawSlash(p.pos.x + dir.x * 4, p.pos.y + 1.3, p.pos.z + dir.z * 4, yaw, 9, 0xff1030, .55);
+      const bx = p.pos.x + dir.x * 2.4, bz = p.pos.z + dir.z * 2.4;
+      G.effects.bloodShock(bx, p.pos.y, bz, 5 + k * 4, 1 + k);
+      G.effects.bloodNova(bx, p.pos.y + 1, bz, 6, 1 + k);
+      if (G.effects.bloodDrip) for (let q = 0; q < 10; q++) G.effects.bloodDrip();
       Audio3D_SFX.explosionAt && Audio3D_SFX.explosionAt(p.pos.x, p.pos.y, p.pos.z);
     }
     UI.center('КРОВАВЫЙ ШАР ' + Math.round(k * 100) + '%', '', 1.2);
   },
 
-  /* F — SELF REPEL: рывок к курсору */
+  /* F — SELF REPEL: рывок к курсору с кровавым следом */
   repel(G, def) {
     if (!this._cd(G, 'repel', def.repelCd || 7)) return false;
     const p = G.player;
@@ -9227,13 +9265,20 @@ const BloodArt = {
     p.onGround = false;
     if (typeof UI !== 'undefined' && UI.dashFx) UI.dashFx(true, false);
     if (G.effects) {
-      for (let i = 0; i < 14; i++) {
-        G.effects.particle(p.pos.x, p.pos.y + 1, p.pos.z,
-          U.rand(-3, 3), U.rand(0, 4), U.rand(-3, 3), U.rand(.1, .28), 'spark', U.rand(.2, .5));
+      /* стартовая ударная волна боли + росчерк-лапа */
+      const yaw = Math.atan2(dir.x, dir.z) + Math.PI;
+      if (G.effects.bloodShock) G.effects.bloodShock(p.pos.x, p.pos.y, p.pos.z, 3, .8);
+      if (G.effects.pawSlash) G.effects.pawSlash(p.pos.x + dir.x * 2.5, p.pos.y + 1, p.pos.z + dir.z * 2.5, yaw, 5, 0xff2040, .45);
+      if (G.effects.bloodScreen) G.effects.bloodScreen(true, .5);
+      setTimeout(() => { if (G.effects && G.effects.bloodScreen) G.effects.bloodScreen(false); }, 350);
+      for (let i = 0; i < 22; i++) {
+        G.effects.particle(p.pos.x + U.rand(-.4, .4), p.pos.y + U.rand(.2, 1.6), p.pos.z + U.rand(-.4, .4),
+          -dir.x * U.rand(3, 9) + U.rand(-2, 2), U.rand(0, 3), -dir.z * U.rand(3, 9) + U.rand(-2, 2),
+          U.rand(.08, .22), 'blood', U.rand(.3, .7));
       }
     }
     Audio3D_SFX.tone(260, .2, 'triangle', .12, p.pos.x, p.pos.y, p.pos.z, 900);
-    UI.toast('SELF REPEL', '#ff4a5a');
+    UI.center('SELF REPEL', '', 1.0);
     return true;
   },
 
@@ -17079,6 +17124,69 @@ class Effects {
     }
   }
 
+  /* ГИГАНТСКИЙ росчерк-лапа в воздухе: разворачивается перед игроком
+     (удар лапой / тяжёлый выстрел). Двухслойный: яркая лапа + мягкий ореол. */
+  pawSlash(x, y, z, yaw, R, col, life) {
+    const tex = (typeof _pawTexture === 'function') ? _pawTexture() : null;
+    const grp = new THREE.Group();
+    grp.position.set(x, y, z);
+    grp.rotation.y = yaw;
+    const mat = new THREE.MeshBasicMaterial({ color: col === undefined ? 0xff2040 : col, map: tex, transparent: true, opacity: .95, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), mat);
+    m.scale.setScalar(R);
+    grp.add(m);
+    const mat2 = mat.clone(); mat2.opacity = .45; mat2.color = new THREE.Color(0xff8a9a);
+    const m2 = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), mat2);
+    m2.scale.setScalar(R * 1.4); m2.position.z = -.01;
+    grp.add(m2);
+    const light = new THREE.PointLight(col === undefined ? 0xff2040 : col, 120, R * 3.2, 2);
+    grp.add(light);
+    this.scene.add(grp);
+    this._pawSlashes = this._pawSlashes || [];
+    this._pawSlashes.push({ grp: grp, mat: mat, mat2: mat2, light: light, life: life || .42, max: life || .42, R: R });
+  }
+
+  /* ударная волна боли: вертикальные торы-кольца разлетаются от точки +
+     волна-лапа на земле + вспышка. Для мощных АоЕ (nuke, шар). */
+  bloodShock(x, y, z, R, power) {
+    power = power || 1;
+    this.bloodShocks = this.bloodShocks || [];
+    const cols = [0xff1030, 0xd41f2a, 0xff6d8a];
+    for (let i = 0; i < 3; i++) {
+      const mat = new THREE.MeshBasicMaterial({ color: cols[i], transparent: true, opacity: .8, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(1, .07, 8, 36), mat);
+      ring.rotation.x = Math.PI / 2;
+      ring.position.set(x, y + .3 + i * .5, z);
+      this.scene.add(ring);
+      this.bloodShocks.push({ mesh: ring, mat: mat, life: .6 + i * .12, max: .6 + i * .12, r: R * power * (1 - i * .12) });
+    }
+    /* волна-лапа на земле */
+    const ptex = (typeof _pawTexture === 'function') ? _pawTexture() : null;
+    const pmat = new THREE.MeshBasicMaterial({ color: 0xff2040, map: ptex, transparent: true, opacity: .85, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
+    const paw = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), pmat);
+    paw.rotation.x = -Math.PI / 2;
+    paw.position.set(x, y + .05, z);
+    this.scene.add(paw);
+    this.bloodShocks.push({ mesh: paw, mat: pmat, life: .7, max: .7, r: R * power * 2.1, flat: true });
+    /* купол — сфера, раздувающаяся и гаснущая */
+    const dmat = new THREE.MeshBasicMaterial({ color: 0xff3050, transparent: true, opacity: .35, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.BackSide });
+    const dome = new THREE.Mesh(new THREE.SphereGeometry(1, 20, 14), dmat);
+    dome.position.set(x, y, z);
+    this.scene.add(dome);
+    this.bloodShocks.push({ mesh: dome, mat: dmat, life: .5, max: .5, r: R * 1.5 * power, dome: true });
+  }
+
+  /* быстрая красная вспышка всего экрана (урон/мощный удар) */
+  bloodHit(k) {
+    const e = this._bloodScreenEl || document.getElementById('bloodScreen');
+    if (!e) return;
+    this._bloodScreenEl = e;
+    e.classList.add('on');
+    e.style.opacity = String(U.clamp(.5 + (k || 0) * .5, 0, 1));
+    clearTimeout(this._bloodHitT);
+    this._bloodHitT = setTimeout(() => { if (this.bloodScreen) this.bloodScreen(false); }, 260);
+  }
+
   /* кровавый вихрь-аура вокруг игрока (для заряда гигантского шара) */
   bloodAura(x, y, z, k, on) {
     if (!on) {
@@ -18662,6 +18770,48 @@ class Effects {
         }
       }
     }
+    /* BLOOD ART: росчерки-лапы */
+    if (this._pawSlashes) {
+      for (let i = this._pawSlashes.length - 1; i >= 0; i--) {
+        const s = this._pawSlashes[i];
+        s.life -= dt;
+        const k = Math.max(0, s.life / s.max);
+        const e = 1 - Math.pow(1 - (1 - k), 2);
+        s.grp.scale.setScalar(.5 + e * .9);
+        s.grp.position.y += dt * .3;
+        s.mat.opacity = k * .95; s.mat2.opacity = k * .45;
+        if (s.light) s.light.intensity = 120 * k;
+        if (s.life <= 0) {
+          if (s.grp.parent) s.grp.parent.remove(s.grp);
+          s.grp.traverse(o => { if (o.geometry) o.geometry.dispose(); });
+          s.mat.dispose(); s.mat2.dispose();
+          this._pawSlashes.splice(i, 1);
+        }
+      }
+    }
+    /* BLOOD ART: ударные волны боли */
+    if (this.bloodShocks) {
+      for (let i = this.bloodShocks.length - 1; i >= 0; i--) {
+        const n = this.bloodShocks[i];
+        n.life -= dt;
+        const k = Math.max(0, n.life / n.max);
+        const e = 1 - Math.pow(1 - (1 - k), 3);
+        if (n.dome) {
+          n.mesh.scale.setScalar(.3 + e * n.r);
+          n.mesh.position.y += dt * 1.2;
+          n.mat.opacity = Math.pow(k, 1.5) * .35;
+        } else {
+          n.mesh.scale.setScalar(.3 + e * n.r);
+          n.mat.opacity = k * .8;
+        }
+        if (n.life <= 0) {
+          if (n.mesh.parent) n.mesh.parent.remove(n.mesh);
+          if (n.mesh.geometry) n.mesh.geometry.dispose();
+          n.mat.dispose();
+          this.bloodShocks.splice(i, 1);
+        }
+      }
+    }
     // nuclear FX: eases in (grow + fade up), holds, then eases out
     if (this.nukes) {
       for (let i = this.nukes.length - 1; i >= 0; i--) {
@@ -18840,6 +18990,11 @@ class Effects {
       this.nukes.length = 0;
     }
     if (this.arcs) { this.arcs.forEach(a => { if (a.mesh.parent) a.mesh.parent.remove(a.mesh); if (a.mesh.geometry) a.mesh.geometry.dispose(); }); this.arcs.length = 0; }
+    /* BLOOD ART: волны боли, росчерки-лапы, ударные волны */
+    if (this.bloodNovas) { this.bloodNovas.forEach(n => { if (n.light) { if (n.light.parent) n.light.parent.remove(n.light); } else { if (n.mesh.parent) n.mesh.parent.remove(n.mesh); if (n.mesh.geometry) n.mesh.geometry.dispose(); if (n.mat) n.mat.dispose(); } }); this.bloodNovas.length = 0; }
+    if (this.bloodShocks) { this.bloodShocks.forEach(n => { if (n.mesh.parent) n.mesh.parent.remove(n.mesh); if (n.mesh.geometry) n.mesh.geometry.dispose(); if (n.mat) n.mat.dispose(); }); this.bloodShocks.length = 0; }
+    if (this._pawSlashes) { this._pawSlashes.forEach(s => { if (s.grp.parent) s.grp.parent.remove(s.grp); s.grp.traverse(o => { if (o.geometry) o.geometry.dispose(); }); s.mat.dispose(); s.mat2.dispose(); }); this._pawSlashes.length = 0; }
+    if (this._famFx) { this._famFx.forEach(n => { if (n.mesh.parent) n.mesh.parent.remove(n.mesh); if (n.mesh.geometry) n.mesh.geometry.dispose(); }); this._famFx.length = 0; }
     this.particles.forEach(p => {
       if (p instanceof FastParticle) return;   // GPU-частицы сбрасываются ниже
       if (p.group || p.field) { if (p.mesh.parent) p.mesh.parent.remove(p.mesh); p.mesh.traverse && p.mesh.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material) o.material.dispose(); }); if (p.light && p.light.parent) p.light.parent.remove(p.light); }
@@ -27766,18 +27921,19 @@ const Game = {
         const ud = pr.mesh.userData;
         if (ud.ring) ud.ring.rotation.z += dt * 6;
         if (ud.ring2) ud.ring2.rotation.z -= dt * 4;
+        if (ud.ring3) ud.ring3.rotation.z += dt * 5;
         if (ud.spikes) ud.spikes.rotation.z += dt * 2.5;
         if (ud.core) ud.core.scale.setScalar(1 + Math.sin(U.now() * .012) * .12);
         if (ud.aura) ud.aura.scale.setScalar(1 + Math.sin(U.now() * .008) * .12);
         if (ud.trail) ud.trail.scale.setScalar(.8 + Math.sin(U.now() * .01) * .2);
         /* КРОВАВЫЙ ШЛЕЙФ: пока снаряд летит — капли и искры позади */
-        if (!pr._stuck && (pr.paw === 'big' || pr.paw === 'nuke') && this.effects) {
+        if (!pr._stuck && this.effects) {
           pr._trailT = (pr._trailT || 0) - dt;
           if (pr._trailT <= 0) {
-            pr._trailT = .03;
-            const big = pr.paw === 'big';
-            this.effects.particle(pr.pos.x, pr.pos.y, pr.pos.z, U.rand(-2, 2), U.rand(-1, 1), U.rand(-2, 2), U.rand(.1, .28), 'blood', U.rand(.3, .7));
-            if (big && Math.random() < .6) this.effects.particle(pr.pos.x, pr.pos.y, pr.pos.z, U.rand(-3, 3), U.rand(0, 3), U.rand(-3, 3), U.rand(.06, .16), 'spark', U.rand(.3, .6));
+            pr._trailT = pr.paw === 'barrage' ? .05 : .03;
+            const big = pr.paw === 'big' || pr.paw === 'nuke';
+            this.effects.particle(pr.pos.x, pr.pos.y, pr.pos.z, U.rand(-2, 2), U.rand(-1, 1), U.rand(-2, 2), U.rand(.08, .24), 'blood', U.rand(.3, .7));
+            if (big && Math.random() < .7) this.effects.particle(pr.pos.x, pr.pos.y, pr.pos.z, U.rand(-3, 3), U.rand(0, 3), U.rand(-3, 3), U.rand(.06, .18), 'spark', U.rand(.3, .6));
           }
         }
         /* TORTURE / КРОВАВЫЙ ШАР: «прилип» — тикающий урон по врагам рядом */
@@ -29228,8 +29384,11 @@ const Game = {
       : 56;
     const mesh = buildPawProjectile(mode);
     mesh.position.set(origin.x + d.x * 1.2, origin.y + d.y * 1.2, origin.z + d.z * 1.2);
-    const scale = mode === 'big' ? (def.bigMinMul || .55) * 1 + k * ((def.bigMaxMul || 2.6) - (def.bigMinMul || .55)) : 1;
-    if (mode === 'big') mesh.scale.setScalar(scale);
+    const scale = mode === 'big' ? ((def.bigMinMul || .55) + k * ((def.bigMaxMul || 2.6) - (def.bigMinMul || .55)))
+      : mode === 'nuke' ? 1.5
+      : mode === 'paw' ? 1.35
+      : 1.15;
+    mesh.scale.setScalar(scale);
     this.scene.add(mesh);
     const pr = {
       mesh: mesh, kind: 'bloodpaw', paw: mode,
@@ -29261,18 +29420,24 @@ const Game = {
       if (!normal) {
         pr.pierces = (pr.pierces || 0) + 1;
         if (this.effects) {
-          this.effects.bloodBurst(point, dir, 14);
-          this.effects.bloodNova(point.x, point.y, point.z, 3.2, .6);
+          this.effects.bloodBurst(point, dir, 16);
+          this.effects.bloodNova(point.x, point.y, point.z, 3.6, .7);
+          if (this.effects.bloodShock) this.effects.bloodShock(point.x, point.y, point.z, 2.4, .5);
         }
         UI.hitmark(true); this._hitmarkT = U.now();
         return;
       }
-      if (this.effects) { this.effects.impact(point, normal, 'flesh'); this.effects.bloodBurst(point, dir, 10); }
+      if (this.effects) {
+        this.effects.impact(point, normal, 'flesh');
+        this.effects.bloodBurst(point, dir, 12);
+        const yaw = Math.atan2(-dir.x, -dir.z);
+        if (this.effects.pawSlash) this.effects.pawSlash(point.x, point.y, point.z, yaw, 3.4, 0xff2040, .35);
+      }
       return;
     }
     if (mode === 'barrage') {
-      if (!normal) { if (this.effects) this.effects.bloodBurst(point, dir, 8); UI.hitmark(false); this._hitmarkT = U.now(); return; }
-      if (this.effects) { this.effects.impact(point, normal, 'concrete'); this.effects.bloodBurst(point, dir, 5); }
+      if (!normal) { if (this.effects) { this.effects.bloodBurst(point, dir, 9); if (this.effects.bloodShock) this.effects.bloodShock(point.x, point.y, point.z, 1.6, .35); } UI.hitmark(false); this._hitmarkT = U.now(); return; }
+      if (this.effects) { this.effects.impact(point, normal, 'concrete'); this.effects.bloodBurst(point, dir, 6); }
       return;
     }
     if (mode === 'torture') {
@@ -29280,7 +29445,7 @@ const Game = {
       if (!normal) {
         pr.stuckT = pr.tortureTime || 5;
         pr.stuckTo = null;
-        if (this.effects) { this.effects.bloodBurst(point, dir, 16); this.effects.goreBurst && this.effects.goreBurst(point.x, point.y, point.z, 4); this.effects.bloodNova(point.x, point.y, point.z, 4, .8); }
+        if (this.effects) { this.effects.bloodBurst(point, dir, 16); this.effects.goreBurst && this.effects.goreBurst(point.x, point.y, point.z, 4); this.effects.bloodNova(point.x, point.y, point.z, 4, .8); if (this.effects.bloodShock) this.effects.bloodShock(point.x, point.y, point.z, 2.4, .6); }
         if (typeof UI !== 'undefined' && UI.dmgFlash) UI.dmgFlash();
         pr.vel.x = pr.vel.y = pr.vel.z = 0;   // «прилипает» и тикает
         return;
@@ -29294,9 +29459,12 @@ const Game = {
       if (this.effects) {
         this.effects.explosion(point.x, point.y, point.z, R, [0xd41f2a, 0x2a0308]);
         this.effects.goreBurst && this.effects.goreBurst(point.x, point.y, point.z, R);
-        this.effects.bloodNova(point.x, point.y, point.z, R, 1.6);
-        if (this.effects.bloodScreen) this.effects.bloodScreen(true, .8);
-        if (this.effects.bloodDrip) for (let q = 0; q < 8; q++) this.effects.bloodDrip();
+        this.effects.bloodNova(point.x, point.y, point.z, R, 1.8);
+        if (this.effects.bloodShock) this.effects.bloodShock(point.x, point.y, point.z, R * .7, 1.4);
+        const yaw = Math.atan2(-dir.x, -dir.z);
+        if (this.effects.pawSlash) this.effects.pawSlash(point.x, point.y + .6, point.z, yaw, R * 1.1, 0xff1030, .6);
+        if (this.effects.bloodScreen) this.effects.bloodScreen(true, .9);
+        if (this.effects.bloodDrip) for (let q = 0; q < 10; q++) this.effects.bloodDrip();
         setTimeout(() => { if (this.effects && this.effects.bloodScreen) this.effects.bloodScreen(false); }, 900);
       }
       this.breakMapAt(point.x, point.y, point.z, R * .8, 500);
@@ -29327,7 +29495,16 @@ const Game = {
     if (mode === 'nuke') {
       /* PAIN NUKE: взрыв + подброс врагов + разрушение карты */
       const R = pr.nukeR;
-      if (this.effects) { this.effects.explosion(point.x, point.y, point.z, R, [0xd41f2a, 0x2a0308]); this.effects.goreBurst && this.effects.goreBurst(point.x, point.y, point.z, R); }
+      if (this.effects) {
+        this.effects.explosion(point.x, point.y, point.z, R, [0xd41f2a, 0x2a0308]);
+        this.effects.goreBurst && this.effects.goreBurst(point.x, point.y, point.z, R);
+        this.effects.bloodNova(point.x, point.y, point.z, R, 1.4);
+        if (this.effects.bloodShock) this.effects.bloodShock(point.x, point.y, point.z, R * .7, 1.2);
+        const yaw = Math.atan2(-dir.x, -dir.z);
+        if (this.effects.pawSlash) this.effects.pawSlash(point.x, point.y + .6, point.z, yaw, R * 1.05, 0xff1030, .55);
+        if (this.effects.bloodScreen) { this.effects.bloodScreen(true, .8); setTimeout(() => { if (this.effects && this.effects.bloodScreen) this.effects.bloodScreen(false); }, 700); }
+        if (this.effects.bloodDrip) for (let q = 0; q < 7; q++) this.effects.bloodDrip();
+      }
       this.breakMapAt(point.x, point.y, point.z, (pr.nukeBreakR || 7), 400);
       Audio3D_SFX.explosionAt(point.x, point.y, point.z);
       const push = (list, remote) => {

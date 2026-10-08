@@ -409,6 +409,69 @@ class Effects {
     }
   }
 
+  /* ГИГАНТСКИЙ росчерк-лапа в воздухе: разворачивается перед игроком
+     (удар лапой / тяжёлый выстрел). Двухслойный: яркая лапа + мягкий ореол. */
+  pawSlash(x, y, z, yaw, R, col, life) {
+    const tex = (typeof _pawTexture === 'function') ? _pawTexture() : null;
+    const grp = new THREE.Group();
+    grp.position.set(x, y, z);
+    grp.rotation.y = yaw;
+    const mat = new THREE.MeshBasicMaterial({ color: col === undefined ? 0xff2040 : col, map: tex, transparent: true, opacity: .95, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), mat);
+    m.scale.setScalar(R);
+    grp.add(m);
+    const mat2 = mat.clone(); mat2.opacity = .45; mat2.color = new THREE.Color(0xff8a9a);
+    const m2 = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), mat2);
+    m2.scale.setScalar(R * 1.4); m2.position.z = -.01;
+    grp.add(m2);
+    const light = new THREE.PointLight(col === undefined ? 0xff2040 : col, 120, R * 3.2, 2);
+    grp.add(light);
+    this.scene.add(grp);
+    this._pawSlashes = this._pawSlashes || [];
+    this._pawSlashes.push({ grp: grp, mat: mat, mat2: mat2, light: light, life: life || .42, max: life || .42, R: R });
+  }
+
+  /* ударная волна боли: вертикальные торы-кольца разлетаются от точки +
+     волна-лапа на земле + вспышка. Для мощных АоЕ (nuke, шар). */
+  bloodShock(x, y, z, R, power) {
+    power = power || 1;
+    this.bloodShocks = this.bloodShocks || [];
+    const cols = [0xff1030, 0xd41f2a, 0xff6d8a];
+    for (let i = 0; i < 3; i++) {
+      const mat = new THREE.MeshBasicMaterial({ color: cols[i], transparent: true, opacity: .8, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(1, .07, 8, 36), mat);
+      ring.rotation.x = Math.PI / 2;
+      ring.position.set(x, y + .3 + i * .5, z);
+      this.scene.add(ring);
+      this.bloodShocks.push({ mesh: ring, mat: mat, life: .6 + i * .12, max: .6 + i * .12, r: R * power * (1 - i * .12) });
+    }
+    /* волна-лапа на земле */
+    const ptex = (typeof _pawTexture === 'function') ? _pawTexture() : null;
+    const pmat = new THREE.MeshBasicMaterial({ color: 0xff2040, map: ptex, transparent: true, opacity: .85, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
+    const paw = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), pmat);
+    paw.rotation.x = -Math.PI / 2;
+    paw.position.set(x, y + .05, z);
+    this.scene.add(paw);
+    this.bloodShocks.push({ mesh: paw, mat: pmat, life: .7, max: .7, r: R * power * 2.1, flat: true });
+    /* купол — сфера, раздувающаяся и гаснущая */
+    const dmat = new THREE.MeshBasicMaterial({ color: 0xff3050, transparent: true, opacity: .35, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.BackSide });
+    const dome = new THREE.Mesh(new THREE.SphereGeometry(1, 20, 14), dmat);
+    dome.position.set(x, y, z);
+    this.scene.add(dome);
+    this.bloodShocks.push({ mesh: dome, mat: dmat, life: .5, max: .5, r: R * 1.5 * power, dome: true });
+  }
+
+  /* быстрая красная вспышка всего экрана (урон/мощный удар) */
+  bloodHit(k) {
+    const e = this._bloodScreenEl || document.getElementById('bloodScreen');
+    if (!e) return;
+    this._bloodScreenEl = e;
+    e.classList.add('on');
+    e.style.opacity = String(U.clamp(.5 + (k || 0) * .5, 0, 1));
+    clearTimeout(this._bloodHitT);
+    this._bloodHitT = setTimeout(() => { if (this.bloodScreen) this.bloodScreen(false); }, 260);
+  }
+
   /* кровавый вихрь-аура вокруг игрока (для заряда гигантского шара) */
   bloodAura(x, y, z, k, on) {
     if (!on) {
@@ -1992,6 +2055,48 @@ class Effects {
         }
       }
     }
+    /* BLOOD ART: росчерки-лапы */
+    if (this._pawSlashes) {
+      for (let i = this._pawSlashes.length - 1; i >= 0; i--) {
+        const s = this._pawSlashes[i];
+        s.life -= dt;
+        const k = Math.max(0, s.life / s.max);
+        const e = 1 - Math.pow(1 - (1 - k), 2);
+        s.grp.scale.setScalar(.5 + e * .9);
+        s.grp.position.y += dt * .3;
+        s.mat.opacity = k * .95; s.mat2.opacity = k * .45;
+        if (s.light) s.light.intensity = 120 * k;
+        if (s.life <= 0) {
+          if (s.grp.parent) s.grp.parent.remove(s.grp);
+          s.grp.traverse(o => { if (o.geometry) o.geometry.dispose(); });
+          s.mat.dispose(); s.mat2.dispose();
+          this._pawSlashes.splice(i, 1);
+        }
+      }
+    }
+    /* BLOOD ART: ударные волны боли */
+    if (this.bloodShocks) {
+      for (let i = this.bloodShocks.length - 1; i >= 0; i--) {
+        const n = this.bloodShocks[i];
+        n.life -= dt;
+        const k = Math.max(0, n.life / n.max);
+        const e = 1 - Math.pow(1 - (1 - k), 3);
+        if (n.dome) {
+          n.mesh.scale.setScalar(.3 + e * n.r);
+          n.mesh.position.y += dt * 1.2;
+          n.mat.opacity = Math.pow(k, 1.5) * .35;
+        } else {
+          n.mesh.scale.setScalar(.3 + e * n.r);
+          n.mat.opacity = k * .8;
+        }
+        if (n.life <= 0) {
+          if (n.mesh.parent) n.mesh.parent.remove(n.mesh);
+          if (n.mesh.geometry) n.mesh.geometry.dispose();
+          n.mat.dispose();
+          this.bloodShocks.splice(i, 1);
+        }
+      }
+    }
     // nuclear FX: eases in (grow + fade up), holds, then eases out
     if (this.nukes) {
       for (let i = this.nukes.length - 1; i >= 0; i--) {
@@ -2170,6 +2275,11 @@ class Effects {
       this.nukes.length = 0;
     }
     if (this.arcs) { this.arcs.forEach(a => { if (a.mesh.parent) a.mesh.parent.remove(a.mesh); if (a.mesh.geometry) a.mesh.geometry.dispose(); }); this.arcs.length = 0; }
+    /* BLOOD ART: волны боли, росчерки-лапы, ударные волны */
+    if (this.bloodNovas) { this.bloodNovas.forEach(n => { if (n.light) { if (n.light.parent) n.light.parent.remove(n.light); } else { if (n.mesh.parent) n.mesh.parent.remove(n.mesh); if (n.mesh.geometry) n.mesh.geometry.dispose(); if (n.mat) n.mat.dispose(); } }); this.bloodNovas.length = 0; }
+    if (this.bloodShocks) { this.bloodShocks.forEach(n => { if (n.mesh.parent) n.mesh.parent.remove(n.mesh); if (n.mesh.geometry) n.mesh.geometry.dispose(); if (n.mat) n.mat.dispose(); }); this.bloodShocks.length = 0; }
+    if (this._pawSlashes) { this._pawSlashes.forEach(s => { if (s.grp.parent) s.grp.parent.remove(s.grp); s.grp.traverse(o => { if (o.geometry) o.geometry.dispose(); }); s.mat.dispose(); s.mat2.dispose(); }); this._pawSlashes.length = 0; }
+    if (this._famFx) { this._famFx.forEach(n => { if (n.mesh.parent) n.mesh.parent.remove(n.mesh); if (n.mesh.geometry) n.mesh.geometry.dispose(); }); this._famFx.length = 0; }
     this.particles.forEach(p => {
       if (p instanceof FastParticle) return;   // GPU-частицы сбрасываются ниже
       if (p.group || p.field) { if (p.mesh.parent) p.mesh.parent.remove(p.mesh); p.mesh.traverse && p.mesh.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material) o.material.dispose(); }); if (p.light && p.light.parent) p.light.parent.remove(p.light); }

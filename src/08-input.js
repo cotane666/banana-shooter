@@ -275,11 +275,11 @@ const TouchUI = {
         '<button id="tDummy" class="tbtn act accent">МАНЕКЕН</button>' +
         '<button id="tSpawn" class="tbtn act accent">СПАВН</button>' +
         '<button id="tUnstick" class="tbtn act">СБРОС</button>' +
-        '<button id="tBA1" class="tbtn act accent">ЛАПА Z</button>' +
-        '<button id="tBA2" class="tbtn act accent">ЗАЛП X</button>' +
-        '<button id="tBA3" class="tbtn act accent">ЯДЕРКА C</button>' +
-        '<button id="tBA4" class="tbtn act accent">ПЫТКА V</button>' +
-        '<button id="tBA5" class="tbtn act accent">РЫВОК F</button>' +
+        '<button id="tBA1" class="tbtn act accent ba">ЛАПА Z</button>' +
+        '<button id="tBA2" class="tbtn act accent ba">ЗАЛП X</button>' +
+        '<button id="tBA3" class="tbtn act accent ba">ЯДЕРКА C</button>' +
+        '<button id="tBA4" class="tbtn act accent ba">ШАР V</button>' +
+        '<button id="tBA5" class="tbtn act accent ba">РЫВОК F</button>' +
       '</div>' +
       '<div id="tHint">Слева — ходьба · Справа — обзор · Тап — огонь · АВТО — очередь · Кнопки справа появляются по ситуации</div>';
     document.body.appendChild(wrap);
@@ -377,7 +377,13 @@ const TouchUI = {
     E.unstick.addEventListener('touchstart', e => { swallow(e); Bus.emit('touchUnstick'); E.unstick.classList.add('down'); setTimeout(() => E.unstick.classList.remove('down'), 160); }, { passive: false });
     E.blood.addEventListener('touchstart', e => { swallow(e); Bus.emit('touchBloodArt'); E.blood.classList.add('down'); setTimeout(() => E.blood.classList.remove('down'), 160); }, { passive: false });
     const baKey = (el, code) => el.addEventListener('touchstart', e => { swallow(e); if (typeof BloodArt !== 'undefined') BloodArt.key(code); el.classList.add('down'); setTimeout(() => el.classList.remove('down'), 140); }, { passive: false });
-    baKey(E.ba1, 'KeyZ'); baKey(E.ba2, 'KeyX'); baKey(E.ba3, 'KeyC'); baKey(E.ba4, 'KeyV'); baKey(E.ba5, 'KeyF');
+    baKey(E.ba1, 'KeyZ'); baKey(E.ba2, 'KeyX'); baKey(E.ba3, 'KeyC');
+    baKey(E.ba5, 'KeyF');
+    /* V — ЗАРЯЖАЕМЫЙ шар: держи — заряжаем, отпусти — выпускаем */
+    E.ba4.addEventListener('touchstart', e => { swallow(e); if (typeof BloodArt !== 'undefined') BloodArt.key('KeyV'); E.ba4.classList.add('down'); }, { passive: false });
+    const ba4End = e => { swallow(e); if (typeof BloodArt !== 'undefined' && Game.player && Game.player._bigCharging) BloodArt.releaseBig(Game); E.ba4.classList.remove('down'); };
+    E.ba4.addEventListener('touchend', ba4End, { passive: false });
+    E.ba4.addEventListener('touchcancel', ba4End, { passive: false });
     E.buy.addEventListener('touchstart', e => { swallow(e); Bus.emit('touchBuy'); E.buy.classList.add('down'); setTimeout(() => E.buy.classList.remove('down'), 130); }, { passive: false });
     E.menu.addEventListener('touchstart', e => { swallow(e); Bus.emit('touchPause'); E.menu.classList.add('down'); setTimeout(() => E.menu.classList.remove('down'), 130); }, { passive: false });
     // double-tap the stick area toggles auto-run

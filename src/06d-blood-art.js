@@ -96,14 +96,14 @@ function buildPawProjectile(kind) {
   if (!_pawBodyGeo) {
     _pawBodyGeo = new THREE.SphereGeometry(.24, 14, 12);
   }
-  const coreCol = kind === 'torture' ? 0xff2030 : BLOOD_COL;
+  const coreCol = kind === 'big' ? 0xff1030 : BLOOD_COL;
   const body = new THREE.Mesh(_pawBodyGeo,
     new THREE.MeshBasicMaterial({ color: coreCol, map: _pawTexture(), transparent: true, depthWrite: false, side: THREE.DoubleSide }));
   body.scale.set(1, 1, .45);
   g.add(body);
   // ободок-лапа чуть больше и полупрозрачный (объём)
   const halo = new THREE.Mesh(_pawBodyGeo,
-    new THREE.MeshBasicMaterial({ color: kind === 'torture' ? 0xff8090 : PAW_PINK, map: _pawTexture(), transparent: true, opacity: .35, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
+    new THREE.MeshBasicMaterial({ color: kind === 'big' ? 0xff6070 : PAW_PINK, map: _pawTexture(), transparent: true, opacity: .35, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
   halo.scale.set(1.35, 1.35, .5);
   halo.position.z = .02;
   g.add(halo);
@@ -118,6 +118,19 @@ function buildPawProjectile(kind) {
       new THREE.MeshBasicMaterial({ color: 0xff3344, transparent: true, opacity: .7, blending: THREE.AdditiveBlending, depthWrite: false }));
     g.add(ring);
     g.userData.ring = ring;
+  }
+  if (kind === 'big') {
+    /* ГИГАНТСКИЙ шар: массивный кровавый отпечаток-сфера с вращающимся
+       вихревым кольцом боли */
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(1.05, .10, 10, 28),
+      new THREE.MeshBasicMaterial({ color: 0xff2030, transparent: true, opacity: .75, blending: THREE.AdditiveBlending, depthWrite: false }));
+    g.add(ring);
+    g.userData.ring = ring;
+    const ring2 = new THREE.Mesh(new THREE.TorusGeometry(.78, .06, 8, 24),
+      new THREE.MeshBasicMaterial({ color: 0xff8090, transparent: true, opacity: .55, blending: THREE.AdditiveBlending, depthWrite: false }));
+    ring2.rotation.x = Math.PI / 2;
+    g.add(ring2);
+    g.userData.ring2 = ring2;
   }
   g.userData.pawBody = body;
   return g;
@@ -189,12 +202,71 @@ const BloodArt = {
     return true;
   },
 
-  /* V — TORTURE: красный пульсирующий снаряд — тикающий урон */
+  /* V — КРОВАВЫЙ ШАР: ЗАРЯЖАЕМЫЙ гигантский шар-снаряд.
+     Держи V — шар растёт и заряжается; отпусти — гигантский шар-«лапа»
+     летит вперёд, прилипает и наносит тикающий урон по площади. */
   torture(G, def) {
-    if (!this._cd(G, 'torture', def.tortureCd || 24)) return false;
-    G._spawnPaw(def, 'torture');
-    UI.toast('TORTURE', '#ff2030');
+    /* нажатие: начинаем заряд (если не на кулдауне) */
+    const now = U.now();
+    const at = G._bigAt;
+    if (at && now - at < (def.bigCd || 20) * 1000) {
+      const left = Math.ceil(((def.bigCd || 20) * 1000 - (now - at)) / 1000);
+      UI.toast('Кровавый шар через ' + left + 'с', '#f5d33c');
+      Audio3D_SFX.deny(); return false;
+    }
+    const p = G.player;
+    if (p._bigCharging) return false;
+    p._bigCharging = true;
+    p._bigChargeT = 0;
+    G._bigDef = def;
+    if (Audio3D_SFX.spamtonChargeStart) Audio3D_SFX.spamtonChargeStart();
+    UI.toast('ЗАРЯД КРОВАВОГО ШАРА…', '#ff2030');
     return true;
+  },
+
+  /* тик заряда (вызывается из игрового цикла) */
+  updateTorture(G, dt) {
+    const p = G.player;
+    if (!p || !p._bigCharging) { if (this._preview && this._preview.parent) this._preview.visible = false; return; }
+    const def = G._bigDef || (p.def || {});
+    if (!p.alive || !(p.def && p.def.fruit === 'bloodArt')) { this.releaseBig(G); return; }
+    const maxT = def.bigChargeTime || 2.0;
+    p._bigChargeT = Math.min(maxT, (p._bigChargeT || 0) + dt);
+    const k = U.clamp(p._bigChargeT / maxT, 0, 1);
+    p._bigChargeK = k;
+    if (Audio3D_SFX.spamtonChargeUpdate) Audio3D_SFX.spamtonChargeUpdate(k);
+    /* визуал: перед игроком растёт кровавый шар */
+    const origin = G.eyePos(), dir = G.cameraDir();
+    const cx = origin.x + dir.x * 1.7, cy = origin.y - .1 + dir.y * 1.3, cz = origin.z + dir.z * 1.7;
+    const scale = (def.bigMinMul || .55) + k * ((def.bigMaxMul || 2.6) - (def.bigMinMul || .55));
+    if (!this._preview && G.scene) {
+      this._preview = buildPawProjectile('big');
+      G.scene.add(this._preview);
+    }
+    if (this._preview) {
+      this._preview.visible = true;
+      this._preview.position.set(cx, cy, cz);
+      this._preview.scale.setScalar(scale);
+      this._preview.rotation.z += dt * 4;
+      this._preview.rotation.x += dt * 1.5;
+      if (this._preview.userData.ring) this._preview.userData.ring.rotation.z += dt * 8;
+      if (this._preview.userData.ring2) this._preview.userData.ring2.rotation.z -= dt * 5;
+    }
+  },
+
+  /* отпускание: выпускаем гигантский шар */
+  releaseBig(G) {
+    const p = G.player;
+    if (!p || !p._bigCharging) return;
+    p._bigCharging = false;
+    if (Audio3D_SFX.spamtonChargeStop) Audio3D_SFX.spamtonChargeStop();
+    const def = G._bigDef || (p.def || {});
+    const k = U.clamp((p._bigChargeT || 0) / (def.bigChargeTime || 2), 0, 1);
+    p._bigChargeT = 0;
+    if (k < .15) { UI.toast('Слабый заряд — шар рассеялся', '#f5d33c'); return; }
+    G._bigAt = U.now();
+    G._spawnPaw(def, 'big', k);
+    UI.toast('КРОВАВЫЙ ШАР ' + Math.round(k * 100) + '%', '#ff1040');
   },
 
   /* F — SELF REPEL: рывок к курсору */
@@ -229,5 +301,6 @@ const BloodArt = {
         G._spawnPaw(G._barrageDef, 'barrage');
       }
     }
+    this.updateTorture(G, dt);
   }
 };

@@ -841,11 +841,14 @@ html.touch .fld input{padding:10px;font-size:15px}
   .tbtn.small{width:52px;height:52px;font-size:9.5px}
   #tAim{right:16px;bottom:96px}
   #tAuto{right:16px;bottom:154px}
-  /* landscape phones are very short: a right-edge stack above the fire buttons
-     would run off the top, so the contextual actions move under the minimap */
-  #tActions{right:auto;left:12px;top:calc(104px + env(safe-area-inset-top,0px));bottom:auto;
-    max-height:calc(100vh - 150px);gap:5px;align-items:flex-start}
-  .tbtn.act{min-width:84px;height:36px;font-size:10px;padding:0 10px}
+  /* landscape phones are very short: the contextual stack stays on the RIGHT
+     (не под миникартой!) компактной сеткой 2 колонки, чтобы не наезжать
+     на кнопки огня снизу и не упираться в потолок */
+  #tActions{right:12px;left:auto;top:calc(96px + env(safe-area-inset-top,0px));bottom:auto;
+    max-height:calc(100vh - 300px);gap:4px;align-items:flex-end;overflow-y:auto;
+    display:grid;grid-template-columns:auto auto;justify-content:end}
+  .tbtn.act{min-width:70px;height:30px;font-size:9px;padding:0 8px}
+  .tbtn.act.ba{min-width:52px;height:28px;font-size:8.5px;padding:0 5px}
   #tJump{right:18px;bottom:20px}
   #tCrouch{right:80px;bottom:24px}
   #tReload{left:calc(50% - 84px);top:calc(6px + env(safe-area-inset-top,0px))}
@@ -868,15 +871,19 @@ html.touch .fld input{padding:10px;font-size:15px}
   html.touch .hud-tl{bottom:176px;width:118px}
   html.touch .hud-bl{bottom:230px}
   html.touch .hud-br{top:92px}
-  html.touch #minimap{width:82px;height:82px}
+  html.touch #minimap{width:76px;height:76px}
   html.touch .ammo b{font-size:26px}
   html.touch #feed{top:160px;width:150px}
   html.touch .menu-foot{font-size:10px}
   html.touch #tHint{bottom:28%}
-  .tbtn.small{width:56px;height:56px}
+  .tbtn.small{width:54px;height:54px}
+  /* Портрет: способности идут СТОЛБИКОМ справа над ПРИЦЕЛ/АВТО — не под миникартой */
+  #tActions{right:12px;top:calc(104px + env(safe-area-inset-top,0px));bottom:auto;
+    max-height:calc(100vh - 300px);gap:5px;align-items:flex-end;overflow-y:auto}
+  .tbtn.act{min-width:80px;height:32px;font-size:9.5px;padding:0 8px}
+  .tbtn.act.ba{min-width:60px;height:30px;font-size:9px;padding:0 5px}
   #tAim{right:14px;bottom:110px}
-  #tAuto{right:14px;bottom:176px}
-  #tActions{right:14px;bottom:236px}
+  #tAuto{right:14px;bottom:170px}
   #tJump{right:14px;bottom:28px}
   #tCrouch{right:82px;bottom:32px}
   #tReload{left:calc(50% - 92px);top:calc(10px + env(safe-area-inset-top,0px))}
@@ -2205,8 +2212,9 @@ const WEAPONS = {
           barrageCd: 12, barrageCount: 7, barrageDmg: 150, barrageInterval: .07,
           /* C — PAIN NUKE */
           nukeCd: 18, nukeDmg: 520, nukeR: 9, nukeBreakR: 7, nukeSpeed: 52,
-          /* V — TORTURE */
-          tortureCd: 24, tortureDmg: 90, tortureTick: 70, tortureTime: 5, tortureSpeed: 46,
+          /* V — TORTURE: заряжаемый ГИГАНТСКИЙ шар-снаряд */
+          bigCd: 20, bigChargeTime: 2.0, bigMinMul: .55, bigMaxMul: 2.6,
+          bigDmg: 420, bigSpeed: 40, bigR: 9, bigTick: 90, bigTime: 6,
           /* F — SELF REPEL */
           repelCd: 7, repelDist: 34, repelSpeed: 60 }
 };
@@ -8399,14 +8407,14 @@ function buildPawProjectile(kind) {
   if (!_pawBodyGeo) {
     _pawBodyGeo = new THREE.SphereGeometry(.24, 14, 12);
   }
-  const coreCol = kind === 'torture' ? 0xff2030 : BLOOD_COL;
+  const coreCol = kind === 'big' ? 0xff1030 : BLOOD_COL;
   const body = new THREE.Mesh(_pawBodyGeo,
     new THREE.MeshBasicMaterial({ color: coreCol, map: _pawTexture(), transparent: true, depthWrite: false, side: THREE.DoubleSide }));
   body.scale.set(1, 1, .45);
   g.add(body);
   // ободок-лапа чуть больше и полупрозрачный (объём)
   const halo = new THREE.Mesh(_pawBodyGeo,
-    new THREE.MeshBasicMaterial({ color: kind === 'torture' ? 0xff8090 : PAW_PINK, map: _pawTexture(), transparent: true, opacity: .35, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
+    new THREE.MeshBasicMaterial({ color: kind === 'big' ? 0xff6070 : PAW_PINK, map: _pawTexture(), transparent: true, opacity: .35, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
   halo.scale.set(1.35, 1.35, .5);
   halo.position.z = .02;
   g.add(halo);
@@ -8421,6 +8429,19 @@ function buildPawProjectile(kind) {
       new THREE.MeshBasicMaterial({ color: 0xff3344, transparent: true, opacity: .7, blending: THREE.AdditiveBlending, depthWrite: false }));
     g.add(ring);
     g.userData.ring = ring;
+  }
+  if (kind === 'big') {
+    /* ГИГАНТСКИЙ шар: массивный кровавый отпечаток-сфера с вращающимся
+       вихревым кольцом боли */
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(1.05, .10, 10, 28),
+      new THREE.MeshBasicMaterial({ color: 0xff2030, transparent: true, opacity: .75, blending: THREE.AdditiveBlending, depthWrite: false }));
+    g.add(ring);
+    g.userData.ring = ring;
+    const ring2 = new THREE.Mesh(new THREE.TorusGeometry(.78, .06, 8, 24),
+      new THREE.MeshBasicMaterial({ color: 0xff8090, transparent: true, opacity: .55, blending: THREE.AdditiveBlending, depthWrite: false }));
+    ring2.rotation.x = Math.PI / 2;
+    g.add(ring2);
+    g.userData.ring2 = ring2;
   }
   g.userData.pawBody = body;
   return g;
@@ -8492,12 +8513,71 @@ const BloodArt = {
     return true;
   },
 
-  /* V — TORTURE: красный пульсирующий снаряд — тикающий урон */
+  /* V — КРОВАВЫЙ ШАР: ЗАРЯЖАЕМЫЙ гигантский шар-снаряд.
+     Держи V — шар растёт и заряжается; отпусти — гигантский шар-«лапа»
+     летит вперёд, прилипает и наносит тикающий урон по площади. */
   torture(G, def) {
-    if (!this._cd(G, 'torture', def.tortureCd || 24)) return false;
-    G._spawnPaw(def, 'torture');
-    UI.toast('TORTURE', '#ff2030');
+    /* нажатие: начинаем заряд (если не на кулдауне) */
+    const now = U.now();
+    const at = G._bigAt;
+    if (at && now - at < (def.bigCd || 20) * 1000) {
+      const left = Math.ceil(((def.bigCd || 20) * 1000 - (now - at)) / 1000);
+      UI.toast('Кровавый шар через ' + left + 'с', '#f5d33c');
+      Audio3D_SFX.deny(); return false;
+    }
+    const p = G.player;
+    if (p._bigCharging) return false;
+    p._bigCharging = true;
+    p._bigChargeT = 0;
+    G._bigDef = def;
+    if (Audio3D_SFX.spamtonChargeStart) Audio3D_SFX.spamtonChargeStart();
+    UI.toast('ЗАРЯД КРОВАВОГО ШАРА…', '#ff2030');
     return true;
+  },
+
+  /* тик заряда (вызывается из игрового цикла) */
+  updateTorture(G, dt) {
+    const p = G.player;
+    if (!p || !p._bigCharging) { if (this._preview && this._preview.parent) this._preview.visible = false; return; }
+    const def = G._bigDef || (p.def || {});
+    if (!p.alive || !(p.def && p.def.fruit === 'bloodArt')) { this.releaseBig(G); return; }
+    const maxT = def.bigChargeTime || 2.0;
+    p._bigChargeT = Math.min(maxT, (p._bigChargeT || 0) + dt);
+    const k = U.clamp(p._bigChargeT / maxT, 0, 1);
+    p._bigChargeK = k;
+    if (Audio3D_SFX.spamtonChargeUpdate) Audio3D_SFX.spamtonChargeUpdate(k);
+    /* визуал: перед игроком растёт кровавый шар */
+    const origin = G.eyePos(), dir = G.cameraDir();
+    const cx = origin.x + dir.x * 1.7, cy = origin.y - .1 + dir.y * 1.3, cz = origin.z + dir.z * 1.7;
+    const scale = (def.bigMinMul || .55) + k * ((def.bigMaxMul || 2.6) - (def.bigMinMul || .55));
+    if (!this._preview && G.scene) {
+      this._preview = buildPawProjectile('big');
+      G.scene.add(this._preview);
+    }
+    if (this._preview) {
+      this._preview.visible = true;
+      this._preview.position.set(cx, cy, cz);
+      this._preview.scale.setScalar(scale);
+      this._preview.rotation.z += dt * 4;
+      this._preview.rotation.x += dt * 1.5;
+      if (this._preview.userData.ring) this._preview.userData.ring.rotation.z += dt * 8;
+      if (this._preview.userData.ring2) this._preview.userData.ring2.rotation.z -= dt * 5;
+    }
+  },
+
+  /* отпускание: выпускаем гигантский шар */
+  releaseBig(G) {
+    const p = G.player;
+    if (!p || !p._bigCharging) return;
+    p._bigCharging = false;
+    if (Audio3D_SFX.spamtonChargeStop) Audio3D_SFX.spamtonChargeStop();
+    const def = G._bigDef || (p.def || {});
+    const k = U.clamp((p._bigChargeT || 0) / (def.bigChargeTime || 2), 0, 1);
+    p._bigChargeT = 0;
+    if (k < .15) { UI.toast('Слабый заряд — шар рассеялся', '#f5d33c'); return; }
+    G._bigAt = U.now();
+    G._spawnPaw(def, 'big', k);
+    UI.toast('КРОВАВЫЙ ШАР ' + Math.round(k * 100) + '%', '#ff1040');
   },
 
   /* F — SELF REPEL: рывок к курсору */
@@ -8532,6 +8612,7 @@ const BloodArt = {
         G._spawnPaw(G._barrageDef, 'barrage');
       }
     }
+    this.updateTorture(G, dt);
   }
 };
 
@@ -15438,11 +15519,11 @@ const TouchUI = {
         '<button id="tDummy" class="tbtn act accent">МАНЕКЕН</button>' +
         '<button id="tSpawn" class="tbtn act accent">СПАВН</button>' +
         '<button id="tUnstick" class="tbtn act">СБРОС</button>' +
-        '<button id="tBA1" class="tbtn act accent">ЛАПА Z</button>' +
-        '<button id="tBA2" class="tbtn act accent">ЗАЛП X</button>' +
-        '<button id="tBA3" class="tbtn act accent">ЯДЕРКА C</button>' +
-        '<button id="tBA4" class="tbtn act accent">ПЫТКА V</button>' +
-        '<button id="tBA5" class="tbtn act accent">РЫВОК F</button>' +
+        '<button id="tBA1" class="tbtn act accent ba">ЛАПА Z</button>' +
+        '<button id="tBA2" class="tbtn act accent ba">ЗАЛП X</button>' +
+        '<button id="tBA3" class="tbtn act accent ba">ЯДЕРКА C</button>' +
+        '<button id="tBA4" class="tbtn act accent ba">ШАР V</button>' +
+        '<button id="tBA5" class="tbtn act accent ba">РЫВОК F</button>' +
       '</div>' +
       '<div id="tHint">Слева — ходьба · Справа — обзор · Тап — огонь · АВТО — очередь · Кнопки справа появляются по ситуации</div>';
     document.body.appendChild(wrap);
@@ -15540,7 +15621,13 @@ const TouchUI = {
     E.unstick.addEventListener('touchstart', e => { swallow(e); Bus.emit('touchUnstick'); E.unstick.classList.add('down'); setTimeout(() => E.unstick.classList.remove('down'), 160); }, { passive: false });
     E.blood.addEventListener('touchstart', e => { swallow(e); Bus.emit('touchBloodArt'); E.blood.classList.add('down'); setTimeout(() => E.blood.classList.remove('down'), 160); }, { passive: false });
     const baKey = (el, code) => el.addEventListener('touchstart', e => { swallow(e); if (typeof BloodArt !== 'undefined') BloodArt.key(code); el.classList.add('down'); setTimeout(() => el.classList.remove('down'), 140); }, { passive: false });
-    baKey(E.ba1, 'KeyZ'); baKey(E.ba2, 'KeyX'); baKey(E.ba3, 'KeyC'); baKey(E.ba4, 'KeyV'); baKey(E.ba5, 'KeyF');
+    baKey(E.ba1, 'KeyZ'); baKey(E.ba2, 'KeyX'); baKey(E.ba3, 'KeyC');
+    baKey(E.ba5, 'KeyF');
+    /* V — ЗАРЯЖАЕМЫЙ шар: держи — заряжаем, отпусти — выпускаем */
+    E.ba4.addEventListener('touchstart', e => { swallow(e); if (typeof BloodArt !== 'undefined') BloodArt.key('KeyV'); E.ba4.classList.add('down'); }, { passive: false });
+    const ba4End = e => { swallow(e); if (typeof BloodArt !== 'undefined' && Game.player && Game.player._bigCharging) BloodArt.releaseBig(Game); E.ba4.classList.remove('down'); };
+    E.ba4.addEventListener('touchend', ba4End, { passive: false });
+    E.ba4.addEventListener('touchcancel', ba4End, { passive: false });
     E.buy.addEventListener('touchstart', e => { swallow(e); Bus.emit('touchBuy'); E.buy.classList.add('down'); setTimeout(() => E.buy.classList.remove('down'), 130); }, { passive: false });
     E.menu.addEventListener('touchstart', e => { swallow(e); Bus.emit('touchPause'); E.menu.classList.add('down'); setTimeout(() => E.menu.classList.remove('down'), 130); }, { passive: false });
     // double-tap the stick area toggles auto-run
@@ -21831,6 +21918,10 @@ const Game = {
     Input.onKeyDown = (code, e) => this.onKeyDown(code, e);
     Input.onKeyUp = (code, e) => {
       if (code === 'Space' && this.player) this.player.in.wantJump = false;
+      /* BLOOD ART: отпустили V — выпускаем заряженный КРОВАВЫЙ ШАР */
+      if (code === 'KeyV' && typeof BloodArt !== 'undefined' && this.player && this.player._bigCharging) {
+        BloodArt.releaseBig(this);
+      }
       // release Tab → drop the scoreboard (hold-to-view, like CS)
       if (code === 'Tab' && this._tabHeld) {
         this._tabHeld = false;
@@ -26901,22 +26992,25 @@ const Game = {
       if (pr.kind === 'bloodpaw') {
         pr.mesh.rotation.z += dt * 3.2;
         if (pr.mesh.userData.ring) pr.mesh.userData.ring.rotation.z += dt * 6;
-        /* TORTURE: «прилип» — тикающий урон по врагам рядом */
-        if (pr.paw === 'torture' && pr.stuckT > 0) {
+        if (pr.mesh.userData.ring2) pr.mesh.userData.ring2.rotation.z -= dt * 4;
+        /* TORTURE / КРОВАВЫЙ ШАР: «прилип» — тикающий урон по врагам рядом */
+        if ((pr.paw === 'torture' || pr.paw === 'big') && pr.stuckT > 0) {
           pr.stuckT -= dt;
           pr._tickT = (pr._tickT || 0) - dt;
-          if (pr._tickT <= 0) {
-            pr._tickT = .4;
-            if (this.horde) for (const z of this.horde.list) {
-              if (!z.alive || z.dying) continue;
-              const d = Math.hypot(z.pos.x - pr.pos.x, z.pos.z - pr.pos.z);
-              if (d < 3.2) { z.takeDamage(pr.tortureTick, 'body', { x: 0, y: 0, z: 0 }); this.player.damageDealt += pr.tortureTick; }
-            }
+          const tick = pr._tickT <= 0;
+          if (tick) pr._tickT = .4;
+          const R = pr.paw === 'big' ? (pr.bigR || 9) : 3.2;
+          if (tick && this.horde) for (const z of this.horde.list) {
+            if (!z.alive || z.dying) continue;
+            const d = Math.hypot(z.pos.x - pr.pos.x, z.pos.z - pr.pos.z);
+            if (d < R) { const dmg = pr.bigTick || pr.tortureTick || 90; z.takeDamage(dmg, 'body', { x: 0, y: 0, z: 0 }); this.player.damageDealt += dmg; }
+            if (pr.paw === 'big' && z.alive && !z.dying) z.vel.y = Math.max(z.vel.y, 5);
           }
-          if (this.effects) this.effects.particle(pr.pos.x, pr.pos.y, pr.pos.z, U.rand(-1, 1), U.rand(.5, 2), U.rand(-1, 1), U.rand(.1, .24), 'blood', U.rand(.3, .6));
+          if (this.effects) for (let k = 0; k < (pr.paw === 'big' ? 3 : 1); k++) this.effects.particle(pr.pos.x + U.rand(-R * .4, R * .4), pr.pos.y + U.rand(-R * .4, R * .4), pr.pos.z + U.rand(-R * .4, R * .4), U.rand(-1, 1), U.rand(.5, 2), U.rand(-1, 1), U.rand(.1, .28), 'blood', U.rand(.3, .6));
           if (pr.stuckT <= 0) { this.removeProjectile(i); continue; }
           pr.mesh.position.set(pr.pos.x, pr.pos.y, pr.pos.z);
-          continue;   // застрявший TORTURE не летит дальше
+          if (pr.paw === 'big' && pr.mesh.userData.ring2) pr.mesh.userData.ring2.rotation.x += dt * 3;
+          continue;   // застрявший шар не летит дальше
         }
       }
       if (pr.kind === 'hyperpipis') {
@@ -27061,6 +27155,9 @@ const Game = {
           } else if (pr.paw === 'torture') {
             /* TORTURE: во врага «прилипает» (тикает), в стену — исчезает */
             if (impactNormal) this.removeProjectile(i);
+          } else if (pr.paw === 'big') {
+            /* КРОВАВЫЙ ШАР: детонирует и остаётся пульсировать на месте */
+            if (!pr.stuckT) this.removeProjectile(i);   // если уже отработал — убрать
           } else {
             this.removeProjectile(i);   // nuke/barrage — одноразовые
           }
@@ -28325,33 +28422,38 @@ const Game = {
   /* ============================================================
      BLOOD ART (Pain Fruit): снаряды-лапы
      ============================================================ */
-  _spawnPaw(def, mode) {
+  _spawnPaw(def, mode, chargeK) {
     const p = this.player;
     const origin = this.muzzleWorldPos();
     const baseDir = this.cameraDir();
-    const d = this.spreadDirection(baseDir, mode === 'barrage' ? .05 : .012, false);
+    const d = mode === 'big'
+      ? { x: baseDir.x, y: baseDir.y, z: baseDir.z }
+      : this.spreadDirection(baseDir, mode === 'barrage' ? .05 : .012, false);
+    const k = chargeK === undefined ? 1 : chargeK;
     const speed = mode === 'paw' ? (def.pawSpeed || 62)
       : mode === 'nuke' ? (def.nukeSpeed || 52)
-      : mode === 'torture' ? (def.tortureSpeed || 46)
+      : mode === 'big' ? (def.bigSpeed || 40)
       : 56;
     const mesh = buildPawProjectile(mode);
-    mesh.position.set(origin.x, origin.y, origin.z);
+    mesh.position.set(origin.x + d.x * 1.2, origin.y + d.y * 1.2, origin.z + d.z * 1.2);
+    const scale = mode === 'big' ? (def.bigMinMul || .55) * 1 + k * ((def.bigMaxMul || 2.6) - (def.bigMinMul || .55)) : 1;
+    if (mode === 'big') mesh.scale.setScalar(scale);
     this.scene.add(mesh);
     const pr = {
       mesh: mesh, kind: 'bloodpaw', paw: mode,
       pid: 'pr' + (this._projSeq = (this._projSeq || 0) + 1),
-      alive: true, life: mode === 'torture' ? 6 : 4,
+      alive: true, life: mode === 'big' ? 8 : 4,
       prev: { x: origin.x, y: origin.y, z: origin.z },
-      pos: { x: origin.x, y: origin.y, z: origin.z },
+      pos: { x: mesh.position.x, y: mesh.position.y, z: mesh.position.z },
       vel: { x: d.x * speed, y: d.y * speed, z: d.z * speed },
       grav: mode === 'nuke' ? 6 : 0,
       dmg: mode === 'paw' ? (def.pawDmg || 260)
         : mode === 'nuke' ? (def.nukeDmg || 520)
-        : mode === 'torture' ? (def.tortureDmg || 90)
+        : mode === 'big' ? (def.bigDmg || 420) * (.5 + k)
         : (def.barrageDmg || 150),
       pierce: def.pawPierce || 8, pierces: 0,
       nukeR: def.nukeR || 9, nukeBreakR: def.nukeBreakR || 7,
-      tortureTick: def.tortureTick || 70, tortureTime: def.tortureTime || 5,
+      bigR: (def.bigR || 9) * (.7 + k * .6), bigTick: def.bigTick || 90, bigTime: def.bigTime || 6,
       noSelfDamage: true, ownerIsLocal: true
     };
     this.projectiles.push(pr);
@@ -28389,6 +28491,34 @@ const Game = {
         return;
       }
       if (this.effects) this.effects.impact(point, normal, 'concrete');
+      return;
+    }
+    if (mode === 'big') {
+      /* КРОВАВЫЙ ШАР: гигантский — взрыв боли, разрушение карты, прилипание */
+      const R = pr.bigR || 9;
+      if (this.effects) { this.effects.explosion(point.x, point.y, point.z, R, [0xd41f2a, 0x2a0308]); this.effects.goreBurst && this.effects.goreBurst(point.x, point.y, point.z, R); }
+      this.breakMapAt(point.x, point.y, point.z, R * .8, 500);
+      Audio3D_SFX.explosionAt(point.x, point.y, point.z);
+      if (this.horde) for (const z of this.horde.list) {
+        if (!z.alive || z.dying) continue;
+        const dd = Math.hypot(z.pos.x - point.x, (z.pos.y + 1) - point.y, z.pos.z - point.z);
+        if (dd > R) continue;
+        const kk = 1 - dd / R;
+        z.takeDamage(pr.dmg * (.5 + kk * .5), 'body', { x: z.pos.x - point.x, y: 0, z: z.pos.z - point.z });
+        this.player.damageDealt += pr.dmg * .5;
+        if (z.alive && !z.dying) { z.vel.y = 10 * kk + 3; }
+      }
+      if (this.mode === CS.MODE.ONLINE) {
+        for (const rp of this.remotePlayers) {
+          if (!rp.alive) continue;
+          if (Math.hypot(rp.pos.x - point.x, rp.pos.z - point.z) < R) this.sendPvpHit(pr.dmg, 'body', true, rp, 'bloodpaw');
+        }
+        Net.send({ t: 'boom', from: Net.selfId(), x: +point.x.toFixed(2), y: +point.y.toFixed(2), z: +point.z.toFixed(2), r: R, c: [0xd41f2a, 0x2a0308] });
+      }
+      /* шар остаётся на месте как «пульсирующая боль» — тикающий урон по площади */
+      pr.stuckT = pr.bigTime || 6;
+      pr.vel.x = pr.vel.y = pr.vel.z = 0;
+      pr.grav = 0;
       return;
     }
     if (mode === 'nuke') {

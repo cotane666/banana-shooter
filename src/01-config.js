@@ -457,8 +457,9 @@ const WEAPONS = {
           barrageCd: 12, barrageCount: 7, barrageDmg: 150, barrageInterval: .07,
           /* C — PAIN NUKE */
           nukeCd: 18, nukeDmg: 520, nukeR: 9, nukeBreakR: 7, nukeSpeed: 52,
-          /* V — TORTURE */
-          tortureCd: 24, tortureDmg: 90, tortureTick: 70, tortureTime: 5, tortureSpeed: 46,
+          /* V — TORTURE: заряжаемый ГИГАНТСКИЙ шар-снаряд */
+          bigCd: 20, bigChargeTime: 2.0, bigMinMul: .55, bigMaxMul: 2.6,
+          bigDmg: 420, bigSpeed: 40, bigR: 9, bigTick: 90, bigTime: 6,
           /* F — SELF REPEL */
           repelCd: 7, repelDist: 34, repelSpeed: 60 }
 };

@@ -826,11 +826,14 @@ html.touch .fld input{padding:10px;font-size:15px}
   .tbtn.small{width:52px;height:52px;font-size:9.5px}
   #tAim{right:16px;bottom:96px}
   #tAuto{right:16px;bottom:154px}
-  /* landscape phones are very short: a right-edge stack above the fire buttons
-     would run off the top, so the contextual actions move under the minimap */
-  #tActions{right:auto;left:12px;top:calc(104px + env(safe-area-inset-top,0px));bottom:auto;
-    max-height:calc(100vh - 150px);gap:5px;align-items:flex-start}
-  .tbtn.act{min-width:84px;height:36px;font-size:10px;padding:0 10px}
+  /* landscape phones are very short: the contextual stack stays on the RIGHT
+     (не под миникартой!) компактной сеткой 2 колонки, чтобы не наезжать
+     на кнопки огня снизу и не упираться в потолок */
+  #tActions{right:12px;left:auto;top:calc(96px + env(safe-area-inset-top,0px));bottom:auto;
+    max-height:calc(100vh - 300px);gap:4px;align-items:flex-end;overflow-y:auto;
+    display:grid;grid-template-columns:auto auto;justify-content:end}
+  .tbtn.act{min-width:70px;height:30px;font-size:9px;padding:0 8px}
+  .tbtn.act.ba{min-width:52px;height:28px;font-size:8.5px;padding:0 5px}
   #tJump{right:18px;bottom:20px}
   #tCrouch{right:80px;bottom:24px}
   #tReload{left:calc(50% - 84px);top:calc(6px + env(safe-area-inset-top,0px))}
@@ -853,15 +856,19 @@ html.touch .fld input{padding:10px;font-size:15px}
   html.touch .hud-tl{bottom:176px;width:118px}
   html.touch .hud-bl{bottom:230px}
   html.touch .hud-br{top:92px}
-  html.touch #minimap{width:82px;height:82px}
+  html.touch #minimap{width:76px;height:76px}
   html.touch .ammo b{font-size:26px}
   html.touch #feed{top:160px;width:150px}
   html.touch .menu-foot{font-size:10px}
   html.touch #tHint{bottom:28%}
-  .tbtn.small{width:56px;height:56px}
+  .tbtn.small{width:54px;height:54px}
+  /* Портрет: способности идут СТОЛБИКОМ справа над ПРИЦЕЛ/АВТО — не под миникартой */
+  #tActions{right:12px;top:calc(104px + env(safe-area-inset-top,0px));bottom:auto;
+    max-height:calc(100vh - 300px);gap:5px;align-items:flex-end;overflow-y:auto}
+  .tbtn.act{min-width:80px;height:32px;font-size:9.5px;padding:0 8px}
+  .tbtn.act.ba{min-width:60px;height:30px;font-size:9px;padding:0 5px}
   #tAim{right:14px;bottom:110px}
-  #tAuto{right:14px;bottom:176px}
-  #tActions{right:14px;bottom:236px}
+  #tAuto{right:14px;bottom:170px}
   #tJump{right:14px;bottom:28px}
   #tCrouch{right:82px;bottom:32px}
   #tReload{left:calc(50% - 92px);top:calc(10px + env(safe-area-inset-top,0px))}

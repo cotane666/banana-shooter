@@ -1499,6 +1499,10 @@ const Game = {
     Input.onKeyDown = (code, e) => this.onKeyDown(code, e);
     Input.onKeyUp = (code, e) => {
       if (code === 'Space' && this.player) this.player.in.wantJump = false;
+      /* BLOOD ART: отпустили V — выпускаем заряженный КРОВАВЫЙ ШАР */
+      if (code === 'KeyV' && typeof BloodArt !== 'undefined' && this.player && this.player._bigCharging) {
+        BloodArt.releaseBig(this);
+      }
       // release Tab → drop the scoreboard (hold-to-view, like CS)
       if (code === 'Tab' && this._tabHeld) {
         this._tabHeld = false;
@@ -6569,22 +6573,25 @@ const Game = {
       if (pr.kind === 'bloodpaw') {
         pr.mesh.rotation.z += dt * 3.2;
         if (pr.mesh.userData.ring) pr.mesh.userData.ring.rotation.z += dt * 6;
-        /* TORTURE: «прилип» — тикающий урон по врагам рядом */
-        if (pr.paw === 'torture' && pr.stuckT > 0) {
+        if (pr.mesh.userData.ring2) pr.mesh.userData.ring2.rotation.z -= dt * 4;
+        /* TORTURE / КРОВАВЫЙ ШАР: «прилип» — тикающий урон по врагам рядом */
+        if ((pr.paw === 'torture' || pr.paw === 'big') && pr.stuckT > 0) {
           pr.stuckT -= dt;
           pr._tickT = (pr._tickT || 0) - dt;
-          if (pr._tickT <= 0) {
-            pr._tickT = .4;
-            if (this.horde) for (const z of this.horde.list) {
-              if (!z.alive || z.dying) continue;
-              const d = Math.hypot(z.pos.x - pr.pos.x, z.pos.z - pr.pos.z);
-              if (d < 3.2) { z.takeDamage(pr.tortureTick, 'body', { x: 0, y: 0, z: 0 }); this.player.damageDealt += pr.tortureTick; }
-            }
+          const tick = pr._tickT <= 0;
+          if (tick) pr._tickT = .4;
+          const R = pr.paw === 'big' ? (pr.bigR || 9) : 3.2;
+          if (tick && this.horde) for (const z of this.horde.list) {
+            if (!z.alive || z.dying) continue;
+            const d = Math.hypot(z.pos.x - pr.pos.x, z.pos.z - pr.pos.z);
+            if (d < R) { const dmg = pr.bigTick || pr.tortureTick || 90; z.takeDamage(dmg, 'body', { x: 0, y: 0, z: 0 }); this.player.damageDealt += dmg; }
+            if (pr.paw === 'big' && z.alive && !z.dying) z.vel.y = Math.max(z.vel.y, 5);
           }
-          if (this.effects) this.effects.particle(pr.pos.x, pr.pos.y, pr.pos.z, U.rand(-1, 1), U.rand(.5, 2), U.rand(-1, 1), U.rand(.1, .24), 'blood', U.rand(.3, .6));
+          if (this.effects) for (let k = 0; k < (pr.paw === 'big' ? 3 : 1); k++) this.effects.particle(pr.pos.x + U.rand(-R * .4, R * .4), pr.pos.y + U.rand(-R * .4, R * .4), pr.pos.z + U.rand(-R * .4, R * .4), U.rand(-1, 1), U.rand(.5, 2), U.rand(-1, 1), U.rand(.1, .28), 'blood', U.rand(.3, .6));
           if (pr.stuckT <= 0) { this.removeProjectile(i); continue; }
           pr.mesh.position.set(pr.pos.x, pr.pos.y, pr.pos.z);
-          continue;   // застрявший TORTURE не летит дальше
+          if (pr.paw === 'big' && pr.mesh.userData.ring2) pr.mesh.userData.ring2.rotation.x += dt * 3;
+          continue;   // застрявший шар не летит дальше
         }
       }
       if (pr.kind === 'hyperpipis') {
@@ -6729,6 +6736,9 @@ const Game = {
           } else if (pr.paw === 'torture') {
             /* TORTURE: во врага «прилипает» (тикает), в стену — исчезает */
             if (impactNormal) this.removeProjectile(i);
+          } else if (pr.paw === 'big') {
+            /* КРОВАВЫЙ ШАР: детонирует и остаётся пульсировать на месте */
+            if (!pr.stuckT) this.removeProjectile(i);   // если уже отработал — убрать
           } else {
             this.removeProjectile(i);   // nuke/barrage — одноразовые
           }
@@ -7993,33 +8003,38 @@ const Game = {
   /* ============================================================
      BLOOD ART (Pain Fruit): снаряды-лапы
      ============================================================ */
-  _spawnPaw(def, mode) {
+  _spawnPaw(def, mode, chargeK) {
     const p = this.player;
     const origin = this.muzzleWorldPos();
     const baseDir = this.cameraDir();
-    const d = this.spreadDirection(baseDir, mode === 'barrage' ? .05 : .012, false);
+    const d = mode === 'big'
+      ? { x: baseDir.x, y: baseDir.y, z: baseDir.z }
+      : this.spreadDirection(baseDir, mode === 'barrage' ? .05 : .012, false);
+    const k = chargeK === undefined ? 1 : chargeK;
     const speed = mode === 'paw' ? (def.pawSpeed || 62)
       : mode === 'nuke' ? (def.nukeSpeed || 52)
-      : mode === 'torture' ? (def.tortureSpeed || 46)
+      : mode === 'big' ? (def.bigSpeed || 40)
       : 56;
     const mesh = buildPawProjectile(mode);
-    mesh.position.set(origin.x, origin.y, origin.z);
+    mesh.position.set(origin.x + d.x * 1.2, origin.y + d.y * 1.2, origin.z + d.z * 1.2);
+    const scale = mode === 'big' ? (def.bigMinMul || .55) * 1 + k * ((def.bigMaxMul || 2.6) - (def.bigMinMul || .55)) : 1;
+    if (mode === 'big') mesh.scale.setScalar(scale);
     this.scene.add(mesh);
     const pr = {
       mesh: mesh, kind: 'bloodpaw', paw: mode,
       pid: 'pr' + (this._projSeq = (this._projSeq || 0) + 1),
-      alive: true, life: mode === 'torture' ? 6 : 4,
+      alive: true, life: mode === 'big' ? 8 : 4,
       prev: { x: origin.x, y: origin.y, z: origin.z },
-      pos: { x: origin.x, y: origin.y, z: origin.z },
+      pos: { x: mesh.position.x, y: mesh.position.y, z: mesh.position.z },
       vel: { x: d.x * speed, y: d.y * speed, z: d.z * speed },
       grav: mode === 'nuke' ? 6 : 0,
       dmg: mode === 'paw' ? (def.pawDmg || 260)
         : mode === 'nuke' ? (def.nukeDmg || 520)
-        : mode === 'torture' ? (def.tortureDmg || 90)
+        : mode === 'big' ? (def.bigDmg || 420) * (.5 + k)
         : (def.barrageDmg || 150),
       pierce: def.pawPierce || 8, pierces: 0,
       nukeR: def.nukeR || 9, nukeBreakR: def.nukeBreakR || 7,
-      tortureTick: def.tortureTick || 70, tortureTime: def.tortureTime || 5,
+      bigR: (def.bigR || 9) * (.7 + k * .6), bigTick: def.bigTick || 90, bigTime: def.bigTime || 6,
       noSelfDamage: true, ownerIsLocal: true
     };
     this.projectiles.push(pr);
@@ -8057,6 +8072,34 @@ const Game = {
         return;
       }
       if (this.effects) this.effects.impact(point, normal, 'concrete');
+      return;
+    }
+    if (mode === 'big') {
+      /* КРОВАВЫЙ ШАР: гигантский — взрыв боли, разрушение карты, прилипание */
+      const R = pr.bigR || 9;
+      if (this.effects) { this.effects.explosion(point.x, point.y, point.z, R, [0xd41f2a, 0x2a0308]); this.effects.goreBurst && this.effects.goreBurst(point.x, point.y, point.z, R); }
+      this.breakMapAt(point.x, point.y, point.z, R * .8, 500);
+      Audio3D_SFX.explosionAt(point.x, point.y, point.z);
+      if (this.horde) for (const z of this.horde.list) {
+        if (!z.alive || z.dying) continue;
+        const dd = Math.hypot(z.pos.x - point.x, (z.pos.y + 1) - point.y, z.pos.z - point.z);
+        if (dd > R) continue;
+        const kk = 1 - dd / R;
+        z.takeDamage(pr.dmg * (.5 + kk * .5), 'body', { x: z.pos.x - point.x, y: 0, z: z.pos.z - point.z });
+        this.player.damageDealt += pr.dmg * .5;
+        if (z.alive && !z.dying) { z.vel.y = 10 * kk + 3; }
+      }
+      if (this.mode === CS.MODE.ONLINE) {
+        for (const rp of this.remotePlayers) {
+          if (!rp.alive) continue;
+          if (Math.hypot(rp.pos.x - point.x, rp.pos.z - point.z) < R) this.sendPvpHit(pr.dmg, 'body', true, rp, 'bloodpaw');
+        }
+        Net.send({ t: 'boom', from: Net.selfId(), x: +point.x.toFixed(2), y: +point.y.toFixed(2), z: +point.z.toFixed(2), r: R, c: [0xd41f2a, 0x2a0308] });
+      }
+      /* шар остаётся на месте как «пульсирующая боль» — тикающий урон по площади */
+      pr.stuckT = pr.bigTime || 6;
+      pr.vel.x = pr.vel.y = pr.vel.z = 0;
+      pr.grav = 0;
       return;
     }
     if (mode === 'nuke') {

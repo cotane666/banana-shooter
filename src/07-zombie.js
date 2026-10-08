@@ -2,6 +2,82 @@
    07 — ZOMBIES: horde AI (flow field + steering), animation, damage
    ============================================================ */
 
+/* ============================================================
+   УЛЬТРА-ГРАФИКА: раны на конечностях, отрыв конечностей и рэгдолл.
+   Всё это включается ТОЛЬКО при пресете «УЛЬТРА» (Game._gfxUltra).
+   ============================================================ */
+function zombieUltra() { return (typeof Game !== 'undefined' && Game && Game._gfxUltra) === true; }
+
+/* текстура раны/отметины (тёмно-багровое пятно) — общая на всех */
+let _woundTex = null;
+function zombieWoundTexture() {
+  if (_woundTex) return _woundTex;
+  const S = 48; const c = document.createElement('canvas'); c.width = c.height = S;
+  const x = c.getContext('2d');
+  x.clearRect(0, 0, S, S);
+  const g = x.createRadialGradient(S / 2, S / 2, 1, S / 2, S / 2, S / 2);
+  g.addColorStop(0, 'rgba(120,8,8,.98)');
+  g.addColorStop(.45, 'rgba(90,10,10,.85)');
+  g.addColorStop(.8, 'rgba(60,8,8,.35)');
+  g.addColorStop(1, 'rgba(50,6,6,0)');
+  x.fillStyle = g; x.beginPath(); x.arc(S / 2, S / 2, S / 2, 0, 7); x.fill();
+  for (let i = 0; i < 5; i++) {
+    x.strokeStyle = 'rgba(150,20,20,.5)'; x.lineWidth = 2;
+    x.beginPath(); x.moveTo(S / 2, S / 2);
+    x.lineTo(S / 2 + (Math.random() - .5) * S, S / 2 + (Math.random() - .5) * S); x.stroke();
+  }
+  _woundTex = new THREE.CanvasTexture(c);
+  _woundTex.colorSpace = THREE.SRGBColorSpace;
+  return _woundTex;
+}
+let _woundMat = null;
+let _woundGeo = null;
+function zombieWoundMat() {
+  if (!_woundMat) _woundMat = new THREE.MeshBasicMaterial({ map: zombieWoundTexture(), transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -6, side: THREE.DoubleSide });
+  return _woundMat;
+}
+
+/* свободные оторванные конечности (физика + затухание), общие на всю игру */
+const ZOMBIE_LIMB_DEBRIS = [];
+function spawnLimbDebris(scene, part, dir) {
+  if (!scene || !part) return;
+  scene.add(part);
+  const d = dir || { x: 0, y: 0, z: 0 };
+  const dl = Math.hypot(d.x, d.z) || 1;
+  ZOMBIE_LIMB_DEBRIS.push({
+    mesh: part, life: 3.2, max: 3.2,
+    vel: { x: (d.x / dl) * U.rand(2, 5) + U.rand(-2, 2), y: U.rand(3, 6.5), z: (d.z / dl) * U.rand(2, 5) + U.rand(-2, 2) },
+    spin: { x: U.rand(-10, 10), y: U.rand(-10, 10), z: U.rand(-10, 10) },
+    grounded: false
+  });
+}
+function updateLimbDebris(dt, world) {
+  for (let i = ZOMBIE_LIMB_DEBRIS.length - 1; i >= 0; i--) {
+    const b = ZOMBIE_LIMB_DEBRIS[i];
+    b.life -= dt;
+    if (b.life <= 0) {
+      if (b.mesh.parent) b.mesh.parent.remove(b.mesh);
+      ZOMBIE_LIMB_DEBRIS.splice(i, 1);
+      continue;
+    }
+    b.vel.y -= 20 * dt;
+    const p = b.mesh.position;
+    p.x += b.vel.x * dt; p.y += b.vel.y * dt; p.z += b.vel.z * dt;
+    let gy = 0;
+    if (world && world.groundAt) gy = world.groundAt(p.x, p.z, p.y + 1) || 0;
+    if (p.y <= gy) {
+      p.y = gy + .06;
+      if (Math.abs(b.vel.y) > 1.5) { b.vel.y *= -.35; b.vel.x *= .6; b.vel.z *= .6; }
+      else { b.vel.y = 0; b.vel.x *= .82; b.vel.z *= .82; b.grounded = true; }
+      b.spin.x *= .6; b.spin.y *= .6; b.spin.z *= .6;
+    }
+    b.mesh.rotation.x += b.spin.x * dt;
+    b.mesh.rotation.y += b.spin.y * dt;
+    b.mesh.rotation.z += b.spin.z * dt;
+    if (b.life < .8) b.mesh.scale.multiplyScalar(1 - dt * 1.2);
+  }
+}
+
 /* ---------------- procedural zombie mesh ---------------- */
 /* helper: a box mesh (centre-anchored) for boss builds */
 function mkBox(w, h, d, color, x, y, z) {
@@ -671,6 +747,11 @@ class Zombie {
     this.group = buildZombieMesh(type);
     this.group.scale.setScalar(this.scale);
     this.parts = this.group.userData.parts;
+
+    /* ---- УЛЬТРА: раны на конечностях, отрыв конечностей, рэгдолл ---- */
+    this.wounds = [];              // { part, mesh, life }
+    this.severed = { armL: false, armR: false, legL: false, legR: false, head: false };
+    this.ragdoll = null;           // физика тела после смерти (ультра)
   }
 
   /* local-space hitboxes (scaled) */
@@ -684,11 +765,62 @@ class Zombie {
         { part: 'body', cx: 0, cy: 2.6 * s, cz: 0, hw: 2.6 * s, hh: 2.6 * s, hd: 2.4 * s }
       ];
     }
-    return [
+    const sev = this.severed || {};
+    const out = [
       { part: 'head', cx: 0, cy: 1.52 * s, cz: 0, hw: .17 * s, hh: .17 * s, hd: .17 * s },
-      { part: 'body', cx: 0, cy: 1.02 * s, cz: 0, hw: .29 * s, hh: .34 * s, hd: .17 * s },
-      { part: 'legs', cx: 0, cy: .44 * s, cz: 0, hw: .25 * s, hh: .44 * s, hd: .13 * s }
+      { part: 'body', cx: 0, cy: 1.02 * s, cz: 0, hw: .29 * s, hh: .34 * s, hd: .17 * s }
     ];
+    if (!sev.armL) out.push({ part: 'armL', cx: -.35 * s, cy: 1.01 * s, cz: 0, hw: .11 * s, hh: .37 * s, hd: .11 * s });
+    if (!sev.armR) out.push({ part: 'armR', cx:  .35 * s, cy: 1.01 * s, cz: 0, hw: .11 * s, hh: .37 * s, hd: .11 * s });
+    if (!sev.legL) out.push({ part: 'legL', cx: -.14 * s, cy: .44 * s, cz: 0, hw: .13 * s, hh: .42 * s, hd: .13 * s });
+    if (!sev.legR) out.push({ part: 'legR', cx:  .14 * s, cy: .44 * s, cz: 0, hw: .13 * s, hh: .42 * s, hd: .13 * s });
+    /* если обе ноги оторваны — тело всё ещё можно бить (общий хитбокс таза) */
+    if (sev.legL && sev.legR) out.push({ part: 'legs', cx: 0, cy: .42 * s, cz: 0, hw: .25 * s, hh: .30 * s, hd: .13 * s });
+    return out;
+  }
+
+  /* УЛЬТРА: попадание в живую конечность — отметина-рана */
+  addWound(partName) {
+    if (!zombieUltra()) return;
+    const pivot = this.parts[partName];
+    if (!pivot || this.severed[partName]) return;
+    this._wounds = this._wounds || 0;
+    if (this._wounds >= 12) return;
+    this._wounds++;
+    if (!_woundGeo) _woundGeo = new THREE.PlaneGeometry(1, 1);
+    const q = new THREE.Mesh(_woundGeo, zombieWoundMat());
+    q.userData.sharedGeo = true;   // общая геометрия/материал — не диспозить индивидуально
+    q.userData.sharedMat = true;
+    const sz = .16 * (this.scale || 1);
+    q.scale.setScalar(sz * U.rand(.8, 1.4));
+    q.position.set(U.rand(-.09, .09), -U.rand(.18, .62), -.085);
+    q.rotation.set(U.rand(0, 3), U.rand(0, 3), U.rand(0, 3));
+    pivot.add(q);
+    (this.wounds || (this.wounds = [])).push(q);
+  }
+
+  /* УЛЬТРА: шанс ОТОРВАТЬ конечность и швырнуть её как обломок */
+  maybeSever(partName, fromDir) {
+    if (!zombieUltra()) return false;
+    if (this.severed[partName]) return false;
+    const pivot = this.parts[partName];
+    if (!pivot) return false;
+    this.severed[partName] = true;
+    /* мировая трансформация отрываемой конечности */
+    pivot.updateWorldMatrix(true, false);
+    const wp = new THREE.Vector3(), wq = new THREE.Quaternion(), ws = new THREE.Vector3();
+    pivot.matrixWorld.decompose(wp, wq, ws);
+    this.group.remove(pivot);
+    pivot.position.copy(wp); pivot.quaternion.copy(wq); pivot.scale.copy(ws);
+    const scene = this.group.parent;
+    spawnLimbDebris(scene, pivot, fromDir);
+    /* брызги крови на месте отрыва */
+    const gm = this.game;
+    if (gm && gm.effects) {
+      gm.effects.bloodBurst({ x: wp.x, y: wp.y, z: wp.z }, fromDir || { x: 0, y: 0, z: 0 }, 18);
+      gm.effects.bloodBurst({ x: wp.x, y: wp.y - .3, z: wp.z }, fromDir || { x: 0, y: 0, z: 0 }, 12);
+    }
+    return true;
   }
 
   worldToLocal(p) {
@@ -722,7 +854,7 @@ class Zombie {
     }
     let mul = 1;
     if (part === 'head') mul = CFG.headshotMultiplier;
-    else if (part === 'legs') mul = CFG.limbMultiplier;
+    else if (part === 'legs' || part === 'legL' || part === 'legR') mul = CFG.limbMultiplier;
     let dmg = amount * mul * (this.dmgTakenMul || 1);
     // armoured enemies (the robot zombie) soak a share of every hit
     if (this.armor > 0) dmg *= (1 - this.armor);
@@ -736,6 +868,18 @@ class Zombie {
         dmg *= (1 - (this.def.shieldReduction === undefined ? .92 : this.def.shieldReduction));
         this.blockFlash = .1;
       }
+    }
+    /* ---- УЛЬТРА: отметина-рана на конечности + шанс оторвать её ---- */
+    const limb = (part === 'armL' || part === 'armR' || part === 'legL' || part === 'legR');
+    if (zombieUltra() && limb && !this.severed[part]) {
+      this.addWound(part);
+      /* шанс отрыва: выше у конечностей с малым остатком HP и у сильных выстрелов */
+      const hpFrac = Math.max(0, this.health / Math.max(1, this.maxHealth));
+      let chance = .12 + (1 - hpFrac) * .30 + Math.min(.18, dmg / Math.max(1, this.maxHealth) * .25);
+      if (fromDir && (fromDir.x || fromDir.z)) chance += .05;
+      if (this.isBoss || this.isMiniBoss) chance *= .35;      // боссы почти не теряют конечности
+      if (dmg >= this.health) chance = Math.max(chance, .85); // смертельный выстрел в конечность
+      if (Math.random() < chance) this.maybeSever(part, fromDir);
     }
     this.health -= dmg;
     this.hitFlash = .12;
@@ -751,6 +895,14 @@ class Zombie {
     this.deadT = 0;
     this.fallDir = headshot ? U.rand(-1, 1) : U.rand(-1, 1);
     this.fallSpeed = U.rand(2.2, 3.4);
+    /* ---- УЛЬТРА: рэгдолл — тело падает с физикой (толчок + вращение) ---- */
+    if (zombieUltra() && !this.ragdoll) {
+      this.ragdoll = {
+        vel: { x: U.rand(-2.2, 2.2), y: U.rand(2.4, 5.2), z: U.rand(-2.2, 2.2) },
+        spin: { x: U.rand(-7, 7), y: U.rand(-5, 5), z: U.rand(-6, 6) },
+        grounded: false, settle: 0
+      };
+    }
     Bus.emit('zombieDied', this, headshot);
   }
 
@@ -796,6 +948,34 @@ class Zombie {
   update(dt, ctx) {
     if (this.dying) {
       this.deadT += dt;
+      /* УЛЬТРА: РЭГДОЛЛ — тело падает с физикой, крутится, скользит и оседает */
+      if (this.ragdoll) {
+        const r = this.ragdoll;
+        if (!r.grounded) {
+          r.vel.y -= 22 * dt;
+          this.pos.x += r.vel.x * dt;
+          this.pos.y += r.vel.y * dt;
+          this.pos.z += r.vel.z * dt;
+          let gy = 0;
+          if (ctx && ctx.world && ctx.world.groundAt) gy = ctx.world.groundAt(this.pos.x, this.pos.z, this.pos.y + 1) || 0;
+          if (this.pos.y <= gy) {
+            this.pos.y = gy;
+            if (Math.abs(r.vel.y) > 2) { r.vel.y *= -.32; r.vel.x *= .6; r.vel.z *= .6; }
+            else { r.vel.y = 0; r.vel.x *= .8; r.vel.z *= .8; r.settle += dt; if (r.settle > .25) r.grounded = true; }
+            r.spin.x *= .55; r.spin.y *= .55; r.spin.z *= .55;
+          }
+        } else {
+          r.vel.x *= .9; r.vel.z *= .9;
+          this.pos.x += r.vel.x * dt; this.pos.z += r.vel.z * dt;
+        }
+        this.group.rotation.x += r.spin.x * dt;
+        this.group.rotation.y += r.spin.y * dt;
+        this.group.rotation.z += r.spin.z * dt;
+        this.group.position.set(this.pos.x, this.pos.y, this.pos.z);
+        const fade = U.clamp(1 - (this.deadT - 3.2) / 1.0, 0, 1);
+        if (this.deadT > 3.0) this.group.scale.setScalar(this.scale * U.clamp(fade, .01, 1));
+        return;
+      }
       // fall over
       const k = U.clamp(this.deadT * this.fallSpeed, 0, 1);
       const fall = Math.sin(k * Math.PI * .5);
@@ -1135,6 +1315,27 @@ class Zombie {
   remoteVisualTick(dt, player) {
     if (this.dying) {
       this.deadT += dt;
+      /* УЛЬТРА: рэгдолл (клиент видит так же, как хост) */
+      if (this.ragdoll) {
+        const r = this.ragdoll;
+        if (!r.grounded) {
+          r.vel.y -= 22 * dt;
+          this.pos.x += r.vel.x * dt; this.pos.y += r.vel.y * dt; this.pos.z += r.vel.z * dt;
+          let gy = 0; if (Game && Game.world && Game.world.groundAt) gy = Game.world.groundAt(this.pos.x, this.pos.z, this.pos.y + 1) || 0;
+          if (this.pos.y <= gy) {
+            this.pos.y = gy;
+            if (Math.abs(r.vel.y) > 2) { r.vel.y *= -.32; r.vel.x *= .6; r.vel.z *= .6; } else { r.vel.y = 0; r.settle += dt; if (r.settle > .25) r.grounded = true; }
+            r.spin.x *= .55; r.spin.y *= .55; r.spin.z *= .55;
+          }
+        }
+        this.group.rotation.x += r.spin.x * dt;
+        this.group.rotation.y += r.spin.y * dt;
+        this.group.rotation.z += r.spin.z * dt;
+        this.group.position.set(this.pos.x, this.pos.y, this.pos.z);
+        const fade = U.clamp(1 - (this.deadT - 3.2) / 1.0, 0, 1);
+        if (this.deadT > 3.0) this.group.scale.setScalar(this.scale * U.clamp(fade, .01, 1));
+        return;
+      }
       const k = U.clamp(this.deadT * this.fallSpeed, 0, 1);
       const fall = Math.sin(k * Math.PI * .5);
       this.group.rotation.x = -fall * Math.PI * .5 * (this.fallDir >= 0 ? 1 : -1);
@@ -1190,20 +1391,23 @@ class Zombie {
     const amp = .55 * bob;
     const stagger = this.staggerT > 0 ? this.staggerT * 2.2 : 0;
 
-    p.legL.rotation.x = Math.sin(ph) * amp;
-    p.legR.rotation.x = -Math.sin(ph) * amp;
+    /* оторванные конечности не анимируем */
+    const sev = this.severed || {};
+    if (!sev.legL) p.legL.rotation.x = Math.sin(ph) * amp;
+    if (!sev.legR) p.legR.rotation.x = -Math.sin(ph) * amp;
     // arms reaching forward (classic zombie). A limb hangs DOWN from its pivot,
     // so a POSITIVE rotation.x swings it forward (-Z, the way the zombie faces);
     // a negative value would point the arms behind its back.
     const reach = this.type === 'runner' ? 1.15 : 1.5;
-    p.armL.rotation.x = reach + Math.sin(ph + 1) * amp * .8 + stagger * U.rand(0, 1);
-    p.armR.rotation.x = reach + Math.sin(ph + 2.2) * amp * .8;
-    p.armL.rotation.z = .12; p.armR.rotation.z = -.12;
+    if (!sev.armL) p.armL.rotation.x = reach + Math.sin(ph + 1) * amp * .8 + stagger * U.rand(0, 1);
+    if (!sev.armR) p.armR.rotation.x = reach + Math.sin(ph + 2.2) * amp * .8;
+    if (!sev.armL) p.armL.rotation.z = .12;
+    if (!sev.armR) p.armR.rotation.z = -.12;
     // attack lunge
     if (this.attackT > 0) {
       const k = 1 - Math.abs(this.attackT / .38 - .5) * 2;
-      p.armL.rotation.x = reach + k * .9;
-      p.armR.rotation.x = reach + k * .9;
+      if (!sev.armL) p.armL.rotation.x = reach + k * .9;
+      if (!sev.armR) p.armR.rotation.x = reach + k * .9;
     }
     // body sway + hit reaction
     const sway = Math.sin(ph * 2) * .045 * bob;
@@ -1286,7 +1490,10 @@ class Zombie {
 
   dispose(scene) {
     scene.remove(this.group);
-    this.group.traverse(o => { if (o.geometry) o.geometry.dispose(); });
+    this.group.traverse(o => {
+      if (o.userData && (o.userData.sharedGeo || o.userData.sharedMat)) return;  // общие ресурсы ран
+      if (o.geometry) o.geometry.dispose();
+    });
     if (this.moundMesh) { if (this.moundMesh.parent) this.moundMesh.parent.remove(this.moundMesh); this.moundMesh.geometry.dispose(); this.moundMesh.material.dispose(); this.moundMesh = null; }
     if (this.iceShell) { if (this.iceShell.parent) this.iceShell.parent.remove(this.iceShell); this.iceShell.geometry.dispose(); this.iceShell.material.dispose(); this.iceShell = null; }
   }
@@ -1514,6 +1721,8 @@ class Horde {
       if (z.isTarget) continue;
       if (z.dying && z.deadT > 4.2) { z.dispose(this.scene); this.list.splice(i, 1); }
     }
+    /* УЛЬТРА: физика оторванных конечностей (общие обломки) */
+    if (typeof updateLimbDebris === 'function') updateLimbDebris(dt, this.world);
   }
 
   get aliveCount() { let n = 0; for (const z of this.list) if (z.alive && !z.dying) n++; return n; }
@@ -1523,6 +1732,11 @@ class Horde {
     if (typeof BrainBoss !== 'undefined' && BrainBoss.active) BrainBoss.cleanup();
     for (const z of this.list) z.dispose(this.scene);
     this.list.length = 0;
+    /* УЛЬТРА: убрать оторванные конечности со сцены */
+    if (typeof ZOMBIE_LIMB_DEBRIS !== 'undefined') {
+      for (const b of ZOMBIE_LIMB_DEBRIS) { if (b.mesh.parent) b.mesh.parent.remove(b.mesh); }
+      ZOMBIE_LIMB_DEBRIS.length = 0;
+    }
   }
 
   /* Ray-vs-zombie hit test. Returns {zombie, t, part, point, dist} or null. */

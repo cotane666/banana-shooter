@@ -9101,7 +9101,7 @@ const Game = {
       } else {
         zHit.zombie.takeDamage(dmg, zHit.part, dir);
       }
-      p.damageDealt += dmg * (zHit.part === 'head' ? CFG.headshotMultiplier : zHit.part === 'legs' ? CFG.limbMultiplier : 1);
+      p.damageDealt += dmg * (zHit.part === 'head' ? CFG.headshotMultiplier : (zHit.part === 'legs' || zHit.part === 'legL' || zHit.part === 'legR') ? CFG.limbMultiplier : 1);
       this.hitEffect(zHit.point, dir, zHit.part, zHit.part === 'head');
       Audio3D_SFX.hit(zHit.point.x, zHit.point.y, zHit.point.z, zHit.part === 'head');
       this.effects.tracer(muzzleWorld, zHit.point, 1, true, _shotCol);
@@ -9215,7 +9215,8 @@ const Game = {
     const theme = (this.player && this.player.skinTheme) || null;
     if (theme === 'flesh') this.effects.fleshImpact(point, dir);
     else if (theme === 'galaxy') this.effects.galaxyImpact(point, dir);
-    this.effects.bloodBurst(point, dir, headshot ? 14 : part === 'legs' ? 5 : 8);
+    const limb = (part === 'legs' || part === 'legL' || part === 'legR' || part === 'armL' || part === 'armR');
+    this.effects.bloodBurst(point, dir, headshot ? 14 : limb ? 7 : 8);
     UI.hitmark(false);
     this._hitmarkT = U.now();
   },

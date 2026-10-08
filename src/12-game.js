@@ -10493,7 +10493,7 @@ const Game = {
           if (typeof UI !== 'undefined' && UI.edPanelSync) UI.edPanelSync();
         }
       }
-      if (this.effects) this.effects.update(dt);
+      if (this.effects) this.effects.update(dt, this.camera);
       if (typeof MapElements !== 'undefined' && MapElements.list.length) MapElements.update(dt, this);
       this.cameraUpdate(dt);
       this.renderFrame(dt);
@@ -10513,7 +10513,7 @@ const Game = {
           Net.send({ t: 'drone', st: 'pos', from: Net.selfId(), x: +dr.pos.x.toFixed(2), y: +dr.pos.y.toFixed(2), z: +dr.pos.z.toFixed(2), yw: +dr.yaw.toFixed(2) });
         }
       }
-      if (this.effects) this.effects.update(dt);
+      if (this.effects) this.effects.update(dt, this.camera);
       this.updateSpamtonCombo(dt);
       this.updateProjectiles(dt);
       this.updateSlashProjectiles(dt);
@@ -10722,7 +10722,7 @@ const Game = {
     if (typeof BrainBoss !== 'undefined' && BrainBoss.active) BrainBoss.update(dt);
 
     // ---- effects ----
-    if (this.effects) this.effects.update(dt);
+    if (this.effects) this.effects.update(dt, this.camera);
     /* РЕДАКТОР КАРТ: обновляем курсор и подсветку */
     if (this.mode === CS.MODE.EDITOR && typeof MapEditor !== 'undefined') MapEditor.update(dt);
     /* ИГРОВЫЕ ЭЛЕМЕНТЫ КАРТ: движущиеся платформы/шипы/телепорты */

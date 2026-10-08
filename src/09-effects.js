@@ -15,29 +15,38 @@ class Effects {
     this.particles = [];
     this.decals = [];
     this.maxDecals = quality === 0 ? 40 : quality === 1 ? 90 : 150;
-    this.maxParticles = quality === 0 ? 120 : quality === 1 ? 260 : 420;
+    this.maxParticles = quality === 0 ? 220 : quality === 1 ? 520 : 1000;
     /* пресет графики домножает лимиты (низкая графика = меньше частиц/декалей) */
     const pm = (CFG && CFG.particleMul) || 1;
     const dm = (CFG && CFG.decalMul) || 1;
     this.maxDecals = Math.max(12, Math.round(this.maxDecals * dm));
-    this.maxParticles = Math.max(40, Math.round(this.maxParticles * pm));
+    this.maxParticles = Math.max(60, Math.round(this.maxParticles * pm));
+    /* множитель КОЛИЧЕСТВА частиц: больше частиц на пресетах повыше */
+    this.partMul = Math.max(0.5, pm);
 
     // tracer: thin elongated box reused from a pool
     this.tracerGeo = new THREE.BoxGeometry(.03, .03, 1);
     this.tracerMat = new THREE.MeshBasicMaterial({ color: 0xffe9a8, transparent: true, opacity: .85, blending: THREE.AdditiveBlending, depthWrite: false });
     this.tracerMat2 = new THREE.MeshBasicMaterial({ color: 0xffd070, transparent: true, opacity: .55, blending: THREE.AdditiveBlending, depthWrite: false });
 
-    this.particleGeo = new THREE.BoxGeometry(1, 1, 1);
-    this.bloodMat = new THREE.MeshBasicMaterial({ color: 0x8a1210 });
-    this.sparkMat = new THREE.MeshBasicMaterial({ color: 0xffcc55, blending: THREE.AdditiveBlending, transparent: true, depthWrite: false });
-    this.vsparkMat = new THREE.MeshBasicMaterial({ color: 0xc060ff, blending: THREE.AdditiveBlending, transparent: true, depthWrite: false });
-    this.smokeMat = new THREE.MeshBasicMaterial({ color: 0x9a9a94, transparent: true, opacity: .4, depthWrite: false });
-    this.bananaMat = new THREE.MeshLambertMaterial({ color: 0xf2c93b, emissive: 0x3a2c08 });
+    this.particleGeo = new THREE.PlaneGeometry(1, 1);   // билборд-квад вместо куба
+    /* мягкая круглая «точка» — частицы выглядят как свечения, а не квадраты */
+    const dot = this._dotTexture();
+    const soft = (color, opts) => new THREE.MeshBasicMaterial(Object.assign({
+      color: color, map: dot, transparent: true, depthWrite: false,
+      side: THREE.DoubleSide, alphaTest: 0.01
+    }, opts || {}));
+    this.bloodMat = soft(0x8a1210, { blending: THREE.NormalBlending, opacity: .95 });
+    this.sparkMat = soft(0xffcc55, { blending: THREE.AdditiveBlending });
+    this.vsparkMat = soft(0xc060ff, { blending: THREE.AdditiveBlending });
+    this.smokeMat = soft(0x9a9a94, { blending: THREE.NormalBlending, opacity: .4 });
+    this.bananaMat = new THREE.MeshBasicMaterial({ color: 0xf2c93b, map: dot, transparent: true, depthWrite: false, side: THREE.DoubleSide, alphaTest: 0.01 });
     /* уникальные частицы [BIG SHOT] в стиле Спамтона */
-    this.spamtonGoldMat = new THREE.MeshBasicMaterial({ color: 0xffd21e, blending: THREE.AdditiveBlending, transparent: true, depthWrite: false });
-    this.spamtonPinkMat = new THREE.MeshBasicMaterial({ color: 0xff5fb0, transparent: true, depthWrite: false });
-    this.spamtonCashMat = new THREE.MeshBasicMaterial({ color: 0x39d94a, transparent: true, depthWrite: false, side: THREE.DoubleSide });
-    this.spamtonPhoneMat = new THREE.MeshBasicMaterial({ color: 0xf7f7ff, transparent: true, depthWrite: false, side: THREE.DoubleSide });
+    this.spamtonGoldMat = soft(0xffd21e, { blending: THREE.AdditiveBlending });
+    this.spamtonPinkMat = soft(0xff5fb0, { blending: THREE.NormalBlending, opacity: .95 });
+    /* купюры и «телефонные» панельки — прямоугольные, без круглой маски */
+    this.spamtonCashMat = new THREE.MeshBasicMaterial({ color: 0x39d94a, transparent: true, opacity: .95, depthWrite: false, side: THREE.DoubleSide });
+    this.spamtonPhoneMat = new THREE.MeshBasicMaterial({ color: 0xf7f7ff, transparent: true, opacity: .95, depthWrite: false, side: THREE.DoubleSide });
 
     this.decalGeo = new THREE.PlaneGeometry(1, 1);
     this.decalMats = {
@@ -237,7 +246,7 @@ class Effects {
   /* УЛЬТА МЕЧА РОКОЧУЩЕГО РЫЦАРЯ: объёмный БЕЛЫЙ разрез вдоль полосы (в мире).
      `mini` — короткая ДУГА-ПОЛУМЕСЯЦ (след меча) для обычного удара ЛКМ. */
   _whiteSparkMat() {
-    if (!this._whiteSpark) this._whiteSpark = new THREE.MeshBasicMaterial({ color: 0xffffff, blending: THREE.AdditiveBlending, transparent: true, depthWrite: false });
+    if (!this._whiteSpark) this._whiteSpark = new THREE.MeshBasicMaterial({ color: 0xffffff, map: this._dotTexture(), blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, side: THREE.DoubleSide, alphaTest: 0.01 });
     return this._whiteSpark;
   }
 
@@ -385,9 +394,10 @@ class Effects {
      текстурой материала, разлетаются и падают под гравитацией. */
   debrisBurst(x, y, z, color, size, mat, count) {
     const c = color === undefined ? 0xb8b2a6 : color;
+    const pm = this.partMul || 1;
     const lowGfx = (this.quality === 0 || ((CFG && CFG.particleMul) < .6));
-    const nChunks = count !== undefined ? count : (lowGfx ? 4 : 8);
-    const nDust = lowGfx ? 5 : 9;
+    const nChunks = count !== undefined ? count : (lowGfx ? 4 : Math.round(10 * pm));
+    const nDust = lowGfx ? 5 : Math.round(10 * pm);
     // пыль (серые клубы, всплывают медленно)
     for (let i = 0; i < nDust; i++) {
       this.particle(x + U.rand(-.6, .6), y + U.rand(-.4, .7), z + U.rand(-.6, .6),
@@ -415,8 +425,25 @@ class Effects {
     }
   }
 
-  _holeTexture(col) {
-    const c = makeCanvas(64); const x = c.getContext('2d');
+  /* мягкая круглая точка для частиц (радиальный градиент) — так частицы
+     выглядят как свечения, а не как квадраты */  _dotTexture() {
+    if (this._dotTex) return this._dotTex;
+    const S = 64;
+    const c = makeCanvas(S); const x = c.getContext('2d');
+    x.clearRect(0, 0, S, S);
+    const g = x.createRadialGradient(S / 2, S / 2, 0, S / 2, S / 2, S / 2);
+    g.addColorStop(0, 'rgba(255,255,255,1)');
+    g.addColorStop(.35, 'rgba(255,255,255,.85)');
+    g.addColorStop(.7, 'rgba(255,255,255,.22)');
+    g.addColorStop(1, 'rgba(255,255,255,0)');
+    x.fillStyle = g; x.beginPath(); x.arc(S / 2, S / 2, S / 2, 0, 7); x.fill();
+    const t = new THREE.CanvasTexture(c);
+    t.colorSpace = THREE.SRGBColorSpace;
+    this._dotTex = t;
+    return t;
+  }
+
+  _holeTexture(col) {    const c = makeCanvas(64); const x = c.getContext('2d');
     x.clearRect(0, 0, 64, 64);
     const g = x.createRadialGradient(32, 32, 1, 32, 32, 22);
     g.addColorStop(0, '#000');
@@ -587,10 +614,11 @@ class Effects {
   /* a sharp metallic spark (disc ricochet, wall hit) */
   spark(pos, normal) {
     if (!pos) return;
-    for (let i = 0; i < 4; i++) {
+    const n = Math.round(5 * (this.partMul || 1));
+    for (let i = 0; i < n; i++) {
       this.particle(pos.x, pos.y, pos.z,
-        (normal ? normal.x : 0) * U.rand(0, 2) + U.rand(-2, 2),
-        U.rand(.4, 2.4), (normal ? normal.z : 0) * U.rand(0, 2) + U.rand(-2, 2),
+        (normal ? normal.x : 0) * U.rand(0, 2) + U.rand(-2.5, 2.5),
+        U.rand(.4, 2.4), (normal ? normal.z : 0) * U.rand(0, 2) + U.rand(-2.5, 2.5),
         U.rand(.03, .08), 'spark', U.rand(.2, .45));
     }
     this.decal(pos.x, pos.y, pos.z, normal ? normal.x : 0, normal ? normal.y : 1, normal ? normal.z : 0, .2, 'metal');
@@ -1014,14 +1042,21 @@ class Effects {
     if (this.particles.length > this.maxParticles) return null;
     let m = this.particlePool.pop();
     const mat = type === 'blood' ? this.bloodMat : type === 'smoke' ? this.smokeMat
-      : type === 'banana' ? this.bananaMat : type === 'vspark' ? this.vsparkMat : this.sparkMat;
+      : type === 'banana' ? this.bananaMat : type === 'vspark' ? this.vsparkMat
+      : type === 'spamtonPipis' ? this.spamtonPinkMat : type === 'spamtonCash' ? this.spamtonCashMat
+      : type === 'spamtonPhone' ? this.spamtonPhoneMat : this.sparkMat;
     if (!m) m = new THREE.Mesh(this.particleGeo, mat);
     m.material = mat;
     m.position.set(x, y, z);
+    /* billboard: плоские «свечения» всегда смотрят в камеру (кроме купюр/панелек,
+       которым нужен собственный 3D-разворот) */
+    const bb = !(type === 'spamtonCash' || type === 'spamtonPhone');
+    if (bb && this._cam) m.quaternion.copy(this._cam.quaternion);
+    else m.rotation.set(0, 0, 0);
     m.scale.setScalar(size);
     m.visible = true;
     if (m.parent !== this.scene) this.scene.add(m);
-    this.particles.push({ mesh: m, vx, vy, vz, life: life, max: life, grav: type === 'smoke' ? -1.5 : 16, type });
+    this.particles.push({ mesh: m, vx, vy, vz, life: life, max: life, grav: type === 'smoke' ? -1.5 : 16, type, bb });
     return m;
   }
 
@@ -1038,7 +1073,8 @@ class Effects {
   }
 
   bloodBurst(pos, dir, amount) {
-    amount = amount || 8;
+    const pm = this.partMul || 1;
+    amount = Math.round((amount || 8) * pm);
     for (let i = 0; i < amount; i++) {
       this.particle(pos.x, pos.y, pos.z,
         dir.x * U.rand(1, 5) + U.rand(-2.5, 2.5),
@@ -1144,15 +1180,17 @@ class Effects {
     if (theme === 'galaxy') { this.galaxyImpact(pos, normal); return; }
     const n = normal || { x: 0, y: 1, z: 0 };
     const knight = theme === 'knight';                 // меч рыцаря: БЕЛЫЕ искры
-    for (let i = 0; i < 5; i++) {
+    const pm = this.partMul || 1;
+    const nSp = Math.round(8 * pm);
+    for (let i = 0; i < nSp; i++) {
       const p = this.particle(pos.x, pos.y, pos.z,
-        n.x * U.rand(1, 5) + U.rand(-2, 2),
+        n.x * U.rand(1, 5) + U.rand(-2.5, 2.5),
         n.y * U.rand(1, 5) + U.rand(0, 3),
-        n.z * U.rand(1, 5) + U.rand(-2, 2),
+        n.z * U.rand(1, 5) + U.rand(-2.5, 2.5),
         U.rand(.03, .09), 'spark', U.rand(.12, .3));
       if (knight && p) p.material = this._whiteSparkMat();
     }
-    for (let i = 0; i < 3; i++) {
+    for (let i = 0; i < Math.round(4 * pm); i++) {
       this.particle(pos.x, pos.y, pos.z,
         n.x * U.rand(.4, 2) + U.rand(-1, 1), U.rand(.6, 2.2), n.z * U.rand(.4, 2) + U.rand(-1, 1),
         U.rand(.12, .28), 'smoke', U.rand(.4, .9));
@@ -1275,7 +1313,8 @@ class Effects {
     const key = color + (additive ? 'a' : 's');
     if (!this._tintCache[key]) {
       this._tintCache[key] = new THREE.MeshBasicMaterial({
-        color: color, transparent: true, depthWrite: false,
+        color: color, map: this._dotTexture(), transparent: true, depthWrite: false,
+        side: THREE.DoubleSide, alphaTest: 0.01,
         opacity: additive ? 1 : .55,
         blending: additive ? THREE.AdditiveBlending : THREE.NormalBlending
       });
@@ -1289,15 +1328,25 @@ class Effects {
   explosion(x, y, z, radius, tint, nuke, palette) {
     const sparkMat = tint ? this._tintMat(tint[0], true) : null;
     const smokeMat = tint ? this._tintMat(tint[1], false) : null;
-    for (let i = 0; i < 30; i++) {
+    const pm = this.partMul || 1;
+    const nSpark = Math.round(30 * pm), nSmoke = Math.round(16 * pm);
+    for (let i = 0; i < nSpark; i++) {
       const a = U.rand(0, 6.28), e = U.rand(-.3, 1);
       const p = this.particle(x, y, z, Math.cos(a) * U.rand(2, 12), e * U.rand(3, 12), Math.sin(a) * U.rand(2, 12),
         U.rand(.15, .5), 'spark', U.rand(.3, .8));
       if (sparkMat && p) p.material = sparkMat;
     }
-    for (let i = 0; i < 16; i++) {
+    for (let i = 0; i < nSmoke; i++) {
       const p = this.particle(x, y, z, U.rand(-3, 3), U.rand(1, 5), U.rand(-3, 3), U.rand(.3, .8), 'smoke', U.rand(.8, 1.8));
       if (smokeMat && p) p.material = smokeMat;
+    }
+    /* кольцо-ударная волна: быстро расходящееся кольцо искр вдоль горизонта */
+    const nRing = Math.round(14 * pm);
+    for (let i = 0; i < nRing; i++) {
+      const a = (i / nRing) * 6.28 + U.rand(-.1, .1);
+      const p = this.particle(x, y + .15, z, Math.cos(a) * U.rand(9, 14), U.rand(.4, 1.4), Math.sin(a) * U.rand(9, 14),
+        U.rand(.12, .26), 'spark', U.rand(.28, .5));
+      if (sparkMat && p) p.material = sparkMat;
     }
     const light = new THREE.PointLight(tint ? tint[0] : 0xffaa44, 60, radius * 3, 2);
     light.position.set(x, y, z);
@@ -1509,8 +1558,9 @@ class Effects {
     }
   }
 
-  update(dt) {
+  update(dt, cam) {
     this._t += dt;
+    if (cam) this._cam = cam;
     // tracers
     for (let i = this.tracers.length - 1; i >= 0; i--) {
       const t = this.tracers[i];
@@ -1765,17 +1815,25 @@ class Effects {
         p.mesh.position.y = .02;
         p.vx *= .4; p.vz *= .4; p.vy = 0;
       }
+      /* билборд: свечения держат разворот к камере */
+      if (p.bb && this._cam) p.mesh.quaternion.copy(this._cam.quaternion);
       if (p.type === 'smoke') {
         p.mesh.scale.multiplyScalar(1 + dt * 1.8);
-        if (p.mesh.material.opacity !== undefined && p.mesh.material === this.smokeMat) { }
+        /* дым тускнеет и «пухнет» — стало живее */
+        if (p.mesh.scale.x > 1.2) p.mesh.scale.setScalar(Math.min(p.mesh.scale.x, 2.4));
       }
       if (p.spin) {
         p.mesh.rotation.x += p.spin.x * dt;
         p.mesh.rotation.y += p.spin.y * dt;
         p.mesh.rotation.z += p.spin.z * dt;
       }
-      if (p.life < .25 && p.mesh.material && p.mesh.material.opacity !== undefined && p.type === 'spark') {
-        p.mesh.material = p.mesh.material; // shared material; fade via scale
+      /* КРАСИВЫЙ ФЕЙД: искры/свечения сжимаются и слегка пульсируют к концу жизни */
+      if (p.bb && (p.type === 'spark' || p.type === 'vspark' || p.type === 'spamtonPink')) {
+        const k = U.clamp(p.life / p.max, 0, 1);
+        const shrink = .55 + .45 * k;
+        const flick = 1 + Math.sin((p.life * 40) + p.mesh.position.x) * .12 * (1 - k);
+        p.mesh.scale.setScalar((p._baseScale || (p._baseScale = p.mesh.scale.x)) * shrink * flick);
+      } else if (p.life < .25 && p.type === 'spark') {
         p.mesh.scale.multiplyScalar(.88);
       }
     }

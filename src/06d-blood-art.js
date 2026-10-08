@@ -14,75 +14,135 @@ const BLOOD_DARK = 0x5a0a12;    // тёмно-бордовый
 const PAW_PINK = 0xff6d8a;      // розовые подушечки
 
 /* ---------- модель лапы в руках (первое лицо) ---------- */
+let _clawVainMat = null, _clawGlowMat = null;
 function buildBloodArtClaw() {
   const g = new THREE.Group();
   const flesh = new THREE.MeshLambertMaterial({ color: BLOOD_COL, emissive: 0x2a0408 });
   const dark = new THREE.MeshLambertMaterial({ color: BLOOD_DARK, emissive: 0x120003 });
   const pad = new THREE.MeshLambertMaterial({ color: PAW_PINK, emissive: 0x3a0a14 });
+  if (!_clawVainMat) _clawVainMat = new THREE.MeshBasicMaterial({ color: 0xff3040, transparent: true, opacity: .85, blending: THREE.AdditiveBlending, depthWrite: false });
+  if (!_clawGlowMat) _clawGlowMat = new THREE.MeshBasicMaterial({ color: BLOOD_COL, transparent: true, opacity: .22, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
 
-  // запястье / рука
-  const wrist = new THREE.Mesh(new THREE.BoxGeometry(.16, .15, .20), dark);
-  wrist.position.set(0, -.02, .10);
+  // запястье / рука с «мышцами»
+  const wrist = new THREE.Mesh(new THREE.BoxGeometry(.17, .16, .22), dark);
+  wrist.position.set(0, -.02, .11);
   g.add(wrist);
+  for (let i = -1; i <= 1; i++) {
+    const muscle = new THREE.Mesh(new THREE.CylinderGeometry(.022, .03, .16, 6), flesh);
+    muscle.position.set(i * .045, .03, .11);
+    muscle.rotation.x = .2;
+    g.add(muscle);
+  }
 
   // ладонь
-  const palm = new THREE.Mesh(new THREE.BoxGeometry(.20, .10, .18), flesh);
+  const palm = new THREE.Mesh(new THREE.BoxGeometry(.21, .11, .19), flesh);
   palm.position.set(0, 0, -.05);
   g.add(palm);
-
-  // три «пальца»-когтя спереди
+  // светящиеся вены-полосы на ладони
   for (let i = -1; i <= 1; i++) {
-    const f = new THREE.Mesh(new THREE.BoxGeometry(.045, .07, .16), flesh);
-    f.position.set(i * .06, .015, -.19);
-    f.rotation.x = .12;
-    g.add(f);
-    const claw = new THREE.Mesh(new THREE.ConeGeometry(.028, .10, 6), pad);
-    claw.position.set(i * .06, .0, -.29);
-    claw.rotation.x = Math.PI / 2;
-    g.add(claw);
+    const vain = new THREE.Mesh(new THREE.BoxGeometry(.012, .055, .14), _clawVainMat);
+    vain.position.set(i * .05, .056, -.05);
+    g.add(vain);
   }
-  // большой палец
-  const thumb = new THREE.Mesh(new THREE.BoxGeometry(.05, .07, .12), flesh);
-  thumb.position.set(.12, .0, -.10);
-  thumb.rotation.y = -.5;
-  g.add(thumb);
 
-  // подушечка на ладони (знак лапы Pain Fruit)
-  const padMain = new THREE.Mesh(new THREE.SphereGeometry(.045, 10, 8), pad);
-  padMain.scale.set(1, 1, .4);
-  padMain.position.set(0, .055, -.05);
+  // три «пальца»-когтя спереди — сегментированные
+  for (let i = -1; i <= 1; i++) {
+    const ang = i * .22;
+    const base = new THREE.Mesh(new THREE.BoxGeometry(.048, .075, .11), flesh);
+    base.position.set(i * .062, .018, -.14);
+    base.rotation.x = .1; base.rotation.y = ang;
+    g.add(base);
+    // второй сегмент (фаланга)
+    const seg2 = new THREE.Mesh(new THREE.BoxGeometry(.04, .06, .09), flesh);
+    seg2.position.set(i * .075, .005, -.24);
+    seg2.rotation.x = .28; seg2.rotation.y = ang;
+    g.add(seg2);
+    // острый коготь
+    const claw = new THREE.Mesh(new THREE.ConeGeometry(.03, .13, 6), pad);
+    claw.position.set(i * .085, -.015, -.32);
+    claw.rotation.x = Math.PI / 2 + .35; claw.rotation.y = ang;
+    g.add(claw);
+    // светящаяся вена вдоль пальца
+    const v = new THREE.Mesh(new THREE.BoxGeometry(.008, .012, .10), _clawVainMat);
+    v.position.set(i * .062, .05, -.14);
+    g.add(v);
+  }
+  // большой палец (2 сегмента)
+  const thumb1 = new THREE.Mesh(new THREE.BoxGeometry(.055, .075, .12), flesh);
+  thumb1.position.set(.13, .0, -.08); thumb1.rotation.y = -.55;
+  g.add(thumb1);
+  const thumb2 = new THREE.Mesh(new THREE.BoxGeometry(.045, .06, .1), flesh);
+  thumb2.position.set(.17, -.01, -.16); thumb2.rotation.y = -.7; thumb2.rotation.x = .2;
+  g.add(thumb2);
+  const tclaw = new THREE.Mesh(new THREE.ConeGeometry(.026, .1, 6), pad);
+  tclaw.position.set(.20, -.02, -.22); tclaw.rotation.z = -Math.PI / 2 - .4; tclaw.rotation.y = -.7;
+  g.add(tclaw);
+
+  // подушечки на ладони (знак лапы Pain Fruit)
+  const padMain = new THREE.Mesh(new THREE.SphereGeometry(.05, 12, 9), pad);
+  padMain.scale.set(1.1, 1, .42);
+  padMain.position.set(0, .054, -.04);
   g.add(padMain);
   for (let i = -1; i <= 1; i++) {
-    const toe = new THREE.Mesh(new THREE.SphereGeometry(.02, 8, 6), pad);
-    toe.scale.set(1, 1, .4);
-    toe.position.set(i * .05, .03, -.16);
+    const toe = new THREE.Mesh(new THREE.SphereGeometry(.024, 8, 6), pad);
+    toe.scale.set(1, 1, .42);
+    toe.position.set(i * .058, .032, -.14);
     g.add(toe);
   }
 
-  // слабое красное свечение вокруг лапы
-  const glow = new THREE.Mesh(new THREE.SphereGeometry(.22, 10, 8),
-    new THREE.MeshBasicMaterial({ color: BLOOD_COL, transparent: true, opacity: .18, blending: THREE.AdditiveBlending, depthWrite: false }));
-  glow.position.set(0, .02, -.10);
+  // свечение вокруг лапы
+  const glow = new THREE.Mesh(new THREE.SphereGeometry(.24, 12, 10), _clawGlowMat);
+  glow.position.set(0, .02, -.12);
   g.add(glow);
 
+  // капли крови, свисающие с когтей (визуал)
+  const dripMat = new THREE.MeshLambertMaterial({ color: 0x8a0a12, emissive: 0x300004 });
+  for (let i = -1; i <= 1; i++) {
+    const drip = new THREE.Mesh(new THREE.SphereGeometry(.016, 6, 6), dripMat);
+    drip.scale.set(.8, 1.4, .8);
+    drip.position.set(i * .085, -.09, -.33);
+    g.add(drip);
+  }
+
   g.userData.bloodClaw = true;
+  g.userData.vains = [];
+  g.traverse(o => { if (o.isMesh && o.material === _clawVainMat) { o.userData.vain = true; g.userData.vains.push(o); } });
+  g.userData.glow = glow;
   return g;
 }
 
 /* ---------- знак лапы (плоский отпечаток с подушечками) ---------- */
 function _pawTexture() {
   if (_pawTexture._c) return _pawTexture._c;
-  const S = 128; const c = makeCanvas(S); const x = c.getContext('2d');
+  const S = 256; const c = makeCanvas(S); const x = c.getContext('2d');
   x.clearRect(0, 0, S, S);
   const cx = S / 2, cy = S * .58;
-  x.fillStyle = 'rgba(255,255,255,.96)';
+  /* мягкое свечение позади */
+  const grd = x.createRadialGradient(cx, cy, S * .1, cx, cy, S * .5);
+  grd.addColorStop(0, 'rgba(255,80,90,.55)');
+  grd.addColorStop(.6, 'rgba(200,20,40,.25)');
+  grd.addColorStop(1, 'rgba(120,0,20,0)');
+  x.fillStyle = grd; x.beginPath(); x.arc(cx, cy, S * .5, 0, 7); x.fill();
+  /* объёмная заливка лапы с тенью снизу */
+  const fill = x.createLinearGradient(0, S * .25, 0, S * .9);
+  fill.addColorStop(0, 'rgba(255,235,235,.98)');
+  fill.addColorStop(.55, 'rgba(255,140,150,.96)');
+  fill.addColorStop(1, 'rgba(200,20,45,.96)');
+  x.fillStyle = fill;
   // центральная подушечка
-  x.beginPath(); x.ellipse(cx, cy, S * .20, S * .16, 0, 0, 7); x.fill();
+  x.beginPath(); x.ellipse(cx, cy, S * .205, S * .165, 0, 0, 7); x.fill();
   // четыре пальца
-  const toes = [[-.24, -.20, .085], [-.09, -.30, .09], [.09, -.30, .09], [.24, -.20, .085]];
+  const toes = [[-.25, -.22, .088], [-.09, -.32, .092], [.09, -.32, .092], [.25, -.22, .088]];
   for (const t of toes) {
-    x.beginPath(); x.ellipse(cx + t[0] * S, cy + t[1] * S, S * t[2], S * t[2] * 1.15, 0, 0, 7); x.fill();
+    x.beginPath(); x.ellipse(cx + t[0] * S, cy + t[1] * S, S * t[2], S * t[2] * 1.2, 0, 0, 7); x.fill();
   }
+  /* тёмный контур-обводка, чтобы читалась на фоне */
+  x.lineWidth = S * .022; x.strokeStyle = 'rgba(90,0,15,.85)';
+  x.beginPath(); x.ellipse(cx, cy, S * .205, S * .165, 0, 0, 7); x.stroke();
+  for (const t of toes) { x.beginPath(); x.ellipse(cx + t[0] * S, cy + t[1] * S, S * t[2], S * t[2] * 1.2, 0, 0, 7); x.stroke(); }
+  /* блики на подушечках */
+  x.fillStyle = 'rgba(255,255,255,.7)';
+  x.beginPath(); x.ellipse(cx - S * .06, cy - S * .06, S * .06, S * .035, -.4, 0, 7); x.fill();
   const tx = new THREE.CanvasTexture(c);
   tx.colorSpace = THREE.SRGBColorSpace;
   _pawTexture._c = tx;
@@ -94,45 +154,71 @@ let _pawBodyGeo = null, _pawMat = null, _pawGlowMat = null;
 function buildPawProjectile(kind) {
   const g = new THREE.Group();
   if (!_pawBodyGeo) {
-    _pawBodyGeo = new THREE.SphereGeometry(.24, 14, 12);
+    _pawBodyGeo = new THREE.SphereGeometry(.26, 18, 14);
   }
-  const coreCol = kind === 'big' ? 0xff1030 : BLOOD_COL;
+  const big = kind === 'big';
+  const coreCol = big ? 0xff1030 : BLOOD_COL;
+
+  /* ядро — светящаяся сфера */
+  const core = new THREE.Mesh(new THREE.SphereGeometry(.14, 14, 10),
+    new THREE.MeshBasicMaterial({ color: big ? 0xff5060 : 0xff4050, transparent: true, opacity: .95, blending: THREE.AdditiveBlending, depthWrite: false }));
+  core.position.z = .06;
+  g.add(core);
+
+  /* основной объём — отпечаток лапы (билборд-сфера, смотрит по курсу) */
   const body = new THREE.Mesh(_pawBodyGeo,
     new THREE.MeshBasicMaterial({ color: coreCol, map: _pawTexture(), transparent: true, depthWrite: false, side: THREE.DoubleSide }));
-  body.scale.set(1, 1, .45);
+  body.scale.set(1, 1, .42);
   g.add(body);
-  // ободок-лапа чуть больше и полупрозрачный (объём)
+
+  /* задний ободок-лапа (объём) */
   const halo = new THREE.Mesh(_pawBodyGeo,
-    new THREE.MeshBasicMaterial({ color: kind === 'big' ? 0xff6070 : PAW_PINK, map: _pawTexture(), transparent: true, opacity: .35, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
-  halo.scale.set(1.35, 1.35, .5);
-  halo.position.z = .02;
+    new THREE.MeshBasicMaterial({ color: big ? 0xff6070 : PAW_PINK, map: _pawTexture(), transparent: true, opacity: .32, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
+  halo.scale.set(1.4, 1.4, .48);
+  halo.position.z = -.06;
   g.add(halo);
-  // тёмное ядро сзади, чтобы читался объём
-  const core = new THREE.Mesh(new THREE.SphereGeometry(.12, 10, 8),
-    new THREE.MeshBasicMaterial({ color: 0x300006, transparent: true, opacity: .8, depthWrite: false }));
-  core.position.z = .10;
-  g.add(core);
-  if (kind === 'nuke') {
-    // у «ядерки» — мигающий красный ореол
-    const ring = new THREE.Mesh(new THREE.TorusGeometry(.34, .05, 8, 20),
-      new THREE.MeshBasicMaterial({ color: 0xff3344, transparent: true, opacity: .7, blending: THREE.AdditiveBlending, depthWrite: false }));
-    g.add(ring);
-    g.userData.ring = ring;
+
+  /* кровавый «хвост»-шлейф позади */
+  const trailMat = new THREE.MeshBasicMaterial({ color: 0xff2030, transparent: true, opacity: .45, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
+  const trail = new THREE.Mesh(new THREE.ConeGeometry(.22, .7, 10, 1, true), trailMat);
+  trail.rotation.x = -Math.PI / 2;      // острие назад
+  trail.position.z = .5;
+  g.add(trail);
+  g.userData.trail = trail;
+
+  /* два вращающихся кольца-вихря (боль) */
+  const ringMat = new THREE.MeshBasicMaterial({ color: big ? 0xff2030 : 0xff4050, transparent: true, opacity: .7, blending: THREE.AdditiveBlending, depthWrite: false });
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(big ? .5 : .30, big ? .06 : .035, 8, 24), ringMat);
+  g.add(ring);
+  g.userData.ring = ring;
+  const ring2 = new THREE.Mesh(new THREE.TorusGeometry(big ? .38 : .22, big ? .04 : .022, 8, 20), ringMat.clone());
+  ring2.rotation.x = Math.PI / 2;
+  g.add(ring2);
+  g.userData.ring2 = ring2;
+
+  /* искры-«шипы боли» по кругу */
+  const sparkMat = new THREE.MeshBasicMaterial({ color: 0xff8090, transparent: true, opacity: .8, blending: THREE.AdditiveBlending, depthWrite: false });
+  const spikes = new THREE.Group();
+  const ns = big ? 14 : 8;
+  for (let i = 0; i < ns; i++) {
+    const a = i / ns * Math.PI * 2;
+    const sp = new THREE.Mesh(new THREE.ConeGeometry(.02, big ? .16 : .10, 4), sparkMat);
+    sp.position.set(Math.cos(a) * (big ? .5 : .3), Math.sin(a) * (big ? .5 : .3), 0);
+    sp.rotation.z = a - Math.PI / 2;
+    spikes.add(sp);
   }
-  if (kind === 'big') {
-    /* ГИГАНТСКИЙ шар: массивный кровавый отпечаток-сфера с вращающимся
-       вихревым кольцом боли */
-    const ring = new THREE.Mesh(new THREE.TorusGeometry(1.05, .10, 10, 28),
-      new THREE.MeshBasicMaterial({ color: 0xff2030, transparent: true, opacity: .75, blending: THREE.AdditiveBlending, depthWrite: false }));
-    g.add(ring);
-    g.userData.ring = ring;
-    const ring2 = new THREE.Mesh(new THREE.TorusGeometry(.78, .06, 8, 24),
-      new THREE.MeshBasicMaterial({ color: 0xff8090, transparent: true, opacity: .55, blending: THREE.AdditiveBlending, depthWrite: false }));
-    ring2.rotation.x = Math.PI / 2;
-    g.add(ring2);
-    g.userData.ring2 = ring2;
+  g.add(spikes);
+  g.userData.spikes = spikes;
+
+  if (big) {
+    /* у гигантского шара — мощный пульсирующий ореол */
+    const auraMat = new THREE.MeshBasicMaterial({ color: 0xff3344, transparent: true, opacity: .3, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.BackSide });
+    const aura = new THREE.Mesh(new THREE.SphereGeometry(1.15, 18, 14), auraMat);
+    g.add(aura);
+    g.userData.aura = aura;
   }
   g.userData.pawBody = body;
+  g.userData.core = core;
   return g;
 }
 
@@ -177,8 +263,9 @@ const BloodArt = {
   heavyPaw(G, def) {
     if (!this._cd(G, 'paw', def.pawCd || 8)) return false;
     G._spawnPaw(def, 'paw');
+    this._bloodCast(G, .35);
     Audio3D_SFX.tone(180, .18, 'sawtooth', .12, G.player.pos.x, G.player.pos.y, G.player.pos.z, 600);
-    UI.toast('HEAVY PAW', '#ff4a5a');
+    UI.center('HEAVY PAW', '', 1.0);
     return true;
   },
 
@@ -188,8 +275,9 @@ const BloodArt = {
     G._barrageLeft = def.barrageCount || 7;
     G._barrageT = 0;
     G._barrageDef = def;
+    this._bloodCast(G, .5);
     Audio3D_SFX.tone(140, .3, 'sawtooth', .14, G.player.pos.x, G.player.pos.y, G.player.pos.z, 500);
-    UI.toast('PAW BARRAGE', '#ff4a5a');
+    UI.center('PAW BARRAGE', '', 1.0);
     return true;
   },
 
@@ -197,9 +285,22 @@ const BloodArt = {
   nuke(G, def) {
     if (!this._cd(G, 'nuke', def.nukeCd || 18)) return false;
     G._spawnPaw(def, 'nuke');
+    this._bloodCast(G, .7);
     Audio3D_SFX.tone(90, .35, 'sawtooth', .16, G.player.pos.x, G.player.pos.y, G.player.pos.z, 300);
-    UI.toast('PAIN NUKE', '#ff4a5a');
+    UI.center('PAIN NUKE', '', 1.0);
     return true;
+  },
+
+  /* общий визуал «каст»: вспышка крови вокруг игрока + кровавый экран */
+  _bloodCast(G, k) {
+    const p = G.player;
+    if (!p) return;
+    if (G.effects) {
+      G.effects.bloodNova(p.pos.x, p.pos.y + .4, p.pos.z, 2.6, .5 + k);
+      G.effects.bloodScreen(true, k * .5);
+      if (G.effects.bloodDrip) for (let i = 0; i < Math.round(k * 5); i++) G.effects.bloodDrip();
+      setTimeout(() => { if (G.effects && G.effects.bloodScreen) G.effects.bloodScreen(false); }, 400);
+    }
   },
 
   /* V — КРОВАВЫЙ ШАР: ЗАРЯЖАЕМЫЙ гигантский шар-снаряд.
@@ -249,8 +350,21 @@ const BloodArt = {
       this._preview.scale.setScalar(scale);
       this._preview.rotation.z += dt * 4;
       this._preview.rotation.x += dt * 1.5;
-      if (this._preview.userData.ring) this._preview.userData.ring.rotation.z += dt * 8;
-      if (this._preview.userData.ring2) this._preview.userData.ring2.rotation.z -= dt * 5;
+      const ud = this._preview.userData;
+      if (ud.ring) ud.ring.rotation.z += dt * 8;
+      if (ud.ring2) ud.ring2.rotation.z -= dt * 5;
+      if (ud.spikes) ud.spikes.rotation.z += dt * 3;
+      if (ud.core) ud.core.scale.setScalar(1 + Math.sin(U.now() * .02) * .15);
+    }
+    /* кровавый вихрь-аура под игроком + кровавый экран нарастает */
+    if (G.effects) {
+      if (G.effects.bloodAura) G.effects.bloodAura(p.pos.x, p.pos.y, p.pos.z, k, true);
+      if (G.effects.particle && Math.random() < .5 + k * .5) {
+        const a = U.rand(0, 6.28), rr = 1.2 + k * 1.2;
+        G.effects.particle(p.pos.x + Math.cos(a) * rr, p.pos.y + .2 + U.rand(0, 1.6), p.pos.z + Math.sin(a) * rr,
+          -Math.cos(a) * U.rand(1, 3), U.rand(1, 3), -Math.sin(a) * U.rand(1, 3), U.rand(.06, .17), 'blood', U.rand(.3, .6));
+      }
+      if (G.effects.bloodScreen) G.effects.bloodScreen(true, k * .5);
     }
   },
 
@@ -263,10 +377,16 @@ const BloodArt = {
     const def = G._bigDef || (p.def || {});
     const k = U.clamp((p._bigChargeT || 0) / (def.bigChargeTime || 2), 0, 1);
     p._bigChargeT = 0;
-    if (k < .15) { UI.toast('Слабый заряд — шар рассеялся', '#f5d33c'); return; }
+    if (G.effects && G.effects.bloodAura) G.effects.bloodAura(p.pos.x, p.pos.y, p.pos.z, k, false);
+    if (k < .15) { UI.toast('Слабый заряд — шар рассеялся', '#f5d33c'); if (G.effects && G.effects.bloodScreen) G.effects.bloodScreen(false); return; }
     G._bigAt = U.now();
     G._spawnPaw(def, 'big', k);
-    UI.toast('КРОВАВЫЙ ШАР ' + Math.round(k * 100) + '%', '#ff1040');
+    if (G.effects) {
+      G.effects.bloodNova(p.pos.x + G.cameraDir().x, p.pos.y + 1, p.pos.z + G.cameraDir().z, 5, .8 + k);
+      if (G.effects.bloodDrip) for (let q = 0; q < 6; q++) G.effects.bloodDrip();
+      Audio3D_SFX.explosionAt && Audio3D_SFX.explosionAt(p.pos.x, p.pos.y, p.pos.z);
+    }
+    UI.center('КРОВАВЫЙ ШАР ' + Math.round(k * 100) + '%', '', 1.2);
   },
 
   /* F — SELF REPEL: рывок к курсору */

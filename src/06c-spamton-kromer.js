@@ -75,20 +75,23 @@ const KROMER_ITEMS = [
   { id: 'shieldgen', cat: 'support', name: '[[ЩИТ-ГЕНЕРАТОР]]', desc: 'Щит восстанавливается быстрее',                  cost: 240, max: 2, col: '#4ad6ff', stat: 'shieldRegen', amt: 1 },
 
   /* ================= СПАВН (КОМПАНЬОНЫ) ================= */
-  { id: 'maw',       cat: 'spawn',   name: 'MAW SPAWN',      desc: 'Компаньон: кусает врагов рядом',      cost: 20,  max: 3, col: '#c24bff', familiar: 'maw',      famDmg: 18, famCd: 0.7, famR: 2.2 },
-  { id: 'worm',      cat: 'spawn',   name: 'WORM SPAWN',     desc: 'Компаньон: червь, бьёт врагов',        cost: 30,  max: 3, col: '#e07a3a', familiar: 'worm',     famDmg: 22, famCd: 0.6, famR: 2.4 },
-  { id: 'strider',   cat: 'spawn',   name: 'STRIDER SPAWN',  desc: 'Компаньон: длинноногий охотник',       cost: 30,  max: 3, col: '#39d94a', familiar: 'strider',  famDmg: 26, famCd: 0.65, famR: 2.6 },
-  { id: 'fetus',     cat: 'spawn',   name: 'FETUS SPAWN',    desc: 'Компаньон: крепкий помощник',          cost: 40,  max: 3, col: '#ff5fb0', familiar: 'fetus',    famDmg: 30, famCd: 0.75, famR: 2.8 },
-  { id: 'seahorse',  cat: 'spawn',   name: 'SEAHORSE SPAWN', desc: 'Компаньон: стреляет рядом',            cost: 40,  max: 3, col: '#4ad6ff', familiar: 'seahorse', famDmg: 24, famCd: 0.5, famR: 4.2 },
-  { id: 'pipisbuddy',cat: 'spawn',   name: 'PIPIS BUDDY',    desc: 'Компаньон: мини-пипис, бьёт врагов',   cost: 60,  max: 3, col: '#39d94a', familiar: 'pipis',    famDmg: 34, famCd: 0.55, famR: 3.0 },
-  { id: 'poppup',    cat: 'spawn',   name: 'POPPUP',         desc: 'Компаньон: взрывается по врагам',      cost: 70,  max: 3, col: '#ff7a1e', familiar: 'poppup',   famDmg: 40, famCd: 0.9, famR: 3.0 },
-  { id: 'rudinn',    cat: 'spawn',   name: 'RUDINN',         desc: 'Компаньон: бьёт копьём',               cost: 80,  max: 3, col: '#8fe0ff', familiar: 'rudinn',   famDmg: 38, famCd: 0.7, famR: 3.2 },
-  { id: 'hathy',     cat: 'spawn',   name: 'HATHY',          desc: 'Компаньон: больно кусает',             cost: 85,  max: 3, col: '#e05141', familiar: 'hathy',    famDmg: 42, famCd: 0.8, famR: 3.0 },
-  { id: 'tasque',    cat: 'spawn',   name: 'TASQUE',         desc: 'Компаньон: быстрый кот-воин',          cost: 90,  max: 3, col: '#ffd21e', familiar: 'tasque',   famDmg: 30, famCd: 0.4, famR: 3.0 },
-  { id: 'spamtonbuddy',cat:'spawn',  name: 'SPAMTON BUDDY',  desc: 'Компаньон: сам Спамтон помогает',      cost: 120, max: 2, col: '#ff5fb0', familiar: 'spamton',  famDmg: 55, famCd: 0.5, famR: 3.4 },
-  { id: 'bigbuddy',  cat: 'spawn',   name: 'BIG BUDDY',      desc: 'Компаньон: крупный и мощный',          cost: 300, max: 2, col: '#ffd21e', familiar: 'big',      famDmg: 90, famCd: 0.6, famR: 3.6 },
-  { id: 'queenbuddy',cat: 'spawn',   name: 'MINI QUEEN',     desc: 'Компаньон: королевская поддержка',    cost: 500, max: 1, col: '#c24bff', familiar: 'queen',    famDmg: 120, famCd: 0.5, famR: 4.0 },
-  { id: 'jevilbuddy',cat: 'spawn',   name: 'JEVIL BUDDY',     desc: 'Компаньон: хаос-спутник, бьёт сильно', cost: 800, max: 1, col: '#8a5cff', familiar: 'jevil',    famDmg: 200, famCd: 0.45, famR: 4.4 }
+  /* atk: 'bite' — кусает вблизи · 'melee' — удар вблизи · 'spear' — колющий удар
+     (дальше) · 'shoot' — стреляет снарядом · 'pipis' — кидает пипис ·
+     'boom' — взрывается по площади · 'chaos' — хаос-атака · 'spamton' — выстрел. */
+  { id: 'maw',       cat: 'spawn',   name: 'MAW SPAWN',      desc: 'Компаньон: кусает врагов рядом',      cost: 20,  max: 3, col: '#c24bff', familiar: 'maw',      atk: 'bite',  famDmg: 18, famCd: 0.7, famR: 3.3 },
+  { id: 'worm',      cat: 'spawn',   name: 'WORM SPAWN',     desc: 'Компаньон: червь, бьёт врагов',        cost: 30,  max: 3, col: '#e07a3a', familiar: 'worm',     atk: 'melee', famDmg: 22, famCd: 0.6, famR: 3.4 },
+  { id: 'strider',   cat: 'spawn',   name: 'STRIDER SPAWN',  desc: 'Компаньон: длинноногий охотник',       cost: 30,  max: 3, col: '#39d94a', familiar: 'strider',  atk: 'melee', famDmg: 26, famCd: 0.65, famR: 3.6 },
+  { id: 'fetus',     cat: 'spawn',   name: 'FETUS SPAWN',    desc: 'Компаньон: крепкий помощник',          cost: 40,  max: 3, col: '#ff5fb0', familiar: 'fetus',    atk: 'melee', famDmg: 30, famCd: 0.75, famR: 3.4 },
+  { id: 'seahorse',  cat: 'spawn',   name: 'SEAHORSE SPAWN', desc: 'Компаньон: стреляет рядом',            cost: 40,  max: 3, col: '#4ad6ff', familiar: 'seahorse', atk: 'shoot', famDmg: 24, famCd: 0.5, famR: 4.6 },
+  { id: 'pipisbuddy',cat: 'spawn',   name: 'PIPIS BUDDY',    desc: 'Компаньон: мини-пипис, бьёт врагов',   cost: 60,  max: 3, col: '#39d94a', familiar: 'pipis',    atk: 'pipis', famDmg: 34, famCd: 0.55, famR: 4.2 },
+  { id: 'poppup',    cat: 'spawn',   name: 'POPPUP',         desc: 'Компаньон: взрывается по врагам',      cost: 70,  max: 3, col: '#ff7a1e', familiar: 'poppup',   atk: 'boom',  famDmg: 40, famCd: 0.9, famR: 3.4 },
+  { id: 'rudinn',    cat: 'spawn',   name: 'RUDINN',         desc: 'Компаньон: бьёт копьём',               cost: 80,  max: 3, col: '#8fe0ff', familiar: 'rudinn',   atk: 'spear', famDmg: 38, famCd: 0.7, famR: 4.2 },
+  { id: 'hathy',     cat: 'spawn',   name: 'HATHY',          desc: 'Компаньон: больно кусает',             cost: 85,  max: 3, col: '#e05141', familiar: 'hathy',    atk: 'bite',  famDmg: 42, famCd: 0.8, famR: 3.3 },
+  { id: 'tasque',    cat: 'spawn',   name: 'TASQUE',         desc: 'Компаньон: быстрый кот-воин',          cost: 90,  max: 3, col: '#ffd21e', familiar: 'tasque',   atk: 'melee', famDmg: 30, famCd: 0.4, famR: 3.4 },
+  { id: 'spamtonbuddy',cat:'spawn',  name: 'SPAMTON BUDDY',  desc: 'Компаньон: сам Спамтон помогает',      cost: 120, max: 2, col: '#ff5fb0', familiar: 'spamton',  atk: 'spamton', famDmg: 55, famCd: 0.5, famR: 4.6 },
+  { id: 'bigbuddy',  cat: 'spawn',   name: 'BIG BUDDY',      desc: 'Компаньон: крупный и мощный',          cost: 300, max: 2, col: '#ffd21e', familiar: 'big',      atk: 'melee', famDmg: 90, famCd: 0.6, famR: 4.0 },
+  { id: 'queenbuddy',cat: 'spawn',   name: 'MINI QUEEN',     desc: 'Компаньон: королевская поддержка',    cost: 500, max: 1, col: '#c24bff', familiar: 'queen',    atk: 'shoot', famDmg: 120, famCd: 0.5, famR: 5.2 },
+  { id: 'jevilbuddy',cat: 'spawn',   name: 'JEVIL BUDDY',     desc: 'Компаньон: хаос-спутник, бьёт сильно', cost: 800, max: 1, col: '#8a5cff', familiar: 'jevil',    atk: 'chaos', famDmg: 200, famCd: 0.45, famR: 5.2 }
 ];
 
 /* быстрый доступ по id */
@@ -380,23 +383,311 @@ function kromerFamiliarsWanted() {
   return want.slice(0, 12);
 }
 
+/* ============================================================
+   КОМПАНЬОНЫ (фамильяры). Раньше все были одинаковыми шариками и
+   ДЁРГАЛИСЬ: обновлялись раз в 0.05с и жёстко телепортировались к игроку.
+   Теперь: у каждого типа своя модель, а движение — плавное следование
+   (lerp к орбитальной точке) каждый кадр + мягкое покачивание.
+   ============================================================ */
+function _famMat(col, emissive) {
+  return new THREE.MeshLambertMaterial({ color: new THREE.Color(col || '#ff5fb0'), emissive: emissive === undefined ? 0x140610 : emissive });
+}
+function _famGlow(col, op) {
+  return new THREE.MeshBasicMaterial({ color: new THREE.Color(col || '#ff5fb0'), transparent: true, opacity: op === undefined ? .4 : op, blending: THREE.AdditiveBlending, depthWrite: false });
+}
+
 function kromerMakeFamiliarMesh(game, def) {
-  const col = new THREE.Color(def.col || '#ff5fb0');
+  const col = def.col || '#ff5fb0';
+  const C = new THREE.Color(col).getHex();
   const g = new THREE.Group();
-  const big = (def.familiar === 'big' || def.familiar === 'queen' || def.familiar === 'jevil');
-  const r = big ? .42 : .26;
-  const body = new THREE.Mesh(new THREE.SphereGeometry(r, 10, 8),
-    new THREE.MeshLambertMaterial({ color: col }));
-  g.add(body);
+  const kind = def.familiar || 'maw';
+  const big = (kind === 'big' || kind === 'queen' || kind === 'jevil');
+  const r = big ? .40 : .26;
+  const body = _famMat(C);
+  const dark = _famMat(new THREE.Color(C).multiplyScalar(.45).getHex());
   const eyeMat = new THREE.MeshBasicMaterial({ color: 0x111111 });
-  const eye = new THREE.Mesh(new THREE.SphereGeometry(r * .26, 6, 6), eyeMat);
-  eye.position.set(r * .45, r * .22, -r * .8); g.add(eye);
-  /* маленькая «шляпа»/антенна — чтобы силуэт отличался */
-  const spike = new THREE.Mesh(new THREE.ConeGeometry(r * .3, r * .9, 6),
-    new THREE.MeshLambertMaterial({ color: col }));
-  spike.position.y = r * 1.05; g.add(spike);
+  const eyeWhite = _famGlow(0xffffff, .9);
+
+  const addEye = (ox, oy, oz, sz) => {
+    const e = new THREE.Mesh(new THREE.SphereGeometry(sz || r * .24, 8, 6), eyeMat);
+    e.position.set(ox, oy, oz); g.add(e);
+    const gl = new THREE.Mesh(new THREE.SphereGeometry((sz || r * .24) * .5, 6, 5), eyeWhite);
+    gl.position.set(ox + .01, oy + .01, oz - .01); g.add(gl);
+  };
+
+  switch (kind) {
+    case 'maw': {
+      /* МАУ — зубастая пасть с двумя глазами */
+      const jaw = new THREE.Mesh(new THREE.SphereGeometry(r, 12, 9), body);
+      jaw.scale.set(1.2, .9, 1.1); g.add(jaw);
+      const mouth = new THREE.Mesh(new THREE.SphereGeometry(r * .7, 10, 8), _famMat(0x2a0410));
+      mouth.scale.set(1, .5, .8); mouth.position.set(0, -r * .2, -r * .55); g.add(mouth);
+      // зубы
+      const tooth = new THREE.MeshLambertMaterial({ color: 0xffffff });
+      for (let i = -1; i <= 1; i++) {
+        const t = new THREE.Mesh(new THREE.ConeGeometry(r * .12, r * .28, 5), tooth);
+        t.position.set(i * r * .35, -r * .1, -r * .8); t.rotation.x = Math.PI; g.add(t);
+      }
+      addEye(-r * .35, r * .25, -r * .55, r * .2); addEye(r * .35, r * .25, -r * .55, r * .2);
+      break;
+    }
+    case 'worm': {
+      /* ЧЕРВЬ — сегментированное тело */
+      for (let i = 0; i < 4; i++) {
+        const s = new THREE.Mesh(new THREE.SphereGeometry(r * (1 - i * .13), 9, 7), i % 2 ? body : dark);
+        s.position.set(0, Math.sin(i) * r * .18, i * r * .35);
+        g.add(s);
+      }
+      const head = new THREE.Mesh(new THREE.SphereGeometry(r * .85, 10, 8), body);
+      head.position.z = -r * .35; g.add(head);
+      addEye(-r * .25, r * .15, -r * .75, r * .17); addEye(r * .25, r * .15, -r * .75, r * .17);
+      break;
+    }
+    case 'strider': {
+      /* СТРАЙДЕР — длинные ноги и вытянутая голова */
+      const torso = new THREE.Mesh(new THREE.SphereGeometry(r * .8, 10, 8), body);
+      torso.scale.set(1, .8, 1.4); g.add(torso);
+      const neck = new THREE.Mesh(new THREE.CylinderGeometry(r * .22, r * .3, r * 1.1), dark);
+      neck.position.set(0, r * .3, -r * .7); neck.rotation.x = Math.PI / 2.4; g.add(neck);
+      const head = new THREE.Mesh(new THREE.SphereGeometry(r * .5, 9, 7), body);
+      head.position.set(0, r * .4, -r * 1.1); g.add(head);
+      addEye(-r * .18, r * .45, -r * 1.35, r * .13); addEye(r * .18, r * .45, -r * 1.35, r * .13);
+      const leg = new THREE.MeshLambertMaterial({ color: dark.color.getHex() });
+      for (let i = -1; i <= 1; i += 2) for (let j = 0; j < 2; j++) {
+        const l = new THREE.Mesh(new THREE.CylinderGeometry(r * .07, r * .05, r * 1.3), leg);
+        l.position.set(i * r * .45, -r * .7, (j - .5) * r * .5); g.add(l);
+      }
+      break;
+    }
+    case 'fetus': {
+      /* ФЕТУС — крупный крепыш с бронёй */
+      const b = new THREE.Mesh(new THREE.SphereGeometry(r, 12, 9), body);
+      b.scale.set(1.1, 1.05, 1); g.add(b);
+      const shell = new THREE.Mesh(new THREE.SphereGeometry(r * .85, 10, 8), _famMat(new THREE.Color(C).multiplyScalar(.6).getHex()));
+      shell.scale.set(1.15, .5, 1.15); shell.position.y = r * .5; g.add(shell);
+      addEye(-r * .3, r * .1, -r * .85, r * .2); addEye(r * .3, r * .1, -r * .85, r * .2);
+      break;
+    }
+    case 'seahorse': {
+      /* МОРСКОЙ КОНЁК — вытянутая мордочка и хвост-спираль */
+      const b = new THREE.Mesh(new THREE.SphereGeometry(r * .8, 10, 8), body);
+      b.scale.set(.9, 1.2, 1); g.add(b);
+      const snout = new THREE.Mesh(new THREE.CylinderGeometry(r * .18, r * .28, r * .9), dark);
+      snout.position.set(0, r * .1, -r * .8); snout.rotation.x = Math.PI / 2.2; g.add(snout);
+      addEye(-r * .22, r * .3, -r * .6, r * .16); addEye(r * .22, r * .3, -r * .6, r * .16);
+      // спиральный хвост
+      for (let i = 0; i < 4; i++) {
+        const s = new THREE.Mesh(new THREE.TorusGeometry(r * (.3 - i * .05), r * .06, 6, 12, Math.PI), dark);
+        s.position.set(0, -r * .6 - i * r * .18, r * .1); s.rotation.y = i * .5; g.add(s);
+      }
+      break;
+    }
+    case 'pipis': {
+      /* ПИПИС-БАДДИ — маленькое голубое яйцо (канон) */
+      const e = new THREE.Mesh(new THREE.SphereGeometry(r * .9, 12, 10), _famMat(0x6fc7e8, 0x0c2a34));
+      e.scale.set(1, 1.3, 1); g.add(e);
+      const shine = new THREE.Mesh(new THREE.SphereGeometry(r * .22, 8, 6), _famGlow(0xffffff, .6));
+      shine.position.set(-r * .25, r * .45, r * .3); g.add(shine);
+      addEye(-r * .25, r * .1, -r * .75, r * .15); addEye(r * .25, r * .1, -r * .75, r * .15);
+      break;
+    }
+    case 'poppup': {
+      /* ПОППАП — взрывающийся пузырь с искрами */
+      const b = new THREE.Mesh(new THREE.SphereGeometry(r, 12, 10), _famGlow(C, .55));
+      g.add(b);
+      const core = new THREE.Mesh(new THREE.SphereGeometry(r * .5, 10, 8), _famGlow(0xffffff, .8));
+      g.add(core);
+      for (let i = 0; i < 6; i++) {
+        const a = i / 6 * Math.PI * 2;
+        const s = new THREE.Mesh(new THREE.ConeGeometry(r * .12, r * .3, 5), _famGlow(0xfff2a0, .7));
+        s.position.set(Math.cos(a) * r * .9, Math.sin(a) * r * .9, 0); s.rotation.z = a - Math.PI / 2; g.add(s);
+      }
+      break;
+    }
+    case 'rudinn': {
+      /* РУДИНН — змеелюд с копьём */
+      const b = new THREE.Mesh(new THREE.CylinderGeometry(r * .5, r * .38, r * 1.4, 9), body);
+      g.add(b);
+      const head = new THREE.Mesh(new THREE.SphereGeometry(r * .55, 10, 8), body);
+      head.position.y = r * .85; g.add(head);
+      addEye(-r * .2, r * .9, -r * .4, r * .14); addEye(r * .2, r * .9, -r * .4, r * .14);
+      const spear = new THREE.Mesh(new THREE.CylinderGeometry(r * .05, r * .05, r * 2.2), _famMat(0x8fe0ff));
+      spear.position.set(r * .6, 0, -r * .2); spear.rotation.x = Math.PI / 2.6; g.add(spear);
+      const tip = new THREE.Mesh(new THREE.ConeGeometry(r * .14, r * .4, 6), _famGlow(0xdfffff, .8));
+      tip.position.set(r * .6, r * .5, -r * .9); tip.rotation.x = -Math.PI / 2.6; g.add(tip);
+      break;
+    }
+    case 'hathy': {
+      /* ХАТИ — пушистый клубок с ушами */
+      const b = new THREE.Mesh(new THREE.SphereGeometry(r, 12, 10), body);
+      b.scale.set(1.1, .95, 1.05); g.add(b);
+      for (let i = -1; i <= 1; i += 2) {
+        const ear = new THREE.Mesh(new THREE.ConeGeometry(r * .3, r * .7, 5), dark);
+        ear.position.set(i * r * .5, r * .8, 0); ear.rotation.z = i * .3; g.add(ear);
+      }
+      addEye(-r * .32, r * .1, -r * .8, r * .2); addEye(r * .32, r * .1, -r * .8, r * .2);
+      break;
+    }
+    case 'tasque': {
+      /* ТАСК — быстрый кот-воин */
+      const b = new THREE.Mesh(new THREE.SphereGeometry(r * .9, 11, 9), body);
+      b.scale.set(1, .9, 1.2); g.add(b);
+      const head = new THREE.Mesh(new THREE.SphereGeometry(r * .6, 10, 8), body);
+      head.position.set(0, r * .2, -r * .7); g.add(head);
+      for (let i = -1; i <= 1; i += 2) {
+        const ear = new THREE.Mesh(new THREE.ConeGeometry(r * .22, r * .5, 4), dark);
+        ear.position.set(i * r * .32, r * .65, -r * .7); g.add(ear);
+      }
+      addEye(-r * .22, r * .25, -r * 1.05, r * .15); addEye(r * .22, r * .25, -r * 1.05, r * .15);
+      // хвост
+      const tail = new THREE.Mesh(new THREE.CylinderGeometry(r * .06, r * .03, r * 1.3), dark);
+      tail.position.set(0, r * .1, r * .9); tail.rotation.x = -Math.PI / 3; g.add(tail);
+      break;
+    }
+    case 'spamton': {
+      /* СПАМТОН-БАДДИ — марионетка в очках и с телефоном */
+      const b = new THREE.Mesh(new THREE.SphereGeometry(r, 12, 9), _famMat(0xff5fb0, 0x2a0a20));
+      b.scale.set(.9, 1.1, .9); g.add(b);
+      const head = new THREE.Mesh(new THREE.SphereGeometry(r * .5, 10, 8), _famMat(0xf0f0f0, 0x303030));
+      head.position.y = r * .8; g.add(head);
+      // очки-«диски»
+      const g1 = _famMat(0x0a0a0a);
+      for (let i = -1; i <= 1; i += 2) {
+        const lens = new THREE.Mesh(new THREE.CylinderGeometry(r * .18, r * .18, r * .06, 10), g1);
+        lens.position.set(i * r * .2, r * .85, -r * .38); lens.rotation.x = Math.PI / 2; g.add(lens);
+      }
+      // телефон
+      const phone = new THREE.Mesh(new THREE.BoxGeometry(r * .3, r * .5, r * .05), _famMat(0x1a1a1a));
+      phone.position.set(r * .6, r * .1, -r * .2); g.add(phone);
+      const scr = new THREE.Mesh(new THREE.PlaneGeometry(r * .24, r * .38), _famGlow(0x39d94a, .8));
+      scr.position.set(r * .6, r * .1, -r * .23); g.add(scr);
+      break;
+    }
+    case 'big': {
+      /* БИГ-БАДДИ — крупный и мощный */
+      const b = new THREE.Mesh(new THREE.SphereGeometry(r, 13, 10), body);
+      b.scale.set(1.15, 1.2, 1.1); g.add(b);
+      const chest = new THREE.Mesh(new THREE.SphereGeometry(r * .8, 11, 9), _famMat(new THREE.Color(C).multiplyScalar(.65).getHex()));
+      chest.scale.set(1.1, .7, 1.05); chest.position.y = r * .3; g.add(chest);
+      const horn = new THREE.MeshLambertMaterial({ color: 0xf0e6c0 });
+      for (let i = -1; i <= 1; i += 2) {
+        const h = new THREE.Mesh(new THREE.ConeGeometry(r * .16, r * .7, 6), horn);
+        h.position.set(i * r * .35, r * 1.0, 0); h.rotation.z = i * .3; g.add(h);
+      }
+      addEye(-r * .32, r * .15, -r * .9, r * .2); addEye(r * .32, r * .15, -r * .9, r * .2);
+      break;
+    }
+    case 'queen': {
+      /* MINI QUEEN — корона и мантия */
+      const b = new THREE.Mesh(new THREE.SphereGeometry(r, 13, 10), _famMat(0xc24bff, 0x2a0a44));
+      b.scale.set(1.05, 1.15, 1); g.add(b);
+      const crown = new THREE.Mesh(new THREE.CylinderGeometry(r * .55, r * .4, r * .35, 8, 1, true), _famMat(0xffd21e, 0x4a3800));
+      crown.position.y = r * 1.05; g.add(crown);
+      for (let i = 0; i < 5; i++) {
+        const a = i / 5 * Math.PI * 2;
+        const p = new THREE.Mesh(new THREE.ConeGeometry(r * .09, r * .35, 4), _famMat(0xffd21e, 0x4a3800));
+        p.position.set(Math.cos(a) * r * .48, r * 1.3, Math.sin(a) * r * .48); g.add(p);
+      }
+      addEye(-r * .3, r * .2, -r * .9, r * .2); addEye(r * .3, r * .2, -r * .9, r * .2);
+      break;
+    }
+    case 'jevil': {
+      /* JEVIL — хаос-шут: рога, кривая ухмылка, разный цвет глаз */
+      const b = new THREE.Mesh(new THREE.SphereGeometry(r, 13, 10), _famMat(0x8a5cff, 0x1a0a30));
+      b.scale.set(1, 1.1, 1); g.add(b);
+      const horn = _famMat(0xe0d0ff);
+      for (let i = -1; i <= 1; i += 2) {
+        const h = new THREE.Mesh(new THREE.TorusGeometry(r * .3, r * .07, 6, 10, Math.PI * 1.4), horn);
+        h.position.set(i * r * .4, r * .9, 0); h.rotation.z = i * .5; g.add(h);
+      }
+      const eL = new THREE.Mesh(new THREE.SphereGeometry(r * .22, 8, 6), _famGlow(0x39d94a, .95));
+      eL.position.set(-r * .3, r * .15, -r * .85); g.add(eL);
+      const eR = new THREE.Mesh(new THREE.SphereGeometry(r * .22, 8, 6), _famGlow(0xff5fb0, .95));
+      eR.position.set(r * .3, r * .15, -r * .85); g.add(eR);
+      const smile = new THREE.Mesh(new THREE.TorusGeometry(r * .4, r * .05, 6, 16, Math.PI), _famMat(0xffffff, 0x333333));
+      smile.position.set(0, -r * .3, -r * .8); smile.rotation.z = Math.PI; g.add(smile);
+      break;
+    }
+    default: {
+      const b = new THREE.Mesh(new THREE.SphereGeometry(r, 11, 9), body);
+      g.add(b);
+      const spike = new THREE.Mesh(new THREE.ConeGeometry(r * .3, r * .9, 6), dark);
+      spike.position.y = r * 1.05; g.add(spike);
+      addEye(-r * .3, r * .2, -r * .8, r * .2); addEye(r * .3, r * .2, -r * .8, r * .2);
+    }
+  }
+
+  /* мягкое свечение-аура под фамильяром (цвет индивидуален) */
+  const aura = new THREE.Mesh(new THREE.SphereGeometry(r * 1.5, 10, 8), _famGlow(C, big ? .22 : .16));
+  aura.scale.y = .5; aura.position.y = -r * .6; g.add(aura);
+
+  /* сохранённые части для уникальной idle-анимации каждого типа */
+  g.userData.kind = kind;
+  g.userData.r = r;
+  g.userData.anim = g.userData.anim || { t: Math.random() * 6.28 };
+  g.traverse(o => { if (o.isMesh) { o.castShadow = false; o.receiveShadow = false; } });
   game.scene.add(g);
   return g;
+}
+
+/* анимация компаньона: у каждого типа — свой характер движения */
+function kromerAnimateFamiliar(f, dt) {
+  const g = f.mesh, kind = g.userData.kind, r = g.userData.r || .26;
+  const a = g.userData.anim; a.t += dt;
+  const t = a.t;
+  switch (kind) {
+    case 'maw': /* жуёт пастью — чавканье */
+      g.rotation.x = Math.sin(t * 6) * .12;
+      g.scale.y = 1 + Math.abs(Math.sin(t * 6)) * .08;
+      break;
+    case 'worm': /* извивается */
+      g.rotation.y += Math.sin(t * 3) * .005;
+      g.rotation.z = Math.sin(t * 4) * .2;
+      break;
+    case 'strider': /* шагает на длинных ногах */
+      g.rotation.z = Math.sin(t * 5) * .06;
+      g.position.y += 0;
+      break;
+    case 'fetus': /* тяжело пыхтит */
+      g.scale.setScalar(1 + Math.sin(t * 3) * .04);
+      break;
+    case 'seahorse': /* покачивается на волне */
+      g.rotation.z = Math.sin(t * 2.4) * .16;
+      break;
+    case 'pipis': /* прыгает как яйцо */
+      g.scale.set(1 + Math.sin(t * 5) * .06, 1 + Math.abs(Math.sin(t * 5)) * .1, 1 + Math.sin(t * 5) * .06);
+      break;
+    case 'poppup': /* пульсирует-вот-вот взорвётся */
+      g.scale.setScalar(1 + Math.sin(t * 8) * .1);
+      break;
+    case 'rudinn': /* вращает копьё */
+      g.rotation.y += dt * 1.2;
+      break;
+    case 'hathy': /* подпрыгивает */
+      g.position.y += Math.abs(Math.sin(t * 6)) * .001;
+      g.rotation.z = Math.sin(t * 6) * .1;
+      break;
+    case 'tasque': /* вертится — кот-воин */
+      g.rotation.y += dt * 2.5;
+      break;
+    case 'spamton': /* дрожит и печатает по телефону */
+      g.rotation.z = (Math.random() - .5) * .08;
+      g.scale.setScalar(1 + Math.sin(t * 12) * .03);
+      break;
+    case 'big': /* грозно покачивается */
+      g.rotation.z = Math.sin(t * 1.6) * .08;
+      g.scale.setScalar(1 + Math.sin(t * 1.6) * .04);
+      break;
+    case 'queen': /* царственно парит и вращается */
+      g.rotation.y += dt * .8;
+      g.scale.setScalar(1 + Math.sin(t * 1.2) * .04);
+      break;
+    case 'jevil': /* хаотично крутится и дёргается */
+      g.rotation.y += dt * 3.5;
+      g.rotation.z = Math.sin(t * 9) * .25;
+      g.rotation.x = Math.cos(t * 7) * .2;
+      break;
+  }
 }
 
 function kromerSyncFamiliars(game) {
@@ -413,7 +704,11 @@ function kromerSyncFamiliars(game) {
   /* создать недостающих */
   for (let i = 0; i < want.length; i++) {
     if (!list[i]) {
-      list[i] = { mesh: kromerMakeFamiliarMesh(game, want[i]), def: want[i], idx: i, ang: Math.random() * Math.PI * 2, cool: 0 };
+      const mesh = kromerMakeFamiliarMesh(game, want[i]);
+      /* появляемся в орбитальной точке сразу, без рывка */
+      const ang0 = (i / Math.max(1, want.length)) * Math.PI * 2;
+      mesh.position.set(p.pos.x + Math.cos(ang0) * 2, p.pos.y + 1.2, p.pos.z + Math.sin(ang0) * 2);
+      list[i] = { mesh: mesh, def: want[i], idx: i, ang: ang0, cool: 0, bob: Math.random() * 6.28, px: mesh.position.x, py: mesh.position.y, pz: mesh.position.z, lungeT: 0, lx: 0, ly: 0, lz: 0 };
     }
     list[i].def = want[i];
     list[i].idx = i;
@@ -425,17 +720,34 @@ function kromerUpdateFamiliars(game, dt) {
   if (!p) return;
   kromerSyncFamiliars(game);
   const list = game.kromerFam || [];
-  const ring = 2.1;
+  const ring = 2.0;
   for (let i = 0; i < list.length; i++) {
     const f = list[i];
     const def = f.def || {};
-    f.ang += dt * (0.9 + i * 0.05) * (i % 2 ? -1 : 1);
-    const rad = ring + (i % 3) * 0.4;
+    /* орбита вокруг игрока */
+    f.ang += dt * (1.1 + i * 0.04) * (i % 2 ? -1 : 1);
+    const rad = ring + (i % 3) * 0.35;
+    f.bob += dt * 2.6;
     const tx = p.pos.x + Math.cos(f.ang) * rad;
     const tz = p.pos.z + Math.sin(f.ang) * rad;
-    const ty = p.pos.y + 1.15 + Math.sin(U.now() * 0.003 + i) * 0.16;
-    f.mesh.position.set(tx, ty, tz);
+    const ty = p.pos.y + 1.15 + Math.sin(f.bob) * 0.12;
+    /* ПЛАВНОЕ следование (lerp) вместо жёсткого телепорта — нет дёрганья */
+    const k = 1 - Math.pow(0.0001, dt);
+    f.px = U.lerp(f.px === undefined ? tx : f.px, tx, k);
+    f.py = U.lerp(f.py === undefined ? ty : f.py, ty, k);
+    f.pz = U.lerp(f.pz === undefined ? tz : f.pz, tz, k);
+    /* «рывок» к цели (выпад) — сглаживается обратно */
+    if (f.lungeT > 0) {
+      f.lungeT -= dt;
+      const lx = U.clamp(f.lungeT / (def.lungeTime || .22), 0, 1);
+      const pull = Math.sin(lx * Math.PI) * (def.lungeDist || .6);
+      f.mesh.position.set(f.px + f.lx * pull, f.py + f.ly * pull, f.pz + f.lz * pull);
+    } else {
+      f.mesh.position.set(f.px, f.py, f.pz);
+    }
     f.mesh.rotation.y = -f.ang;
+    /* лёгкое покачивание-наклон + уникальная анимация типа */
+    kromerAnimateFamiliar(f, dt);
     f.cool -= dt;
     if (f.cool > 0) continue;
     /* атака: ближайший зомби в радиусе действия компаньона */
@@ -450,12 +762,195 @@ function kromerUpdateFamiliars(game, dt) {
       if (d2 < bd) { bd = d2; best = z; }
     }
     if (best) {
-      const dmg = (def.famDmg || 24) * (1 + kromerStat('dmg') * 0.5);
-      best.takeDamage(dmg, 'body', { x: 0, y: 0, z: 0 });
-      if (p) p.damageDealt += dmg;
-      f.cool = def.famCd || 0.6;
-      if (game.effects) game.effects.particle(tx, ty, tz, 0, 1.5, 0, .14, 'vspark', .3);
-      Audio3D_SFX.hit && Audio3D_SFX.hit();
+      const did = kromerFamiliarAttack(game, def, f, best, tx, ty, tz);
+      if (did) f.cool = def.famCd || 0.6;
+    }
+  }
+  /* снаряды компаньонов (стреляющие/кидающие) */
+  kromerUpdateFamiliarShots(game, dt);
+}
+
+/* атака компаньона СОГЛАСНО ЕГО ОПИСАНИЮ (def.atk). Возвращает true, если
+   атака реально состоялась (для постановки кулдауна). */
+function kromerFamiliarAttack(game, def, f, z, tx, ty, tz) {
+  const p = game.player;
+  const kind = def.atk || 'melee';
+  const dmg = (def.famDmg || 24) * (1 + kromerStat('dmg') * 0.5);
+  /* направление на цель — для выпада и росчерков */
+  const dx = z.pos.x - f.px, dy = (z.pos.y + .8) - f.py, dz = z.pos.z - f.pz;
+  const dl = Math.hypot(dx, dy, dz) || 1;
+  f.lx = dx / dl; f.ly = dy / dl; f.lz = dz / dl;
+
+  const doMelee = () => {
+    /* ближний удар: урон сразу + выпад + росчерк */
+    z.takeDamage(dmg, 'body', { x: dx, y: 0, z: dz });
+    if (p) p.damageDealt += dmg;
+    f.lungeT = def.lungeTime || .22;
+    kromerFamiliarAttackFx(game, def, z, f.px, f.py, f.pz);
+    Audio3D_SFX.hit && Audio3D_SFX.hit();
+    return true;
+  };
+
+  switch (kind) {
+    case 'bite': case 'melee':
+      return dl <= (def.famR || 2.6) * 1.05 ? doMelee() : false;
+    case 'spear':
+      /* колющий удар копьём: длиннее и заметный выпад */
+      if (dl <= (def.famR || 4.0) * 1.1) { f.lungeT = def.lungeTime || .3; return doMelee(); }
+      return false;
+    case 'shoot':
+      kromerFamiliarShoot(game, def, f, z, dmg);
+      f.lungeT = .12;
+      return true;
+    case 'pipis':
+    case 'spamton':
+      kromerFamiliarShoot(game, def, f, z, dmg, 'pipis');
+      f.lungeT = .12;
+      return true;
+    case 'boom':
+      /* взрывается по площади вокруг цели */
+      if (dl <= (def.famR || 3.2) * 1.15) {
+        const R = 2.6;
+        kromerFamiliarAttackFx(game, def, z, f.px, f.py, f.pz);
+        if (game.horde) for (const o of game.horde.list) {
+          if (!o.alive || o.dying) continue;
+          const dd = Math.hypot(o.pos.x - z.pos.x, o.pos.z - z.pos.z);
+          if (dd > R) continue;
+          o.takeDamage(dmg * (1 - dd / R * .5), 'body', { x: 0, y: 0, z: 0 });
+        }
+        if (p) p.damageDealt += dmg;
+        if (game.effects && game.effects.explosion) game.effects.explosion(z.pos.x, z.pos.y + .6, z.pos.z, R, [0xff7a1e, 0x1a0d05]);
+        Audio3D_SFX.explosionAt && Audio3D_SFX.explosionAt(z.pos.x, z.pos.y, z.pos.z);
+        f.lungeT = .3;
+        return true;
+      }
+      return false;
+    case 'chaos':
+      /* хаос: цель получает удар + случайный доп. эффект */
+      if (dl <= (def.famR || 5.0) * 1.2) {
+        z.takeDamage(dmg, 'body', { x: dx, y: 0, z: dz });
+        if (p) p.damageDealt += dmg;
+        if (Math.random() < .5 && game.effects) game.effects.explosion(z.pos.x, z.pos.y + .6, z.pos.z, 2.4, [0x8a5cff, 0x0a0414]);
+        kromerFamiliarAttackFx(game, def, z, f.px, f.py, f.pz);
+        f.lungeT = .22;
+        Audio3D_SFX.hit && Audio3D_SFX.hit();
+        return true;
+      }
+      return false;
+    default:
+      return dl <= (def.famR || 2.6) * 1.05 ? doMelee() : false;
+  }
+}
+
+/* снаряд компаньона: летит в цель, при попадании — урон (+ AoE для pop) */
+function kromerFamiliarShoot(game, def, f, z, dmg, style) {
+  if (!game._famShots) game._famShots = [];
+  const C = new THREE.Color(def.col || '#ff5fb0').getHex();
+  const mat = new THREE.MeshBasicMaterial({ color: C, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
+  const mesh = new THREE.Mesh(new THREE.SphereGeometry(style === 'pipis' ? .16 : .12, 10, 8), mat);
+  const sx = f.px, sy = f.py, sz = f.pz;
+  mesh.position.set(sx, sy, sz);
+  game.scene.add(mesh);
+  const tx = z.pos.x - sx, ty = (z.pos.y + .8) - sy, tz = z.pos.z - sz;
+  const tl = Math.hypot(tx, ty, tz) || 1;
+  const sp = 26;
+  game._famShots.push({
+    mesh: mesh, mat: mat, life: 2.2,
+    vx: tx / tl * sp, vy: ty / tl * sp, vz: tz / tl * sp,
+    dmg: dmg, color: C
+  });
+}
+
+function kromerUpdateFamiliarShots(game, dt) {
+  const shots = game._famShots;
+  if (!shots || !shots.length) return;
+  for (let i = shots.length - 1; i >= 0; i--) {
+    const s = shots[i];
+    s.life -= dt;
+    s.mesh.position.x += s.vx * dt; s.mesh.position.y += s.vy * dt; s.mesh.position.z += s.vz * dt;
+    s.mat.opacity = Math.max(0, Math.min(1, s.life));
+    let hit = null;
+    if (game.horde) for (const z of game.horde.list) {
+      if (!z.alive || z.dying) continue;
+      const d = Math.hypot(z.pos.x - s.mesh.position.x, (z.pos.y + .8) - s.mesh.position.y, z.pos.z - s.mesh.position.z);
+      if (d < .8) { hit = z; break; }
+    }
+    if (hit || s.life <= 0) {
+      if (hit) {
+        hit.takeDamage(s.dmg, 'body', { x: s.vx, y: 0, z: s.vz });
+        if (game.player) game.player.damageDealt += s.dmg;
+        if (game.effects) {
+          game.effects.particle(hit.pos.x, hit.pos.y + .8, hit.pos.z, 0, 2, 0, .16, 'vspark', .3);
+          for (let k = 0; k < 6; k++) { const a = U.rand(0, 6.28); game.effects.particle(hit.pos.x, hit.pos.y + .8, hit.pos.z, Math.cos(a) * U.rand(2, 6), U.rand(1, 4), Math.sin(a) * U.rand(2, 6), U.rand(.06, .16), 'spark', U.rand(.2, .5)); }
+        }
+      }
+      if (s.mesh.parent) s.mesh.parent.remove(s.mesh);
+      s.mesh.geometry.dispose(); s.mat.dispose();
+      shots.splice(i, 1);
+    }
+  }
+}
+
+/* эффект атаки каждого типа компаньона: цвет, форма, тип частиц */
+function kromerFamiliarAttackFx(game, def, z, tx, ty, tz) {
+  if (!game.effects) return;
+  const C = new THREE.Color(def.col || '#ff5fb0').getHex();
+  const kind = def.familiar || 'maw';
+  const px = z.pos.x, py = z.pos.y + .8, pz = z.pos.z;
+  const tint = { color: C, blending: THREE.AdditiveBlending, transparent: true, depthWrite: false };
+  const mk = (col) => { const m = new THREE.MeshBasicMaterial({ color: col === undefined ? C : col, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }); return m; };
+  switch (kind) {
+    case 'maw': {   /* укус — круг «пасти» */
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(.45, .09, 8, 18, Math.PI * 1.5), mk(0xffffff));
+      ring.position.set(px, py, pz); ring.lookAt(tx, ty, tz);
+      game.scene.add(ring);
+      game.effects._famFx = game.effects._famFx || [];
+      game.effects._famFx.push({ mesh: ring, life: .22, max: .22, grow: 1.5 });
+      break;
+    }
+    case 'seahorse': {  /* выстрел — снаряд-пузырёк */
+      const orb = new THREE.Mesh(new THREE.SphereGeometry(.14, 8, 6), mk());
+      orb.position.set(tx, ty, tz); game.scene.add(orb);
+      game.effects._famFx = game.effects._famFx || [];
+      game.effects._famFx.push({ mesh: orb, life: .25, max: .25, grow: .2, vx: (px - tx) * 3, vy: (py - ty) * 3, vz: (pz - tz) * 3 });
+      break;
+    }
+    case 'poppup': {    /* взрыв-хлопок */
+      for (let i = 0; i < 12; i++) { const a = U.rand(0, 6.28); game.effects.particle(px, py, pz, Math.cos(a) * U.rand(4, 9), U.rand(2, 6), Math.sin(a) * U.rand(4, 9), U.rand(.1, .24), 'spark', U.rand(.3, .6)); }
+      break;
+    }
+    case 'rudinn': {    /* удар копьём — белый росчерк */
+      const sl = new THREE.Mesh(new THREE.BoxGeometry(.05, .05, 1.4), mk(0xdfffff));
+      sl.position.set(px, py, pz); sl.lookAt(tx, ty, tz);
+      game.scene.add(sl); game.effects._famFx = game.effects._famFx || [];
+      game.effects._famFx.push({ mesh: sl, life: .18, max: .18, grow: .9 });
+      break;
+    }
+    case 'jevil': {     /* хаос-взрыв разноцветных искр */
+      const cols = [0x39d94a, 0xff5fb0, 0xffd21e, 0xc24bff];
+      for (let i = 0; i < 16; i++) { const a = U.rand(0, 6.28); game.effects.particle(px, py, pz, Math.cos(a) * U.rand(5, 11), U.rand(2, 7), Math.sin(a) * U.rand(5, 11), U.rand(.1, .26), 'spark', U.rand(.3, .7)); }
+      const flash = new THREE.Mesh(new THREE.SphereGeometry(.5, 8, 6), mk(0xffffff));
+      flash.position.set(px, py, pz); game.scene.add(flash);
+      game.effects._famFx = game.effects._famFx || [];
+      game.effects._famFx.push({ mesh: flash, life: .16, max: .16, grow: .3 });
+      break;
+    }
+    case 'big': {       /* тяжёлый удар — ударная волна */
+      const ring = new THREE.Mesh(new THREE.RingGeometry(.4, .6, 24), mk());
+      ring.position.set(px, py, pz); ring.rotation.x = -Math.PI / 2; game.scene.add(ring);
+      game.effects._famFx = game.effects._famFx || [];
+      game.effects._famFx.push({ mesh: ring, life: .3, max: .3, grow: 2.2 });
+      break;
+    }
+    case 'queen': {     /* королевская вспышка */
+      const star = new THREE.Mesh(new THREE.SphereGeometry(.32, 8, 6), mk(0xffffff));
+      star.position.set(px, py, pz); game.scene.add(star);
+      game.effects._famFx = game.effects._famFx || [];
+      game.effects._famFx.push({ mesh: star, life: .22, max: .22, grow: .5 });
+      break;
+    }
+    default: {          /* искра-«удар» единорога/прочих */
+      for (let i = 0; i < 6; i++) { const a = U.rand(0, 6.28); game.effects.particle(px, py, pz, Math.cos(a) * U.rand(2, 5), U.rand(1, 4), Math.sin(a) * U.rand(2, 5), U.rand(.06, .16), 'vspark', U.rand(.25, .5)); }
     }
   }
 }
@@ -464,6 +959,11 @@ function kromerClearFamiliars(game) {
   if (!game || !game.kromerFam) return;
   for (const f of game.kromerFam) { if (f.mesh && f.mesh.parent) f.mesh.parent.remove(f.mesh); }
   game.kromerFam.length = 0;
+  /* снаряды компаньонов тоже убрать */
+  if (game._famShots) {
+    for (const s of game._famShots) { if (s.mesh && s.mesh.parent) s.mesh.parent.remove(s.mesh); }
+    game._famShots.length = 0;
+  }
 }
 
 /* ---------- тик: монетки падают/собираются + фамильяры + регенерация ---------- */
@@ -508,13 +1008,9 @@ function kromerUpdate(game, dt) {
   }
 
   if (!KromerState.active) { kromerClearFamiliars(game); return; }
-  /* фамильяры и пассивки обновляем реже (раз в ~3 кадра) — дешевле, заметно не глазами */
-  game._kromerSlowT = (game._kromerSlowT || 0) + dt;
-  if (game._kromerSlowT >= .05) {
-    game._kromerSlowT = 0;
-    /* компаньоны */
-    kromerUpdateFamiliars(game, .05);
-  }
+  /* Компаньоны: обновляем КАЖДЫЙ кадр (плавное следование) — раньше раз в
+     0.05с, из-за чего они дёргались. Нагрузка мала: до 12 тел. */
+  kromerUpdateFamiliars(game, dt);
   /* восстановление щита Lightner's Shield */
   if (kromerCount('shield') > 0) {
     const regen = 12 + kromerStat('shieldRegen') * 18;   // ед./сек

@@ -2185,6 +2185,9 @@ function buildWeaponModel(id) {
       const claw = buildBloodArtClaw();
       while (claw.children.length) g.add(claw.children[0]);
       g.userData.bloodClaw = true;
+      g.userData.vains = [];
+      g.traverse(o => { if (o.isMesh && o.userData && o.userData.vain) g.userData.vains.push(o); });
+      g.userData.glow = g.children.find(c => c.isMesh && c.geometry && c.geometry.type === 'SphereGeometry' && c.material && c.material.opacity <= .25 && c.material.blending === THREE.AdditiveBlending) || null;
       break;
     }
   }

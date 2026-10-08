@@ -377,6 +377,100 @@ class Effects {
   }
 
   /* ============================================================
+     BLOOD ART (Pain Fruit): кровавые эффекты.
+     ============================================================ */
+  /* кровавая вспышка-новá: расходящиеся кольца боли + брызги + свет */
+  bloodNova(x, y, z, R, power) {
+    power = power || 1;
+    this.bloodNovas = this.bloodNovas || [];
+    const cols = [0xff1030, 0xd41f2a, 0xff6d8a];
+    for (let ring = 0; ring < 3; ring++) {
+      const mat = new THREE.MeshBasicMaterial({ color: cols[ring], transparent: true, opacity: .85,
+        blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
+      const m = new THREE.Mesh(new THREE.RingGeometry(.7, 1.0, 44), mat);
+      m.rotation.x = -Math.PI / 2;
+      m.position.set(x, y + .05 + ring * .14, z);
+      this.scene.add(m);
+      this.bloodNovas.push({ mesh: m, mat: mat, life: .7 + ring * .14, max: .7 + ring * .14, r: R * power * (1 - ring * .13) });
+    }
+    const light = new THREE.PointLight(0xff2030, 200 * power, R * 3.4, 2);
+    light.position.set(x, y + 1.1, z); this.scene.add(light);
+    this.bloodNovas.push({ light: light, life: .5, max: .5 });
+    /* фонтан кровавых брызг */
+    const n = Math.round(28 * power);
+    for (let i = 0; i < n; i++) {
+      const a = U.rand(0, 6.28), e = U.rand(.1, 1);
+      this.particle(x, y + .3, z, Math.cos(a) * U.rand(3, R * 1.2), e * U.rand(4, R * 1.1), Math.sin(a) * U.rand(3, R * 1.2),
+        U.rand(.08, .22), 'blood', U.rand(.4, 1.0));
+    }
+    for (let i = 0; i < Math.round(12 * power); i++) {
+      this.particle(x, y + .4, z, U.rand(-3, 3), U.rand(2, 6), U.rand(-3, 3),
+        U.rand(.2, .5), 'smoke', U.rand(.6, 1.4));
+    }
+  }
+
+  /* кровавый вихрь-аура вокруг игрока (для заряда гигантского шара) */
+  bloodAura(x, y, z, k, on) {
+    if (!on) {
+      if (this._bloodAura) {
+        if (this._bloodAura.parent) this._bloodAura.parent.remove(this._bloodAura);
+        this._bloodAura.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material && o.material.dispose) o.material.dispose(); });
+        this._bloodAura = null;
+      }
+      return;
+    }
+    if (!this._bloodAura) {
+      this._bloodAura = new THREE.Group();
+      const mat = new THREE.MeshBasicMaterial({ color: 0xff2030, transparent: true, opacity: .5, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
+      const ring = new THREE.Mesh(new THREE.RingGeometry(.55, .75, 40), mat);
+      ring.rotation.x = -Math.PI / 2; ring.position.y = .05;
+      this._bloodAura.add(ring);
+      this._bloodAura.userData.ring = ring; this._bloodAura.userData.mat = mat;
+      const ring2 = new THREE.Mesh(new THREE.RingGeometry(.85, 1.0, 40), mat.clone());
+      ring2.rotation.x = -Math.PI / 2; ring2.position.y = 1.2;
+      this._bloodAura.add(ring2); this._bloodAura.userData.ring2 = ring2;
+      this.scene.add(this._bloodAura);
+    }
+    this._bloodAura.position.set(x, y, z);
+    const s = .7 + k * 1.4;
+    this._bloodAura.userData.ring.scale.setScalar(s);
+    this._bloodAura.userData.ring2.scale.setScalar(.8 + k * .8);
+    this._bloodAura.userData.ring.rotation.z += .06;
+    this._bloodAura.userData.ring2.rotation.z -= .08;
+    this._bloodAura.userData.mat.opacity = .3 + k * .45;
+  }
+
+  /* кровавый дождь-брызги в точке (полёт снаряда) */
+  bloodTrail(x, y, z, r) {
+    const n = r > .6 ? 3 : 1;
+    for (let i = 0; i < n; i++) {
+      this.particle(x + U.rand(-r, r), y + U.rand(-r, r), z + U.rand(-r, r),
+        U.rand(-2, 2), U.rand(-1, 1.5), U.rand(-2, 2), U.rand(.06, .16), 'blood', U.rand(.25, .6));
+    }
+  }
+
+  /* «кровавый экран» — красная пелена + потёки крови по краям (оверлей на время) */
+  bloodScreen(on, k) {
+    const e = this._bloodScreenEl || document.getElementById('bloodScreen');
+    if (!e) return;
+    this._bloodScreenEl = e;
+    e.classList.toggle('on', !!on);
+    if (on) e.style.opacity = String(U.clamp(.35 + (k || 0) * .65, 0, 1));
+  }
+
+  /* кровавые потёки: несколько «капель» стекают по экрану */
+  bloodDrip() {
+    const host = document.getElementById('bloodDrips');
+    if (!host) return;
+    const d = document.createElement('i');
+    d.style.left = U.rand(4, 96) + '%';
+    d.style.animationDuration = U.rand(1.1, 2.2).toFixed(2) + 's';
+    d.style.height = U.rand(30, 70) + '%';
+    host.appendChild(d);
+    setTimeout(() => d.remove(), 2400);
+  }
+
+  /* ============================================================
      SWOON — красная пиксельная надпись (как в Deltarune у Рокочущего рыцаря),
      всплывающая над врагом, убитым ПКМ-ультой. Рисуется пиксель-за-пикселем
      на canvas (крупные квадраты), с чёрной обводкой — аутентичный вид.
@@ -1855,6 +1949,46 @@ class Effects {
           if (n.mesh.geometry) n.mesh.geometry.dispose();
           n.mat.dispose();
           this.flowerNovas.splice(i, 1);
+        }
+      }
+    }
+    /* BLOOD ART: кровавые волны боли */
+    if (this.bloodNovas) {
+      for (let i = this.bloodNovas.length - 1; i >= 0; i--) {
+        const n = this.bloodNovas[i];
+        n.life -= dt;
+        const k = Math.max(0, n.life / n.max);
+        if (n.light) {
+          n.light.intensity = 200 * k;
+          if (n.life <= 0) { if (n.light.parent) n.light.parent.remove(n.light); this.bloodNovas.splice(i, 1); }
+          continue;
+        }
+        const e = 1 - Math.pow(1 - (1 - k), 3);
+        n.mesh.scale.setScalar(.4 + e * (n.r || 8));
+        n.mat.opacity = k * .85;
+        if (n.life <= 0) {
+          if (n.mesh.parent) n.mesh.parent.remove(n.mesh);
+          if (n.mesh.geometry) n.mesh.geometry.dispose();
+          n.mat.dispose();
+          this.bloodNovas.splice(i, 1);
+        }
+      }
+    }
+    /* КОМПАНЬОНЫ (Кромер): короткие FX атак — росчерк копья, укус, взрыв и т.д. */
+    if (this._famFx) {
+      for (let i = this._famFx.length - 1; i >= 0; i--) {
+        const n = this._famFx[i];
+        n.life -= dt;
+        const k = Math.max(0, n.life / n.max);
+        if (n.vx !== undefined) { n.mesh.position.x += n.vx * dt; n.mesh.position.y += n.vy * dt; n.mesh.position.z += n.vz * dt; }
+        const sc = 1 + (n.grow || 0) * (1 - k);
+        n.mesh.scale.setScalar(sc);
+        if (n.mesh.material) n.mesh.material.opacity = k * .9;
+        if (n.life <= 0) {
+          if (n.mesh.parent) n.mesh.parent.remove(n.mesh);
+          if (n.mesh.geometry) n.mesh.geometry.dispose();
+          if (n.mesh.material && n.mesh.material.dispose) n.mesh.material.dispose();
+          this._famFx.splice(i, 1);
         }
       }
     }

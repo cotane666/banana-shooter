@@ -6572,10 +6572,26 @@ const Game = {
       if (pr.kind === 'pipis') { pr.mesh.rotation.z += dt * 10; pr.mesh.rotation.x += dt * 5; }
       if (pr.kind === 'bloodpaw') {
         pr.mesh.rotation.z += dt * 3.2;
-        if (pr.mesh.userData.ring) pr.mesh.userData.ring.rotation.z += dt * 6;
-        if (pr.mesh.userData.ring2) pr.mesh.userData.ring2.rotation.z -= dt * 4;
+        const ud = pr.mesh.userData;
+        if (ud.ring) ud.ring.rotation.z += dt * 6;
+        if (ud.ring2) ud.ring2.rotation.z -= dt * 4;
+        if (ud.spikes) ud.spikes.rotation.z += dt * 2.5;
+        if (ud.core) ud.core.scale.setScalar(1 + Math.sin(U.now() * .012) * .12);
+        if (ud.aura) ud.aura.scale.setScalar(1 + Math.sin(U.now() * .008) * .12);
+        if (ud.trail) ud.trail.scale.setScalar(.8 + Math.sin(U.now() * .01) * .2);
+        /* КРОВАВЫЙ ШЛЕЙФ: пока снаряд летит — капли и искры позади */
+        if (!pr._stuck && (pr.paw === 'big' || pr.paw === 'nuke') && this.effects) {
+          pr._trailT = (pr._trailT || 0) - dt;
+          if (pr._trailT <= 0) {
+            pr._trailT = .03;
+            const big = pr.paw === 'big';
+            this.effects.particle(pr.pos.x, pr.pos.y, pr.pos.z, U.rand(-2, 2), U.rand(-1, 1), U.rand(-2, 2), U.rand(.1, .28), 'blood', U.rand(.3, .7));
+            if (big && Math.random() < .6) this.effects.particle(pr.pos.x, pr.pos.y, pr.pos.z, U.rand(-3, 3), U.rand(0, 3), U.rand(-3, 3), U.rand(.06, .16), 'spark', U.rand(.3, .6));
+          }
+        }
         /* TORTURE / КРОВАВЫЙ ШАР: «прилип» — тикающий урон по врагам рядом */
         if ((pr.paw === 'torture' || pr.paw === 'big') && pr.stuckT > 0) {
+          pr._stuck = true;
           pr.stuckT -= dt;
           pr._tickT = (pr._tickT || 0) - dt;
           const tick = pr._tickT <= 0;
@@ -6587,10 +6603,14 @@ const Game = {
             if (d < R) { const dmg = pr.bigTick || pr.tortureTick || 90; z.takeDamage(dmg, 'body', { x: 0, y: 0, z: 0 }); this.player.damageDealt += dmg; }
             if (pr.paw === 'big' && z.alive && !z.dying) z.vel.y = Math.max(z.vel.y, 5);
           }
-          if (this.effects) for (let k = 0; k < (pr.paw === 'big' ? 3 : 1); k++) this.effects.particle(pr.pos.x + U.rand(-R * .4, R * .4), pr.pos.y + U.rand(-R * .4, R * .4), pr.pos.z + U.rand(-R * .4, R * .4), U.rand(-1, 1), U.rand(.5, 2), U.rand(-1, 1), U.rand(.1, .28), 'blood', U.rand(.3, .6));
+          /* пульсирующая «боль»: кольца дышат + кровавые искры по кругу */
+          if (pr.mesh.userData.ring) { const pl = 1 + Math.sin(U.now() * .01) * .15; pr.mesh.userData.ring.scale.setScalar(pr.paw === 'big' ? 2.1 * pl : pl); }
+          if (this.effects) {
+            for (let kk2 = 0; kk2 < (pr.paw === 'big' ? 4 : 1); kk2++) this.effects.particle(pr.pos.x + U.rand(-R * .4, R * .4), pr.pos.y + U.rand(-R * .4, R * .4), pr.pos.z + U.rand(-R * .4, R * .4), U.rand(-1, 1), U.rand(.5, 2), U.rand(-1, 1), U.rand(.1, .28), 'blood', U.rand(.3, .6));
+            if (tick && this.effects.bloodNova && pr.paw === 'big') this.effects.bloodNova(pr.pos.x, pr.pos.y, pr.pos.z, R * .5, .5);
+          }
           if (pr.stuckT <= 0) { this.removeProjectile(i); continue; }
           pr.mesh.position.set(pr.pos.x, pr.pos.y, pr.pos.z);
-          if (pr.paw === 'big' && pr.mesh.userData.ring2) pr.mesh.userData.ring2.rotation.x += dt * 3;
           continue;   // застрявший шар не летит дальше
         }
       }
@@ -8049,16 +8069,19 @@ const Game = {
       /* прошивает врагов; в стене застревает */
       if (!normal) {
         pr.pierces = (pr.pierces || 0) + 1;
-        if (this.effects) this.effects.bloodBurst(point, dir, 10);
+        if (this.effects) {
+          this.effects.bloodBurst(point, dir, 14);
+          this.effects.bloodNova(point.x, point.y, point.z, 3.2, .6);
+        }
         UI.hitmark(true); this._hitmarkT = U.now();
         return;
       }
-      if (this.effects) this.effects.impact(point, normal, 'flesh');
+      if (this.effects) { this.effects.impact(point, normal, 'flesh'); this.effects.bloodBurst(point, dir, 10); }
       return;
     }
     if (mode === 'barrage') {
-      if (!normal) { if (this.effects) this.effects.bloodBurst(point, dir, 6); UI.hitmark(false); this._hitmarkT = U.now(); return; }
-      if (this.effects) this.effects.impact(point, normal, 'concrete');
+      if (!normal) { if (this.effects) this.effects.bloodBurst(point, dir, 8); UI.hitmark(false); this._hitmarkT = U.now(); return; }
+      if (this.effects) { this.effects.impact(point, normal, 'concrete'); this.effects.bloodBurst(point, dir, 5); }
       return;
     }
     if (mode === 'torture') {
@@ -8066,7 +8089,7 @@ const Game = {
       if (!normal) {
         pr.stuckT = pr.tortureTime || 5;
         pr.stuckTo = null;
-        if (this.effects) { this.effects.bloodBurst(point, dir, 16); this.effects.goreBurst && this.effects.goreBurst(point.x, point.y, point.z, 4); }
+        if (this.effects) { this.effects.bloodBurst(point, dir, 16); this.effects.goreBurst && this.effects.goreBurst(point.x, point.y, point.z, 4); this.effects.bloodNova(point.x, point.y, point.z, 4, .8); }
         if (typeof UI !== 'undefined' && UI.dmgFlash) UI.dmgFlash();
         pr.vel.x = pr.vel.y = pr.vel.z = 0;   // «прилипает» и тикает
         return;
@@ -8077,7 +8100,14 @@ const Game = {
     if (mode === 'big') {
       /* КРОВАВЫЙ ШАР: гигантский — взрыв боли, разрушение карты, прилипание */
       const R = pr.bigR || 9;
-      if (this.effects) { this.effects.explosion(point.x, point.y, point.z, R, [0xd41f2a, 0x2a0308]); this.effects.goreBurst && this.effects.goreBurst(point.x, point.y, point.z, R); }
+      if (this.effects) {
+        this.effects.explosion(point.x, point.y, point.z, R, [0xd41f2a, 0x2a0308]);
+        this.effects.goreBurst && this.effects.goreBurst(point.x, point.y, point.z, R);
+        this.effects.bloodNova(point.x, point.y, point.z, R, 1.6);
+        if (this.effects.bloodScreen) this.effects.bloodScreen(true, .8);
+        if (this.effects.bloodDrip) for (let q = 0; q < 8; q++) this.effects.bloodDrip();
+        setTimeout(() => { if (this.effects && this.effects.bloodScreen) this.effects.bloodScreen(false); }, 900);
+      }
       this.breakMapAt(point.x, point.y, point.z, R * .8, 500);
       Audio3D_SFX.explosionAt(point.x, point.y, point.z);
       if (this.horde) for (const z of this.horde.list) {
@@ -8088,6 +8118,7 @@ const Game = {
         z.takeDamage(pr.dmg * (.5 + kk * .5), 'body', { x: z.pos.x - point.x, y: 0, z: z.pos.z - point.z });
         this.player.damageDealt += pr.dmg * .5;
         if (z.alive && !z.dying) { z.vel.y = 10 * kk + 3; }
+        else if (z.dying) z._bloodArtHit = true;
       }
       if (this.mode === CS.MODE.ONLINE) {
         for (const rp of this.remotePlayers) {
@@ -11281,6 +11312,12 @@ const Game = {
         baseY + swayY + idleY + bobWY - deployK * .5 - runK * .05 - reloadK * .12,
         baseZ + recoilPitch * 1.4 + reloadK * .04
       );
+      /* BLOOD ART: пульсация светящихся вен и свечения на лапе */
+      if (vm.userData && vm.userData.bloodClaw) {
+        const pulse = .5 + .5 * Math.sin(U.now() * .006);
+        for (const v of (vm.userData.vains || [])) v.material.opacity = .5 + pulse * .5;
+        if (vm.userData.glow) vm.userData.glow.material.opacity = .14 + pulse * .18;
+      }
       vm.rotation.set(
         recoilPitch * 5.5 + deployK * .8 + reloadK * .5,
         -recoilYaw * 4.5 - runK * .3,

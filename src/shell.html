@@ -406,21 +406,46 @@
   </div>
   <!-- ============ MAP EDITOR HUD ============ -->
   <div id="edPanel" class="hidden">
-    <div class="ed-title">РЕДАКТОР КАРТ</div>
-    <div class="ed-row"><span>Материал</span><b id="edMat">КИРПИЧ</b></div>
-    <div class="ed-row"><span>Размер</span><b id="edSize">4 м</b></div>
-    <div class="ed-row"><span>Режим</span><b id="edMode">ПОСТАВИТЬ</b></div>
-    <div class="ed-row"><span>Элемент</span><b id="edElem">НЕТ</b></div>
-    <div class="ed-row"><span>Блоков</span><b id="edCount">0</b></div>
-    <div class="ed-row"><span>Спавн</span><b id="edSpawn">(0, 40)</b></div>
-    <div class="ed-hint">
-      ЛКМ — поставить/выбрать · ПКМ — убрать<br>
-      [ ]/R — размер · G — материал · T — элемент<br>
-      E — спавн · C — режим · Z — отмена<br>
-      F — сохранить · Esc — выйти · V — свободная камера
+    <div class="ed-head">
+      <span class="ed-title">РЕДАКТОР КАРТ</span>
+      <button class="ed-fold" id="edFold" title="Свернуть">−</button>
     </div>
-    <input id="edName" class="ed-name" maxlength="24" placeholder="Название карты" autocomplete="off">
-    <button class="mbtn tiny" id="edSaveBtn">СОХРАНИТЬ (F)</button>
+    <div class="ed-body">
+      <div class="ed-sec">РЕЖИМ</div>
+      <div class="ed-chips">
+        <button class="ed-chip on" id="edPlace">ПОСТАВИТЬ</button>
+        <button class="ed-chip" id="edEraseM">УБРАТЬ</button>
+      </div>
+      <div class="ed-sec">МАТЕРИАЛ</div>
+      <div class="ed-chips" id="edMats"></div>
+      <div class="ed-sec">РАЗМЕР</div>
+      <div class="ed-chips" id="edSizes"></div>
+      <div class="ed-sec">ЭЛЕМЕНТ</div>
+      <div class="ed-chips" id="edElems"></div>
+      <div class="ed-row"><span>Блоков</span><b id="edCount">0</b></div>
+      <div class="ed-row"><span>Спавн</span><b id="edSpawn">(0, 40)</b></div>
+      <input id="edName" class="ed-name" maxlength="24" placeholder="Название карты" autocomplete="off">
+      <div class="ed-btnrow">
+        <button class="ed-btn primary" id="edSaveBtn">💾 СОХРАНИТЬ</button>
+        <button class="ed-btn" id="edSpawnBtn">СПАВН</button>
+      </div>
+      <div class="ed-btnrow">
+        <button class="ed-btn" id="edUndoBtn">↶ ОТМЕНА</button>
+        <button class="ed-btn" id="edFreeCam">КАМЕРА</button>
+      </div>
+      <div class="ed-sec">ВЫСОТА КАМЕРЫ</div>
+      <div class="ed-btnrow">
+        <button class="ed-btn" id="edUp">▲ ВЫШЕ</button>
+        <button class="ed-btn" id="edDown">▼ НИЖЕ</button>
+      </div>
+      <div class="ed-hint">
+        ПК: ЛКМ — поставить · ПКМ — убрать · [ ]/R — размер<br>
+        G — материал · T — элемент · E — спавн · C — режим<br>
+        Z — отмена · V — камера · F — сохранить · Esc — выйти<br>
+        Телефон: слева — полёт · справа — обзор · тап — поставить
+      </div>
+      <button class="ed-btn danger" id="edExitBtn">ВЫЙТИ В МЕНЮ</button>
+    </div>
   </div>
   <div id="dmgDirs"></div>
   <!-- ЭФФЕКТ РЫВКА: цветные полосы/виньетка по краям экрана -->

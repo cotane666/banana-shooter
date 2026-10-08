@@ -34,10 +34,13 @@ const UI = {
       'accCloudTag', 'accCloudHint', 'accCloudForm', 'accUrl', 'accKey', 'accHash',
       'btnAccount', 'btnAccountBack', 'btnAccLogin', 'btnAccRegister', 'btnAccSync', 'btnAccOut',
       'btnAccCloud', 'btnAccCloudSave', 'btnAccCopyHash',
-      'btnEditor', 'edPanel', 'edMat', 'edSize', 'edMode', 'edCount', 'edSpawn', 'edName', 'edSaveBtn', 'edElem', 'myMaps', 'lobbyMyMaps', 'dashFx'];
+      'btnEditor', 'edPanel', 'edCount', 'edSpawn', 'edName', 'edSaveBtn', 'myMaps', 'lobbyMyMaps', 'dashFx',
+      'edMats', 'edSizes', 'edElems', 'edPlace', 'edEraseM', 'edSpawnBtn', 'edUndoBtn', 'edFreeCam',
+      'edUp', 'edDown', 'edExitBtn', 'edFold'];
     ids.forEach(i => this.el[i] = $(i));
     this.buildBuyCats();
     this.buildChips();
+    this.buildEdPanel();
   },
 
   /* ---------------- screens ---------------- */
@@ -354,6 +357,52 @@ const UI = {
     fill(this.el.myMaps);
     fill(this.el.lobbyMyMaps);
   },
+
+  /* ---- ПАЛИТРА РЕДАКТОРА КАРТ: кнопки материала/размера/элемента/действий ---- */
+  buildEdPanel() {
+    const E = this.el;
+    const chip = (wrap, key, val, label, onPick) => {
+      const b = document.createElement('button');
+      b.className = 'ed-chip';
+      b.dataset[key] = val;
+      b.textContent = label;
+      b.addEventListener('click', () => { onPick(val); this.edPanelSync(); });
+      wrap.appendChild(b);
+    };
+    const ed = (typeof MapEditor !== 'undefined') ? MapEditor : null;
+    if (!ed) return;
+    if (E.edMats) {
+      E.edMats.innerHTML = '';
+      ed.MATS.forEach(m => chip(E.edMats, 'mat', m.id, m.name, v => ed.setMat(v)));
+    }
+    if (E.edSizes) {
+      E.edSizes.innerHTML = '';
+      ed.SIZES.forEach(s => chip(E.edSizes, 'size', s, s + ' м', v => ed.setSize(v)));
+    }
+    if (E.edElems) {
+      E.edElems.innerHTML = '';
+      chip(E.edElems, 'elem', '__none__', 'БЛОКИ', v => ed.setElem(null));
+      ed.ELEM_KINDS.forEach(e => chip(E.edElems, 'elem', e.k, e.name, v => ed.setElem(v)));
+    }
+    const bind = (id, fn) => { const b = E[id]; if (b) b.addEventListener('click', () => { fn(); this.edPanelSync(); }); };
+    bind('edPlace', () => ed.toggleErase(false));
+    bind('edEraseM', () => ed.toggleErase(true));
+    bind('edFreeCam', () => ed.toggleFreeCam());
+    bind('edUp', () => { ed._touchUp = true; setTimeout(() => { ed._touchUp = false; }, 160); });
+    bind('edDown', () => { ed._touchDown = true; setTimeout(() => { ed._touchDown = false; }, 160); });
+    bind('edSpawnBtn', () => ed.setSpawnHere());
+    bind('edUndoBtn', () => ed.undo());
+    bind('edExitBtn', () => ed.exitEditor());
+    if (E.edFold) {
+      E.edFold.addEventListener('click', () => {
+        const p = E.edPanel;
+        p.classList.toggle('folded');
+        E.edFold.textContent = p.classList.contains('folded') ? '+' : '−';
+      });
+    }
+  },
+  /* после правки в панели — подсветить активное */
+  edPanelSync() { if (typeof MapEditor !== 'undefined' && MapEditor.active) MapEditor.updatePanel(); },
 
   /* time-of-day / weather / auto-cycle chip groups (environment settings).
      The same groups appear in the settings panel AND in the online lobby — the

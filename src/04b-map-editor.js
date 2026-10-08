@@ -278,6 +278,29 @@ const MapEditor = {
     this.mat = this.MATS[i].id;
     this.updatePanel(); UI.toast('Материал: ' + this.MATS[i].name);
   },
+  /* прямые сеттеры для кнопок панели (телефон/ПК) */
+  setMat(id) { if (this.MATS.some(m => m.id === id)) { this.mat = id; this.updatePanel(); Audio3D_SFX.uiClick(); } },
+  setSize(v) { if (this.SIZES.indexOf(v) >= 0) { this.size = v; this.updatePanel(); Audio3D_SFX.uiClick(); } },
+  setElem(k) {
+    /* повторное нажатие по активному — вернуться к блокам; null — явный выбор */
+    this.elemKind = (k === null || this.elemKind === k) ? null : k;
+    this.updatePanel();
+    const nm = this.elemKind ? ((this.ELEM_KINDS.find(x => x.k === this.elemKind) || {}).name || k) : 'НЕТ (БЛОКИ)';
+    UI.toast('Элемент: ' + nm, '#8a5cff');
+  },
+  toggleErase(on) {
+    this.erase = (on === undefined) ? !this.erase : !!on;
+    this.updatePanel();
+    UI.toast(this.erase ? 'РЕЖИМ: УБРАТЬ' : 'РЕЖИМ: ПОСТАВИТЬ', this.erase ? '#ff6a5a' : '#9be564');
+  },
+  toggleFreeCam() {
+    this.freeCam = !this.freeCam;
+    this.updatePanel();
+    UI.toast(this.freeCam ? 'Свободная камера' : 'Камера от игрока');
+  },
+  exitEditor() {
+    if (typeof Game !== 'undefined' && Game.stopToMenu) { Game.stopToMenu(); UI.show('menu'); }
+  },
   setSpawnHere() {
     const p = Game.player;
     this.spawn = { x: p.pos.x, z: p.pos.z, yaw: p.yaw };
@@ -384,16 +407,24 @@ const MapEditor = {
   },
 
   /* ---------- панель ---------- */
+  /* Кнопки палитры строятся ОДИН РАЗ (в UI.buildEdPanel), здесь только
+     подсвечиваем активные и обновляем значения. */
   updatePanel() {
     const el = UI.el;
     if (!el.edPanel) return;
-    if (el.edName) { el.edName.value = this.mapName; }
-    if (el.edMat) el.edMat.textContent = (this.MATS.find(m => m.id === this.mat) || {}).name || this.mat;
-    if (el.edSize) el.edSize.textContent = this.size + ' м';
-    if (el.edMode) el.edMode.textContent = this.erase ? 'УБРАТЬ' : 'ПОСТАВИТЬ';
-    if (el.edElem) el.edElem.textContent = this.elemKind ? ((this.ELEM_KINDS.find(x => x.k === this.elemKind) || {}).name || this.elemKind) : 'НЕТ';
+    if (el.edName && document.activeElement !== el.edName) { el.edName.value = this.mapName; }
     if (el.edCount) el.edCount.textContent = String(this.blocks.length);
     if (el.edSpawn) el.edSpawn.textContent = '(' + Math.round(this.spawn.x) + ', ' + Math.round(this.spawn.z) + ')';
+    const mark = (wrap, key, val) => {
+      if (!wrap) return;
+      Array.from(wrap.children).forEach(b => b.classList.toggle('on', b.dataset[key] === String(val)));
+    };
+    mark(el.edMats, 'mat', this.mat);
+    mark(el.edSizes, 'size', this.size);
+    mark(el.edElems, 'elem', this.elemKind === null ? '__none__' : this.elemKind);
+    if (el.edPlace) el.edPlace.classList.toggle('on', !this.erase);
+    if (el.edEraseM) el.edEraseM.classList.toggle('on', this.erase);
+    if (el.edFreeCam) el.edFreeCam.classList.toggle('on', this.freeCam);
   }
 };
 

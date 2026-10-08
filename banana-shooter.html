@@ -890,20 +890,55 @@ html.touch .fld input{padding:10px;font-size:15px}
 
 /* ============ MAP EDITOR ============ */
 #edPanel{
-  position:fixed;left:12px;top:calc(12px + env(safe-area-inset-top,0px));
-  z-index:40;width:230px;padding:10px 12px;border-radius:12px;
-  background:rgba(14,17,20,.82);border:1px solid rgba(120,255,170,.35);
+  position:fixed;left:10px;top:calc(10px + env(safe-area-inset-top,0px));
+  z-index:40;width:212px;max-height:calc(100vh - 20px);overflow-y:auto;
+  -webkit-overflow-scrolling:touch;overscroll-behavior:contain;touch-action:pan-y;
+  padding:8px 10px 10px;border-radius:12px;
+  background:rgba(14,17,20,.9);border:1px solid rgba(120,255,170,.35);
   font-family:inherit;color:#e9eef2;backdrop-filter:blur(4px);pointer-events:auto;
+  box-shadow:0 10px 30px rgba(0,0,0,.55)
 }
 #edPanel.hidden{display:none}
-#edPanel .ed-title{font-weight:800;letter-spacing:.06em;color:#9be564;margin-bottom:8px;font-size:13px}
-#edPanel .ed-row{display:flex;justify-content:space-between;align-items:center;font-size:12px;padding:3px 0;border-bottom:1px solid rgba(255,255,255,.06)}
+#edPanel .ed-head{display:flex;align-items:center;justify-content:space-between;gap:6px}
+#edPanel .ed-title{font-weight:800;letter-spacing:.05em;color:#9be564;font-size:12.5px}
+#edPanel .ed-fold{width:26px;height:26px;border-radius:7px;border:1px solid rgba(255,255,255,.2);
+  background:rgba(255,255,255,.06);color:#fff;font-size:16px;font-weight:800;line-height:1;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;padding:0}
+#edPanel.folded .ed-body{display:none}
+#edPanel .ed-sec{font-size:9.5px;letter-spacing:1.6px;color:#8b98a5;margin:8px 0 4px;font-weight:700}
+#edPanel .ed-chips{display:flex;flex-wrap:wrap;gap:4px}
+#edPanel .ed-chip{border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.05);
+  color:#cfd6dd;border-radius:7px;padding:5px 8px;font-size:10.5px;font-weight:700;
+  font-family:inherit;cursor:pointer;transition:.1s;letter-spacing:.02em}
+#edPanel .ed-chip:active{transform:scale(.95)}
+#edPanel .ed-chip.on{background:rgba(155,229,100,.24);border-color:#9be564;color:#eaffd6;
+  box-shadow:0 0 10px rgba(155,229,100,.28)}
+#edPanel .ed-row{display:flex;justify-content:space-between;align-items:center;font-size:11.5px;
+  padding:4px 0;border-top:1px solid rgba(255,255,255,.06);margin-top:6px}
 #edPanel .ed-row span{opacity:.7}
 #edPanel .ed-row b{color:#ffd23f}
-#edPanel .ed-hint{margin-top:8px;font-size:10.5px;line-height:1.5;opacity:.72}
-#edPanel .ed-name{width:100%;margin-top:8px;box-sizing:border-box;padding:6px 8px;border-radius:8px;
-  border:1px solid rgba(255,255,255,.18);background:rgba(0,0,0,.35);color:#fff;font-size:12px}
-#edPanel .mbtn.tiny{margin-top:6px;width:100%}
+#edPanel .ed-hint{margin-top:8px;font-size:9.5px;line-height:1.55;opacity:.6}
+#edPanel .ed-name{width:100%;margin-top:8px;box-sizing:border-box;padding:7px 8px;border-radius:8px;
+  border:1px solid rgba(255,255,255,.18);background:rgba(0,0,0,.35);color:#fff;font-size:12px;font-family:inherit}
+#edPanel .ed-btnrow{display:flex;gap:5px;margin-top:6px}
+#edPanel .ed-btn{flex:1 1 0;min-width:0;border:1px solid rgba(255,255,255,.18);background:#1d2329;
+  color:#e9eef2;border-radius:8px;padding:8px 6px;font-size:10.5px;font-weight:800;font-family:inherit;
+  cursor:pointer;letter-spacing:.02em;transition:.1s;white-space:nowrap}
+#edPanel .ed-btn:active{transform:scale(.96)}
+#edPanel .ed-btn.primary{background:linear-gradient(90deg,#2f5a1c,#1d2329);border-color:#9be564;color:#eaffd6}
+#edPanel .ed-btn.on{background:rgba(155,229,100,.24);border-color:#9be564}
+#edPanel .ed-btn.danger{background:rgba(120,20,20,.3);border-color:rgba(255,110,90,.5);color:#ffb0a2;margin-top:6px}
+
+/* на телефоне панель редактора компактнее и не мешает обзору */
+html.touch #edPanel{width:min(52vw,200px);padding:7px 9px 9px}
+html.touch #edPanel .ed-hint{display:none}
+html.touch #edPanel .ed-chip{padding:6px 9px;font-size:11px}
+html.touch #edPanel .ed-btn{padding:9px 6px;font-size:11px}
+/* короткие ландшафтные экраны: панель в один столбец, сворачивается */
+@media (orientation:landscape) and (max-height:560px){
+  html.touch #edPanel{width:min(44vw,190px);max-height:calc(100vh - 16px)}
+  html.touch #edPanel .ed-sec{margin:5px 0 3px}
+}
 #myMaps .mapedit{display:inline-flex;gap:4px;align-items:center}
 #myMaps .mapedit .del{border:0;background:rgba(255,90,90,.2);color:#ff8a8a;border-radius:6px;
   padding:2px 6px;cursor:pointer;font-size:11px}
@@ -1348,21 +1383,46 @@ html.touch .fld input{padding:10px;font-size:15px}
   </div>
   <!-- ============ MAP EDITOR HUD ============ -->
   <div id="edPanel" class="hidden">
-    <div class="ed-title">РЕДАКТОР КАРТ</div>
-    <div class="ed-row"><span>Материал</span><b id="edMat">КИРПИЧ</b></div>
-    <div class="ed-row"><span>Размер</span><b id="edSize">4 м</b></div>
-    <div class="ed-row"><span>Режим</span><b id="edMode">ПОСТАВИТЬ</b></div>
-    <div class="ed-row"><span>Элемент</span><b id="edElem">НЕТ</b></div>
-    <div class="ed-row"><span>Блоков</span><b id="edCount">0</b></div>
-    <div class="ed-row"><span>Спавн</span><b id="edSpawn">(0, 40)</b></div>
-    <div class="ed-hint">
-      ЛКМ — поставить/выбрать · ПКМ — убрать<br>
-      [ ]/R — размер · G — материал · T — элемент<br>
-      E — спавн · C — режим · Z — отмена<br>
-      F — сохранить · Esc — выйти · V — свободная камера
+    <div class="ed-head">
+      <span class="ed-title">РЕДАКТОР КАРТ</span>
+      <button class="ed-fold" id="edFold" title="Свернуть">−</button>
     </div>
-    <input id="edName" class="ed-name" maxlength="24" placeholder="Название карты" autocomplete="off">
-    <button class="mbtn tiny" id="edSaveBtn">СОХРАНИТЬ (F)</button>
+    <div class="ed-body">
+      <div class="ed-sec">РЕЖИМ</div>
+      <div class="ed-chips">
+        <button class="ed-chip on" id="edPlace">ПОСТАВИТЬ</button>
+        <button class="ed-chip" id="edEraseM">УБРАТЬ</button>
+      </div>
+      <div class="ed-sec">МАТЕРИАЛ</div>
+      <div class="ed-chips" id="edMats"></div>
+      <div class="ed-sec">РАЗМЕР</div>
+      <div class="ed-chips" id="edSizes"></div>
+      <div class="ed-sec">ЭЛЕМЕНТ</div>
+      <div class="ed-chips" id="edElems"></div>
+      <div class="ed-row"><span>Блоков</span><b id="edCount">0</b></div>
+      <div class="ed-row"><span>Спавн</span><b id="edSpawn">(0, 40)</b></div>
+      <input id="edName" class="ed-name" maxlength="24" placeholder="Название карты" autocomplete="off">
+      <div class="ed-btnrow">
+        <button class="ed-btn primary" id="edSaveBtn">💾 СОХРАНИТЬ</button>
+        <button class="ed-btn" id="edSpawnBtn">СПАВН</button>
+      </div>
+      <div class="ed-btnrow">
+        <button class="ed-btn" id="edUndoBtn">↶ ОТМЕНА</button>
+        <button class="ed-btn" id="edFreeCam">КАМЕРА</button>
+      </div>
+      <div class="ed-sec">ВЫСОТА КАМЕРЫ</div>
+      <div class="ed-btnrow">
+        <button class="ed-btn" id="edUp">▲ ВЫШЕ</button>
+        <button class="ed-btn" id="edDown">▼ НИЖЕ</button>
+      </div>
+      <div class="ed-hint">
+        ПК: ЛКМ — поставить · ПКМ — убрать · [ ]/R — размер<br>
+        G — материал · T — элемент · E — спавн · C — режим<br>
+        Z — отмена · V — камера · F — сохранить · Esc — выйти<br>
+        Телефон: слева — полёт · справа — обзор · тап — поставить
+      </div>
+      <button class="ed-btn danger" id="edExitBtn">ВЫЙТИ В МЕНЮ</button>
+    </div>
   </div>
   <div id="dmgDirs"></div>
   <!-- ЭФФЕКТ РЫВКА: цветные полосы/виньетка по краям экрана -->
@@ -3875,6 +3935,29 @@ const MapEditor = {
     this.mat = this.MATS[i].id;
     this.updatePanel(); UI.toast('Материал: ' + this.MATS[i].name);
   },
+  /* прямые сеттеры для кнопок панели (телефон/ПК) */
+  setMat(id) { if (this.MATS.some(m => m.id === id)) { this.mat = id; this.updatePanel(); Audio3D_SFX.uiClick(); } },
+  setSize(v) { if (this.SIZES.indexOf(v) >= 0) { this.size = v; this.updatePanel(); Audio3D_SFX.uiClick(); } },
+  setElem(k) {
+    /* повторное нажатие по активному — вернуться к блокам; null — явный выбор */
+    this.elemKind = (k === null || this.elemKind === k) ? null : k;
+    this.updatePanel();
+    const nm = this.elemKind ? ((this.ELEM_KINDS.find(x => x.k === this.elemKind) || {}).name || k) : 'НЕТ (БЛОКИ)';
+    UI.toast('Элемент: ' + nm, '#8a5cff');
+  },
+  toggleErase(on) {
+    this.erase = (on === undefined) ? !this.erase : !!on;
+    this.updatePanel();
+    UI.toast(this.erase ? 'РЕЖИМ: УБРАТЬ' : 'РЕЖИМ: ПОСТАВИТЬ', this.erase ? '#ff6a5a' : '#9be564');
+  },
+  toggleFreeCam() {
+    this.freeCam = !this.freeCam;
+    this.updatePanel();
+    UI.toast(this.freeCam ? 'Свободная камера' : 'Камера от игрока');
+  },
+  exitEditor() {
+    if (typeof Game !== 'undefined' && Game.stopToMenu) { Game.stopToMenu(); UI.show('menu'); }
+  },
   setSpawnHere() {
     const p = Game.player;
     this.spawn = { x: p.pos.x, z: p.pos.z, yaw: p.yaw };
@@ -3981,16 +4064,24 @@ const MapEditor = {
   },
 
   /* ---------- панель ---------- */
+  /* Кнопки палитры строятся ОДИН РАЗ (в UI.buildEdPanel), здесь только
+     подсвечиваем активные и обновляем значения. */
   updatePanel() {
     const el = UI.el;
     if (!el.edPanel) return;
-    if (el.edName) { el.edName.value = this.mapName; }
-    if (el.edMat) el.edMat.textContent = (this.MATS.find(m => m.id === this.mat) || {}).name || this.mat;
-    if (el.edSize) el.edSize.textContent = this.size + ' м';
-    if (el.edMode) el.edMode.textContent = this.erase ? 'УБРАТЬ' : 'ПОСТАВИТЬ';
-    if (el.edElem) el.edElem.textContent = this.elemKind ? ((this.ELEM_KINDS.find(x => x.k === this.elemKind) || {}).name || this.elemKind) : 'НЕТ';
+    if (el.edName && document.activeElement !== el.edName) { el.edName.value = this.mapName; }
     if (el.edCount) el.edCount.textContent = String(this.blocks.length);
     if (el.edSpawn) el.edSpawn.textContent = '(' + Math.round(this.spawn.x) + ', ' + Math.round(this.spawn.z) + ')';
+    const mark = (wrap, key, val) => {
+      if (!wrap) return;
+      Array.from(wrap.children).forEach(b => b.classList.toggle('on', b.dataset[key] === String(val)));
+    };
+    mark(el.edMats, 'mat', this.mat);
+    mark(el.edSizes, 'size', this.size);
+    mark(el.edElems, 'elem', this.elemKind === null ? '__none__' : this.elemKind);
+    if (el.edPlace) el.edPlace.classList.toggle('on', !this.erase);
+    if (el.edEraseM) el.edEraseM.classList.toggle('on', this.erase);
+    if (el.edFreeCam) el.edFreeCam.classList.toggle('on', this.freeCam);
   }
 };
 
@@ -14079,7 +14170,7 @@ const Input = {
       document.addEventListener('touchstart', e => {
         if (!TouchUI.active || !Game.running || Game.mode === CS.MODE.MENU) return;
         if (UI.overlayOpen()) return;                 // menus own their taps
-        if (e.target && e.target.closest && e.target.closest('#touchui button')) return;
+        if (e.target && e.target.closest && (e.target.closest('#touchui button') || e.target.closest('#edPanel'))) return;
         e.preventDefault();
         TouchUI.onStart(e);
       }, opts);
@@ -14235,12 +14326,6 @@ const TouchUI = {
         '<button id="tDummy" class="tbtn act accent">МАНЕКЕН</button>' +
         '<button id="tSpawn" class="tbtn act accent">СПАВН</button>' +
         '<button id="tUnstick" class="tbtn act">СБРОС</button>' +
-        '<button id="tEdUp" class="tbtn act accent">ВЫШЕ</button>' +
-        '<button id="tEdDown" class="tbtn act accent">НИЖЕ</button>' +
-        '<button id="tEdPlace" class="tbtn act accent">ПОСТАВИТЬ</button>' +
-        '<button id="tEdErase" class="tbtn act accent">УБРАТЬ</button>' +
-        '<button id="tEdMat" class="tbtn act">МАТЕРИАЛ</button>' +
-        '<button id="tEdSize" class="tbtn act">РАЗМЕР</button>' +
       '</div>' +
       '<div id="tHint">Слева — ходьба · Справа — обзор · Тап — огонь · АВТО — очередь · Кнопки справа появляются по ситуации</div>';
     document.body.appendChild(wrap);
@@ -14272,12 +14357,6 @@ const TouchUI = {
       dummy: document.getElementById('tDummy'),
       spawn: document.getElementById('tSpawn'),
       unstick: document.getElementById('tUnstick'),
-      edUp: document.getElementById('tEdUp'),
-      edDown: document.getElementById('tEdDown'),
-      edPlace: document.getElementById('tEdPlace'),
-      edErase: document.getElementById('tEdErase'),
-      edMat: document.getElementById('tEdMat'),
-      edSize: document.getElementById('tEdSize'),
       hint: document.getElementById('tHint')
     };
     // fire/aim must be usable while a match is not running too, so we set the
@@ -14336,13 +14415,6 @@ const TouchUI = {
     E.dummy.addEventListener('touchstart', e => { swallow(e); Bus.emit('touchRangeDummy'); E.dummy.classList.add('down'); setTimeout(() => E.dummy.classList.remove('down'), 160); }, { passive: false });
     E.spawn.addEventListener('touchstart', e => { swallow(e); Bus.emit('touchRangeSpawn'); E.spawn.classList.add('down'); setTimeout(() => E.spawn.classList.remove('down'), 160); }, { passive: false });
     E.unstick.addEventListener('touchstart', e => { swallow(e); Bus.emit('touchUnstick'); E.unstick.classList.add('down'); setTimeout(() => E.unstick.classList.remove('down'), 160); }, { passive: false });
-    /* ---- РЕДАКТОР КАРТ: кнопки для телефона ---- */
-    holdBtn(E.edUp, () => { MapEditor._touchUp = true; }, () => { MapEditor._touchUp = false; });
-    holdBtn(E.edDown, () => { MapEditor._touchDown = true; }, () => { MapEditor._touchDown = false; });
-    E.edPlace.addEventListener('touchstart', e => { swallow(e); MapEditor.place(); E.edPlace.classList.add('down'); setTimeout(() => E.edPlace.classList.remove('down'), 130); }, { passive: false });
-    E.edErase.addEventListener('touchstart', e => { swallow(e); MapEditor.removeAt(); E.edErase.classList.add('down'); setTimeout(() => E.edErase.classList.remove('down'), 130); }, { passive: false });
-    E.edMat.addEventListener('touchstart', e => { swallow(e); MapEditor.cycleMat(1); E.edMat.classList.add('down'); setTimeout(() => E.edMat.classList.remove('down'), 130); }, { passive: false });
-    E.edSize.addEventListener('touchstart', e => { swallow(e); MapEditor.cycleSize(1); E.edSize.classList.add('down'); setTimeout(() => E.edSize.classList.remove('down'), 130); }, { passive: false });
     E.buy.addEventListener('touchstart', e => { swallow(e); Bus.emit('touchBuy'); E.buy.classList.add('down'); setTimeout(() => E.buy.classList.remove('down'), 130); }, { passive: false });
     E.menu.addEventListener('touchstart', e => { swallow(e); Bus.emit('touchPause'); E.menu.classList.add('down'); setTimeout(() => E.menu.classList.remove('down'), 130); }, { passive: false });
     // double-tap the stick area toggles auto-run
@@ -14470,10 +14542,8 @@ const TouchUI = {
       ['aim', 'auto', 'jump', 'crouch', 'reload', 'swap', 'heal', 'drone', 'grenade', 'grenadeKind',
        'sticky', 'missiles', 'surge', 'mech', 'turret', 'dummy', 'spawn', 'unstick', 'climb', 'dash', 'buy'
       ].forEach(k => { if (E[k]) E[k].style.display = 'none'; });
-      dim(E.edUp, show); dim(E.edDown, show); dim(E.edPlace, show);
-      dim(E.edErase, show); dim(E.edMat, show); dim(E.edSize, show);
       dim(E.menu, show);
-      if (E.hint) E.hint.textContent = 'Слева — полёт · Справа — обзор · ВЫШЕ/НИЖЕ — высота · ПОСТАВИТЬ/УБРАТЬ — блоки · МАТЕРИАЛ/РАЗМЕР — настройка';
+      if (E.hint) E.hint.textContent = 'Слева — полёт · Справа — обзор · Тап — поставить · Панель слева — блоки и элементы';
       return;
     }
 
@@ -14557,8 +14627,6 @@ const TouchUI = {
       const fresh = show && this._hintAt && (U.now() - this._hintAt < 9000);
       E.hint.style.display = fresh ? 'block' : 'none';
     }
-    /* редакторские кнопки прячем вне редактора */
-    ['edUp', 'edDown', 'edPlace', 'edErase', 'edMat', 'edSize'].forEach(k => { if (E[k]) E[k].style.display = 'none'; });
   },
 
   setSens(v) { this.sens = v; Store.data.touchSens = v; Store.save(); }
@@ -16611,10 +16679,13 @@ const UI = {
       'accCloudTag', 'accCloudHint', 'accCloudForm', 'accUrl', 'accKey', 'accHash',
       'btnAccount', 'btnAccountBack', 'btnAccLogin', 'btnAccRegister', 'btnAccSync', 'btnAccOut',
       'btnAccCloud', 'btnAccCloudSave', 'btnAccCopyHash',
-      'btnEditor', 'edPanel', 'edMat', 'edSize', 'edMode', 'edCount', 'edSpawn', 'edName', 'edSaveBtn', 'edElem', 'myMaps', 'lobbyMyMaps', 'dashFx'];
+      'btnEditor', 'edPanel', 'edCount', 'edSpawn', 'edName', 'edSaveBtn', 'myMaps', 'lobbyMyMaps', 'dashFx',
+      'edMats', 'edSizes', 'edElems', 'edPlace', 'edEraseM', 'edSpawnBtn', 'edUndoBtn', 'edFreeCam',
+      'edUp', 'edDown', 'edExitBtn', 'edFold'];
     ids.forEach(i => this.el[i] = $(i));
     this.buildBuyCats();
     this.buildChips();
+    this.buildEdPanel();
   },
 
   /* ---------------- screens ---------------- */
@@ -16931,6 +17002,52 @@ const UI = {
     fill(this.el.myMaps);
     fill(this.el.lobbyMyMaps);
   },
+
+  /* ---- ПАЛИТРА РЕДАКТОРА КАРТ: кнопки материала/размера/элемента/действий ---- */
+  buildEdPanel() {
+    const E = this.el;
+    const chip = (wrap, key, val, label, onPick) => {
+      const b = document.createElement('button');
+      b.className = 'ed-chip';
+      b.dataset[key] = val;
+      b.textContent = label;
+      b.addEventListener('click', () => { onPick(val); this.edPanelSync(); });
+      wrap.appendChild(b);
+    };
+    const ed = (typeof MapEditor !== 'undefined') ? MapEditor : null;
+    if (!ed) return;
+    if (E.edMats) {
+      E.edMats.innerHTML = '';
+      ed.MATS.forEach(m => chip(E.edMats, 'mat', m.id, m.name, v => ed.setMat(v)));
+    }
+    if (E.edSizes) {
+      E.edSizes.innerHTML = '';
+      ed.SIZES.forEach(s => chip(E.edSizes, 'size', s, s + ' м', v => ed.setSize(v)));
+    }
+    if (E.edElems) {
+      E.edElems.innerHTML = '';
+      chip(E.edElems, 'elem', '__none__', 'БЛОКИ', v => ed.setElem(null));
+      ed.ELEM_KINDS.forEach(e => chip(E.edElems, 'elem', e.k, e.name, v => ed.setElem(v)));
+    }
+    const bind = (id, fn) => { const b = E[id]; if (b) b.addEventListener('click', () => { fn(); this.edPanelSync(); }); };
+    bind('edPlace', () => ed.toggleErase(false));
+    bind('edEraseM', () => ed.toggleErase(true));
+    bind('edFreeCam', () => ed.toggleFreeCam());
+    bind('edUp', () => { ed._touchUp = true; setTimeout(() => { ed._touchUp = false; }, 160); });
+    bind('edDown', () => { ed._touchDown = true; setTimeout(() => { ed._touchDown = false; }, 160); });
+    bind('edSpawnBtn', () => ed.setSpawnHere());
+    bind('edUndoBtn', () => ed.undo());
+    bind('edExitBtn', () => ed.exitEditor());
+    if (E.edFold) {
+      E.edFold.addEventListener('click', () => {
+        const p = E.edPanel;
+        p.classList.toggle('folded');
+        E.edFold.textContent = p.classList.contains('folded') ? '+' : '−';
+      });
+    }
+  },
+  /* после правки в панели — подсветить активное */
+  edPanelSync() { if (typeof MapEditor !== 'undefined' && MapEditor.active) MapEditor.updatePanel(); },
 
   /* time-of-day / weather / auto-cycle chip groups (environment settings).
      The same groups appear in the settings panel AND in the online lobby — the
@@ -21483,6 +21600,15 @@ const Game = {
   editorUI(on) {
     const e = UI.el;
     if (e.edPanel) e.edPanel.classList.toggle('hidden', !on);
+    /* в редакторе боевой HUD не нужен — прячем ТОЛЬКО его элементы
+       (#edPanel живёт внутри #hud, поэтому сам #hud не трогаем) */
+    ['minimap', 'hud-tl', 'hud-bl', 'hud-tr', 'hud-br', 'feed'].forEach(cls => {
+      const nodes = document.getElementsByClassName(cls);
+      for (const n of Array.from(nodes)) {
+        if (on) { if (n.style.display !== 'none') { n.dataset.edHidden = '1'; n.style.display = 'none'; } }
+        else if (n.dataset.edHidden) { n.style.display = ''; delete n.dataset.edHidden; }
+      }
+    });
     if (on) MapEditor.updatePanel();
   },
 
@@ -29158,6 +29284,14 @@ const Game = {
       }
       this._frameLook = { dx: mm.dx, dy: mm.dy };
       MapEditor.update(dt);
+      /* ТЕЛЕФОН: тап — поставить/убрать (по режиму панели УБРАТЬ/ПОСТАВИТЬ) */
+      if (IS_TOUCH && !blocked) {
+        if (TouchUI.tapFire) {
+          TouchUI.tapFire = false;
+          if (MapEditor.erase) MapEditor.removeAt(); else MapEditor.place();
+          if (typeof UI !== 'undefined' && UI.edPanelSync) UI.edPanelSync();
+        }
+      }
       if (this.effects) this.effects.update(dt);
       if (typeof MapElements !== 'undefined' && MapElements.list.length) MapElements.update(dt, this);
       this.cameraUpdate(dt);
@@ -29899,8 +30033,9 @@ const Game = {
     this.renderer.clear();
     this.renderer.render(this.scene, this.camera);
     // first-person weapon on top, in its own scene → never clips through walls
-    // (hidden while the player is flying the drone)
-    if (this.running && this.mode !== CS.MODE.MENU && !this.drone && !this.localGuidedMissile() && this.player && this.player.alive && this.vmScene.children.length) {
+    // (hidden while the player is flying the drone, and in the map editor where
+    //  there is no weapon on screen)
+    if (this.running && this.mode !== CS.MODE.MENU && this.mode !== CS.MODE.EDITOR && !this.drone && !this.localGuidedMissile() && this.player && this.player.alive && this.vmScene.children.length) {
       this.renderer.clearDepth();
       this.renderer.render(this.vmScene, this.vmCamera);
     }

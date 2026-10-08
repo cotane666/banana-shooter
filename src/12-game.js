@@ -2644,6 +2644,15 @@ const Game = {
   editorUI(on) {
     const e = UI.el;
     if (e.edPanel) e.edPanel.classList.toggle('hidden', !on);
+    /* в редакторе боевой HUD не нужен — прячем ТОЛЬКО его элементы
+       (#edPanel живёт внутри #hud, поэтому сам #hud не трогаем) */
+    ['minimap', 'hud-tl', 'hud-bl', 'hud-tr', 'hud-br', 'feed'].forEach(cls => {
+      const nodes = document.getElementsByClassName(cls);
+      for (const n of Array.from(nodes)) {
+        if (on) { if (n.style.display !== 'none') { n.dataset.edHidden = '1'; n.style.display = 'none'; } }
+        else if (n.dataset.edHidden) { n.style.display = ''; delete n.dataset.edHidden; }
+      }
+    });
     if (on) MapEditor.updatePanel();
   },
 
@@ -10319,6 +10328,14 @@ const Game = {
       }
       this._frameLook = { dx: mm.dx, dy: mm.dy };
       MapEditor.update(dt);
+      /* ТЕЛЕФОН: тап — поставить/убрать (по режиму панели УБРАТЬ/ПОСТАВИТЬ) */
+      if (IS_TOUCH && !blocked) {
+        if (TouchUI.tapFire) {
+          TouchUI.tapFire = false;
+          if (MapEditor.erase) MapEditor.removeAt(); else MapEditor.place();
+          if (typeof UI !== 'undefined' && UI.edPanelSync) UI.edPanelSync();
+        }
+      }
       if (this.effects) this.effects.update(dt);
       if (typeof MapElements !== 'undefined' && MapElements.list.length) MapElements.update(dt, this);
       this.cameraUpdate(dt);
@@ -11060,8 +11077,9 @@ const Game = {
     this.renderer.clear();
     this.renderer.render(this.scene, this.camera);
     // first-person weapon on top, in its own scene → never clips through walls
-    // (hidden while the player is flying the drone)
-    if (this.running && this.mode !== CS.MODE.MENU && !this.drone && !this.localGuidedMissile() && this.player && this.player.alive && this.vmScene.children.length) {
+    // (hidden while the player is flying the drone, and in the map editor where
+    //  there is no weapon on screen)
+    if (this.running && this.mode !== CS.MODE.MENU && this.mode !== CS.MODE.EDITOR && !this.drone && !this.localGuidedMissile() && this.player && this.player.alive && this.vmScene.children.length) {
       this.renderer.clearDepth();
       this.renderer.render(this.vmScene, this.vmCamera);
     }

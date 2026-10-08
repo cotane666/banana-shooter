@@ -12962,6 +12962,200 @@ function spawnLimbDebris(scene, part, dir) {
     grounded: false, bloodT: 0
   });
 }
+/* ============================================================
+   РЭГДОЛЛ (УЛЬТРА): тело зомби распадается на НЕЗАВИСИМЫЕ куски-«частицы»
+   (торс, голова, руки, ноги). Каждый кусок имеет свою позицию/скорость и
+   вращение, связан суставами с соседями (мягкая связь, как верёвка), и
+   сталкивается с землёй И стенами — поэтому не проваливается сквозь
+   текстуры и не вращается вокруг одной точки.
+   ============================================================ */
+const RAGDOLL_G = 26;
+
+/* построить список тел рэгдолла из частей зомби (мировые координаты) */
+function ragdollBuildBodies(z) {
+  const bodies = [];
+  const map = [
+    { key: 'torso', part: 'torso', r: .38, cy: 0 },
+    { key: 'head', part: 'head', r: .22, cy: 0 },
+    { key: 'armL', part: 'armL', r: .16, cy: -.37 },
+    { key: 'armR', part: 'armR', r: .16, cy: -.37 },
+    { key: 'legL', part: 'legL', r: .19, cy: -.42 },
+    { key: 'legR', part: 'legR', r: .19, cy: -.42 }
+  ];
+  z.group.updateMatrixWorld(true);
+  const _p = new THREE.Vector3(), _q = new THREE.Quaternion(), _s = new THREE.Vector3();
+  const sc = z.scale || 1;
+  for (const m of map) {
+    const piv = z.parts[m.part];
+    if (!piv || z.severed[m.part]) continue;
+    piv.updateWorldMatrix(true, false);
+    piv.matrixWorld.decompose(_p, _q, _s);
+    /* физическая точка = ЦЕНТР куска (сустав + локальный сдвиг cy) */
+    const off = new THREE.Vector3(0, m.cy * sc, 0).applyQuaternion(_q);
+    bodies.push({
+      key: m.key, part: m.part, mesh: null,
+      px: _p.x + off.x, py: _p.y + off.y, pz: _p.z + off.z,
+      x0: _p.x + off.x, y0: _p.y + off.y, z0: _p.z + off.z,
+      /* положение самого сустава (нужно, чтобы поставить клон меша) */
+      jx: _p.x, jy: _p.y, jz: _p.z, cy: m.cy * sc,
+      vx: 0, vy: 0, vz: 0,
+      radius: Math.max(.18, m.r * sc),
+      quat: _q.clone(), spin: { x: U.rand(-8, 8), y: U.rand(-8, 8), z: U.rand(-8, 8) }
+    });
+  }
+  const byKey = {}; bodies.forEach(b => byKey[b.key] = b);
+  const links = [];
+  const link = (a, b) => {
+    const A = byKey[a], B = byKey[b];
+    if (A && B) links.push({ a: A, b: B, ax: B.x0 - A.x0, ay: B.y0 - A.y0, az: B.z0 - A.z0 });
+  };
+  link('torso', 'head');
+  link('torso', 'armL');
+  link('torso', 'armR');
+  link('torso', 'legL');
+  link('torso', 'legR');
+  return { bodies: bodies, links: links, byKey: byKey };
+}
+
+/* старт рэгдолла: спрятать исходную модель, заспавнить независимые куски */
+function ragdollStart(z, dir) {
+  if (!z || z.ragdollBodies) return;
+  const data = ragdollBuildBodies(z);
+  if (!data.bodies.length) return;
+  const scene = z.group.parent || (typeof Game !== 'undefined' && Game.scene);
+  if (!scene) return;
+  z.group.visible = false;
+  const d = dir || { x: 0, y: 0, z: 0 };
+  const dl = Math.hypot(d.x, d.z) || 1;
+  for (const b of data.bodies) {
+    /* клон ставим так, чтобы СУСТАВ (pivot) оказался в joint-точке: она на
+       расстоянии cy от центра тела (cy повёрнут вместе с телом). */
+    const piv = z.parts[b.part];
+    let mesh;
+    if (b.key === 'torso') mesh = z.parts.torso.clone(true);
+    else mesh = piv.clone(true);
+    const off = new THREE.Vector3(0, -b.cy, 0).applyQuaternion(b.quat);
+    mesh.position.set(b.px + off.x, b.py + off.y, b.pz + off.z);
+    mesh.quaternion.copy(b.quat);
+    mesh.scale.copy(z.group.scale);
+    scene.add(mesh);
+    b.mesh = mesh;
+    /* импульс: в стороны от удара + вверх + разлёт кусков */
+    b.vx = (d.x / dl) * U.rand(1.5, 3.5) + U.rand(-2.5, 2.5);
+    b.vy = U.rand(2.5, 5.5);
+    b.vz = (d.z / dl) * U.rand(1.5, 3.5) + U.rand(-2.5, 2.5);
+  }
+  z.ragdollBodies = data.bodies;
+  z.ragdollLinks = data.links;
+  z.ragdollByKey = data.byKey;
+  z.ragdollSettle = 0;
+}
+
+/* один шаг физики рэгдолла: гравитация, интеграция, связи, коллизии, вращение */
+function ragdollUpdate(z, dt, world) {
+  const bodies = z.ragdollBodies;
+  if (!bodies) return false;
+  /* 1) интеграция + гравитация */
+  for (const b of bodies) {
+    b.vy -= RAGDOLL_G * dt;
+    b.px += b.vx * dt; b.py += b.vy * dt; b.pz += b.vz * dt;
+  }
+  /* 2) связи-суставы: тянем конечности к точке сустава, которая ВРАЩАЕТСЯ
+     вместе с торсом (поэтому конечности мотаются, а не едут параллельно) */
+  const links = z.ragdollLinks;
+  for (let it = 0; it < 3; it++) {
+    for (const L of links) {
+      const a = L.a, b = L.b;
+      /* локальный rest-вектор (относительно A) поворачиваем quaternion'ом A */
+      _ragVec.set(L.ax, L.ay, L.az).applyQuaternion(a.quat);
+      const tx = a.px + _ragVec.x, ty = a.py + _ragVec.y, tz = a.pz + _ragVec.z;
+      const dx = b.px - tx, dy = b.py - ty, dz = b.pz - tz;
+      const k = .5;
+      b.px -= dx * k; b.py -= dy * k; b.pz -= dz * k;
+      a.px += dx * k * .2; a.py += dy * k * .2; a.pz += dz * k * .2;
+    }
+  }
+  /* 3) коллизии со стенами (по каждому телу) + земля */
+  for (const b of bodies) {
+    b.grounded = false;
+    /* тело — сфера радиуса b.radius вокруг центра (b.px,py,pz) */
+    let gy = 0;
+    if (world && world.groundAt) gy = world.groundAt(b.px, b.pz, b.py + .5) || 0;
+    if (b.py - b.radius <= gy) {
+      b.py = gy + b.radius;
+      if (b.vy < 0) {
+        if (b.vy < -2.5) b.vy = -b.vy * .3;
+        else b.vy = 0;
+      }
+      b.vx *= .7; b.vz *= .7;
+      b.spin.x *= .6; b.spin.y *= .6; b.spin.z *= .6;
+      b.grounded = true;
+    }
+    /* стены: отталкиваем сферу тела из перекрывающих блоков */
+    if (world && world.query) {
+      const rad = b.radius;
+      const bb = AABB(b.px - rad, b.py - rad, b.pz - rad, b.px + rad, b.py + rad, b.pz + rad);
+      world.query(bb, _ragQuery);
+      for (let i = 0; i < _ragQuery.length; i++) {
+        const box = _ragQuery[i];
+        if (b.py + rad <= box.minY || b.py - rad >= box.maxY) continue;
+        const cx = U.clamp(b.px, box.minX, box.maxX);
+        const cz = U.clamp(b.pz, box.minZ, box.maxZ);
+        let dx = b.px - cx, dz = b.pz - cz;
+        let d2 = dx * dx + dz * dz;
+        if (d2 >= rad * rad) continue;
+        let d = Math.sqrt(d2);
+        if (d < 1e-4) { dx = 1; dz = 0; d = 1; }
+        const push = (rad - d);
+        b.px += (dx / d) * push; b.pz += (dz / d) * push;
+        b.vx *= .5; b.vz *= .5;
+      }
+    }
+  }
+  /* 4) вращение кусков: осевое кручение затухает на земле */
+  let allGrounded = true;
+  const _off = _ragVec;
+  for (const b of bodies) {
+    if (!b.grounded) allGrounded = false;
+    b.quat.multiply(_ragTmpQ.setFromEuler(_ragTmpE.set(b.spin.x * dt, b.spin.y * dt, b.spin.z * dt)));
+    b.quat.normalize();
+    if (b.mesh) {
+      _off.set(0, -b.cy, 0).applyQuaternion(b.quat);
+      b.mesh.position.set(b.px + _off.x, b.py + _off.y, b.pz + _off.z);
+      b.mesh.quaternion.copy(b.quat);
+    }
+  }
+  if (allGrounded) z.ragdollSettle += dt; else z.ragdollSettle = 0;
+  /* когда все куски лежат — быстро гасим остаточное движение и вращение */
+  if (allGrounded) {
+    for (const b of bodies) {
+      b.vx *= .86; b.vz *= .86;
+      b.spin.x *= .82; b.spin.y *= .82; b.spin.z *= .82;
+      if (Math.abs(b.spin.x) < .15) b.spin.x = 0;
+      if (Math.abs(b.spin.y) < .15) b.spin.y = 0;
+      if (Math.abs(b.spin.z) < .15) b.spin.z = 0;
+    }
+  }
+  return true;
+}
+
+const _ragQuery = [];
+const _ragTmpQ = new THREE.Quaternion();
+const _ragTmpE = new THREE.Euler();
+const _ragVec = new THREE.Vector3();
+
+/* убрать тела рэгдолла со сцены */
+function ragdollDispose(z) {
+  if (!z.ragdollBodies) return;
+  for (const b of z.ragdollBodies) {
+    if (b.mesh) {
+      if (b.mesh.parent) b.mesh.parent.remove(b.mesh);
+      /* клоны делят геометрию/материал с оригиналом — НЕ диспозим */
+    }
+  }
+  z.ragdollBodies = null; z.ragdollLinks = null; z.ragdollByKey = null;
+}
+
 function updateLimbDebris(dt, world, game) {
   for (let i = ZOMBIE_LIMB_DEBRIS.length - 1; i >= 0; i--) {
     const b = ZOMBIE_LIMB_DEBRIS[i];
@@ -12974,6 +13168,26 @@ function updateLimbDebris(dt, world, game) {
     b.vel.y -= 20 * dt;
     const p = b.mesh.position;
     p.x += b.vel.x * dt; p.y += b.vel.y * dt; p.z += b.vel.z * dt;
+    /* СТЕНЫ: отскакиваем от блоков, чтобы конечность не проходила сквозь текстуры */
+    if (world && world.query) {
+      const rad = .18;
+      const bb = AABB(p.x - rad, p.y - rad, p.z - rad, p.x + rad, p.y + rad, p.z + rad);
+      const ls = world.query(bb, _ragQuery);
+      for (let i = 0; i < _ragQuery.length; i++) {
+        const box = _ragQuery[i];
+        if (p.y + rad <= box.minY || p.y - rad >= box.maxY) continue;
+        const cx = U.clamp(p.x, box.minX, box.maxX);
+        const cz = U.clamp(p.z, box.minZ, box.maxZ);
+        let dx = p.x - cx, dz = p.z - cz;
+        let d2 = dx * dx + dz * dz;
+        if (d2 >= rad * rad) continue;
+        let d = Math.sqrt(d2) || .0001;
+        if (d2 < 1e-8) { dx = 1; dz = 0; d = 1; }
+        const push = rad - d;
+        p.x += (dx / d) * push; p.z += (dz / d) * push;
+        b.vel.x *= -.35; b.vel.z *= -.35;
+      }
+    }
     let gy = 0;
     if (world && world.groundAt) gy = world.groundAt(p.x, p.z, p.y + 1) || 0;
     if (p.y <= gy) {
@@ -13777,6 +13991,7 @@ class Zombie {
     if (part === 'head') mul = CFG.headshotMultiplier;
     else if (part === 'legs' || part === 'legL' || part === 'legR') mul = CFG.limbMultiplier;
     let dmg = amount * mul * (this.dmgTakenMul || 1);
+    if (fromDir && (fromDir.x || fromDir.z || fromDir.y)) this._lastHitDir = { x: fromDir.x, y: fromDir.y || 0, z: fromDir.z };
     // armoured enemies (the robot zombie) soak a share of every hit
     if (this.armor > 0) dmg *= (1 - this.armor);
     /* ЩИТОНОСЕЦ: a bolt from the front is almost entirely deflected by the plate */
@@ -13816,20 +14031,11 @@ class Zombie {
     this.deadT = 0;
     this.fallDir = headshot ? U.rand(-1, 1) : U.rand(-1, 1);
     this.fallSpeed = U.rand(2.2, 3.4);
-    /* ---- УЛЬТРА: рэгдолл — тело падает с физикой (толчок + вращение),
-       а каждая конечность БОЛТАЕТСЯ независимо ---- */
-    if (zombieUltra() && !this.ragdoll) {
-      this.ragdoll = {
-        vel: { x: U.rand(-2.6, 2.6), y: U.rand(2.6, 5.6), z: U.rand(-2.6, 2.6) },
-        spin: { x: U.rand(-8, 8), y: U.rand(-6, 6), z: U.rand(-7, 7) },
-        grounded: false, settle: 0
-      };
-      /* каждая конечность получает своё угловое колебание (болтается отдельно) */
-      const flail = {};
-      const mk = () => ({ rx: U.rand(-1.2, 1.2), rz: U.rand(-1.2, 1.2), ph: U.rand(0, 6.28), amp: U.rand(.5, 1.4), damp: 1 });
-      for (const k of ['armL', 'armR', 'legL', 'legR']) if (!this.severed[k]) flail[k] = mk();
-      this._flail = flail;
-      this._flailT = 0;
+    /* ---- УЛЬТРА: РЭГДОЛЛ — тело распадается на независимые куски (торс,
+       голова, руки, ноги), каждый со своей физикой и коллизиями ---- */
+    if (zombieUltra() && !this.ragdollBodies) {
+      this._ragDeathDir = this._lastHitDir || { x: U.rand(-1, 1), y: 0, z: U.rand(-1, 1) };
+      try { ragdollStart(this, this._ragDeathDir); } catch (e) { }
     }
     Bus.emit('zombieDied', this, headshot);
   }
@@ -13876,45 +14082,14 @@ class Zombie {
   update(dt, ctx) {
     if (this.dying) {
       this.deadT += dt;
-      /* УЛЬТРА: РЭГДОЛЛ — тело падает с физикой, крутится, скользит и оседает */
-      if (this.ragdoll) {
-        const r = this.ragdoll;
-        if (!r.grounded) {
-          r.vel.y -= 22 * dt;
-          this.pos.x += r.vel.x * dt;
-          this.pos.y += r.vel.y * dt;
-          this.pos.z += r.vel.z * dt;
-          let gy = 0;
-          if (ctx && ctx.world && ctx.world.groundAt) gy = ctx.world.groundAt(this.pos.x, this.pos.z, this.pos.y + 1) || 0;
-          if (this.pos.y <= gy) {
-            this.pos.y = gy;
-            if (Math.abs(r.vel.y) > 2) { r.vel.y *= -.32; r.vel.x *= .6; r.vel.z *= .6; }
-            else { r.vel.y = 0; r.vel.x *= .8; r.vel.z *= .8; r.settle += dt; if (r.settle > .25) r.grounded = true; }
-            r.spin.x *= .55; r.spin.y *= .55; r.spin.z *= .55;
-          }
-        } else {
-          r.vel.x *= .9; r.vel.z *= .9;
-          this.pos.x += r.vel.x * dt; this.pos.z += r.vel.z * dt;
-        }
-        this.group.rotation.x += r.spin.x * dt;
-        this.group.rotation.y += r.spin.y * dt;
-        this.group.rotation.z += r.spin.z * dt;
-        this.group.position.set(this.pos.x, this.pos.y, this.pos.z);
-        /* КОНЕЧНОСТИ БОЛТАЮТСЯ ОТДЕЛЬНО: каждая машет с собственной фазой,
-           затухая по мере оседания тела */
-        if (this._flail) {
-          this._flailT += dt;
-          const pt = this.parts;
-          const damp = r.grounded ? Math.max(0, 1 - this._flailT * .8) : 1;
-          for (const k in this._flail) {
-            const f = this._flail[k], piv = pt[k];
-            if (!piv) continue;
-            piv.rotation.x = f.rx + Math.sin(this._flailT * 9 + f.ph) * f.amp * damp;
-            piv.rotation.z = f.rz + Math.cos(this._flailT * 7 + f.ph) * f.amp * .6 * damp;
-          }
-        }
+      /* УЛЬТРА: РЭГДОЛЛ — независимые куски тела с физикой и коллизиями */
+      if (this.ragdollBodies) {
+        ragdollUpdate(this, dt, ctx && ctx.world);
+        /* затухание: через 3с куски съёживаются и исчезают */
         const fade = U.clamp(1 - (this.deadT - 3.2) / 1.0, 0, 1);
-        if (this.deadT > 3.0) this.group.scale.setScalar(this.scale * U.clamp(fade, .01, 1));
+        if (this.deadT > 3.0) {
+          for (const b of this.ragdollBodies) if (b.mesh) b.mesh.scale.setScalar(U.clamp(fade, .01, 1));
+        }
         return;
       }
       // fall over
@@ -14257,35 +14432,12 @@ class Zombie {
     if (this.dying) {
       this.deadT += dt;
       /* УЛЬТРА: рэгдолл (клиент видит так же, как хост) */
-      if (this.ragdoll) {
-        const r = this.ragdoll;
-        if (!r.grounded) {
-          r.vel.y -= 22 * dt;
-          this.pos.x += r.vel.x * dt; this.pos.y += r.vel.y * dt; this.pos.z += r.vel.z * dt;
-          let gy = 0; if (Game && Game.world && Game.world.groundAt) gy = Game.world.groundAt(this.pos.x, this.pos.z, this.pos.y + 1) || 0;
-          if (this.pos.y <= gy) {
-            this.pos.y = gy;
-            if (Math.abs(r.vel.y) > 2) { r.vel.y *= -.32; r.vel.x *= .6; r.vel.z *= .6; } else { r.vel.y = 0; r.settle += dt; if (r.settle > .25) r.grounded = true; }
-            r.spin.x *= .55; r.spin.y *= .55; r.spin.z *= .55;
-          }
-        }
-        this.group.rotation.x += r.spin.x * dt;
-        this.group.rotation.y += r.spin.y * dt;
-        this.group.rotation.z += r.spin.z * dt;
-        this.group.position.set(this.pos.x, this.pos.y, this.pos.z);
-        if (this._flail) {
-          this._flailT = (this._flailT || 0) + dt;
-          const pt = this.parts;
-          const damp = r.grounded ? Math.max(0, 1 - this._flailT * .8) : 1;
-          for (const k in this._flail) {
-            const f = this._flail[k], piv = pt[k];
-            if (!piv) continue;
-            piv.rotation.x = f.rx + Math.sin(this._flailT * 9 + f.ph) * f.amp * damp;
-            piv.rotation.z = f.rz + Math.cos(this._flailT * 7 + f.ph) * f.amp * .6 * damp;
-          }
-        }
+      if (this.ragdollBodies) {
+        ragdollUpdate(this, dt, Game && Game.world);
         const fade = U.clamp(1 - (this.deadT - 3.2) / 1.0, 0, 1);
-        if (this.deadT > 3.0) this.group.scale.setScalar(this.scale * U.clamp(fade, .01, 1));
+        if (this.deadT > 3.0) {
+          for (const b of this.ragdollBodies) if (b.mesh) b.mesh.scale.setScalar(U.clamp(fade, .01, 1));
+        }
         return;
       }
       const k = U.clamp(this.deadT * this.fallSpeed, 0, 1);
@@ -14446,6 +14598,8 @@ class Zombie {
       if (o.userData && (o.userData.sharedGeo || o.userData.sharedMat)) return;  // общие ресурсы ран
       if (o.geometry) o.geometry.dispose();
     });
+    /* убрать куски рэгдолла (клоны делят ресурсы с оригиналом — не диспозим) */
+    if (typeof ragdollDispose === 'function') ragdollDispose(this);
     if (this.moundMesh) { if (this.moundMesh.parent) this.moundMesh.parent.remove(this.moundMesh); this.moundMesh.geometry.dispose(); this.moundMesh.material.dispose(); this.moundMesh = null; }
     if (this.iceShell) { if (this.iceShell.parent) this.iceShell.parent.remove(this.iceShell); this.iceShell.geometry.dispose(); this.iceShell.material.dispose(); this.iceShell = null; }
   }
@@ -25406,7 +25560,12 @@ const Game = {
       z.health = (z.health > 0 && s.h > 0) ? Math.min(z.health, s.h) : s.h;
       z.scale = s.s || z.scale || 1;
       z.group.scale.setScalar(z.scale);
-      if (!s.a && z.alive) { z.alive = false; z.dying = true; z.deadT = 0; }
+      if (!s.a && z.alive) {
+        z.alive = false; z.dying = true; z.deadT = 0;
+        if (typeof zombieUltra === 'function' && zombieUltra() && typeof ragdollStart === 'function') {
+          try { ragdollStart(z, { x: U.rand(-1, 1), y: 0, z: U.rand(-1, 1) }); } catch (e) { }
+        }
+      }
     }
     // remove zombies the host no longer has
     for (let i = this.horde.list.length - 1; i >= 0; i--) {

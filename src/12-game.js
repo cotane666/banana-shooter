@@ -5531,7 +5531,12 @@ const Game = {
       z.health = (z.health > 0 && s.h > 0) ? Math.min(z.health, s.h) : s.h;
       z.scale = s.s || z.scale || 1;
       z.group.scale.setScalar(z.scale);
-      if (!s.a && z.alive) { z.alive = false; z.dying = true; z.deadT = 0; }
+      if (!s.a && z.alive) {
+        z.alive = false; z.dying = true; z.deadT = 0;
+        if (typeof zombieUltra === 'function' && zombieUltra() && typeof ragdollStart === 'function') {
+          try { ragdollStart(z, { x: U.rand(-1, 1), y: 0, z: U.rand(-1, 1) }); } catch (e) { }
+        }
+      }
     }
     // remove zombies the host no longer has
     for (let i = this.horde.list.length - 1; i >= 0; i--) {

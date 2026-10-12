@@ -33452,6 +33452,57 @@ const ACCOUNT = {
   },
   configured() { return !!(this.cfg.url && this.cfg.anonKey); },
 
+  /* ---------- ДИАГНОСТИКА ОБЛАКА ----------
+     Бесплатные проекты Supabase «засыпают» после 7 дней простоя: сервер
+     перестаёт отвечать. Это не поломка игры — локальный прогресс цел.
+     Ниже: лёгкая проверка доступности и человеческие тексты ошибок. */
+  cloudText(state) {
+    if (state === 'paused') {
+      return 'Облако временно недоступно — проект Supabase на паузе (бесплатные проекты засыпают после 7 дней простоя). '
+        + 'Игра и прогресс на устройстве работают как обычно. Чтобы вернуть вход и синхронизацию: dashboard.supabase.com → ваш проект → Restore / Unpause (данные хранятся 90 дней).';
+    }
+    if (state === 'offline') {
+      return 'Нет связи с облаком. Проверьте интернет. Игра и локальный прогресс не затронуты.';
+    }
+    if (state === 'unconfigured') {
+      return 'Облако не настроено — откройте «НАСТРОЙКА ОБЛАКА».';
+    }
+    return 'Облако недоступно. Локальный прогресс не затронут.';
+  },
+  /* превратить ошибку запроса в понятный текст (+ пометить паузу/офлайн) */
+  _friendlyError(e) {
+    const msg = (e && e.message) || '';
+    const status = e && e.status;
+    const offline = (e && e.name === 'TypeError') || /failed to fetch|networkerror|load failed|network request failed/i.test(msg);
+    const paused = status === 503 || status === 540 || /paus|unavailable|inactive|service.*unavail/i.test(msg);
+    if (paused) return { text: this.cloudText('paused'), state: 'paused' };
+    if (offline) return { text: this.cloudText('offline'), state: 'offline' };
+    return { text: 'Ошибка: ' + msg, state: 'error' };
+  },
+  /* проверить доступность проекта (кэш 60 с). state: ok|paused|offline|error|unconfigured */
+  async checkCloud(force) {
+    if (!this.configured()) { this._cloudState = { ok: false, state: 'unconfigured' }; return this._cloudState; }
+    const now = Date.now();
+    if (!force && this._cloudChecked && this._cloudState && now - this._cloudChecked < 60000) return this._cloudState;
+    this._cloudChecked = now;
+    let result = { ok: true, state: 'ok' };
+    let to = null;
+    try {
+      const ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+      if (ctrl) to = setTimeout(() => ctrl.abort(), 8000);
+      const res = await fetch(this.cfg.url.replace(/\/+$/, '') + '/auth/v1/health', {
+        method: 'GET', headers: this.headers(false), signal: ctrl ? ctrl.signal : undefined
+      });
+      if (res.status === 503 || res.status === 540) result = { ok: false, state: 'paused' };
+      else if (!res.ok) result = { ok: false, state: 'error', status: res.status };
+    } catch (e) {
+      result = { ok: false, state: 'offline' };
+    }
+    if (to) clearTimeout(to);
+    this._cloudState = result;
+    return result;
+  },
+
   /* ---------- низкоуровневые запросы ---------- */
   headers(auth) {
     const h = { 'apikey': this.cfg.anonKey, 'Content-Type': 'application/json' };
@@ -33731,6 +33782,14 @@ const ACCOUNT = {
   open() {
     this._render();
     UI.show('account');
+    /* сразу проверим, не на паузе ли проект Supabase — покажем понятный текст */
+    this._status('');
+    this.checkCloud(true).then(r => {
+      if (!r || r.ok || !this.configured()) return;
+      const el = document.getElementById('accStatus');
+      if (el && !el.textContent) this._status(this.cloudText(r.state), '#ff9d21');
+      this._render();
+    }).catch(() => { });
   },
 
   _status(msg, color) {
@@ -33752,7 +33811,7 @@ const ACCOUNT = {
       else this._status('Готово! Прогресс привязан к аккаунту.', '#57d16a');
       if (typeof Store !== 'undefined') { Store.data.name = nick; Store.save(); }
       this._render();
-    } catch (e) { this._status('Ошибка: ' + e.message, '#e33a2e'); }
+    } catch (e) { const f = this._friendlyError(e); this._status(f.text, f.state === 'error' ? '#e33a2e' : '#ff9d21'); }
     this.busy = false;
   },
 
@@ -33768,7 +33827,7 @@ const ACCOUNT = {
       await this.login(email, pass);
       this._status('Вошли. Прогресс синхронизирован.', '#57d16a');
       this._render();
-    } catch (e) { this._status('Не удалось войти: ' + e.message, '#e33a2e'); }
+    } catch (e) { const f = this._friendlyError(e); this._status(f.text, f.state === 'error' ? '#e33a2e' : '#ff9d21'); }
     this.busy = false;
   },
 
@@ -33776,7 +33835,7 @@ const ACCOUNT = {
     if (this.busy) return;
     this.busy = true; this._status('Синхронизация…');
     try { await this.syncNow(); this._status('Синхронизировано.', '#57d16a'); }
-    catch (e) { this._status('Ошибка: ' + e.message, '#e33a2e'); }
+    catch (e) { const f = this._friendlyError(e); this._status(f.text, f.state === 'error' ? '#e33a2e' : '#ff9d21'); }
     this.busy = false;
   },
 
@@ -33799,8 +33858,14 @@ const ACCOUNT = {
 
     const cloudTag = document.getElementById('accCloudTag');
     if (cloudTag) {
-      cloudTag.textContent = this.configured() ? 'Облако подключено' : 'Облако не настроено';
-      cloudTag.style.color = this.configured() ? '#57d16a' : '#e33a2e';
+      const st = this._cloudState;
+      if (st && !st.ok && st.state !== 'unconfigured') {
+        cloudTag.textContent = (st.state === 'paused') ? 'Облако на паузе' : 'Облако недоступно';
+        cloudTag.style.color = '#ff9d21';
+      } else {
+        cloudTag.textContent = this.configured() ? 'Облако подключено' : 'Облако не настроено';
+        cloudTag.style.color = this.configured() ? '#57d16a' : '#e33a2e';
+      }
     }
     // встроенный проект уже настроен — форму показываем только по кнопке
     const cloudHint = document.getElementById('accCloudHint');

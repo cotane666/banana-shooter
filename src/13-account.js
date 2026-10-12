@@ -5,16 +5,19 @@
    Supabase (Auth + REST). Настройки проекта хранятся в localStorage
    (`cs3d.cloud.v1`): url, anonKey, включено/выключено.
 
-   ЧТО СИНХРОНИЗИРУЕТСЯ (прогресс, переносится между устройствами):
-     • достижения (Store.data.ach)          • рекорды забегов (runs)
-     • надетые скины (skinOn, skinChar)     • чекпойнты забегов (checkpoints)
-     • статистика: лучший счёт, лучшая волна, убийства, победы, время и т.д.
-   ЛОКАЛЬНЫЕ НАСТРОЙКИ (чувствительность, графика, звук) НЕ переносятся —
-   у каждого устройства они свои.
+   ЧТО СИНХРОНИЗИРУЕТСЯ: ВСЁ содержимое Store.data — прогресс, достижения,
+   рекорды забегов, скины, чекпойнты, карты редактора (customMaps), прогресс
+   Blood Art (baDmg), магазин, ник и настройки. Вход переносит данные целиком.
 
-   Слияние всегда безопасное (ничего не теряется): достижения/скины/чекпойнты
-   объединяются, числовая статистика берёт максимум.
+   Слияние безопасное (локальное не теряется): коллекции объединяются,
+   числовая статистика берёт максимум, простые поля и настройки приходят из
+   облака. Служебные ключи с «_» не отправляются.
    ============================================================ */
+
+/* ---- глубокое клонирование JSON-данных (снимок для облака) ---- */
+function _deepClone(x) {
+  try { return JSON.parse(JSON.stringify(x)); } catch (e) { return x; }
+}
 
 /* ---- SHA-256 (для хранения только ХЕША пароля, не самого пароля) ---- */
 async function _sha256Hex(str) {
@@ -202,22 +205,20 @@ const ACCOUNT = {
     // локальный прогресс остаётся на устройстве — ничего не удаляем
   },
 
-  /* ---------- облачное хранилище прогресса ---------- */
+  /* ---------- облачное хранилище прогресса ----------
+     ПОЛНЫЙ снимок: переносится АБСОЛЮТНО ВСЁ содержимое Store.data
+     (прогресс, достижения, карты редактора, Blood Art, магазин, ник,
+     настройки). Служебные ключи с «_» не отправляем. */
   progressSubset() {
     const d = Store.data;
-    return {
-      ach: d.ach || {},
-      runs: d.runs || [],
-      skinOn: d.skinOn || {},
-      skinChar: d.skinChar || '',
-      mechSkin: d.mechSkin || '',
-      checkpoints: d.checkpoints || {},
-      best: d.best || 0, bestWave: d.bestWave || 0, killsTotal: d.killsTotal || 0,
-      matches: d.matches || 0, wins: d.wins || 0, signalSrv: d.signalSrv || 0,
-      aimBest: d.aimBest || 0, clears: d.clears || 0, playTime: d.playTime || 0,
-      offModsRun: d.offModsRun || 0, offModPick: d.offModPick || 0,
-      meta: { nick: this.nickname || Store.data.name || '', updated: Date.now() }
-    };
+    const out = {};
+    for (const k in d) {
+      if (!Object.prototype.hasOwnProperty.call(d, k)) continue;
+      if (k.charAt(0) === '_') continue;         // служебные — только локально
+      out[k] = _deepClone(d[k]);
+    }
+    out.meta = { nick: this.nickname || d.name || '', updated: Date.now(), v: 2 };
+    return out;
   },
   async push() {
     if (!this.session || !this.user) return false;
@@ -242,25 +243,48 @@ const ACCOUNT = {
     return null;
   },
 
-  /* ---------- безопасное слияние ---------- */
+  /* ---------- полное безопасное слияние ----------
+     Переносим ВСЕ поля из облака на это устройство:
+       • коллекции (достижения, скины, чекпойнты, магазин, режимы) — union,
+         локальное не теряется;
+       • рекорды забегов и карты редактора — union без дублей;
+       • числовые рекорды — максимум (прогресс никогда не уменьшается);
+       • все прочие поля и настройки — приходят из облака (это и есть перенос). */
   mergeRemote(remote) {
     if (!remote) return false;
     const d = Store.data;
     let changed = false;
-    // достижения, скины, чекпойнты — объединение
-    const mergeObj = (key) => {
-      const local = d[key] || {}, cloud = remote[key] || {};
-      const out = Object.assign({}, cloud, local);
-      if (Object.keys(out).length !== Object.keys(local).length) { d[key] = out; changed = true; }
-      else { d[key] = out; }
+    const setKey = (k, v) => {
+      if (JSON.stringify(d[k]) !== JSON.stringify(v)) { d[k] = v; changed = true; }
     };
-    mergeObj('ach'); mergeObj('skinOn'); mergeObj('checkpoints');
-    if (remote.skinChar && remote.skinChar !== d.skinChar) { d.skinChar = remote.skinChar; changed = true; }
-    if (remote.mechSkin && remote.mechSkin !== d.mechSkin) { d.mechSkin = remote.mechSkin; changed = true; }
-    // числовая статистика — максимум (никогда не уменьшаем)
-    const nums = ['best', 'bestWave', 'killsTotal', 'matches', 'wins', 'signalSrv', 'aimBest', 'clears', 'playTime', 'offModsRun', 'offModPick'];
-    nums.forEach(k => { const v = remote[k] || 0; if (v > (d[k] || 0)) { d[k] = v; changed = true; } });
-    // рекорды забегов — объединение без дублей, топ-50
+
+    const ADD_OBJ = ['ach', 'skinOn', 'checkpoints', 'shopAllow', 'shopItems', 'offMods'];
+    const NUM_MAX = ['best', 'bestWave', 'killsTotal', 'matches', 'wins', 'signalSrv',
+      'aimBest', 'clears', 'playTime', 'offModsRun', 'offModPick', 'baDmg'];
+    const special = {};
+    ADD_OBJ.concat(['runs', 'customMaps']).concat(NUM_MAX).forEach(k => special[k] = 1);
+
+    // 1) все прочие поля — из облака (полный перенос данных и настроек)
+    for (const k in remote) {
+      if (!Object.prototype.hasOwnProperty.call(remote, k)) continue;
+      if (k === 'meta' || special[k]) continue;
+      const v = remote[k];
+      if (v === undefined || v === null) continue;
+      if (k === 'name' && !v) continue;         // пустой ник не затираем
+      setKey(k, _deepClone(v));
+    }
+    // 2) числовые рекорды — максимум
+    for (const k of NUM_MAX) {
+      const v = remote[k];
+      if (typeof v === 'number' && v > (d[k] || 0)) setKey(k, v);
+    }
+    // 3) объекты-коллекции — объединение (локальное имеет приоритет, облако дополняет)
+    for (const key of ADD_OBJ) {
+      const r = remote[key];
+      if (!r || typeof r !== 'object' || Array.isArray(r)) continue;
+      setKey(key, Object.assign({}, r, d[key] || {}));
+    }
+    // 4) забеги — объединение без дублей, топ-50
     if (Array.isArray(remote.runs) && remote.runs.length) {
       const seen = {};
       const all = [];
@@ -269,9 +293,19 @@ const ACCOUNT = {
         if (!seen[key]) { seen[key] = 1; all.push(r); }
       });
       all.sort((a, b) => (b.score || 0) - (a.score || 0));
-      d.runs = all.slice(0, 50);
-      changed = true;
+      setKey('runs', all.slice(0, 50));
     }
+    // 5) карты редактора — объединение по id (локальные версии приоритетны)
+    if (Array.isArray(remote.customMaps) && remote.customMaps.length) {
+      const byId = {};
+      remote.customMaps.forEach(m => { if (m && m.id != null) byId[m.id] = _deepClone(m); });
+      (d.customMaps || []).forEach(m => { if (m && m.id != null) byId[m.id] = m; });
+      setKey('customMaps', Object.keys(byId).map(k => byId[k]));
+    }
+    // ник из облака (если локальный пуст)
+    const meta = remote.meta;
+    if (meta && meta.nick && meta.nick !== d.name) { d.name = meta.nick; changed = true; }
+
     if (changed) { Store.save(); this._refreshUI(); }
     return changed;
   },
@@ -465,6 +499,17 @@ const ACCOUNT = {
   },
 
   _refreshUI() {
+    /* применяем перенесённые настройки «на лету», чтобы не перезапускать игру */
+    try {
+      if (typeof applySetting === 'function') {
+        const S = Store.data;
+        ['sens', 'fov', 'vol', 'sfxVol', 'musicVol', 'touchSens'].forEach(k => {
+          if (S[k] !== undefined) applySetting(k, S[k]);
+        });
+      }
+      if (window.Game && Game.applyGfxPreset) Game.applyGfxPreset();
+      if (typeof Audio3D_SFX !== 'undefined') Audio3D_SFX.musicOff = Store.data.music === 0;
+    } catch (e) { }
     try { if (typeof UI !== 'undefined') { UI.renderMenuStats && UI.renderMenuStats(); UI.refreshChips && UI.refreshChips(); } } catch (e) { }
   },
 

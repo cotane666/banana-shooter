@@ -6335,12 +6335,41 @@ const Audio3D_SFX = {
     if (this.ctx) return;
     const AC = window.AudioContext || window.webkitAudioContext;
     if (!AC) return;
-    this.ctx = new AC();
-    // master (overall) -> destination; two sub-buses so effects and music can
-    // be balanced (or muted) independently of each other
+    /* телефон? на нём микс и буфер делаем аккуратнее */
+    this.mobile = (typeof IS_TOUCH !== 'undefined') ? !!IS_TOUCH
+      : (typeof navigator !== 'undefined' && navigator.maxTouchPoints > 0);
+    /* На телефоне просим более крупный буфер ('balanced'), иначе при тяжёлом
+       3D-рендере аудио-поток «не успевает» и слышен треск. */
+    try { this.ctx = new AC({ latencyHint: this.mobile ? 'balanced' : 'interactive' }); }
+    catch (e) { this.ctx = new AC(); }
+    // master (overall) -> highpass -> limiter -> softclip -> destination
     this.master = this.ctx.createGain();
     this.master.gain.value = this.vol;
-    this.master.connect(this.ctx.destination);
+    /* Highpass убирает саб-частоты, на которых динамик телефона «трещит» */
+    const hp = this.ctx.createBiquadFilter();
+    hp.type = 'highpass';
+    hp.frequency.value = this.mobile ? 75 : 25;
+    hp.Q.value = .7;
+    /* Лимитер: не даёт наложенным звукам уйти в клиппинг (главный источник
+       треска, когда одновременно играют музыка + выстрелы + взрывы). */
+    const lim = this.ctx.createDynamicsCompressor();
+    lim.threshold.value = this.mobile ? -10 : -6;
+    lim.knee.value = 6;
+    lim.ratio.value = 20;
+    lim.attack.value = .003;
+    lim.release.value = .25;
+    this.master.connect(hp);
+    hp.connect(lim);
+    /* Мягкий сатуратор (tanh) ПОСЛЕ лимитера: даже если сумма слоёв «горячая»,
+       волна плавно ограничивается, а не срезается в жёсткий клиппинг (треск). */
+    const clip = this.ctx.createWaveShaper();
+    const curve = new Float32Array(1024);
+    for (let i = 0; i < 1024; i++) { const x = i / 512 - 1; curve[i] = Math.tanh(x * 1.2) / 1.2; }
+    clip.curve = curve;
+    clip.oversample = this.mobile ? 'none' : '2x';
+    lim.connect(clip);
+    clip.connect(this.ctx.destination);
+    this._masterHp = hp; this.limiter = lim; this._softClip = clip;
     this.sfx = this.ctx.createGain();
     this.sfx.gain.value = this.sfxVol;
     this.sfx.connect(this.master);
@@ -7003,7 +7032,7 @@ const Audio3D_SFX = {
   music: {
     /* МЕНЮ в духе Ultrakill: тёмный синт-пульс с ровным битом (не эмбиент).
        menuFloor держит минимальную плотность, чтобы меню всегда «качало». */
-    menu:    { root: 55.0,  scale: [0, 3, 5, 7, 10], prog: [0, -2, -4, -5], bpm: 100, wave: 'sawtooth', bright: 1300, loop: true,  gain: .38, pad: true, drums: true, snare: true, metal: false, menuFloor: .5,
+    menu:    { root: 55.0,  scale: [0, 3, 5, 7, 10], prog: [0, -2, -4, -5], bpm: 100, wave: 'sawtooth', bright: 1300, loop: true,  gain: .30, pad: true, drums: true, snare: true, metal: false, menuFloor: .5,
                riff: [0, 0, 7, 0, 5, 3, 0, -1] },
     game:    { root: 82.41, scale: [0, 3, 5, 7, 10],  prog: [0, -2, -4, -1], bpm: 112, wave: 'sawtooth', bright: 1400, loop: true,  gain: .40, pad: true, drums: true },
     boss:    { root: 73.42, scale: [0, 2, 3, 6, 10],  prog: [0, -1, -5, -3], bpm: 138, wave: 'square',   bright: 1600, loop: true,  gain: .5,  pad: false, drums: true, snare: true, metal: true, riff: [0, 0, 3, 0, 5, 3, 0, -1] },
@@ -7044,7 +7073,10 @@ const Audio3D_SFX = {
       /* темп зависит от интенсивности: на пике боя — быстрее (брейккор-ощущение) */
       const mi = this._musicMi();
       const beat = 60 / (th.bpm * (1 + mi * .45));
-      while (m.next < now + .4) { this._musicStep(m, m.next, beat); m.next += beat * .5; }
+      /* Если главный поток «залип» (рендер/GC на телефоне) и мы отстали —
+         НЕ догоняем пачкой нот (это даёт всплеск и треск), а перескакиваем. */
+      if (m.next < now - .25) m.next = now + .06;
+      while (m.next < now + .9) { this._musicStep(m, m.next, beat); m.next += beat * .5; }
       m.timer = setTimeout(schedule, 120);
     };
     schedule();
@@ -7127,7 +7159,7 @@ const Audio3D_SFX = {
       o.frequency.setValueAtTime(semi(chord), t);
       const lp = this.ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 520 + mi * 380; lp.Q.value = .7;
       const g = this.ctx.createGain();
-      g.gain.setValueAtTime(.18 + .05 * mi, t);
+      g.gain.setValueAtTime(.16 + .04 * mi, t);
       g.gain.exponentialRampToValueAtTime(.001, t + beat * .9);
       o.connect(lp); lp.connect(g); g.connect(m.out);
       o.start(t); o.stop(t + beat);
@@ -7139,7 +7171,7 @@ const Audio3D_SFX = {
         const rn = th.riff[i % th.riff.length];
         const rg = this.ctx.createGain();
         rg.gain.setValueAtTime(.001, t);
-        rg.gain.linearRampToValueAtTime(.16 * (.45 + rk * .75), t + .012);
+        rg.gain.linearRampToValueAtTime(.13 * (.45 + rk * .75) * (this.mobile ? .8 : 1), t + .012);
         rg.gain.exponentialRampToValueAtTime(.001, t + beat * .48);
         const ws = this.ctx.createWaveShaper();
         if (!this._distCurve) {
@@ -7147,7 +7179,7 @@ const Audio3D_SFX = {
           for (let k = 0; k < 256; k++) { const x = k / 128 - 1; c[k] = Math.tanh(x * 4.5); }
           this._distCurve = c;
         }
-        ws.curve = this._distCurve; ws.oversample = '2x';
+        ws.curve = this._distCurve; ws.oversample = this.mobile ? 'none' : '2x';
         const lp = this.ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 2200 + mi * 1400; lp.Q.value = 1.1;
         const o1 = this.ctx.createOscillator(); o1.type = 'sawtooth';
         o1.frequency.setValueAtTime(semi(chord + rn), t);
@@ -7164,7 +7196,7 @@ const Audio3D_SFX = {
         const k = this.ctx.createOscillator(); k.type = 'sine';
         k.frequency.setValueAtTime(120, t); k.frequency.exponentialRampToValueAtTime(45, t + .12);
         const kg = this.ctx.createGain();
-        kg.gain.setValueAtTime(.22 * kG, t); kg.gain.exponentialRampToValueAtTime(.001, t + .16);
+        kg.gain.setValueAtTime(.18 * kG * (this.mobile ? .82 : 1), t); kg.gain.exponentialRampToValueAtTime(.001, t + .16);
         k.connect(kg); kg.connect(m.out); k.start(t); k.stop(t + .18);
       }
       const hG = U.clamp((mi - .28) / .3, 0, 1);
@@ -7172,11 +7204,11 @@ const Audio3D_SFX = {
         const src = this.ctx.createBufferSource(); src.buffer = this.noiseBuf;
         const hp = this.ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 6000;
         const hg = this.ctx.createGain();
-        hg.gain.setValueAtTime(.05 * hG * (th.metal ? 1.6 : 1), t); hg.gain.exponentialRampToValueAtTime(.001, t + (th.metal ? .1 : .06));
+        hg.gain.setValueAtTime(.05 * hG * (th.metal ? 1.6 : 1) * (this.mobile ? .7 : 1), t); hg.gain.exponentialRampToValueAtTime(.001, t + (th.metal ? .1 : .06));
         src.connect(hp); hp.connect(hg); hg.connect(m.out); src.start(t); src.stop(t + .12);
       }
       /* BREAKCORE-ДРАЙВ на пике: дополнительные 16-е хэты */
-      if (mi > .72 && Math.random() < .55) {
+      if (mi > .72 && !this.mobile && Math.random() < .55) {
         const src = this.ctx.createBufferSource(); src.buffer = this.noiseBuf;
         const hp = this.ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 7500;
         const hg = this.ctx.createGain();
@@ -7190,7 +7222,7 @@ const Audio3D_SFX = {
         const s = this.ctx.createBufferSource(); s.buffer = this.noiseBuf;
         const bp = this.ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 1900; bp.Q.value = .8;
         const sg = this.ctx.createGain();
-        sg.gain.setValueAtTime(.14 * sG, t); sg.gain.exponentialRampToValueAtTime(.001, t + .18);
+        sg.gain.setValueAtTime(.12 * sG * (this.mobile ? .7 : 1), t); sg.gain.exponentialRampToValueAtTime(.001, t + .18);
         s.connect(bp); bp.connect(sg); sg.connect(m.out); s.start(t); s.stop(t + .2);
       }
     }
@@ -7200,7 +7232,7 @@ const Audio3D_SFX = {
     a.frequency.setValueAtTime(semi(chord + deg + 24), t);
     const bp = this.ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = th.bright * (.7 + mi * .7); bp.Q.value = 1.2;
     const ag = this.ctx.createGain();
-    ag.gain.setValueAtTime(.07 + .06 * mi, t);
+    ag.gain.setValueAtTime((.06 + .05 * mi) * (this.mobile ? .8 : 1), t);
     ag.gain.exponentialRampToValueAtTime(.001, t + beat * .45);
     a.connect(bp); bp.connect(ag); ag.connect(m.out);
     a.start(t); a.stop(t + beat * .5);
@@ -7224,7 +7256,7 @@ const Audio3D_SFX = {
       p.frequency.linearRampToValueAtTime(semi(chord + 12 + th.scale[2]), t + beat * 3);
       const pg = this.ctx.createGain();
       pg.gain.setValueAtTime(.001, t);
-      pg.gain.linearRampToValueAtTime(.04 + .02 * mi, t + beat);
+      pg.gain.linearRampToValueAtTime(.035 + .015 * mi, t + beat);
       pg.gain.exponentialRampToValueAtTime(.001, t + beat * 3.6);
       // a gentle low-pass keeps the sustained pad round instead of buzzy
       const plp = this.ctx.createBiquadFilter(); plp.type = 'lowpass'; plp.frequency.value = 800 + mi * 500; plp.Q.value = .6;
@@ -7239,7 +7271,7 @@ const Audio3D_SFX = {
     const src = this.ctx.createBufferSource();
     src.buffer = this.noiseBuf; src.loop = true;
     const lp = this.ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 320; lp.Q.value = .7;
-    const g = this.ctx.createGain(); g.gain.value = .045;
+    const g = this.ctx.createGain(); g.gain.value = this.mobile ? .012 : .03;
     src.connect(lp); lp.connect(g); g.connect(this.sfx);
     src.start();
     this.amb = { src, g };

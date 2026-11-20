@@ -706,10 +706,10 @@ const Audio3D_SFX = {
   music: {
     /* МЕНЮ: мягкий тёмный синт-пульс (Katana Zero / Undertale). Меньше низа,
        плюс «хук» — простая запоминающаяся мелодия. */
-    menu:    { root: 65.41, scale: [0, 2, 3, 7, 10], prog: [0, -2, -4, -5, -7, -5, -2, -4], bpm: 88, bright: 1150, gain: .27, pad: true, drums: true, snare: false, menuFloor: .38,
+    menu:    { root: 65.41, scale: [0, 2, 3, 7, 10], prog: [0, -2, -4, -5, -7, -5, -2, -4], bpm: 94, bright: 1300, gain: .55, pad: true, drums: true, snare: false, menuFloor: .4,
                hook:  [0, null, 3, null, 5, null, 2, null],
                hookB: [0, null, 2, 3, null, 5, null, -2] },
-    game:    { root: 87.31, scale: [0, 3, 5, 7, 10], prog: [0, -2, -4, -1, -3, -5, -4, -2], bpm: 100, bright: 1300, gain: .33, pad: true, drums: true,
+    game:    { root: 87.31, scale: [0, 3, 5, 7, 10], prog: [0, -2, -4, -1, -3, -5, -4, -2], bpm: 100, bright: 1300, gain: .48, pad: true, drums: true,
                snare: true,
                riff:   [0, 0, 5, 3, 0, 7, 5, 3],
                melody: [0, 3, 5, 7, 5, 3, 2, 0],
@@ -848,7 +848,7 @@ const Audio3D_SFX = {
       o.frequency.setValueAtTime(semi(chord) * (1 + hum(.002)), t);
       const lp = this.ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 340 + mi * 160; lp.Q.value = .6;
       const g = this.ctx.createGain();
-      g.gain.setValueAtTime(.085 + .035 * mi, t);
+      g.gain.setValueAtTime(.12 + .04 * mi, t);
       g.gain.exponentialRampToValueAtTime(.0008, t + beat * 1.6);
       o.connect(lp); lp.connect(g); g.connect(m.out);
       o.start(t); o.stop(t + beat * 1.7);
@@ -885,7 +885,7 @@ const Audio3D_SFX = {
         const k = this.ctx.createOscillator(); k.type = 'sine';
         k.frequency.setValueAtTime(105, t); k.frequency.exponentialRampToValueAtTime(48, t + .13);
         const kg = this.ctx.createGain();
-        kg.gain.setValueAtTime(.11 * kG * (this.mobile ? .85 : 1), t); kg.gain.exponentialRampToValueAtTime(.001, t + .17);
+        kg.gain.setValueAtTime(.14 * kG * (this.mobile ? .85 : 1), t); kg.gain.exponentialRampToValueAtTime(.001, t + .17);
         k.connect(kg); kg.connect(m.out); k.start(t); k.stop(t + .19);
       }
       /* агрессия: доп. кик на 6 */
@@ -902,7 +902,7 @@ const Audio3D_SFX = {
         const src = this.ctx.createBufferSource(); src.buffer = this.noiseBuf;
         const hp = this.ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 6500;
         const hg = this.ctx.createGain();
-        hg.gain.setValueAtTime(.028 * hG * (th.metal ? 1.5 : 1) * (this.mobile ? .7 : 1), ht);
+        hg.gain.setValueAtTime(.02 * hG * (th.metal ? 1.5 : 1) * (this.mobile ? .7 : 1), ht);
         hg.gain.exponentialRampToValueAtTime(.001, ht + (th.metal ? .09 : .05));
         src.connect(hp); hp.connect(hg); hg.connect(m.out); src.start(ht); src.stop(ht + .1);
       }
@@ -942,7 +942,7 @@ const Audio3D_SFX = {
       a.frequency.setValueAtTime(semi(chord + off + 24) * (1 + hum(.003)), at);
       const bp = this.ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = th.bright * (.7 + mi * .7); bp.Q.value = 1.2;
       const ag = this.ctx.createGain();
-      ag.gain.setValueAtTime((.045 + .04 * mi) * (this.mobile ? .8 : 1), at);
+      ag.gain.setValueAtTime((.075 + .045 * mi) * (this.mobile ? .85 : 1), at);
       ag.gain.exponentialRampToValueAtTime(.001, at + beat * .4);
       a.connect(bp); bp.connect(ag); ag.connect(m.out);
       a.start(at); a.stop(at + beat * .45);
@@ -959,10 +959,10 @@ const Audio3D_SFX = {
         const llp = this.ctx.createBiquadFilter(); llp.type = 'lowpass'; llp.frequency.value = 1800 + mi * 900; llp.Q.value = .8;
         const lg = this.ctx.createGain();
         lg.gain.setValueAtTime(.001, lt);
-        lg.gain.linearRampToValueAtTime(.045 * (this.mobile ? .85 : 1), lt + .012);
-        lg.gain.exponentialRampToValueAtTime(.001, lt + beat * .5);
+        lg.gain.linearRampToValueAtTime(.085 * (this.mobile ? .9 : 1), lt + .012);
+        lg.gain.exponentialRampToValueAtTime(.001, lt + beat * .65);
         lo.connect(llp); llp.connect(lg); lg.connect(m.out);
-        lo.start(lt); lo.stop(lt + beat * .55);
+        lo.start(lt); lo.stop(lt + beat * .7);
       }
     }
     /* ---- МЕЛОДИЯ: ведущая линия поверх риффа (у боссов), громче на пике ---- */
@@ -985,7 +985,7 @@ const Audio3D_SFX = {
       p.frequency.linearRampToValueAtTime(semi(chord + 12 + th.scale[2]), t + beat * 3);
       const pg = this.ctx.createGain();
       pg.gain.setValueAtTime(.001, t);
-      pg.gain.linearRampToValueAtTime(.035 + .015 * mi, t + beat);
+      pg.gain.linearRampToValueAtTime(.05 + .02 * mi, t + beat);
       pg.gain.exponentialRampToValueAtTime(.001, t + beat * 3.6);
       // a gentle low-pass keeps the sustained pad round instead of buzzy
       const plp = this.ctx.createBiquadFilter(); plp.type = 'lowpass'; plp.frequency.value = 800 + mi * 500; plp.Q.value = .6;

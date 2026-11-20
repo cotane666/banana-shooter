@@ -644,6 +644,7 @@ const UI = {
     void h.offsetWidth;
     if (kill) h.classList.add('kill');
     h.classList.add('on');
+    if (typeof Audio3D_SFX !== 'undefined' && Audio3D_SFX.hitmarker) Audio3D_SFX.hitmarker(!!kill);
     clearTimeout(this._hmT);
     this._hmT = setTimeout(() => h.classList.remove('on'), kill ? 220 : 110);
   },

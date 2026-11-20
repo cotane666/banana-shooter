@@ -295,7 +295,9 @@ const BloodArt = {
       if (UI.center) UI.center('ОТКРЫТ СКИЛЛ', 'BLOOD ART · ' + s.name, 2.6);
       if (UI.toast) UI.toast('BLOOD ART: открыт скилл ' + s.name, '#ff2040');
     }
-    if (typeof Audio3D_SFX !== 'undefined' && Audio3D_SFX.tone) {
+    if (typeof Audio3D_SFX !== 'undefined' && Audio3D_SFX.levelUp) {
+      Audio3D_SFX.levelUp();
+    } else if (typeof Audio3D_SFX !== 'undefined' && Audio3D_SFX.tone) {
       Audio3D_SFX.tone(520, .12, 'square', .12);
       setTimeout(() => Audio3D_SFX.tone(780, .12, 'square', .12), 110);
       setTimeout(() => Audio3D_SFX.tone(1040, .18, 'square', .12), 220);

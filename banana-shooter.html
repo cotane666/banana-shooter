@@ -6363,6 +6363,12 @@ const Audio3D_SFX = {
     return b;
   },
 
+  /* ---------- ПРОЦЕДУРНАЯ ВАРИАТИВНОСТЬ ----------
+     Небольшой случайный коэффициент (p = доля разброса, напр. .06 = ±6%).
+     Применяется к высоте тона/громкости, чтобы повторяющиеся звуки не
+     звучали «роботом». */
+  _jitter(p) { return 1 + (Math.random() * 2 - 1) * (p || 0); },
+
   /* volume/pan/attenuation for a world-positioned sound */
   _spatial(x, y, z, refDist, maxDist) {
     if (x === undefined) return { gain: 1, pan: 0 };
@@ -6582,8 +6588,9 @@ const Audio3D_SFX = {
     this.tone(1200, .05, 'square', .06, x, y, z, 700);
   },
 
-  /* generic tone helper */
-  tone(freq, dur, type, gain, x, y, z, slideTo) {
+  /* generic tone helper. pitchJ / gainJ — процедурный разброс (0..1):
+     при повторных вызовах звук слегка «плывёт» по высоте и громкости. */
+  tone(freq, dur, type, gain, x, y, z, slideTo, pitchJ, gainJ) {
     if (!this.ctx || this.muted) return;
     const sp = this._spatial(x, y, z, 3, 90);
     if (sp.gain <= .002) return;
@@ -6591,32 +6598,35 @@ const Audio3D_SFX = {
     const pan = this.ctx.createStereoPanner ? this.ctx.createStereoPanner() : null;
     const out = this.ctx.createGain(); out.gain.value = sp.gain;
     if (pan) { pan.pan.value = sp.pan; out.connect(pan); pan.connect(this.sfx); } else out.connect(this.sfx);
+    const f0 = freq * (pitchJ ? this._jitter(pitchJ) : 1);
     const o = this.ctx.createOscillator();
-    o.type = type || 'square'; o.frequency.setValueAtTime(freq, t);
-    if (slideTo) o.frequency.exponentialRampToValueAtTime(slideTo, t + dur);
+    o.type = type || 'square'; o.frequency.setValueAtTime(f0, t);
+    if (slideTo) o.frequency.exponentialRampToValueAtTime(Math.max(20, slideTo * (pitchJ ? this._jitter(pitchJ) : 1)), t + dur);
     const g = this.ctx.createGain();
-    g.gain.setValueAtTime(gain, t);
+    g.gain.setValueAtTime(Math.max(.0005, gain * (gainJ ? this._jitter(gainJ) : 1)), t);
     g.gain.exponentialRampToValueAtTime(.0008, t + dur);
     o.connect(g); g.connect(out);
     o.start(t); o.stop(t + dur + .02);
   },
 
   hit(x, y, z, headshot) {
-    if (headshot) { this.tone(2100, .09, 'square', .16, x, y, z, 1500); this.tone(3100, .06, 'sine', .1, x, y, z, 2400); }
-    else this.tone(760, .05, 'triangle', .10, x, y, z, 480);
+    if (headshot) {
+      this.tone(2100, .09, 'square', .16, x, y, z, 1500, .05, .12);
+      this.tone(3100, .06, 'sine', .1, x, y, z, 2400, .05, .12);
+    } else this.tone(760, .05, 'triangle', .10, x, y, z, 480, .06, .14);
   },
-  flesh(x, y, z) { if (!this.ctx || this.muted) return; this.tone(190, .12, 'sawtooth', .11, x, y, z, 80); },
-  kill() { this.tone(1250, .07, 'square', .13); setTimeout(() => this.tone(1750, .11, 'square', .12), 70); },
-  hurt() { this.tone(170, .22, 'sawtooth', .2, undefined, undefined, undefined, 95); },
-  empty() { this.tone(2600, .035, 'square', .075); },
-  reloadStep(i) { this.tone(420 + i * 90, .045, 'square', .08); },
-  pickup() { this.tone(880, .06, 'triangle', .1); setTimeout(() => this.tone(1320, .09, 'triangle', .1), 55); },
-  buy() { this.tone(660, .05, 'square', .09); setTimeout(() => this.tone(990, .09, 'square', .09), 60); },
-  deny() { this.tone(200, .16, 'square', .12, undefined, undefined, undefined, 120); },
+  flesh(x, y, z) { if (!this.ctx || this.muted) return; this.tone(190, .12, 'sawtooth', .11, x, y, z, 80, .12, .16); },
+  kill() { this.tone(1250, .07, 'square', .13, undefined, undefined, undefined, undefined, .03, .08); setTimeout(() => this.tone(1750, .11, 'square', .12, undefined, undefined, undefined, undefined, .03, .08), 70); },
+  hurt() { this.tone(170, .22, 'sawtooth', .2, undefined, undefined, undefined, 95, .07, .12); },
+  empty() { this.tone(2600, .035, 'square', .075, undefined, undefined, undefined, undefined, .05, .1); },
+  reloadStep(i) { this.tone(420 + i * 90, .045, 'square', .08, undefined, undefined, undefined, undefined, .05, .12); },
+  pickup() { this.tone(880, .06, 'triangle', .1, undefined, undefined, undefined, undefined, .03, .08); setTimeout(() => this.tone(1320, .09, 'triangle', .1, undefined, undefined, undefined, undefined, .03, .08), 55); },
+  buy() { this.tone(660, .05, 'square', .09, undefined, undefined, undefined, undefined, .03, .08); setTimeout(() => this.tone(990, .09, 'square', .09, undefined, undefined, undefined, undefined, .03, .08), 60); },
+  deny() { this.tone(200, .16, 'square', .12, undefined, undefined, undefined, 120, .06, .1); },
   /* a crate lands: a soft thud plus a bright "ready" ping */
   crateDrop(x, y, z) {
-    this.tone(120, .18, 'triangle', .12, x, y, z, 70);
-    setTimeout(() => this.tone(1500, .08, 'sine', .09, x, y, z, 1900), 90);
+    this.tone(120, .18, 'triangle', .12, x, y, z, 70, .08, .12);
+    setTimeout(() => this.tone(1500, .08, 'sine', .09, x, y, z, 1900, .06, .12), 90);
   },
   /* a laser zap: a bright descending sweep with a little resonance */
   laser(x, y, z) {
@@ -6903,7 +6913,85 @@ const Audio3D_SFX = {
     const notes = win ? [523, 659, 784, 1046] : [523, 440, 349, 262];
     notes.forEach((n, i) => setTimeout(() => this.tone(n, .3, 'triangle', .14), i * 150));
   },
-  uiClick() { this.tone(1100, .025, 'square', .05); },
+  uiClick() { this.tone(1100, .025, 'square', .05, undefined, undefined, undefined, undefined, .05, .1); },
+
+  /* ============================================================
+     СОЧНЫЕ SFX ДЛЯ ИМПАКТА (не позиционные, короткие)
+     ============================================================ */
+  /* хитмаркер: короткий тик при попадании, ярче — на убийстве */
+  hitmarker(kill) {
+    if (!this.ctx || this.muted) return;
+    const now = this.ctx.currentTime;
+    if (!kill && this._hmSndT && now - this._hmSndT < .055) return;   // не спамим на авто-огне
+    this._hmSndT = now;
+    if (kill) {
+      this.tone(1400, .05, 'square', .10, undefined, undefined, undefined, 2200, .02, .06);
+      setTimeout(() => this.tone(2600, .08, 'sine', .085, undefined, undefined, undefined, undefined, .02, .06), 45);
+    } else {
+      this.tone(1900, .03, 'square', .06, undefined, undefined, undefined, 1500, .03, .1);
+    }
+  },
+
+  /* рывок: whoosh + низкий толчок (heavy — для меха/мощного рывка) */
+  dash(heavy) {
+    if (!this.ctx || this.muted) return;
+    const t = this.ctx.currentTime;
+    const src = this.ctx.createBufferSource(); src.buffer = this.noiseBuf;
+    src.playbackRate.value = .8 + Math.random() * .35;
+    const bp = this.ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.Q.value = 1.1;
+    bp.frequency.setValueAtTime(heavy ? 480 : 900, t);
+    bp.frequency.exponentialRampToValueAtTime(heavy ? 2600 : 2200, t + .22);
+    const g = this.ctx.createGain();
+    g.gain.setValueAtTime(.0001, t);
+    g.gain.linearRampToValueAtTime(heavy ? .28 : .18, t + .03);
+    g.gain.exponentialRampToValueAtTime(.001, t + .28);
+    src.connect(bp); bp.connect(g); g.connect(this.sfx);
+    src.start(t); src.stop(t + .3);
+    const o = this.ctx.createOscillator(); o.type = 'sine';
+    o.frequency.setValueAtTime(heavy ? 110 : 150, t);
+    o.frequency.exponentialRampToValueAtTime(50, t + .2);
+    const og = this.ctx.createGain();
+    og.gain.setValueAtTime(heavy ? .3 : .16, t);
+    og.gain.exponentialRampToValueAtTime(.001, t + .22);
+    o.connect(og); og.connect(this.sfx); o.start(t); o.stop(t + .24);
+  },
+
+  /* лёгкий whoosh для пролетающих снарядов / быстрых объектов */
+  whoosh(x, y, z, pitch) {
+    if (!this.ctx || this.muted) return;
+    const sp = this._spatial(x, y, z, 3, 90);
+    if (sp.gain <= .003) return;
+    const t = this.ctx.currentTime;
+    const pitch0 = (pitch || 700) * this._jitter(.15);
+    const src = this.ctx.createBufferSource(); src.buffer = this.noiseBuf;
+    src.playbackRate.value = .9 + Math.random() * .4;
+    const bp = this.ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.Q.value = 1.3;
+    bp.frequency.setValueAtTime(pitch0, t);
+    bp.frequency.exponentialRampToValueAtTime(pitch0 * 2.4, t + .16);
+    const g = this.ctx.createGain();
+    g.gain.setValueAtTime(.0001, t);
+    g.gain.linearRampToValueAtTime(.10 * sp.gain, t + .02);
+    g.gain.exponentialRampToValueAtTime(.001, t + .2);
+    src.connect(bp); bp.connect(g); g.connect(this.sfx);
+    src.start(t); src.stop(t + .22);
+  },
+
+  /* UI: назад / подтверждение / открытие (левелап) */
+  uiBack() { this.tone(520, .07, 'triangle', .08, undefined, undefined, undefined, 320, .04, .08); },
+  uiConfirm() { this.tone(700, .05, 'square', .08, undefined, undefined, undefined, 1100, .03, .08); },
+  levelUp() {
+    [0, 90, 180].forEach((d, i) => setTimeout(() =>
+      this.tone([620, 830, 1100][i], .12, 'triangle', .1, undefined, undefined, undefined, undefined, .02, .06), d));
+  },
+
+  /* рикошет пули от стены */
+  ricochet(x, y, z) {
+    if (!this.ctx || this.muted) return;
+    const sp = this._spatial(x, y, z, 3, 60);
+    if (sp.gain <= .004) return;
+    const f = 1800 * this._jitter(.35);
+    this.tone(f, .06, 'triangle', .05 * sp.gain, x, y, z, f * .4, .2, .2);
+  },
 
   /* ============================================================
      MUSIC — menu / in-game / boss themes
@@ -6913,7 +7001,10 @@ const Audio3D_SFX = {
      ============================================================ */
   musicOff: false,
   music: {
-    menu:    { root: 98.0,  scale: [0, 4, 7, 11, 14], prog: [0, -3, 5, -5], bpm: 76,  wave: 'sawtooth', bright: 1100, loop: true,  gain: .34, pad: true, drums: false },
+    /* МЕНЮ в духе Ultrakill: тёмный синт-пульс с ровным битом (не эмбиент).
+       menuFloor держит минимальную плотность, чтобы меню всегда «качало». */
+    menu:    { root: 55.0,  scale: [0, 3, 5, 7, 10], prog: [0, -2, -4, -5], bpm: 100, wave: 'sawtooth', bright: 1300, loop: true,  gain: .38, pad: true, drums: true, snare: true, metal: false, menuFloor: .5,
+               riff: [0, 0, 7, 0, 5, 3, 0, -1] },
     game:    { root: 82.41, scale: [0, 3, 5, 7, 10],  prog: [0, -2, -4, -1], bpm: 112, wave: 'sawtooth', bright: 1400, loop: true,  gain: .40, pad: true, drums: true },
     boss:    { root: 73.42, scale: [0, 2, 3, 6, 10],  prog: [0, -1, -5, -3], bpm: 138, wave: 'square',   bright: 1600, loop: true,  gain: .5,  pad: false, drums: true, snare: true, metal: true, riff: [0, 0, 3, 0, 5, 3, 0, -1] },
     /* ---- БОССЫ: у каждого своя тема в духе DOOM / Undertale / Deltarune ---- */
@@ -6945,11 +7036,14 @@ const Audio3D_SFX = {
     const t0 = this.ctx.currentTime;
     out.gain.linearRampToValueAtTime(th.gain || .45, t0 + (name === 'menu' ? 1.6 : .8));
     this._music = { name, out, th, step: 0, timer: null, next: t0 + .1 };
-    const beat = 60 / th.bpm;
+    if (this._mi === undefined) this._mi = .3;
     const schedule = () => {
       if (!this._music || !this.ctx) return;
       const m = this._music;
       const now = this.ctx.currentTime;
+      /* темп зависит от интенсивности: на пике боя — быстрее (брейккор-ощущение) */
+      const mi = this._musicMi();
+      const beat = 60 / (th.bpm * (1 + mi * .45));
       while (m.next < now + .4) { this._musicStep(m, m.next, beat); m.next += beat * .5; }
       m.timer = setTimeout(schedule, 120);
     };
@@ -6976,8 +7070,52 @@ const Audio3D_SFX = {
   /* backwards-compatible alias used when a boss appears */
   bossMusicStart(type) { this._bossTheme = type; this.musicStart(type); },
   bossMusicStop() { this._bossTheme = null; if (typeof Game !== 'undefined') Game.refreshMusic(); else this.musicStop(); },
+
+  /* ---------- АДАПТИВНЫЙ САУНДТРЕК ----------
+     Интенсивность 0..1 плавно меняется по состоянию боя и управляет
+     темпом (bpm), набором слоёв (ударные/рифф/мелодия) и яркостью. */
+  _musicMi() {
+    const m = this._music;
+    let mi = (this._mi === undefined) ? .3 : this._mi;
+    if (m) {
+      const nm = m.name || '';
+      if (/^boss|brain/i.test(nm)) mi = Math.max(mi, .82);        // боссы всегда плотные
+      else if (m.th && m.th.menuFloor) mi = Math.max(mi, m.th.menuFloor);
+    }
+    return U.clamp(mi, 0, 1);
+  },
+  /* вернуться к спокойствию (меню/закупка) */
+  setMusicCalm() { this._mi = .15; this._miTarget = .15; },
+  /* вызывается из игрового цикла каждый кадр */
+  updateAdaptive(G, dt) {
+    if (!this.ctx) return;
+    const p = G.player;
+    let target = .18;
+    if (G.mode === CS.MODE.MENU) target = .15;
+    else if (p && p.alive) {
+      if (G.roundState === 'buy') target = .2;
+      else if (G.roundState === 'live' || G.mode === CS.MODE.RANGE) {
+        target = .42;
+        if (G.horde && G.horde.list) {
+          target += U.clamp(G.horde.list.length / 28, 0, .25);
+          for (const z of G.horde.list) {
+            if ((z.isBoss || z.isMiniBoss) && z.alive && !z.dying) { target = 1; break; }
+          }
+        }
+        const maxHP = G.matchHP || p.maxHealth || 100;
+        if (p.health < maxHP * .3) target += .22;      // критическое HP → ускорение
+        if (p.health < maxHP * .15) target += .18;
+      }
+    } else target = .22;
+    target = U.clamp(target, 0, 1);
+    this._miTarget = target;
+    if (this._mi === undefined) this._mi = target;
+    this._mi += (target - this._mi) * Math.min(1, dt * 1.8);
+  },
+
   _musicStep(m, t, beat) {
     const th = m.th, i = m.step++;
+    const mi = this._musicMi();
     const chord = th.prog[Math.floor(i / 8) % th.prog.length];
     const semi = (n) => th.root * Math.pow(2, n / 12);
     // bass on every beat.
@@ -6987,80 +7125,97 @@ const Audio3D_SFX = {
     if (i % 2 === 0) {
       const o = this.ctx.createOscillator(); o.type = 'triangle';
       o.frequency.setValueAtTime(semi(chord), t);
-      const lp = this.ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 520; lp.Q.value = .7;
+      const lp = this.ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 520 + mi * 380; lp.Q.value = .7;
       const g = this.ctx.createGain();
-      g.gain.setValueAtTime(.20, t);
+      g.gain.setValueAtTime(.18 + .05 * mi, t);
       g.gain.exponentialRampToValueAtTime(.001, t + beat * .9);
       o.connect(lp); lp.connect(g); g.connect(m.out);
       o.start(t); o.stop(t + beat);
     }
-    /* ---- МЕТАЛ-РИФФ (дух DOOM): рычащий дисторшн-гитар на каждой доле ---- */
+    /* ---- МЕТАЛ-РИФФ (дух DOOM): включается с ростом интенсивности ---- */
     if (th.riff) {
-      const rn = th.riff[i % th.riff.length];
-      const rg = this.ctx.createGain();
-      rg.gain.setValueAtTime(.001, t);
-      rg.gain.linearRampToValueAtTime(.16, t + .012);
-      rg.gain.exponentialRampToValueAtTime(.001, t + beat * .48);
-      /* дисторшн через WaveShaper */
-      const ws = this.ctx.createWaveShaper();
-      if (!this._distCurve) {
-        const c = new Float32Array(256);
-        for (let k = 0; k < 256; k++) { const x = k / 128 - 1; c[k] = Math.tanh(x * 4.5); }
-        this._distCurve = c;
+      const rk = U.clamp((mi - .4) / .35, 0, 1);
+      if (rk > .03) {
+        const rn = th.riff[i % th.riff.length];
+        const rg = this.ctx.createGain();
+        rg.gain.setValueAtTime(.001, t);
+        rg.gain.linearRampToValueAtTime(.16 * (.45 + rk * .75), t + .012);
+        rg.gain.exponentialRampToValueAtTime(.001, t + beat * .48);
+        const ws = this.ctx.createWaveShaper();
+        if (!this._distCurve) {
+          const c = new Float32Array(256);
+          for (let k = 0; k < 256; k++) { const x = k / 128 - 1; c[k] = Math.tanh(x * 4.5); }
+          this._distCurve = c;
+        }
+        ws.curve = this._distCurve; ws.oversample = '2x';
+        const lp = this.ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 2200 + mi * 1400; lp.Q.value = 1.1;
+        const o1 = this.ctx.createOscillator(); o1.type = 'sawtooth';
+        o1.frequency.setValueAtTime(semi(chord + rn), t);
+        const o2 = this.ctx.createOscillator(); o2.type = 'sawtooth';
+        o2.frequency.setValueAtTime(semi(chord + rn + .12), t);
+        o1.connect(ws); o2.connect(ws); ws.connect(lp); lp.connect(rg); rg.connect(m.out);
+        o1.start(t); o1.stop(t + beat * .5); o2.start(t); o2.stop(t + beat * .5);
       }
-      ws.curve = this._distCurve; ws.oversample = '2x';
-      const lp = this.ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 2600; lp.Q.value = 1.1;
-      const o1 = this.ctx.createOscillator(); o1.type = 'sawtooth';
-      o1.frequency.setValueAtTime(semi(chord + rn), t);
-      const o2 = this.ctx.createOscillator(); o2.type = 'sawtooth';
-      o2.frequency.setValueAtTime(semi(chord + rn + .12), t);       // лёгкий расстрой
-      o1.connect(ws); o2.connect(ws); ws.connect(lp); lp.connect(rg); rg.connect(m.out);
-      o1.start(t); o1.stop(t + beat * .5); o2.start(t); o2.stop(t + beat * .5);
     }
-    // a soft kick + hat for the driving tracks
+    // a soft kick + hat for the driving tracks (слои включаются по интенсивности)
     if (th.drums) {
-      if (i % 2 === 0) {
+      const kG = U.clamp((mi - .08) / .3, 0, 1);
+      if (i % 2 === 0 && kG > .02) {
         const k = this.ctx.createOscillator(); k.type = 'sine';
         k.frequency.setValueAtTime(120, t); k.frequency.exponentialRampToValueAtTime(45, t + .12);
         const kg = this.ctx.createGain();
-        kg.gain.setValueAtTime(.22, t); kg.gain.exponentialRampToValueAtTime(.001, t + .16);
+        kg.gain.setValueAtTime(.22 * kG, t); kg.gain.exponentialRampToValueAtTime(.001, t + .16);
         k.connect(kg); kg.connect(m.out); k.start(t); k.stop(t + .18);
       }
-      if (i % 2 === 1) {
+      const hG = U.clamp((mi - .28) / .3, 0, 1);
+      if (i % 2 === 1 && hG > .02) {
         const src = this.ctx.createBufferSource(); src.buffer = this.noiseBuf;
         const hp = this.ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 6000;
         const hg = this.ctx.createGain();
-        hg.gain.setValueAtTime(.05 * (th.metal ? 1.6 : 1), t); hg.gain.exponentialRampToValueAtTime(.001, t + (th.metal ? .1 : .06));
+        hg.gain.setValueAtTime(.05 * hG * (th.metal ? 1.6 : 1), t); hg.gain.exponentialRampToValueAtTime(.001, t + (th.metal ? .1 : .06));
         src.connect(hp); hp.connect(hg); hg.connect(m.out); src.start(t); src.stop(t + .12);
       }
+      /* BREAKCORE-ДРАЙВ на пике: дополнительные 16-е хэты */
+      if (mi > .72 && Math.random() < .55) {
+        const src = this.ctx.createBufferSource(); src.buffer = this.noiseBuf;
+        const hp = this.ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 7500;
+        const hg = this.ctx.createGain();
+        const tt = t + beat * .25;
+        hg.gain.setValueAtTime(.035, tt); hg.gain.exponentialRampToValueAtTime(.001, tt + .04);
+        src.connect(hp); hp.connect(hg); hg.connect(m.out); src.start(tt); src.stop(tt + .05);
+      }
       /* ---- SNARE (для боссовых тем): на 2 и 4 ---- */
-      if (th.snare && i % 4 === 2) {
+      const sG = U.clamp((mi - .4) / .25, 0, 1);
+      if (th.snare && i % 4 === 2 && sG > .02) {
         const s = this.ctx.createBufferSource(); s.buffer = this.noiseBuf;
         const bp = this.ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 1900; bp.Q.value = .8;
         const sg = this.ctx.createGain();
-        sg.gain.setValueAtTime(.14, t); sg.gain.exponentialRampToValueAtTime(.001, t + .18);
+        sg.gain.setValueAtTime(.14 * sG, t); sg.gain.exponentialRampToValueAtTime(.001, t + .18);
         s.connect(bp); bp.connect(sg); sg.connect(m.out); s.start(t); s.stop(t + .2);
       }
     }
-    // arpeggio note (higher)
+    // arpeggio note (higher) — ярче и громче с интенсивностью
     const deg = th.scale[(i * 3) % th.scale.length];
     const a = this.ctx.createOscillator(); a.type = 'triangle';
     a.frequency.setValueAtTime(semi(chord + deg + 24), t);
-    const bp = this.ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = th.bright; bp.Q.value = 1.2;
+    const bp = this.ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = th.bright * (.7 + mi * .7); bp.Q.value = 1.2;
     const ag = this.ctx.createGain();
-    ag.gain.setValueAtTime(.10, t);
+    ag.gain.setValueAtTime(.07 + .06 * mi, t);
     ag.gain.exponentialRampToValueAtTime(.001, t + beat * .45);
     a.connect(bp); bp.connect(ag); ag.connect(m.out);
     a.start(t); a.stop(t + beat * .5);
-    /* ---- МЕЛОДИЯ: ведущая линия поверх риффа (у боссов) ---- */
+    /* ---- МЕЛОДИЯ: ведущая линия поверх риффа (у боссов), громче на пике ---- */
     if (th.melody) {
-      const mn = th.melody[i % th.melody.length];
-      const mo = this.ctx.createOscillator(); mo.type = 'square';
-      mo.frequency.setValueAtTime(semi(chord + mn + 12), t);
-      const mg = this.ctx.createGain();
-      mg.gain.setValueAtTime(.001, t); mg.gain.linearRampToValueAtTime(.075, t + .01);
-      mg.gain.exponentialRampToValueAtTime(.001, t + beat * .46);
-      mo.connect(mg); mg.connect(m.out); mo.start(t); mo.stop(t + beat * .5);
+      const mG = U.clamp((mi - .55) / .3, 0, 1);
+      if (mG > .03) {
+        const mn = th.melody[i % th.melody.length];
+        const mo = this.ctx.createOscillator(); mo.type = 'square';
+        mo.frequency.setValueAtTime(semi(chord + mn + 12), t);
+        const mg = this.ctx.createGain();
+        mg.gain.setValueAtTime(.001, t); mg.gain.linearRampToValueAtTime(.075 * mG, t + .01);
+        mg.gain.exponentialRampToValueAtTime(.001, t + beat * .46);
+        mo.connect(mg); mg.connect(m.out); mo.start(t); mo.stop(t + beat * .5);
+      }
     }
     // a sustained pad at the top of each bar (warm triangle — same notes)
     if (i % 8 === 0) {
@@ -7069,10 +7224,10 @@ const Audio3D_SFX = {
       p.frequency.linearRampToValueAtTime(semi(chord + 12 + th.scale[2]), t + beat * 3);
       const pg = this.ctx.createGain();
       pg.gain.setValueAtTime(.001, t);
-      pg.gain.linearRampToValueAtTime(.05, t + beat);
+      pg.gain.linearRampToValueAtTime(.04 + .02 * mi, t + beat);
       pg.gain.exponentialRampToValueAtTime(.001, t + beat * 3.6);
       // a gentle low-pass keeps the sustained pad round instead of buzzy
-      const plp = this.ctx.createBiquadFilter(); plp.type = 'lowpass'; plp.frequency.value = 900; plp.Q.value = .6;
+      const plp = this.ctx.createBiquadFilter(); plp.type = 'lowpass'; plp.frequency.value = 800 + mi * 500; plp.Q.value = .6;
       p.connect(plp); plp.connect(pg); pg.connect(m.out);
       p.start(t); p.stop(t + beat * 4);
     }
@@ -9159,7 +9314,9 @@ const BloodArt = {
       if (UI.center) UI.center('ОТКРЫТ СКИЛЛ', 'BLOOD ART · ' + s.name, 2.6);
       if (UI.toast) UI.toast('BLOOD ART: открыт скилл ' + s.name, '#ff2040');
     }
-    if (typeof Audio3D_SFX !== 'undefined' && Audio3D_SFX.tone) {
+    if (typeof Audio3D_SFX !== 'undefined' && Audio3D_SFX.levelUp) {
+      Audio3D_SFX.levelUp();
+    } else if (typeof Audio3D_SFX !== 'undefined' && Audio3D_SFX.tone) {
       Audio3D_SFX.tone(520, .12, 'square', .12);
       setTimeout(() => Audio3D_SFX.tone(780, .12, 'square', .12), 110);
       setTimeout(() => Audio3D_SFX.tone(1040, .18, 'square', .12), 220);
@@ -19893,6 +20050,7 @@ const UI = {
     void h.offsetWidth;
     if (kill) h.classList.add('kill');
     h.classList.add('on');
+    if (typeof Audio3D_SFX !== 'undefined' && Audio3D_SFX.hitmarker) Audio3D_SFX.hitmarker(!!kill);
     clearTimeout(this._hmT);
     this._hmT = setTimeout(() => h.classList.remove('on'), kill ? 220 : 110);
   },
@@ -25520,6 +25678,7 @@ const Game = {
         else if (boss && boss.isMiniBoss) want = 'boss';       // мини-босс — боссовая тема
       }
     }
+    if (want === 'menu' && Audio3D_SFX.setMusicCalm) Audio3D_SFX.setMusicCalm();
     Audio3D_SFX.musicStart(want);
   },
 
@@ -32487,8 +32646,8 @@ const Game = {
     }
     // mech dash: the dash button / key is edge-triggered
     if (Input.consumeDash()) {
-      if (this.isMechActive()) this.mechDash();
-      else if (p.perkDash) p._gearDashWant = true;   // снаряжение «РЫВОК»
+      if (this.isMechActive()) { if (this.mechDash()) { if (Audio3D_SFX.dash) Audio3D_SFX.dash(true); } }
+      else if (p.perkDash) { p._gearDashWant = true; if (Audio3D_SFX.dash) Audio3D_SFX.dash(false); }
     }
 
     p._wantAim = Input.aimDown() && canLook;
@@ -32622,6 +32781,8 @@ const Game = {
 
     // ---- effects ----
     if (this.effects) this.effects.update(dt, this.camera);
+    /* АДАПТИВНЫЙ САУНДТРЕК: интенсивность по состоянию боя (волна/HP/босс) */
+    if (typeof Audio3D_SFX !== 'undefined' && Audio3D_SFX.updateAdaptive) Audio3D_SFX.updateAdaptive(this, dt);
     /* BLOOD ART: тик залпа лапо-снарядов */
     if (typeof BloodArt !== 'undefined') BloodArt.update(this, dt);
     /* РЕДАКТОР КАРТ: обновляем курсор и подсветку */

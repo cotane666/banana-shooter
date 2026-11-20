@@ -1,0 +1,34 @@
+/* ============================================================
+   BANANA SHOOTER 2D — интерфейс и стили
+   ============================================================ */
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body {
+  width: 100%; height: 100%; overflow: hidden; background: #05060a;
+  font-family: "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  color: #e8ecf5; -webkit-user-select: none; user-select: none;
+  -webkit-tap-highlight-color: transparent; touch-action: none;
+}
+#cv { display: block; width: 100%; height: 100%; image-rendering: pixelated; image-rendering: crisp-edges; }
+
+/* ---------------- загрузочный экран ---------------- */
+#boot {
+  position: fixed; inset: 0; z-index: 50; display: flex; align-items: center; justify-content: center;
+  background: radial-gradient(ellipse at 50% 30%, #1b2136 0%, #0a0c14 55%, #05060a 100%);
+}
+#boot.hide { display: none; }
+.bootcard { text-align: center; padding: 26px 34px; max-width: 560px; }
+.bootlogo { font-size: 74px; line-height: 1; filter: drop-shadow(0 6px 18px rgba(255,214,64,.35)); }
+.boottitle {
+  font-size: 34px; font-weight: 800; letter-spacing: 3px; margin-top: 10px;
+  background: linear-gradient(180deg, #ffe066, #ffae2b); -webkit-background-clip: text;
+  background-clip: text; color: transparent;
+}
+.bootsub { color: #8e98b3; font-size: 14px; margin-top: 6px; }
+#bootbtn {
+  margin-top: 22px; padding: 15px 54px; font-size: 20px; font-weight: 800; letter-spacing: 2px;
+  color: #1a1206; cursor: pointer; border: 0; border-radius: 12px;
+  background: linear-gradient(180deg, #ffd94a, #f5a623);
+  box-shadow: 0 8px 0 #a86b0c, 0 14px 30px rgba(0,0,0,.5);
+}
+#bootbtn:active { transform: translateY(3px); box-shadow: 0 5px 0 #a86b0c; }
+.boothint { margin-top: 18px; color: #6f7a94; font-size: 12px; line-height: 1.6; }

@@ -3891,6 +3891,7 @@ const Game = {
         else if (boss && boss.isMiniBoss) want = 'boss';       // мини-босс — боссовая тема
       }
     }
+    if (want === 'menu' && Audio3D_SFX.setMusicCalm) Audio3D_SFX.setMusicCalm();
     Audio3D_SFX.musicStart(want);
   },
 
@@ -10858,8 +10859,8 @@ const Game = {
     }
     // mech dash: the dash button / key is edge-triggered
     if (Input.consumeDash()) {
-      if (this.isMechActive()) this.mechDash();
-      else if (p.perkDash) p._gearDashWant = true;   // снаряжение «РЫВОК»
+      if (this.isMechActive()) { if (this.mechDash()) { if (Audio3D_SFX.dash) Audio3D_SFX.dash(true); } }
+      else if (p.perkDash) { p._gearDashWant = true; if (Audio3D_SFX.dash) Audio3D_SFX.dash(false); }
     }
 
     p._wantAim = Input.aimDown() && canLook;
@@ -10993,6 +10994,8 @@ const Game = {
 
     // ---- effects ----
     if (this.effects) this.effects.update(dt, this.camera);
+    /* АДАПТИВНЫЙ САУНДТРЕК: интенсивность по состоянию боя (волна/HP/босс) */
+    if (typeof Audio3D_SFX !== 'undefined' && Audio3D_SFX.updateAdaptive) Audio3D_SFX.updateAdaptive(this, dt);
     /* BLOOD ART: тик залпа лапо-снарядов */
     if (typeof BloodArt !== 'undefined') BloodArt.update(this, dt);
     /* РЕДАКТОР КАРТ: обновляем курсор и подсветку */

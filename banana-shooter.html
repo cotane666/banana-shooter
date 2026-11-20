@@ -7033,9 +7033,11 @@ const Audio3D_SFX = {
     /* МЕНЮ: мягкий тёмный синт-пульс (Katana Zero / Undertale). Меньше низа,
        плюс «хук» — простая запоминающаяся мелодия. */
     menu:    { root: 65.41, scale: [0, 2, 3, 7, 10], prog: [0, -2, -4, -5, -7, -5, -2, -4], bpm: 94, bright: 1300, gain: .55, pad: true, drums: true, snare: false, menuFloor: .4,
-               hook:  [0, null, 3, null, 5, null, 2, null],
-               hookB: [0, null, 2, 3, null, 5, null, -2] },
+               arrange: ['drive', 'calm', 'drive', 'calm'],
+               hook:  [0, null, 3, null, 5, null, 3, null],
+               hookB: [7, null, 5, null, 3, null, 2, null] },
     game:    { root: 87.31, scale: [0, 3, 5, 7, 10], prog: [0, -2, -4, -1, -3, -5, -4, -2], bpm: 100, bright: 1300, gain: .48, pad: true, drums: true,
+               arrange: ['drive', 'calm', 'drive', 'calm'],
                snare: true,
                riff:   [0, 0, 5, 3, 0, 7, 5, 3],
                melody: [0, 3, 5, 7, 5, 3, 2, 0],
@@ -7160,6 +7162,16 @@ const Audio3D_SFX = {
     [0, 5, 3, null, 7, 10, null, 3]
   ],
 
+  /* секция аранжировки: calm (только мелодия+пэд+бас) / drive (бит+арп) /
+     peak (низкое HP/босс: снейр+рифф). Даёт контраст «спокойно ↔ мощно». */
+  _sectionFor(th, bar, mi) {
+    if (mi > .68) return 'peak';
+    const arr = th.arrange || ['drive'];
+    let s = arr[Math.floor(bar / 8) % arr.length];
+    if (mi > .45 && s === 'calm') s = 'drive';
+    return s;
+  },
+
   _musicStep(m, t, beat) {
     const th = m.th, i = m.step++;
     const mi = this._musicMi();
@@ -7168,8 +7180,11 @@ const Audio3D_SFX = {
     const semi = (n) => th.root * Math.pow(2, n / 12);
     const hum = (p) => (Math.random() * 2 - 1) * p;
     if (t < 0) t = 0;
+    const isBoss = /^boss|brain/i.test(m.name || '');
+    const section = isBoss ? 'peak' : this._sectionFor(th, bar, mi);
+    const calm = section === 'calm', peak = section === 'peak';
     /* ---- БАС: мягкий, редкий, без саба (меньше низа) ---- */
-    if (stepInBar === 0 || stepInBar === 4) {
+    if (stepInBar === 0 || (!calm && stepInBar === 4)) {
       const o = this.ctx.createOscillator(); o.type = 'triangle';
       o.frequency.setValueAtTime(semi(chord) * (1 + hum(.002)), t);
       const lp = this.ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 340 + mi * 160; lp.Q.value = .6;
@@ -7180,7 +7195,7 @@ const Audio3D_SFX = {
       o.start(t); o.stop(t + beat * 1.7);
     }
     /* ---- МЕТАЛ-РИФФ: ТОЛЬКО при агрессии (низкое HP / босс) ---- */
-    if (th.riff) {
+    if (peak && th.riff) {
       const rk = U.clamp((mi - .62) / .3, 0, 1);
       if (rk > .03) {
         const rn = th.riff[(i + (Math.floor(bar / 4) % 2) * 2) % th.riff.length];
@@ -7204,8 +7219,8 @@ const Audio3D_SFX = {
         o1.start(t); o1.stop(t + beat * .5); o2.start(t); o2.stop(t + beat * .5);
       }
     }
-    /* ---- УДАРНЫЕ: мягкий бит; агрессия появляется только при высоком mi ---- */
-    if (th.drums) {
+    /* ---- УДАРНЫЕ: только в drive/peak (в calm — чистая мелодия) ---- */
+    if (th.drums && !calm) {
       const kG = U.clamp((mi - .18) / .25, 0, 1);
       if (stepInBar % 4 === 0 && kG > .02) {
         const k = this.ctx.createOscillator(); k.type = 'sine';
@@ -7242,7 +7257,7 @@ const Audio3D_SFX = {
         src.connect(hp); hp.connect(hg); hg.connect(m.out); src.start(tt); src.stop(tt + .05);
       }
       const sG = U.clamp((mi - .55) / .25, 0, 1);
-      if (th.snare && (stepInBar === 2 || stepInBar === 6) && sG > .02) {
+      if (peak && th.snare && (stepInBar === 2 || stepInBar === 6) && sG > .02) {
         const s = this.ctx.createBufferSource(); s.buffer = this.noiseBuf;
         const bp = this.ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 1900; bp.Q.value = .8;
         const sg = this.ctx.createGain();
@@ -7262,20 +7277,20 @@ const Audio3D_SFX = {
     const pats = this._arpPatterns;
     const pat = pats[(bar + Math.floor(bar / 3)) % pats.length];
     const off = pat[stepInBar];
-    if (off != null) {
+    if (!calm && off != null) {
       const at = Math.max(0, t + hum(.004));
       const a = this.ctx.createOscillator(); a.type = 'triangle';
       a.frequency.setValueAtTime(semi(chord + off + 24) * (1 + hum(.003)), at);
       const bp = this.ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = th.bright * (.7 + mi * .7); bp.Q.value = 1.2;
       const ag = this.ctx.createGain();
-      ag.gain.setValueAtTime((.075 + .045 * mi) * (this.mobile ? .85 : 1), at);
+      ag.gain.setValueAtTime((.05 + .03 * mi) * (this.mobile ? .85 : 1), at);
       ag.gain.exponentialRampToValueAtTime(.001, at + beat * .4);
       a.connect(bp); bp.connect(ag); ag.connect(m.out);
       a.start(at); a.stop(at + beat * .45);
     }
 
     /* ---- ХУК: простая запоминающаяся мелодия (Undertale/Deltarune) ---- */
-    const hookArr = (bar % 8 < 4) ? th.hook : (th.hookB || th.hook);
+    const hookArr = calm ? th.hook : (th.hookB || th.hook);
     if (hookArr) {
       const hn = hookArr[stepInBar];
       if (hn != null) {
@@ -7285,10 +7300,10 @@ const Audio3D_SFX = {
         const llp = this.ctx.createBiquadFilter(); llp.type = 'lowpass'; llp.frequency.value = 1800 + mi * 900; llp.Q.value = .8;
         const lg = this.ctx.createGain();
         lg.gain.setValueAtTime(.001, lt);
-        lg.gain.linearRampToValueAtTime(.085 * (this.mobile ? .9 : 1), lt + .012);
-        lg.gain.exponentialRampToValueAtTime(.001, lt + beat * .65);
+        lg.gain.linearRampToValueAtTime((.1 + (peak ? .02 : 0)) * (this.mobile ? .95 : 1), lt + .012);
+        lg.gain.exponentialRampToValueAtTime(.001, lt + beat * (calm ? .9 : .7));
         lo.connect(llp); llp.connect(lg); lg.connect(m.out);
-        lo.start(lt); lo.stop(lt + beat * .7);
+        lo.start(lt); lo.stop(lt + beat * (calm ? .95 : .75));
       }
     }
     /* ---- МЕЛОДИЯ: ведущая линия поверх риффа (у боссов), громче на пике ---- */

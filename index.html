@@ -23367,6 +23367,22 @@ const Game = {
       Audio3D_SFX.init(); Audio3D_SFX.resume();
       Input.requestLock();
     });
+    /* АУДИО-РАЗБЛОКИРОВКА: браузеры не разрешают звук до первого жеста. Как
+       только игрок коснётся экрана / нажмёт клавишу — создаём AudioContext и
+       сразу запускаем музыку (в меню — меню-тему), иначе в меню тишина. */
+    let _audioUnlocked = false;
+    const unlockAudio = () => {
+      if (_audioUnlocked) return;
+      _audioUnlocked = true;
+      try { Audio3D_SFX.init(); Audio3D_SFX.resume(); } catch (e) { }
+      try { this.refreshMusic(); } catch (e) { }
+      window.removeEventListener('pointerdown', unlockAudio);
+      window.removeEventListener('keydown', unlockAudio);
+      window.removeEventListener('touchstart', unlockAudio);
+    };
+    window.addEventListener('pointerdown', unlockAudio, { passive: true });
+    window.addEventListener('keydown', unlockAudio);
+    window.addEventListener('touchstart', unlockAudio, { passive: true });
     // pointer lock behaviour
     Input.onLockChange = (locked, wasLocked) => {
       if (!this.running) return;
@@ -33565,7 +33581,9 @@ function registerServiceWorker() {
   // file:// cannot host a service worker; only register over http(s)
   if (location.protocol !== 'http:' && location.protocol !== 'https:') return;
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('sw.js').catch(err => {
+    navigator.serviceWorker.register('sw.js?v=3', { updateViaCache: 'none' }).then(reg => {
+      try { reg.update(); } catch (e) { }
+    }).catch(err => {
       console.warn('service worker registration failed:', err && err.message);
     });
   });

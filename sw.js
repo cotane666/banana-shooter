@@ -3,7 +3,7 @@
    Caches the whole game (it is one self-contained HTML file plus icons) so it
    starts instantly and works offline once installed.
    ============================================================ */
-const VERSION = 'banana-shooter-v2';
+const VERSION = 'banana-shooter-v3';
 const CORE = [
   './',
   './index.html',
@@ -41,7 +41,7 @@ self.addEventListener('fetch', e => {
   // navigations: network first so updates land, cache as the offline fallback
   if (req.mode === 'navigate') {
     e.respondWith(
-      fetch(req)
+      fetch(req, { cache: 'no-store' })
         .then(res => {
           const copy = res.clone();
           caches.open(VERSION).then(c => c.put('./index.html', copy)).catch(() => { });

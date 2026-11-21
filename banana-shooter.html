@@ -6335,48 +6335,48 @@ function navLineClear(nav, a, b) {
 const HOTLINE_BASS = [110.00, 110.00, 220.00, 110.00, 130.81, 130.81, 146.83, 164.81,
                       110.00, 110.00, 220.00, 110.00, 174.61, 164.81, 146.83, 130.81];
 const HOTLINE_LEAD_A = [
-  24, null, 24, null, 27, null, 29, null,
-  27, null, 24, 26, null, 24, null, 22,
-  24, null, 27, null, 31, null, 34, null,
-  31, null, 29, null, 27, null, 24, null
+  24, null, null, 27, null, 29, null, 31,
+  29, null, 27, null, 26, null, 24, null,
+  22, null, 24, null, 26, null, 27, null,
+  24, null, 22, null, 19, null, null, null
 ];
 const HOTLINE_LEAD_B = [
-  31, null, 31, null, 34, null, 36, null,
-  34, null, 31, 32, null, 31, null, 29,
-  31, null, 34, null, 36, null, 34, null,
-  31, null, 29, null, 27, null, 24, null
+  31, null, 31, null, 34, null, 31, null,
+  29, null, 27, null, 29, null, 31, null,
+  34, null, 36, null, 34, null, 31, null,
+  29, null, 27, null, 24, null, null, null
 ];
 /* Спокойная мелодия для меню: реже, длиннее, без суеты. */
 const HOTLINE_LEAD_MENU = [
-  24, null, null, null, 27, null, null, null,
-  29, null, null, null, 27, null, 24, null,
-  24, null, null, null, 31, null, null, null,
-  29, null, 27, null, 24, null, null, null
+  24, null, null, null, 27, null, 26, null,
+  24, null, null, null, 22, null, 24, null,
+  24, null, null, null, 29, null, 27, null,
+  24, null, 22, null, null, null, null, null
 ];
 const HOTLINE_LEAD_MENU2 = [
-  24, null, null, 27, null, null, 29, null,
-  27, null, 24, null, null, 22, null, null,
-  24, null, null, 31, null, null, 29, null,
-  27, null, 24, null, null, null, null, null
+  19, null, null, 22, null, null, 24, null,
+  22, null, 19, null, null, 17, null, null,
+  19, null, null, 24, null, null, 22, null,
+  19, null, 17, null, null, null, null, null
 ];
 const HOTLINE_LEAD_MENU3 = [
-  29, null, null, 27, null, null, 24, null,
-  27, null, null, 29, null, null, 31, null,
-  29, null, 27, null, null, 24, null, null,
+  27, null, null, 26, null, null, 24, null,
+  26, null, null, 27, null, null, 29, null,
+  27, null, 26, null, null, 24, null, null,
   22, null, 24, null, null, null, null, null
 ];
 /* Дополнительные куплеты для длинной песни. */
 const HOTLINE_LEAD_C = [
-  24, null, 27, 29, null, 31, null, 34,
-  31, null, 29, 27, null, 24, null, 26,
-  24, null, 27, 29, null, 34, null, 36,
-  34, null, 31, 29, null, 27, 24, null
+  24, null, 31, null, 34, null, 31, null,
+  29, null, 36, null, 34, null, 31, null,
+  29, null, 27, null, 24, null, 27, null,
+  31, null, 34, null, 36, null, 34, null
 ];
 const HOTLINE_LEAD_D = [
   24, null, null, 22, null, null, 19, null,
+  17, null, null, 19, null, null, 22, null,
   24, null, null, 27, null, null, 24, null,
-  24, null, null, 22, null, null, 19, null,
-  17, null, 19, null, 22, null, 24, null
+  22, null, 19, null, 17, null, null, null
 ];
 const HOTLINE_LEADS = {
   A: HOTLINE_LEAD_A, B: HOTLINE_LEAD_B, C: HOTLINE_LEAD_C, D: HOTLINE_LEAD_D,
@@ -7285,20 +7285,8 @@ const Audio3D_SFX = {
       k.connect(kg); kg.connect(m.out); k.start(t); k.stop(t + .32);
     }
 
-    /* HI-HAT — на слабых 16-х (+ доп. у босса) */
-    const hatGain = power ? .19 : calm ? .09 : .16;
-    const playHat = (tt, g) => {
-      const src = this.ctx.createBufferSource(); src.buffer = this.noiseBuf;
-      src.playbackRate.value = .9 + Math.random() * .2;
-      const hp = this.ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 7000;
-      const hg = this.ctx.createGain();
-      hg.gain.setValueAtTime(g * (this.mobile ? .75 : 1), tt);
-      hg.gain.exponentialRampToValueAtTime(.001, tt + .05);
-      src.connect(hp); hp.connect(hg); hg.connect(m.out);
-      src.start(tt); src.stop(tt + .06);
-    };
-    if (sec.hat !== false && s % 2 === 1) playHat(t + beat * .01, hatGain);
-    if (power && sec.hat !== false && s % 4 === 2) playHat(t + beat * .01, hatGain * .6);
+    /* HI-HAT убран: шумовой хэт на highpass 7000 звучал как металлическая
+       тарелка. Ритм держат кик, бас и мелодия. */
 
     /* БАС — рифф по 16-м (ровно как в референсе) */
     if (sec.bass !== false) {

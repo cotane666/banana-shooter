@@ -6420,6 +6420,111 @@ const HOTLINE_BOSS_FINAL = {
   pad: true, arp: true, counter: true, snare: true
 };
 
+/* ============================================================
+   ЧЕТЫРЕ ОТДЕЛЬНЫЕ КОМПОЗИЦИИ (меню / закупка / бой / босс)
+   Принципы: сильный мотив, понятная гармония (аккорды), фразировка
+   (длинные/короткие ноты), разные тональности/темпы/инструменты.
+   '~' = продлить предыдущую ноту, null = пауза.
+   ============================================================ */
+
+/* --- МЕНЮ: A-минор, 78 BPM, тёплый эмбиент с певучей мелодией --- */
+const MENU_LEAD = [
+  24,'~','~','~', 27,'~', 29,'~', 31,'~','~','~', 29,'~', 27,'~',
+  27,'~','~','~', 24,'~','~','~', 22,'~', 24,'~', 26,'~','~','~',
+  31,'~','~','~', 34,'~','~','~', 31,'~', 29,'~', 27,'~','~','~',
+  26,'~','~','~', 29,'~', 26,'~', 24,'~','~','~','~','~','~','~',
+  29,'~','~','~', 31,'~', 29,'~', 27,'~','~','~', 26,'~', 24,'~',
+  24,'~','~','~', 27,'~','~','~', 29,'~', 27,'~', 26,'~','~','~',
+  31,'~','~','~', 34,'~','~','~', 36,'~', 34,'~', 31,'~','~','~',
+  29,'~','~','~', 26,'~', 24,'~', 24,'~','~','~','~','~','~','~'
+];
+/* --- ЗАКУПКА: D-минор (ii-V-I), 92 BPM, лоу-фай/джаз --- */
+const BUY_LEAD = [
+  17,'~','~','~', 20,'~', 22,'~', 20,'~','~','~', 17,'~', 15,'~',
+  15,'~','~','~', 19,'~','~','~', 17,'~', 15,'~', 12,'~','~','~',
+  20,'~','~','~', 24,'~','~','~', 22,'~', 20,'~', 19,'~','~','~',
+  17,'~','~','~', 20,'~', 17,'~', 15,'~','~','~','~','~','~','~',
+  22,'~','~','~', 20,'~', 17,'~', 15,'~','~','~', 17,'~', 19,'~',
+  19,'~','~','~', 22,'~','~','~', 24,'~', 22,'~', 19,'~','~','~',
+  24,'~','~','~', 27,'~','~','~', 24,'~', 22,'~', 20,'~','~','~',
+  22,'~','~','~', 20,'~', 17,'~', 17,'~','~','~','~','~','~','~'
+];
+/* --- БОЙ: A-минор, 132 BPM, энергичный гимн-мотив --- */
+const BATTLE_LEAD = [
+  24,null,27,null, 31,null,29,27, 24,null,31,null, 34,null,31,null,
+  29,null,27,null, 24,null,27,29, 31,null,29,null, 27,null,24,null,
+  31,null,34,null, 36,null,34,31, 29,null,31,null, 34,null,36,null,
+  34,null,31,null, 29,null,27,24, 26,null,29,null, 24,null,null,null,
+  24,27,null,31, null,34,31,29, 27,null,24,null, 31,34,null,36,
+  34,null,31,29, null,27,null,24, 29,31,null,34, null,31,29,null,
+  36,null,34,31, 29,null,31,34, 36,null,34,31, null,29,27,null,
+  26,null,29,31, null,34,null,31, 29,null,27,24, null,null,null,null
+];
+/* --- БОСС: D-минор/гармонический, 156 BPM, драматичный мотив --- */
+const BOSS_LEAD = [
+  12,null,12,15, null,17,null,19, 17,15,null,12, null,19,22,null,
+  17,null,19,null, 22,null,24,22, 19,null,17,null, 15,null,12,null,
+  19,null,22,24, null,26,null,24, 22,19,null,17, null,15,12,null,
+  14,null,17,null, 20,null,17,14, 12,null,null,null, 14,null,17,20,
+  24,null,22,19, null,17,15,12, 17,null,19,null, 22,24,null,26,
+  26,null,24,22, 19,null,17,null, 19,22,null,24, null,22,19,null,
+  27,null,26,24, 22,null,19,17, 19,null,22,null, 24,26,null,27,
+  20,null,17,14, 12,null,14,17, 20,null,23,null, 20,17,14,null
+];
+const SONG_MENU = [
+  { bars: 8, pad: true, bass: true, drums: false, arp: false },
+  { bars: 8, pad: true, bass: true, drums: true,  arp: true },
+  { bars: 8, pad: true, bass: true, drums: true,  arp: true }
+];
+const SONG_BUY = [
+  { bars: 8, pad: true, bass: true, drums: false, arp: true },
+  { bars: 8, pad: true, bass: true, drums: true,  arp: true },
+  { bars: 8, pad: true, bass: true, drums: true,  arp: true }
+];
+const SONG_BATTLE = [
+  { bars: 4, pad: true, bass: true, drums: true,  arp: false },
+  { bars: 4, pad: true, bass: true, drums: true,  arp: true },
+  { bars: 4, pad: true, bass: true, drums: true,  arp: true },
+  { bars: 4, pad: true, bass: true, drums: true,  arp: true },
+  { bars: 4, pad: true, bass: true, drums: false, arp: true },
+  { bars: 4, pad: true, bass: true, drums: true,  arp: true },
+  { bars: 4, pad: true, bass: true, drums: true,  arp: true },
+  { bars: 4, pad: true, bass: true, drums: true,  arp: true },
+  { bars: 4, pad: true, bass: true, drums: false, arp: true }
+];
+const SONG_BOSS = [
+  { bars: 5 }, { bars: 5 }, { bars: 5 }, { bars: 5 },
+  { bars: 5 }, { bars: 5 }, { bars: 5 }, { bars: 5 }
+];
+const MENU_THEME = {
+  songTheme: true, step16: true, bpm: 78, root: 110, gain: .52, tempoBoost: .03,
+  prog: [0, -4, 3, -2], chords: ['m', 'maj', 'maj', 'maj'],
+  lead: MENU_LEAD, leadWave: 'triangle', leadCut: 2200, leadGain: .09,
+  bass: 'whole', bassWave: 'sine', pad: true, padGain: .05,
+  arp: true, arpGain: .018, drums: 'soft', song: SONG_MENU
+};
+const BUY_THEME = {
+  songTheme: true, step16: true, bpm: 92, root: 146.83, gain: .5, tempoBoost: .03,
+  prog: [0, 5, -2, -5], chords: ['m7', '7', 'maj7', 'm7'],
+  lead: BUY_LEAD, leadWave: 'triangle', leadCut: 2400, leadGain: .08,
+  bass: 'lofi', bassWave: 'triangle', pad: true, padGain: .045,
+  arp: true, arpGain: .022, drums: 'lofi', song: SONG_BUY
+};
+const BATTLE_THEME = {
+  songTheme: true, step16: true, bpm: 132, root: 110, gain: .58, tempoBoost: .12,
+  prog: [0, -4, 3, -2], chords: ['m', 'maj', 'maj', 'maj'],
+  lead: BATTLE_LEAD, leadWave: 'square', leadCut: 3000, leadGain: .09,
+  bass: 'drive', bassWave: 'sawtooth', pad: true, padGain: .03,
+  arp: true, arpGain: .022, drums: 'battle', song: SONG_BATTLE
+};
+const BOSS_THEME = {
+  songTheme: true, step16: true, bpm: 156, root: 146.83, gain: .64, tempoBoost: .08,
+  prog: [0, -4, -2, 7], chords: ['m', 'maj', 'maj', 'maj'],
+  lead: BOSS_LEAD, leadWave: 'square', leadCut: 3200, leadGain: .1,
+  bass: 'pump', bassWave: 'sawtooth', pad: true, padGain: .025,
+  arp: true, arpGain: .018, drums: 'boss', song: SONG_BOSS
+};
+
 const Audio3D_SFX = {
   ctx: null, master: null, sfx: null, musicBus: null, muted: false, vol: .6, sfxVol: 1, musicVol: 1,
   listener: { x: 0, y: 0, z: 0, fx: 0, fz: -1 },
@@ -7123,24 +7228,16 @@ const Audio3D_SFX = {
      ============================================================ */
   musicOff: false,
   music: {
-    /* HOTLINE MIAMI-стиль + оригинальная мелодия в духе BIGSHOT.
-       Меню — спокойнее (120 BPM, редкая мелодия), бой — 135 BPM. */
-    menu:    { root: 110, bpm: 120, gain: .5, hotline: true, step16: true, menuFloor: .5, calm: true,
-               song: HOTLINE_SONG_MENU,
-               bass16: HOTLINE_BASS, leadA: HOTLINE_LEAD_MENU, leadB: HOTLINE_LEAD_MENU,
-               pad: true, arp: true, counter: false },
-    game:    { root: 110, bpm: 135, gain: .55, hotline: true, step16: true,
-               song: HOTLINE_SONG,
-               bass16: HOTLINE_BASS, leadA: HOTLINE_LEAD_A, leadB: HOTLINE_LEAD_B,
-               pad: true, arp: true, counter: true },
-    /* БОССЫ: тот же трек, но мощнее — быстрее, тяжёлый кик, снейр,
-       контр-мелодия и ярче лид. */
-    boss:       HOTLINE_BOSS,
-    bossWarden: HOTLINE_BOSS,
-    bossBrute:  HOTLINE_BOSS,
-    bossTitan:  HOTLINE_BOSS,
-    bossFinal:  HOTLINE_BOSS,
-    brainBoss:  HOTLINE_BOSS_FINAL
+    /* 4 отдельные композиции: меню / закупка / бой / босс */
+    menu:   MENU_THEME,
+    buy:    BUY_THEME,
+    game:   BATTLE_THEME,
+    boss:   BOSS_THEME,
+    bossWarden: BOSS_THEME,
+    bossBrute:  BOSS_THEME,
+    bossTitan:  BOSS_THEME,
+    bossFinal:  BOSS_THEME,
+    brainBoss:  BOSS_THEME
   },
   /* play a track by name (idempotent); no-op if music is disabled */
   musicStart(name) {
@@ -7161,7 +7258,8 @@ const Audio3D_SFX = {
       const now = this.ctx.currentTime;
       /* темп зависит от интенсивности: на пике боя — быстрее (брейккор-ощущение) */
       const mi = this._musicMi();
-      const beat = 60 / (th.bpm * (th.hotline ? 1 : (1 + mi * .45)));
+      const tb = (th.tempoBoost !== undefined) ? th.tempoBoost : (th.hotline ? 0 : .45);
+      const beat = 60 / (th.bpm * (1 + mi * tb));
       /* Если главный поток «залип» (рендер/GC на телефоне) и мы отстали —
          НЕ догоняем пачкой нот (это даёт всплеск и треск), а перескакиваем. */
       if (m.next < now - .25) m.next = now + .06;
@@ -7255,6 +7353,144 @@ const Audio3D_SFX = {
 
   /* HOTLINE MIAMI-трек (по референсу): кик 150→0, хэт на слабых 16-х,
      бас-рифф по 16-м. 135 BPM, с драйвом на низком HP/боссе. */
+  /* ---------- ДВИЖОК ПЕСЕН (4 отдельные композиции) ---------- */
+  _songDrums(m, th, t, s, bar, beat) {
+    const style = th.drums || 'soft';
+    const kick = (f0, g, len) => {
+      const k = this.ctx.createOscillator(); k.type = 'sine';
+      k.frequency.setValueAtTime(f0, t);
+      k.frequency.exponentialRampToValueAtTime(42, t + len);
+      const kg = this.ctx.createGain();
+      kg.gain.setValueAtTime(.0001, t);
+      kg.gain.linearRampToValueAtTime(g, t + .005);
+      kg.gain.exponentialRampToValueAtTime(.001, t + len);
+      k.connect(kg); kg.connect(m.out); k.start(t); k.stop(t + len + .02);
+    };
+    const snare = (g) => {
+      const src = this.ctx.createBufferSource(); src.buffer = this.noiseBuf;
+      const bp = this.ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 1500; bp.Q.value = .9;
+      const sg = this.ctx.createGain();
+      sg.gain.setValueAtTime(g, t); sg.gain.exponentialRampToValueAtTime(.001, t + .13);
+      src.connect(bp); bp.connect(sg); sg.connect(m.out); src.start(t); src.stop(t + .14);
+    };
+    if (style === 'soft') {
+      if (s === 0 || s === 8) kick(105, .3, .22);
+    } else if (style === 'lofi') {
+      if (s === 0 || s === 8) kick(98, .36, .2);
+      if (s === 4 || s === 12) snare(.045);
+    } else if (style === 'battle') {
+      if (s % 4 === 0) kick(125, .58, .16);
+      if (s === 6 || s === 14) kick(105, .26, .12);
+      if (s === 4 || s === 12) snare(.085);
+    } else if (style === 'boss') {
+      if (s % 2 === 0) kick(140, .54, .14);
+      if (s === 4 || s === 12) snare(.105);
+      if (bar % 4 === 3 && (s === 14 || s === 15)) snare(.07);
+    }
+  },
+
+  _songStep(m, t, beat) {
+    const th = m.th, i = m.step++;
+    if (t < 0) t = 0;
+    const s = i % 16, bar = Math.floor(i / 16);
+    const sec = this._hotlineSection(th, bar);
+    const cr = th.prog[bar % th.prog.length];
+    const q = (th.chords && th.chords[bar % th.chords.length]) || 'm';
+    const qints = q === 'maj7' ? [0, 4, 7, 11] : q === '7' ? [0, 4, 7, 10]
+      : q === 'm7' ? [0, 3, 7, 10] : q === 'maj' ? [0, 4, 7] : [0, 3, 7];
+    const semi = (n) => th.root * Math.pow(2, n / 12);
+
+    /* PAD: тёплый аккорд на такт */
+    if (sec.pad !== false && th.pad !== false && s === 0) {
+      const pg0 = (th.padGain || .04) * (this.mobile ? .95 : 1);
+      for (let c = 0; c < qints.length; c++) {
+        const f = semi(cr + qints[c] + 12);
+        const po = this.ctx.createOscillator(); po.type = 'triangle';
+        po.frequency.setValueAtTime(f, t);
+        const plp = this.ctx.createBiquadFilter(); plp.type = 'lowpass'; plp.frequency.value = 1500; plp.Q.value = .5;
+        const pg = this.ctx.createGain();
+        pg.gain.setValueAtTime(.001, t);
+        pg.gain.linearRampToValueAtTime(pg0, t + beat * .7);
+        pg.gain.setValueAtTime(pg0, t + beat * 2.5);
+        pg.gain.exponentialRampToValueAtTime(.001, t + beat * 3.9);
+        po.connect(plp); plp.connect(pg); pg.connect(m.out);
+        po.start(t); po.stop(t + beat * 4);
+      }
+    }
+
+    /* BASS */
+    if (sec.bass !== false) {
+      const style = th.bass || 'whole';
+      let play = false, oct = 0, len = beat * 3.5, bgain = .12;
+      if (style === 'whole') { play = s === 0; }
+      else if (style === 'lofi') { play = (s === 0 || s === 8); len = beat * 1.7; bgain = .14; }
+      else if (style === 'drive') { play = (s % 2 === 0); len = beat * .42; bgain = .17; oct = (s % 4 === 2) ? 12 : 0; }
+      else if (style === 'pump') { play = (s % 4 === 0 || s === 6 || s === 14); len = beat * .5; bgain = .2; }
+      if (play) {
+        const f = semi(cr + oct);
+        const o = this.ctx.createOscillator(); o.type = th.bassWave || 'sine';
+        o.frequency.setValueAtTime(f, t);
+        const lp = this.ctx.createBiquadFilter(); lp.type = 'lowpass';
+        lp.frequency.value = (style === 'drive' || style === 'pump') ? 720 : 420; lp.Q.value = .6;
+        const bg = this.ctx.createGain();
+        bg.gain.setValueAtTime(.0001, t);
+        bg.gain.linearRampToValueAtTime(bgain * (this.mobile ? .9 : 1), t + .012);
+        bg.gain.exponentialRampToValueAtTime(.001, t + len);
+        o.connect(lp); lp.connect(bg); bg.connect(m.out);
+        o.start(t); o.stop(t + len + .02);
+      }
+    }
+
+    /* DRUMS */
+    if (sec.drums !== false) this._songDrums(m, th, t, s, bar, beat);
+
+    /* LEAD: легато-мелодия с длительностями */
+    const lead = th.lead;
+    if (lead) {
+      const idx = i % lead.length;
+      const ln = lead[idx];
+      if (typeof ln === 'number') {
+        let dur = 1;
+        while (lead[(idx + dur) % lead.length] === '~') dur++;
+        const stepSec = beat * .25;
+        const durSec = Math.max(.09, dur * stepSec);
+        const f = semi(ln);
+        const g = (th.leadGain || .08) * (this.mobile ? .92 : 1);
+        const lt = Math.max(0, t + (Math.random() * 2 - 1) * .003);
+        const lp = this.ctx.createBiquadFilter(); lp.type = 'lowpass';
+        lp.frequency.value = th.leadCut || 2600; lp.Q.value = .7;
+        const lg = this.ctx.createGain();
+        lg.gain.setValueAtTime(.0001, lt);
+        lg.gain.linearRampToValueAtTime(g, lt + .015);
+        lg.gain.setValueAtTime(g, lt + durSec * .72);
+        lg.gain.exponentialRampToValueAtTime(.001, lt + durSec);
+        const o = this.ctx.createOscillator(); o.type = th.leadWave || 'triangle';
+        o.frequency.setValueAtTime(f, lt);
+        if (dur >= 4) {
+          const lfo = this.ctx.createOscillator(); lfo.type = 'sine'; lfo.frequency.value = 5.2;
+          const lg2 = this.ctx.createGain(); lg2.gain.value = f * .006;
+          lfo.connect(lg2); lg2.connect(o.frequency);
+          lfo.start(lt); lfo.stop(lt + durSec + .02);
+        }
+        o.connect(lp); lp.connect(lg); lg.connect(m.out);
+        o.start(lt); o.stop(lt + durSec + .02);
+      }
+    }
+
+    /* ARP (фон) */
+    if (sec.arp !== false && th.arp && s % 2 === 0) {
+      const ao = qints[(s / 2) % qints.length];
+      const f = semi(cr + ao + 12);
+      const a = this.ctx.createOscillator(); a.type = 'triangle';
+      a.frequency.setValueAtTime(f, t);
+      const ag = this.ctx.createGain();
+      ag.gain.setValueAtTime((th.arpGain || .022) * (this.mobile ? .85 : 1), t);
+      ag.gain.exponentialRampToValueAtTime(.001, t + beat * .4);
+      a.connect(ag); ag.connect(m.out);
+      a.start(t); a.stop(t + beat * .45);
+    }
+  },
+
   _hotlineSection(th, bar) {
     const song = th.song || HOTLINE_SONG;
     let total = 0;
@@ -7392,6 +7628,7 @@ const Audio3D_SFX = {
   },
 
   _musicStep(m, t, beat) {
+    if (m.th && m.th.songTheme) return this._songStep(m, t, beat);
     if (m.th && m.th.hotline) return this._musicStepHotline(m, t, beat);
     const th = m.th, i = m.step++;
     const mi = this._musicMi();
@@ -26009,8 +26246,8 @@ const Game = {
     let want = 'menu';
     if (this.running && this.mode !== CS.MODE.MENU) {
       want = 'game';
-      /* ЗАКУПКА — спокойная тема (как меню) */
-      if (this.roundState === 'buy' && this.mode !== CS.MODE.RANGE) want = 'menu';
+      /* ЗАКУПКА — отдельная спокойная тема */
+      if (this.roundState === 'buy' && this.mode !== CS.MODE.RANGE) want = 'buy';
       else if (this.horde) {
         const boss = this.horde.list.find(z => (z.isBoss || z.isMiniBoss) && z.alive && !z.dying);
         if (boss && ZOMBIES[boss.type] && Audio3D_SFX.music[boss.type]) want = boss.type;
@@ -26018,7 +26255,7 @@ const Game = {
         else if (boss && boss.isMiniBoss) want = 'boss';       // мини-босс — боссовая тема
       }
     }
-    if (want === 'menu' && Audio3D_SFX.setMusicCalm) Audio3D_SFX.setMusicCalm();
+    if ((want === 'menu' || want === 'buy') && Audio3D_SFX.setMusicCalm) Audio3D_SFX.setMusicCalm();
     Audio3D_SFX.musicStart(want);
   },
 

@@ -3900,8 +3900,8 @@ const Game = {
     let want = 'menu';
     if (this.running && this.mode !== CS.MODE.MENU) {
       want = 'game';
-      /* ЗАКУПКА — спокойная тема (как меню) */
-      if (this.roundState === 'buy' && this.mode !== CS.MODE.RANGE) want = 'menu';
+      /* ЗАКУПКА — отдельная спокойная тема */
+      if (this.roundState === 'buy' && this.mode !== CS.MODE.RANGE) want = 'buy';
       else if (this.horde) {
         const boss = this.horde.list.find(z => (z.isBoss || z.isMiniBoss) && z.alive && !z.dying);
         if (boss && ZOMBIES[boss.type] && Audio3D_SFX.music[boss.type]) want = boss.type;
@@ -3909,7 +3909,7 @@ const Game = {
         else if (boss && boss.isMiniBoss) want = 'boss';       // мини-босс — боссовая тема
       }
     }
-    if (want === 'menu' && Audio3D_SFX.setMusicCalm) Audio3D_SFX.setMusicCalm();
+    if ((want === 'menu' || want === 'buy') && Audio3D_SFX.setMusicCalm) Audio3D_SFX.setMusicCalm();
     Audio3D_SFX.musicStart(want);
   },
 

@@ -1228,6 +1228,8 @@ const Store = {
           ach: {}, runs: [], skinOn: {}, skinChar: '', mechSkin: '',
           /* BLOOD ART: накопленный полученный урон → открытые скиллы фрукта */
           baDmg: 0,
+          /* стиль музыки: 'melodic' (Zelda-вариант) | 'shooter' */
+          musicStyle: 'melodic',
           /* КАСТОМНЫЕ КАРТЫ из редактора: [{ id, name, blocks:[...], spawn:{x,z} }] */
           customMaps: [],
           /* галактический скин персонажа открыт вместе с платиновым достижением */

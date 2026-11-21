@@ -199,6 +199,42 @@ const BOSS_THEME = {
   arp: true, arpGain: .018, drums: 'boss', song: SONG_BOSS
 };
 
+/* --- ШУТЕР-вариант: агрессивнее, короче мотив, синт-стабы, жёстче бит --- */
+const SHOOTER_BATTLE_LEAD = [
+  24,null,24,27, 24,null,31,29, 27,24,null,27, 31,null,29,27,
+  29,null,29,32, 29,null,34,31, 29,27,null,29, 32,null,31,29,
+  31,null,34,36, 34,31,null,34, 36,null,38,36, 34,31,null,29,
+  29,null,27,24, 27,null,29,31, 24,null,null,null, 31,34,null,36,
+  24,24,27,24, null,31,29,27, 24,27,null,31, 34,null,31,29,
+  34,34,31,29, null,27,24,27, 29,31,null,34, 36,null,34,31,
+  36,36,34,31, null,29,31,34, 36,38,null,36, 34,31,null,29,
+  27,null,29,31, 34,null,31,29, 27,null,24,null, 29,31,34,null
+];
+const SHOOTER_BOSS_LEAD = [
+  12,12,15,12, null,19,17,15, 12,null,19,22, 24,null,22,19,
+  17,17,20,17, null,24,22,20, 17,null,20,22, 24,null,26,24,
+  19,19,22,24, 26,24,22,19, 17,null,19,22, 24,26,null,27,
+  14,null,17,20, 23,20,17,14, 12,null,null,null, 14,17,20,23,
+  24,24,22,19, 17,15,12,null, 17,19,null,22, 24,26,null,27,
+  26,26,24,22, 19,17,15,null, 19,22,null,24, 26,27,null,29,
+  27,27,26,24, 22,19,17,null, 19,22,null,24, 26,27,29,31,
+  20,null,23,20, 17,null,14,17, 20,null,23,null, 20,17,14,null
+];
+const BATTLE_SHOOTER = {
+  songTheme: true, step16: true, bpm: 150, root: 110, gain: .6, tempoBoost: .1,
+  prog: [0, -4, 3, -2], chords: ['m', 'maj', 'maj', 'maj'],
+  lead: SHOOTER_BATTLE_LEAD, leadWave: 'sawtooth', leadCut: 3200, leadGain: .09,
+  bass: 'drive', bassWave: 'sawtooth', pad: true, padGain: .022,
+  arp: true, arpGain: .018, drums: 'battleHard', stab: true, song: SONG_BATTLE
+};
+const BOSS_SHOOTER = {
+  songTheme: true, step16: true, bpm: 172, root: 146.83, gain: .66, tempoBoost: .06,
+  prog: [0, -4, -2, 7], chords: ['m', 'maj', 'maj', 'maj'],
+  lead: SHOOTER_BOSS_LEAD, leadWave: 'square', leadCut: 3400, leadGain: .095,
+  bass: 'pump', bassWave: 'sawtooth', pad: true, padGain: .02,
+  arp: true, arpGain: .016, drums: 'bossHard', stab: true, song: SONG_BOSS
+};
+
 const Audio3D_SFX = {
   ctx: null, master: null, sfx: null, musicBus: null, muted: false, vol: .6, sfxVol: 1, musicVol: 1,
   listener: { x: 0, y: 0, z: 0, fx: 0, fz: -1 },
@@ -906,7 +942,9 @@ const Audio3D_SFX = {
     menu:   MENU_THEME,
     buy:    BUY_THEME,
     game:   BATTLE_THEME,
+    gameShooter: BATTLE_SHOOTER,
     boss:   BOSS_THEME,
+    bossShooter: BOSS_SHOOTER,
     bossWarden: BOSS_THEME,
     bossBrute:  BOSS_THEME,
     bossTitan:  BOSS_THEME,
@@ -1060,6 +1098,16 @@ const Audio3D_SFX = {
       if (s % 2 === 0) kick(140, .54, .14);
       if (s === 4 || s === 12) snare(.105);
       if (bar % 4 === 3 && (s === 14 || s === 15)) snare(.07);
+    } else if (style === 'battleHard') {
+      if (s % 4 === 0) kick(150, .75, .14);
+      if (s === 6 || s === 14) kick(120, .42, .1);
+      if (s === 4 || s === 12) snare(.12);
+      if (s === 2 || s === 10) snare(.05);
+    } else if (style === 'bossHard') {
+      if (s % 2 === 0) kick(160, .7, .12);
+      if (s === 4 || s === 12) snare(.14);
+      if (bar % 4 === 3 && (s === 14 || s === 15)) snare(.09);
+      if (s === 2 || s === 6 || s === 10) kick(140, .35, .08);
     }
   },
 
@@ -1162,6 +1210,21 @@ const Audio3D_SFX = {
       ag.gain.exponentialRampToValueAtTime(.001, t + beat * .4);
       a.connect(ag); ag.connect(m.out);
       a.start(t); a.stop(t + beat * .45);
+    }
+
+    /* STAB: короткий синт-аккорд на слабых долях (шутер-стиль) */
+    if (sec.stab !== false && th.stab && (s === 2 || s === 6 || s === 10 || s === 14)) {
+      const st = [0, qints[1] || 3];
+      for (let c = 0; c < st.length; c++) {
+        const f = semi(cr + st[c] + 12);
+        const o = this.ctx.createOscillator(); o.type = 'sawtooth';
+        o.frequency.setValueAtTime(f, t);
+        const lp = this.ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 2200; lp.Q.value = .8;
+        const g = this.ctx.createGain();
+        g.gain.setValueAtTime(.0001, t); g.gain.linearRampToValueAtTime(.04, t + .005);
+        g.gain.exponentialRampToValueAtTime(.001, t + beat * .18);
+        o.connect(lp); lp.connect(g); g.connect(m.out); o.start(t); o.stop(t + beat * .2);
+      }
     }
   },
 

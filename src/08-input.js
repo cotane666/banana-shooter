@@ -773,6 +773,33 @@ function initSettings() {
   if (mOuts[0]) mOuts[0].textContent = musicNames[S.music === 0 ? 0 : 1];
   if (mOuts[1]) mOuts[1].textContent = musicNames[S.music === 0 ? 0 : 1];
 
+  // стиль музыки: 'melodic' (Zelda-вариант) / 'shooter' (агрессивный)
+  const styleDefs = [['melodic', 'МЕЛОДИЧНАЯ'], ['shooter', 'ШУТЕР']];
+  const styleWraps = [document.getElementById('musicStyle'), document.getElementById('musicStyle2')];
+  const applyStyle = (v) => {
+    S.musicStyle = v;
+    styleWraps.forEach(w => {
+      if (w) Array.from(w.children).forEach(b => b.classList.toggle('on', b.dataset.style === v));
+    });
+    Store.save();
+    if (typeof Game !== 'undefined' && Game.refreshMusic) Game.refreshMusic();
+  };
+  styleWraps.forEach(w => {
+    if (!w) return;
+    w.innerHTML = '';
+    styleDefs.forEach(([v, label]) => {
+      const b = document.createElement('button');
+      b.className = (((S.musicStyle || 'melodic') === v) ? 'on' : '');
+      b.dataset.style = v;
+      b.textContent = label;
+      b.addEventListener('click', () => {
+        applyStyle(v);
+        if (typeof Audio3D_SFX !== 'undefined') Audio3D_SFX.uiClick();
+      });
+      w.appendChild(b);
+    });
+  });
+
   // separate volumes: SFX (shots, hits, explosions) and music, on top of master
   const volPairs = [
     ['sSfx', 'oSfx', 'sSfx2', 'oSfx2', 'sfxVol', (v) => String(Math.round(v))],

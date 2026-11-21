@@ -3903,10 +3903,13 @@ const Game = {
       /* ЗАКУПКА — отдельная спокойная тема */
       if (this.roundState === 'buy' && this.mode !== CS.MODE.RANGE) want = 'buy';
       else if (this.horde) {
-        const boss = this.horde.list.find(z => (z.isBoss || z.isMiniBoss) && z.alive && !z.dying);
-        if (boss && ZOMBIES[boss.type] && Audio3D_SFX.music[boss.type]) want = boss.type;
-        else if (boss && boss.isBoss) want = 'boss';           // у босса без своей темы — общая
-        else if (boss && boss.isMiniBoss) want = 'boss';       // мини-босс — боссовая тема
+        /* Боссовая музыка — ТОЛЬКО для настоящих боссов. Мини-боссы
+           (они почти всегда на карте) больше не перебивают боевую тему. */
+        const boss = this.horde.list.find(z => z.isBoss && z.alive && !z.dying);
+        if (boss) {
+          if (ZOMBIES[boss.type] && Audio3D_SFX.music[boss.type]) want = boss.type;
+          else want = 'boss';
+        }
       }
     }
     if ((want === 'menu' || want === 'buy') && Audio3D_SFX.setMusicCalm) Audio3D_SFX.setMusicCalm();
@@ -9963,9 +9966,13 @@ const Game = {
         UI.center('МОЗГ УНИЧТОЖЕН', def.name + ' · МИР СПАСЁН', 5.0);
         BrainBoss.cleanup();
       }
-      // no boss left alive → back to the battle track (or menu)
-      const anyLeft = this.horde && this.horde.list.some(o => o !== z && (o.isBoss || o.isMiniBoss) && o.alive && !o.dying);
-      if (!anyLeft) this.refreshMusic();
+      // вернуть боевую тему, когда настоящий босс повержен
+      // (мини-боссы больше не удерживают боссовую музыку)
+      if (z.isBoss) this.refreshMusic();
+      else {
+        const anyLeft = this.horde && this.horde.list.some(o => o !== z && o.isBoss && o.alive && !o.dying);
+        if (!anyLeft) this.refreshMusic();
+      }
       if (z.isBoss) { this._bossKills = (this._bossKills || 0) + 1; }
       if (z.isMiniBoss) { this._miniBossKills = (this._miniBossKills || 0) + 1; }
     }

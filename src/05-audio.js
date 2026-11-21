@@ -9,48 +9,48 @@
 const HOTLINE_BASS = [110.00, 110.00, 220.00, 110.00, 130.81, 130.81, 146.83, 164.81,
                       110.00, 110.00, 220.00, 110.00, 174.61, 164.81, 146.83, 130.81];
 const HOTLINE_LEAD_A = [
-  24, null, null, 27, null, 29, null, 31,
-  29, null, 27, null, 26, null, 24, null,
-  22, null, 24, null, 26, null, 27, null,
-  24, null, 22, null, 19, null, null, null
+  24, null, 27, null, null, 31, 29, null,
+  27, null, 24, null, 22, null, null, 19,
+  24, null, 27, null, null, 31, 34, null,
+  31, null, 29, 27, null, 24, null, null
 ];
 const HOTLINE_LEAD_B = [
-  31, null, 31, null, 34, null, 31, null,
-  29, null, 27, null, 29, null, 31, null,
-  34, null, 36, null, 34, null, 31, null,
-  29, null, 27, null, 24, null, null, null
+  29, null, 31, null, 34, null, 31, 29,
+  27, null, 24, null, 27, null, 29, null,
+  31, null, 34, null, 36, null, 34, 31,
+  29, null, 27, 24, null, 22, null, null
 ];
 /* Спокойная мелодия для меню: реже, длиннее, без суеты. */
 const HOTLINE_LEAD_MENU = [
-  24, null, null, null, 27, null, 26, null,
-  24, null, null, null, 22, null, 24, null,
-  24, null, null, null, 29, null, 27, null,
-  24, null, 22, null, null, null, null, null
+  24, null, null, 26, null, null, 27, null,
+  26, null, 24, null, null, 22, null, null,
+  24, null, null, 29, null, null, 27, null,
+  26, null, 24, null, null, null, null, null
 ];
 const HOTLINE_LEAD_MENU2 = [
-  19, null, null, 22, null, null, 24, null,
-  22, null, 19, null, null, 17, null, null,
-  19, null, null, 24, null, null, 22, null,
-  19, null, 17, null, null, null, null, null
+  22, null, null, 24, null, null, 26, null,
+  24, null, 22, null, null, 19, null, null,
+  22, null, null, 27, null, null, 26, null,
+  24, null, 22, null, null, null, null, null
 ];
 const HOTLINE_LEAD_MENU3 = [
-  27, null, null, 26, null, null, 24, null,
-  26, null, null, 27, null, null, 29, null,
-  27, null, 26, null, null, 24, null, null,
-  22, null, 24, null, null, null, null, null
+  27, null, null, 29, null, null, 27, null,
+  26, null, null, 24, null, null, 22, null,
+  24, null, 26, null, null, 27, null, null,
+  24, null, 22, null, null, null, null, null
 ];
 /* Дополнительные куплеты для длинной песни. */
 const HOTLINE_LEAD_C = [
-  24, null, 31, null, 34, null, 31, null,
-  29, null, 36, null, 34, null, 31, null,
-  29, null, 27, null, 24, null, 27, null,
-  31, null, 34, null, 36, null, 34, null
+  24, null, 34, null, 31, null, 36, null,
+  34, null, 31, null, 29, null, 27, null,
+  24, null, 31, null, 34, null, 36, null,
+  34, null, 31, 29, null, 27, null, null
 ];
 const HOTLINE_LEAD_D = [
-  24, null, null, 22, null, null, 19, null,
-  17, null, null, 19, null, null, 22, null,
-  24, null, null, 27, null, null, 24, null,
-  22, null, 19, null, 17, null, null, null
+  19, null, null, 22, null, null, 24, null,
+  22, null, 19, null, null, 17, null, null,
+  19, null, null, 24, null, null, 22, null,
+  19, null, 17, null, 15, null, null, null
 ];
 const HOTLINE_LEADS = {
   A: HOTLINE_LEAD_A, B: HOTLINE_LEAD_B, C: HOTLINE_LEAD_C, D: HOTLINE_LEAD_D,

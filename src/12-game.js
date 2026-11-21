@@ -3900,7 +3900,9 @@ const Game = {
     let want = 'menu';
     if (this.running && this.mode !== CS.MODE.MENU) {
       want = 'game';
-      if (this.horde) {
+      /* ЗАКУПКА — спокойная тема (как меню) */
+      if (this.roundState === 'buy' && this.mode !== CS.MODE.RANGE) want = 'menu';
+      else if (this.horde) {
         const boss = this.horde.list.find(z => (z.isBoss || z.isMiniBoss) && z.alive && !z.dying);
         if (boss && ZOMBIES[boss.type] && Audio3D_SFX.music[boss.type]) want = boss.type;
         else if (boss && boss.isBoss) want = 'boss';           // у босса без своей темы — общая
@@ -4042,6 +4044,7 @@ const Game = {
     this.resetSkipVotes();
     UI.center(label || 'ЗАКУПКА', 'B — магазин', 1.8);
     this.roundNo++;
+    this.refreshMusic();   // закупка — спокойная тема
     if (this.mode === CS.MODE.ONLINE && Net.role === CS.NETROLE.HOST) {
       // send the number we actually settled on, so both sides agree exactly
       Net.send({ t: 'round', st: 'buy', time: seconds, no: this.roundNo });
@@ -4843,6 +4846,7 @@ const Game = {
   startLive() {
     this.roundState = 'live';
     this.roundT = CFG.roundTime;
+    this.refreshMusic();   // бой — основная тема
     const last = this.onlinePlayerCount() > 2;
     UI.center('В БОЙ!', this.mode === 'online' ? (last ? 'Выживает сильнейший · ' + this.matchHP + ' HP' : 'Уничтожьте соперника') : 'Волна ' + (this.offline ? this.offline.wave : 1), 1.4);
     if (this.mode === CS.MODE.OFFLINE && this.offline) {

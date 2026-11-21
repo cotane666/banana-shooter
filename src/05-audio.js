@@ -27,15 +27,70 @@ const HOTLINE_LEAD_MENU = [
   24, null, null, null, 31, null, null, null,
   29, null, 27, null, 24, null, null, null
 ];
+const HOTLINE_LEAD_MENU2 = [
+  24, null, null, 27, null, null, 29, null,
+  27, null, 24, null, null, 22, null, null,
+  24, null, null, 31, null, null, 29, null,
+  27, null, 24, null, null, null, null, null
+];
+const HOTLINE_LEAD_MENU3 = [
+  29, null, null, 27, null, null, 24, null,
+  27, null, null, 29, null, null, 31, null,
+  29, null, 27, null, null, 24, null, null,
+  22, null, 24, null, null, null, null, null
+];
+/* Дополнительные куплеты для длинной песни. */
+const HOTLINE_LEAD_C = [
+  24, null, 27, 29, null, 31, null, 34,
+  31, null, 29, 27, null, 24, null, 26,
+  24, null, 27, 29, null, 34, null, 36,
+  34, null, 31, 29, null, 27, 24, null
+];
+const HOTLINE_LEAD_D = [
+  24, null, null, 22, null, null, 19, null,
+  24, null, null, 27, null, null, 24, null,
+  24, null, null, 22, null, null, 19, null,
+  17, null, 19, null, 22, null, 24, null
+];
+const HOTLINE_LEADS = {
+  A: HOTLINE_LEAD_A, B: HOTLINE_LEAD_B, C: HOTLINE_LEAD_C, D: HOTLINE_LEAD_D,
+  M1: HOTLINE_LEAD_MENU, M2: HOTLINE_LEAD_MENU2, M3: HOTLINE_LEAD_MENU3
+};
+/* ---- ДЛИННЫЕ ПЕСНИ (≥ 1 минуты) ----
+   Секции задают, какие инструменты играют и какой куплет звучит. Так трек
+   развивается: подъёмы/спады, вход/уход слоёв, а не короткий луп. */
+const HOTLINE_SONG = [
+  { bars: 4, lead: 'A', kick: true,  hat: false, bass: true,  pad: true,  arp: true,  counter: false }, // intro
+  { bars: 4, lead: 'A', kick: true,  hat: true,  bass: true,  pad: true,  arp: false, counter: false }, // verse 1
+  { bars: 4, lead: 'B', kick: true,  hat: true,  bass: true,  pad: true,  arp: true,  counter: false }, // verse 2
+  { bars: 4, lead: 'C', kick: true,  hat: true,  bass: true,  pad: true,  arp: true,  counter: true  }, // build
+  { bars: 4, lead: 'B', kick: true,  hat: true,  bass: true,  pad: true,  arp: true,  counter: true  }, // chorus
+  { bars: 4, lead: 'D', kick: false, hat: false, bass: true,  pad: true,  arp: true,  counter: false }, // breakdown
+  { bars: 4, lead: 'A', kick: true,  hat: true,  bass: true,  pad: true,  arp: true,  counter: false }, // return
+  { bars: 4, lead: 'C', kick: true,  hat: true,  bass: true,  pad: true,  arp: true,  counter: true  }, // final chorus
+  { bars: 4, lead: 'B', kick: true,  hat: true,  bass: true,  pad: true,  arp: true,  counter: true  }, // final
+  { bars: 4, lead: 'D', kick: false, hat: false, bass: true,  pad: true,  arp: true,  counter: false }  // outro
+];
+const HOTLINE_SONG_MENU = [
+  { bars: 8, lead: 'M1', kick: true,  hat: false, bass: true, pad: true, arp: true },
+  { bars: 8, lead: 'M2', kick: true,  hat: true,  bass: true, pad: true, arp: true },
+  { bars: 8, lead: 'M3', kick: false, hat: false, bass: true, pad: true, arp: true },
+  { bars: 8, lead: 'M2', kick: true,  hat: true,  bass: true, pad: true, arp: true }
+];
+const HOTLINE_SONG_BOSS = [
+  { bars: 4, lead: 'A' }, { bars: 4, lead: 'B' }, { bars: 4, lead: 'C' }, { bars: 4, lead: 'B' },
+  { bars: 4, lead: 'A' }, { bars: 4, lead: 'D' }, { bars: 4, lead: 'C' }, { bars: 4, lead: 'B' },
+  { bars: 4, lead: 'A' }, { bars: 4, lead: 'C' }
+];
 /* Боссовая версия: тот же трек, но мощнее (быстрее, снейр, тяжёлый кик). */
 const HOTLINE_BOSS = {
   root: 110, bpm: 148, gain: .62, hotline: true, step16: true, power: true,
-  bass16: HOTLINE_BASS, leadA: HOTLINE_LEAD_A, leadB: HOTLINE_LEAD_B,
+  song: HOTLINE_SONG_BOSS, bass16: HOTLINE_BASS, leadA: HOTLINE_LEAD_A, leadB: HOTLINE_LEAD_B,
   pad: true, arp: true, counter: true, snare: true
 };
 const HOTLINE_BOSS_FINAL = {
   root: 110, bpm: 158, gain: .66, hotline: true, step16: true, power: true,
-  bass16: HOTLINE_BASS, leadA: HOTLINE_LEAD_B, leadB: HOTLINE_LEAD_A,
+  song: HOTLINE_SONG_BOSS, bass16: HOTLINE_BASS, leadA: HOTLINE_LEAD_B, leadB: HOTLINE_LEAD_A,
   pad: true, arp: true, counter: true, snare: true
 };
 
@@ -745,9 +800,11 @@ const Audio3D_SFX = {
     /* HOTLINE MIAMI-стиль + оригинальная мелодия в духе BIGSHOT.
        Меню — спокойнее (120 BPM, редкая мелодия), бой — 135 BPM. */
     menu:    { root: 110, bpm: 120, gain: .5, hotline: true, step16: true, menuFloor: .5, calm: true,
+               song: HOTLINE_SONG_MENU,
                bass16: HOTLINE_BASS, leadA: HOTLINE_LEAD_MENU, leadB: HOTLINE_LEAD_MENU,
                pad: true, arp: true, counter: false },
     game:    { root: 110, bpm: 135, gain: .55, hotline: true, step16: true,
+               song: HOTLINE_SONG,
                bass16: HOTLINE_BASS, leadA: HOTLINE_LEAD_A, leadB: HOTLINE_LEAD_B,
                pad: true, arp: true, counter: true },
     /* БОССЫ: тот же трек, но мощнее — быстрее, тяжёлый кик, снейр,
@@ -872,16 +929,26 @@ const Audio3D_SFX = {
 
   /* HOTLINE MIAMI-трек (по референсу): кик 150→0, хэт на слабых 16-х,
      бас-рифф по 16-м. 135 BPM, с драйвом на низком HP/боссе. */
+  _hotlineSection(th, bar) {
+    const song = th.song || HOTLINE_SONG;
+    let total = 0;
+    for (const s of song) total += s.bars;
+    let b = ((bar % total) + total) % total;
+    for (const sec of song) { if (b < sec.bars) return sec; b -= sec.bars; }
+    return song[song.length - 1];
+  },
+
   _musicStepHotline(m, t, beat) {
     const th = m.th, i = m.step++;
     const mi = this._musicMi();
     if (t < 0) t = 0;
     const s = i % 16, bar = Math.floor(i / 16);
     const hum = (p) => (Math.random() * 2 - 1) * p;
-    const calm = !!th.calm, power = !!th.power;
+    const sec = this._hotlineSection(th, bar);
+    const calm = !!th.calm, power = !!th.power || !!sec.power;
 
     /* KICK — на каждую долю (каждую 4-ю 16-ю) */
-    if (s % 4 === 0) {
+    if (sec.kick !== false && s % 4 === 0) {
       const k = this.ctx.createOscillator(); k.type = 'sine';
       const kf = power ? 165 : calm ? 135 : 150;
       k.frequency.setValueAtTime(kf, t);
@@ -904,22 +971,24 @@ const Audio3D_SFX = {
       src.connect(hp); hp.connect(hg); hg.connect(m.out);
       src.start(tt); src.stop(tt + .06);
     };
-    if (s % 2 === 1) playHat(t + beat * .01, hatGain);
-    if (power && s % 4 === 2) playHat(t + beat * .01, hatGain * .6);
+    if (sec.hat !== false && s % 2 === 1) playHat(t + beat * .01, hatGain);
+    if (power && sec.hat !== false && s % 4 === 2) playHat(t + beat * .01, hatGain * .6);
 
     /* БАС — рифф по 16-м (ровно как в референсе) */
-    const bass = th.bass16 || [110, 110, 220, 110];
-    const f = bass[i % bass.length] * (1 + hum(.002));
-    const o = this.ctx.createOscillator(); o.type = 'sawtooth';
-    o.frequency.setValueAtTime(f, t);
-    const lp = this.ctx.createBiquadFilter(); lp.type = 'lowpass';
-    lp.frequency.setValueAtTime(power ? 700 : 600, t);
-    lp.frequency.exponentialRampToValueAtTime(power ? 180 : 150, t + .2);
-    const bg = this.ctx.createGain();
-    bg.gain.setValueAtTime((power ? .27 : calm ? .17 : .22) * (this.mobile ? .85 : 1), t);
-    bg.gain.exponentialRampToValueAtTime(.001, t + .16);
-    o.connect(lp); lp.connect(bg); bg.connect(m.out);
-    o.start(t); o.stop(t + .18);
+    if (sec.bass !== false) {
+      const bass = th.bass16 || [110, 110, 220, 110];
+      const f = bass[i % bass.length] * (1 + hum(.002));
+      const o = this.ctx.createOscillator(); o.type = 'sawtooth';
+      o.frequency.setValueAtTime(f, t);
+      const lp = this.ctx.createBiquadFilter(); lp.type = 'lowpass';
+      lp.frequency.setValueAtTime(power ? 700 : 600, t);
+      lp.frequency.exponentialRampToValueAtTime(power ? 180 : 150, t + .2);
+      const bg = this.ctx.createGain();
+      bg.gain.setValueAtTime((power ? .27 : calm ? .17 : .22) * (this.mobile ? .85 : 1), t);
+      bg.gain.exponentialRampToValueAtTime(.001, t + .16);
+      o.connect(lp); lp.connect(bg); bg.connect(m.out);
+      o.start(t); o.stop(t + .18);
+    }
 
     /* SNARE — только у босса (мощь) */
     if (power && (s === 4 || s === 12)) {
@@ -932,10 +1001,8 @@ const Audio3D_SFX = {
       sn.start(t); sn.stop(t + .18);
     }
 
-    /* МЕЛОДИЯ в духе BIGSHOT (оригинальная): быстрый square-лид с детюном,
-       хроматикой, октавным дублем и лёгким «глитч»-бендом. Куплет A/B — по 2 такта. */
-    const phrase = Math.floor(bar / 2) % 2;
-    const lead = phrase === 0 ? th.leadA : (th.leadB || th.leadA);
+    /* МЕЛОДИЯ в духе BIGSHOT (оригинальная): куплет выбирается секцией песни */
+    const lead = HOTLINE_LEADS[sec.lead] || th.leadA;
     if (lead) {
       const ln = lead[i % lead.length];
       if (ln != null) {
@@ -964,7 +1031,7 @@ const Audio3D_SFX = {
         og.gain.exponentialRampToValueAtTime(.001, lt + .11);
         o3.connect(og); og.connect(m.out); o3.start(lt); o3.stop(lt + .12);
         /* контр-мелодия (октава ниже) — плотность на бой/босса */
-        if (th.counter) {
+        if (sec.counter === undefined ? th.counter : sec.counter) {
           const oc = this.ctx.createOscillator(); oc.type = 'triangle';
           oc.frequency.setValueAtTime(lf / 2, lt);
           const cg = this.ctx.createGain();
@@ -977,7 +1044,7 @@ const Audio3D_SFX = {
     }
 
     /* ПОДЛОЖКА: тёплый аккорд в начале такта — убирает «голость» */
-    if (th.pad && s === 0) {
+    if (sec.pad !== false && th.pad && s === 0) {
       const chord = [0, 7, 12];
       const pg0 = calm ? .05 : power ? .028 : .038;
       for (let c = 0; c < chord.length; c++) {
@@ -995,7 +1062,7 @@ const Audio3D_SFX = {
     }
 
     /* ФОНОВОЕ АРПЕДЖИО: тихий рисунок по 8-м (A-минор) */
-    if (th.arp && s % 2 === 0) {
+    if (sec.arp !== false && th.arp && s % 2 === 0) {
       const pat = [0, 3, 7, 12];
       const ao = pat[(s / 2) % pat.length];
       const af = th.root * 2 * Math.pow(2, ao / 12);

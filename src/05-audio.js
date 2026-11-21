@@ -1,6 +1,26 @@
 /* ============================================================
    05 — AUDIO (WebAudio, fully synthesised — no asset files)
    ============================================================ */
+/* ---- HOTLINE / BIGSHOT-стиль (оригинальные мелодии) ----
+   Бас-рифф — ровно из референса (частоты в Гц).
+   Мелодии — оригинальные, в духе BIGSHOT: быстрый square-лид, детюн,
+   хроматические проходные ноты. Смещения в полутонах от root=110 Гц (A2),
+   сетка 16-х, null = пауза. */
+const HOTLINE_BASS = [110.00, 110.00, 220.00, 110.00, 130.81, 130.81, 146.83, 164.81,
+                      110.00, 110.00, 220.00, 110.00, 174.61, 164.81, 146.83, 130.81];
+const HOTLINE_LEAD_A = [
+  24, null, 24, null, 27, null, 29, null,
+  27, null, 24, 26, null, 24, null, 22,
+  24, null, 27, null, 31, null, 34, null,
+  31, null, 29, null, 27, null, 24, null
+];
+const HOTLINE_LEAD_B = [
+  31, null, 31, null, 34, null, 36, null,
+  34, null, 31, 32, null, 31, null, 29,
+  31, null, 34, null, 36, null, 34, null,
+  31, null, 29, null, 27, null, 24, null
+];
+
 const Audio3D_SFX = {
   ctx: null, master: null, sfx: null, musicBus: null, muted: false, vol: .6, sfxVol: 1, musicVol: 1,
   listener: { x: 0, y: 0, z: 0, fx: 0, fz: -1 },
@@ -708,12 +728,10 @@ const Audio3D_SFX = {
        плюс «хук» — простая запоминающаяся мелодия. */
     /* HOTLINE MIAMI-стиль (по референсу): прямой драйвовый грув — кик, хэт,
        бас-рифф, 16-е доли, 135 BPM. Меню и бой используют этот трек. */
-    menu:    { bpm: 135, gain: .5, hotline: true, step16: true, menuFloor: .5,
-               bass16: [110.00, 110.00, 220.00, 110.00, 130.81, 130.81, 146.83, 164.81,
-                        110.00, 110.00, 220.00, 110.00, 174.61, 164.81, 146.83, 130.81] },
-    game:    { bpm: 135, gain: .55, hotline: true, step16: true,
-               bass16: [110.00, 110.00, 220.00, 110.00, 130.81, 130.81, 146.83, 164.81,
-                        110.00, 110.00, 220.00, 110.00, 174.61, 164.81, 146.83, 130.81] },
+    menu:    { root: 110, bpm: 135, gain: .5, hotline: true, step16: true, menuFloor: .5,
+               bass16: HOTLINE_BASS, leadA: HOTLINE_LEAD_A, leadB: HOTLINE_LEAD_B },
+    game:    { root: 110, bpm: 135, gain: .55, hotline: true, step16: true,
+               bass16: HOTLINE_BASS, leadA: HOTLINE_LEAD_A, leadB: HOTLINE_LEAD_B },
     boss:    { root: 73.42, scale: [0, 2, 3, 6, 10],  prog: [0, -1, -5, -3], bpm: 138, wave: 'square',   bright: 1600, loop: true,  gain: .5,  pad: false, drums: true, snare: true, metal: true, riff: [0, 0, 3, 0, 5, 3, 0, -1] },
     /* ---- БОССЫ: у каждого своя тема в духе DOOM / Undertale / Deltarune ---- */
     /* СТРАЖ — торжественный марш (дух «Spear of Justice» / Undertale) */
@@ -751,7 +769,7 @@ const Audio3D_SFX = {
       const now = this.ctx.currentTime;
       /* темп зависит от интенсивности: на пике боя — быстрее (брейккор-ощущение) */
       const mi = this._musicMi();
-      const beat = 60 / (th.bpm * (1 + mi * (th.hotline ? .15 : .45)));
+      const beat = 60 / (th.bpm * (th.hotline ? 1 : (1 + mi * .45)));
       /* Если главный поток «залип» (рендер/GC на телефоне) и мы отстали —
          НЕ догоняем пачкой нот (это даёт всплеск и треск), а перескакиваем. */
       if (m.next < now - .25) m.next = now + .06;
@@ -890,33 +908,37 @@ const Audio3D_SFX = {
     o.connect(lp); lp.connect(bg); bg.connect(m.out);
     o.start(t); o.stop(t + .18);
 
-    /* ДРАЙВ на низком HP/боссе: снейр на 2 и 4 + доп. хэты */
-    if (mi > .55 && (s === 4 || s === 12)) {
-      const sn = this.ctx.createBufferSource(); sn.buffer = this.noiseBuf;
-      const bp = this.ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 1900; bp.Q.value = .8;
-      const sg = this.ctx.createGain();
-      sg.gain.setValueAtTime(.12 * (this.mobile ? .7 : 1), t);
-      sg.gain.exponentialRampToValueAtTime(.001, t + .16);
-      sn.connect(bp); bp.connect(sg); sg.connect(m.out);
-      sn.start(t); sn.stop(t + .18);
-    }
-    if (mi > .8 && s % 2 === 0 && !this.mobile) {
-      const src = this.ctx.createBufferSource(); src.buffer = this.noiseBuf;
-      const hp = this.ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 8000;
-      const hg = this.ctx.createGain();
-      hg.gain.setValueAtTime(.08, t); hg.gain.exponentialRampToValueAtTime(.001, t + .04);
-      src.connect(hp); hp.connect(hg); hg.connect(m.out);
-      src.start(t); src.stop(t + .05);
-    }
-
-    /* Филл в конце 4-го такта — чтобы луп не был «швом» */
-    if (bar % 4 === 3 && (s === 14 || s === 15)) {
-      const sn = this.ctx.createBufferSource(); sn.buffer = this.noiseBuf;
-      const bp = this.ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 1400 + (s - 14) * 700; bp.Q.value = 1.2;
-      const sg = this.ctx.createGain();
-      sg.gain.setValueAtTime(.1, t); sg.gain.exponentialRampToValueAtTime(.001, t + .06);
-      sn.connect(bp); bp.connect(sg); sg.connect(m.out);
-      sn.start(t); sn.stop(t + .07);
+    /* МЕЛОДИЯ в духе BIGSHOT (оригинальная): быстрый square-лид с детюном,
+       хроматикой, октавным дублем и лёгким «глитч»-бендом. Куплет A/B — по 2 такта. */
+    const phrase = Math.floor(bar / 2) % 2;
+    const lead = phrase === 0 ? th.leadA : (th.leadB || th.leadA);
+    if (lead) {
+      const ln = lead[i % lead.length];
+      if (ln != null) {
+        const lf = th.root * Math.pow(2, ln / 12);
+        const lt = Math.max(0, t + hum(.004));
+        const lp2 = this.ctx.createBiquadFilter(); lp2.type = 'lowpass';
+        lp2.frequency.value = 2600 + mi * 1400; lp2.Q.value = .8;
+        const lg = this.ctx.createGain();
+        lg.gain.setValueAtTime(.001, lt);
+        lg.gain.linearRampToValueAtTime((.085 + .02 * mi) * (this.mobile ? .9 : 1), lt + .008);
+        lg.gain.exponentialRampToValueAtTime(.001, lt + .16);
+        const o1 = this.ctx.createOscillator(); o1.type = 'square';
+        o1.frequency.setValueAtTime(lf * 1.004, lt);
+        const o2 = this.ctx.createOscillator(); o2.type = 'square';
+        o2.frequency.setValueAtTime(lf * .996, lt);
+        /* лёгкий «глитч»-бенд в начале такта, как в BIGSHOT */
+        if (s === 0) o1.frequency.linearRampToValueAtTime(lf * 1.05, lt + .12);
+        o1.connect(lp2); o2.connect(lp2); lp2.connect(lg); lg.connect(m.out);
+        o1.start(lt); o1.stop(lt + .17); o2.start(lt); o2.stop(lt + .17);
+        /* октава сверху — яркость BIGSHOT */
+        const o3 = this.ctx.createOscillator(); o3.type = 'square';
+        o3.frequency.setValueAtTime(lf * 2, lt);
+        const og = this.ctx.createGain();
+        og.gain.setValueAtTime(.028, lt);
+        og.gain.exponentialRampToValueAtTime(.001, lt + .11);
+        o3.connect(og); og.connect(m.out); o3.start(lt); o3.stop(lt + .12);
+      }
     }
   },
 
